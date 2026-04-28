@@ -2028,9 +2028,21 @@ export default function ManagingDirectorDashboard() {
                                             className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
                                         >
                                             <option value="">All Categories</option>
-                                            {MANAGEABLE_ROLES.map(role => (
-                                                <option key={role.value} value={role.value}>{role.label}</option>
-                                            ))}
+                                            {(() => {
+                                                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+                                                const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
+                                                const isHighLevelAdmin = userRoleNums.some(num => [11, 12, 13].includes(num));
+                                                
+                                                let visibleRoles = MANAGEABLE_ROLES;
+                                                if (isHighLevelAdmin) {
+                                                    const allowedSet = [1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33];
+                                                    visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
+                                                }
+                                                
+                                                return visibleRoles.map(role => (
+                                                    <option key={role.value} value={role.value}>{role.label}</option>
+                                                ));
+                                            })()}
                                         </select>
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                                             <ChevronDown className="h-4 w-4" />

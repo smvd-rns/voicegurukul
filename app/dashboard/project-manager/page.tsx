@@ -1963,9 +1963,21 @@ export default function ProjectManagerDashboard() {
                                             className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
                                         >
                                             <option value="">All Roles</option>
-                                            {MANAGEABLE_ROLES.map(role => (
-                                                <option key={role.value} value={role.value}>{role.label}</option>
-                                            ))}
+                                            {(() => {
+                                                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+                                                const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
+                                                const isPMLelvel = userRoleNums.some(num => [14, 15, 16].includes(num));
+                                                
+                                                let visibleRoles = MANAGEABLE_ROLES;
+                                                if (isPMLelvel) {
+                                                    const allowedSet = [1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33];
+                                                    visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
+                                                }
+                                                
+                                                return visibleRoles.map(role => (
+                                                    <option key={role.value} value={role.value}>{role.label}</option>
+                                                ));
+                                            })()}
                                         </select>
                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                                     </div>
