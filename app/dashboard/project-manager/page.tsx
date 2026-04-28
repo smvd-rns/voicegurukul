@@ -11,7 +11,7 @@ import {
     History, Calendar, Mail, Quote, ShieldCheck, Check, Clock, X, ArrowRight, ShieldAlert, Edit, Plus, Trash2, Heart, Award, Lock,
     Home, Building2, UserCheck
 } from 'lucide-react';
-import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
+import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { User } from '@/types';
 // Import UserDetailModal from MD dashboard (assuming it's generic enough)
