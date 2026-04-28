@@ -8,7 +8,8 @@ import { toast } from 'react-hot-toast';
 import {
     Users, FileCheck, Search, Activity, Shield, Filter, MapPin,
     CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight,
-    History, Calendar, Mail, Quote, ShieldCheck, Check, Clock, X, ArrowRight, ShieldAlert, Edit, Plus, Trash2, Heart, Award, Lock
+    History, Calendar, Mail, Quote, ShieldCheck, Check, Clock, X, ArrowRight, ShieldAlert, Edit, Plus, Trash2, Heart, Award, Lock,
+    Home, Building2, UserCheck
 } from 'lucide-react';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -53,6 +54,24 @@ const MANAGEABLE_ROLES = [
 const CENTER_POST_OPTIONS = [
     { label: 'Member / No Post', value: 1 },
     ...MANAGEABLE_ROLES.filter(r => r.value !== 1)
+];
+
+const CAMP_OPTIONS = [
+    { label: 'DYS', value: 'campDys' },
+    { label: 'Sankalpa', value: 'campSankalpa' },
+    { label: 'Sphurti', value: 'campSphurti' },
+    { label: 'Utkarsh', value: 'campUtkarsh' },
+    { label: 'SRCGD Workshop', value: 'campSrcgdWorkshop' },
+    { label: 'Nishtha', value: 'campNishtha' },
+    { label: 'FTEC', value: 'campFtec' },
+    { label: 'Ashraya', value: 'campAshraya' },
+    { label: 'MTEC', value: 'campMtec' },
+    { label: 'Sharanagati', value: 'campSharanagati' },
+    { label: 'IDC', value: 'campIdc' },
+    { label: 'Bhakti Shastri', value: 'campBhaktiShastri' },
+    { label: 'Positive Thinker', value: 'campPositiveThinker' },
+    { label: 'Self Manager', value: 'campSelfManager' },
+    { label: 'Proactive Leader', value: 'campProactiveLeader' },
 ];
 
 import { createPortal } from 'react-dom';
@@ -328,6 +347,11 @@ export default function ProjectManagerDashboard() {
     const [users, setUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [userSearch, setUserSearch] = useState('');
+    const [filterGroup, setFilterGroup] = useState('');
+    const [filterKCStatus, setFilterKCStatus] = useState('');
+    const [filterAshram, setFilterAshram] = useState('');
+    const [filterRole, setFilterRole] = useState<number | ''>('');
+    const [filterCamp, setFilterCamp] = useState('');
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
     const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
 
@@ -1830,24 +1854,145 @@ export default function ProjectManagerDashboard() {
                 {activeTab === 'user-management' && (
                     <div className="space-y-6">
                         {/* Search */}
-                        <div className="flex gap-4">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search users..."
-                                    value={userSearch}
-                                    onChange={(e) => setUserSearch(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
+                        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 mb-8">
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 border-b border-gray-50 pb-8">
+                                <div>
+                                    <h2 className="text-xl font-black text-gray-900 tracking-tight">Devotee Directory</h2>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Search & Segment Devotees</p>
+                                </div>
+                                <div className="relative w-full lg:w-[400px] group">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-teal-500 group-focus-within:scale-110 transition-transform" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by name or email..."
+                                        value={userSearch}
+                                        onChange={(e) => setUserSearch(e.target.value)}
+                                        className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-teal-100 focus:ring-4 focus:ring-teal-500/5 outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Spiritual Group */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Spiritual Group</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-teal-50 text-teal-500 rounded-lg group-hover:bg-teal-500 group-hover:text-white transition-colors">
+                                            <Users className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={filterGroup}
+                                            onChange={(e) => setFilterGroup(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <option value="">All Groups</option>
+                                            {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* KC Status */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">KC Status</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-orange-50 text-orange-500 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                                            <Activity className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={filterKCStatus}
+                                            onChange={(e) => setFilterKCStatus(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <option value="">All KC Status</option>
+                                            {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* Ashram */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Ashram</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-blue-50 text-blue-500 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                                            <Home className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={filterAshram}
+                                            onChange={(e) => setFilterAshram(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <option value="">All Ashrams</option>
+                                            {['Brahmachari', 'Grihastha', 'Student and not decided', 'Working and not decided', 'Gauranga Sabha', 'Nityananda Sabha', 'Staying Single (Not planning to marry)'].map(a => (
+                                                <option key={a} value={a}>{a}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* Role Filter */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Administrative Role</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                                            <UserCheck className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={filterRole}
+                                            onChange={(e) => setFilterRole(e.target.value ? parseInt(e.target.value) : '')}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <option value="">All Roles</option>
+                                            {[4, 3, 2, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map(r => (
+                                                <option key={r} value={r}>{getRoleDisplayName(r)}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* Camp Filter */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Camp Completed</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-emerald-50 text-emerald-500 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                            <Shield className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={filterCamp}
+                                            onChange={(e) => setFilterCamp(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <option value="">Any Status</option>
+                                            {CAMP_OPTIONS.map(c => (
+                                                <option key={c.value} value={c.value}>{c.label}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {/* Mobile Card View */}
                         <div className="lg:hidden space-y-4">
                             {users
-                                .filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                                    u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                                .filter(u => {
+                                    const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                                                    u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                    const groupMatch = !filterGroup || u.bv_group === filterGroup;
+                                    const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
+                                    const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
+                                    
+                                    const userRoles = Array.isArray(u.role) ? u.role : [u.role];
+                                    const roleMatch = !filterRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole);
+                                    
+                                    const campMatch = !filterCamp || (u as any)[filterCamp];
+
+                                    return nameMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                                })
                                 .map((user) => (
                                     <div key={user.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
                                         <div className="flex justify-between items-start">
@@ -1982,8 +2127,20 @@ export default function ProjectManagerDashboard() {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
                                     {users
-                                        .filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                                            u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                                        .filter(u => {
+                                            const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                                                            u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                            const groupMatch = !filterGroup || u.bv_group === filterGroup;
+                                            const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
+                                            const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
+                                            
+                                            const userRoles = Array.isArray(u.role) ? u.role : [u.role];
+                                            const roleMatch = !filterRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole);
+                                            
+                                            const campMatch = !filterCamp || (u as any)[filterCamp];
+
+                                            return nameMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                                        })
                                         .map((user) => (
                                             <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="px-6 py-4">

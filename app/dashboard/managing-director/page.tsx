@@ -47,7 +47,10 @@ const CAMP_OPTIONS = [
     { label: 'MTEC', value: 'campMtec' },
     { label: 'Sharanagati', value: 'campSharanagati' },
     { label: 'IDC', value: 'campIdc' },
-    { label: 'Royal', value: 'royal' },
+    { label: 'Bhakti Shastri', value: 'campBhaktiShastri' },
+    { label: 'Positive Thinker', value: 'campPositiveThinker' },
+    { label: 'Self Manager', value: 'campSelfManager' },
+    { label: 'Proactive Leader', value: 'campProactiveLeader' },
 ];
 
 const MANAGEABLE_ROLES = [
@@ -138,6 +141,9 @@ export default function ManagingDirectorDashboard() {
     const [users, setUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [userSearch, setUserSearch] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState('');
+    const [selectedKCStatus, setSelectedKCStatus] = useState('');
+    const [selectedAshram, setSelectedAshram] = useState('');
     const [selectedCenter, setSelectedCenter] = useState('');
     const [selectedCamp, setSelectedCamp] = useState('');
     const [selectedRole, setSelectedRole] = useState<number | ''>('');
@@ -1247,7 +1253,10 @@ export default function ManagingDirectorDashboard() {
                 : u[selectedCamp as keyof typeof u]
         );
         const roleMatch = !selectedRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === selectedRole);
-        return searchMatch && centerMatch && campMatch && roleMatch;
+        const groupMatch = !selectedGroup || u.bv_group === selectedGroup;
+        const kcMatch = !selectedKCStatus || u.hierarchy?.kcStatus === selectedKCStatus;
+        const ashramMatch = !selectedAshram || u.hierarchy?.ashram === selectedAshram;
+        return searchMatch && centerMatch && campMatch && roleMatch && groupMatch && kcMatch && ashramMatch;
     });
 
     const totalPages = Math.ceil(filteredUsersList.length / itemsPerPage);
@@ -1874,7 +1883,71 @@ export default function ManagingDirectorDashboard() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                                {/* Row 1 */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Spiritual Group</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-orange-50 text-orange-500 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300">
+                                            <Users className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={selectedGroup}
+                                            onChange={(e) => setSelectedGroup(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
+                                        >
+                                            <option value="">All Groups</option>
+                                            {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDown className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">KC Activity Status</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-rose-50 text-rose-500 rounded-lg group-hover:bg-rose-500 group-hover:text-white transition-colors duration-300">
+                                            <Activity className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={selectedKCStatus}
+                                            onChange={(e) => setSelectedKCStatus(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
+                                        >
+                                            <option value="">All KC Status</option>
+                                            {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDown className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Ashram Type</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-purple-50 text-purple-500 rounded-lg group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
+                                            <Home className="h-4 w-4" />
+                                        </div>
+                                        <select
+                                            value={selectedAshram}
+                                            onChange={(e) => setSelectedAshram(e.target.value)}
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
+                                        >
+                                            <option value="">All Ashrams</option>
+                                            {['Brahmachari', 'Grihastha', 'Student and not decided', 'Working and not decided', 'Gauranga Sabha', 'Nityananda Sabha', 'Staying Single (Not planning to marry)'].map(a => (
+                                                <option key={a} value={a}>{a}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDown className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Row 2 */}
                                 <div className="group">
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Center Division</label>
                                     <div className="relative">
@@ -1884,7 +1957,7 @@ export default function ManagingDirectorDashboard() {
                                         <select
                                             value={selectedCenter}
                                             onChange={(e) => setSelectedCenter(e.target.value)}
-                                            className="w-full pl-14 pr-6 py-4 bg-white border-2 border-amber-200 rounded-2xl focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
                                         >
                                             <option value="">All Locations</option>
                                             {centers.map(center => (
@@ -1906,7 +1979,7 @@ export default function ManagingDirectorDashboard() {
                                         <select
                                             value={selectedCamp}
                                             onChange={(e) => setSelectedCamp(e.target.value)}
-                                            className="w-full pl-14 pr-6 py-4 bg-white border-2 border-amber-200 rounded-2xl focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
                                         >
                                             <option value="">Any Status</option>
                                             {CAMP_OPTIONS.map(camp => (
@@ -1919,7 +1992,7 @@ export default function ManagingDirectorDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="group shadow-sm rounded-2xl">
+                                <div className="group">
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Administrative Role</label>
                                     <div className="relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300">
@@ -1928,7 +2001,7 @@ export default function ManagingDirectorDashboard() {
                                         <select
                                             value={selectedRole}
                                             onChange={(e) => setSelectedRole(e.target.value ? parseInt(e.target.value) : '')}
-                                            className="w-full pl-14 pr-6 py-4 bg-white border-2 border-amber-200 rounded-2xl focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
                                         >
                                             <option value="">All Categories</option>
                                             {MANAGEABLE_ROLES.map(role => (
@@ -1941,6 +2014,7 @@ export default function ManagingDirectorDashboard() {
                                     </div>
                                 </div>
                             </div>
+
                         </div>
 
                         {loadingUsers ? (

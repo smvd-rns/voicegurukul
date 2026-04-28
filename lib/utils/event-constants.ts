@@ -27,6 +27,8 @@ export const campOptions = [
     { id: 'campMtec', name: 'MTEC' },
     { id: 'campSharanagati', name: 'Sharanagati' },
     { id: 'campIdc', name: 'IDC' },
-    { id: 'campJigyasa', name: 'Jigyasa' },
-    { id: 'campSadhana', name: 'Sadhana' }
+    { id: 'campBhaktiShastri', name: 'Bhakti Shastri' },
+    { id: 'campPositiveThinker', name: 'Positive Thinker' },
+    { id: 'campSelfManager', name: 'Self Manager' },
+    { id: 'campProactiveLeader', name: 'Proactive Leader' }
 ];
