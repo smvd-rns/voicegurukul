@@ -28,6 +28,9 @@ export type UserRole =
   | 'kitchen_head'
   | 'study_in_charge'
   | 'event_admin'
+  | 'grihstha_counselor'
+  | 'easy_incharge'
+  | 'prerna_incharge'
   | 'student'
   | 1 // student
   | 2 // counselor
@@ -56,7 +59,10 @@ export type UserRole =
   | 27 // accountant
   | 28 // kitchen_head
   | 29 // study_in_charge
-  | 30; // event_admin
+  | 30 // event_admin
+  | 31 // grihstha_counselor
+  | 32 // easy_incharge
+  | 33; // prerna_incharge
 
 export type SpiritualLevel = 'beginner' | 'intermediate' | 'advanced';
 

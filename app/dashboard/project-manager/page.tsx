@@ -331,7 +331,7 @@ export default function ProjectManagerDashboard() {
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
     const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
 
-    const BV_GROUPS = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva'];
+    const BV_GROUPS = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva', 'Prerna', 'Non Residential Alumni'];
     const KC_STATUS_OPTIONS = ['Active', 'Passive', 'Dormant'];
 
     // Service Team State

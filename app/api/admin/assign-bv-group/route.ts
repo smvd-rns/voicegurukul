@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         }
 
         // Validate group
-        const validGroups = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva', null];
+        const validGroups = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva', 'Prerna', 'Non Residential Alumni', null];
         if (!validGroups.includes(bvGroup)) {
             return NextResponse.json({ error: 'Invalid VOICE group level' }, { status: 400 });
         }
