@@ -16,7 +16,7 @@ import { getRoleDisplayName, getRoleHierarchyNumber, canAdminManageTarget } from
 import { CenterData, addCenterToLocal, deleteCenterFromLocal } from '@/lib/data/local-centers';
 import UserDetailModal from '@/components/dashboard/UserDetailModal';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { User } from '@/types';
+import { User, UserRole } from '@/types';
 
 // Reuse types/interfaces where possible or define locally if specific to this view
 interface ProfileRequest {
@@ -54,7 +54,7 @@ const CAMP_OPTIONS = [
 ];
 
 const MANAGEABLE_ROLES = [
-    { label: 'Member', value: 1 },
+    { label: 'Student', value: 1 },
     { label: 'Counselor', value: 2 },
     { label: 'Care Giver', value: 20 },
     { label: 'Voice Manager', value: 3 },

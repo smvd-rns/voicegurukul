@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { User } from '@/types';
+import { User, UserRole } from '@/types';
 // Import UserDetailModal from MD dashboard (assuming it's generic enough)
 import UserDetailModal from '@/components/dashboard/UserDetailModal';
 
@@ -36,7 +36,7 @@ interface ProfileRequest {
 }
 
 const MANAGEABLE_ROLES = [
-    { label: 'Member', value: 1 },
+    { label: 'Student', value: 1 },
     { label: 'Counselor', value: 2 },
     { label: 'Care Giver', value: 20 },
     { label: 'Voice Manager', value: 3 },
