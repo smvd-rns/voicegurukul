@@ -579,7 +579,7 @@ export default function ManagingDirectorDashboard() {
             setNewCenter({
                 name: '', address: '', contact: '',
                 projectManagerId: '', projectAdvisorId: '', actingManagerId: '',
-                internalManagerId: '', preachingCoordinatorId: '', morningProgramInChargeId: '',
+                internalManagerId: '', preachingCoordinatorIds: [], morningProgramInChargeId: '',
                 mentorIds: [], frontlinerIds: [], accountantId: '', kitchenHeadId: '',
                 studyInChargeId: '', grihsthaCounselorIds: [], easyInchargeIds: [], prernaInchargeIds: [], ocId: ''
             });
