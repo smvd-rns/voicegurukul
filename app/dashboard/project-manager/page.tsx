@@ -37,7 +37,24 @@ interface ProfileRequest {
 
 const MANAGEABLE_ROLES = [
     { label: 'Member', value: 1 },
+    { label: 'Counselor', value: 2 },
+    { label: 'Care Giver', value: 20 },
+    { label: 'Voice Manager', value: 3 },
+    { label: 'BC Voice Manager', value: 4 },
+    { label: 'City Manager', value: 5 },
+    { label: 'State Manager', value: 6 },
+    { label: 'Zone Manager', value: 7 },
+    { label: 'Super Admin', value: 8 },
+    { label: 'Vice-President', value: 9 },
+    { label: 'President', value: 10 },
+    { label: 'Managing Director', value: 11 },
+    { label: 'Director', value: 12 },
+    { label: 'Central VOICE Manager', value: 13 },
+    { label: 'Project Advisor', value: 14 },
+    { label: 'Project Manager', value: 15 },
+    { label: 'Acting Manager', value: 16 },
     { label: 'OC', value: 17 },
+    { label: 'Youth Preacher', value: 21 },
     { label: 'Internal Manager', value: 22 },
     { label: 'Preaching Coordinator', value: 23 },
     { label: 'Morning Program In-charge', value: 24 },
@@ -46,6 +63,7 @@ const MANAGEABLE_ROLES = [
     { label: 'Accountant', value: 27 },
     { label: 'Kitchen Head', value: 28 },
     { label: 'Study In-charge', value: 29 },
+    { label: 'Event Admin', value: 30 },
     { label: 'Grihstha Counselor', value: 31 },
     { label: 'Easy Incharge', value: 32 },
     { label: 'Prerna Incharge', value: 33 },
@@ -1945,8 +1963,8 @@ export default function ProjectManagerDashboard() {
                                             className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
                                         >
                                             <option value="">All Roles</option>
-                                            {[4, 3, 2, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map(r => (
-                                                <option key={r} value={r}>{getRoleDisplayName(r)}</option>
+                                            {MANAGEABLE_ROLES.map(role => (
+                                                <option key={role.value} value={role.value}>{role.label}</option>
                                             ))}
                                         </select>
                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />

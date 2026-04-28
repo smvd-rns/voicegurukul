@@ -149,7 +149,7 @@ export const canAccessLevel = (userRole: UserRole | UserRole[], targetRole: User
   return userMaxLevel >= getRoleHierarchyNumber(targetRole);
 };
 
-export const getRoleDisplayName = (role: UserRole): string => {
+export const getRoleDisplayName = (role: any): string => {
   // Handle numeric roles (number or numeric string) by converting to string name first
   if (typeof role === 'number' || (typeof role === 'string' && !isNaN(Number(role)) && role.trim() !== '')) {
     const roleNum = Number(role);

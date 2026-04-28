@@ -54,13 +54,37 @@ const CAMP_OPTIONS = [
 ];
 
 const MANAGEABLE_ROLES = [
+    { label: 'Member', value: 1 },
+    { label: 'Counselor', value: 2 },
+    { label: 'Care Giver', value: 20 },
+    { label: 'Voice Manager', value: 3 },
+    { label: 'BC Voice Manager', value: 4 },
+    { label: 'City Manager', value: 5 },
+    { label: 'State Manager', value: 6 },
+    { label: 'Zone Manager', value: 7 },
+    { label: 'Super Admin', value: 8 },
+    { label: 'Vice-President', value: 9 },
+    { label: 'President', value: 10 },
+    { label: 'Managing Director', value: 11 },
     { label: 'Director', value: 12 },
     { label: 'Central VOICE Manager', value: 13 },
     { label: 'Project Advisor', value: 14 },
     { label: 'Project Manager', value: 15 },
     { label: 'Acting Manager', value: 16 },
     { label: 'OC', value: 17 },
-    { label: 'Student', value: 1 },
+    { label: 'Youth Preacher', value: 21 },
+    { label: 'Internal Manager', value: 22 },
+    { label: 'Preaching Coordinator', value: 23 },
+    { label: 'Morning Program In-charge', value: 24 },
+    { label: 'Mentor', value: 25 },
+    { label: 'Frontliner', value: 26 },
+    { label: 'Accountant', value: 27 },
+    { label: 'Kitchen Head', value: 28 },
+    { label: 'Study In-charge', value: 29 },
+    { label: 'Event Admin', value: 30 },
+    { label: 'Grihstha Counselor', value: 31 },
+    { label: 'Easy Incharge', value: 32 },
+    { label: 'Prerna Incharge', value: 33 },
 ];
 
 export default function ManagingDirectorDashboard() {
