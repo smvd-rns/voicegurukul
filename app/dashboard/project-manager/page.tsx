@@ -1964,13 +1964,13 @@ export default function ProjectManagerDashboard() {
                                         >
                                             <option value="">All Roles</option>
                                             {(() => {
-                                                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+                                                const userRoles = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).filter(Boolean) as UserRole[];
                                                 const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
                                                 const isPMLelvel = userRoleNums.some(num => [14, 15, 16].includes(num));
                                                 
                                                 let visibleRoles = MANAGEABLE_ROLES;
                                                 if (isPMLelvel) {
-                                                    const allowedSet = [1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33];
+                                                    const allowedSet = [1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
                                                     visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
                                                 }
                                                 

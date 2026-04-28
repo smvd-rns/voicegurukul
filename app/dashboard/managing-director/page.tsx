@@ -2029,13 +2029,13 @@ export default function ManagingDirectorDashboard() {
                                         >
                                             <option value="">All Categories</option>
                                             {(() => {
-                                                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+                                                const userRoles = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).filter(Boolean) as UserRole[];
                                                 const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
                                                 const isHighLevelAdmin = userRoleNums.some(num => [11, 12, 13].includes(num));
                                                 
                                                 let visibleRoles = MANAGEABLE_ROLES;
                                                 if (isHighLevelAdmin) {
-                                                    const allowedSet = [1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33];
+                                                    const allowedSet = [1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
                                                     visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
                                                 }
                                                 
