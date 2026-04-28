@@ -45,6 +45,9 @@ const MANAGEABLE_ROLES = [
     { label: 'Accountant', value: 27 },
     { label: 'Kitchen Head', value: 28 },
     { label: 'Study In-charge', value: 29 },
+    { label: 'Grihstha Counselor', value: 31 },
+    { label: 'Easy Incharge', value: 32 },
+    { label: 'Prerna Incharge', value: 33 },
 ];
 
 const CENTER_POST_OPTIONS = [
@@ -326,8 +329,10 @@ export default function ProjectManagerDashboard() {
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [userSearch, setUserSearch] = useState('');
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
+    const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
 
     const BV_GROUPS = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva'];
+    const KC_STATUS_OPTIONS = ['Active', 'Passive', 'Dormant'];
 
     // Service Team State
     const [loadingStructure, setLoadingStructure] = useState(false);
@@ -342,7 +347,10 @@ export default function ProjectManagerDashboard() {
         26: 'frontliner_id',
         27: 'accountant_id',
         28: 'kitchen_head_id',
-        29: 'study_in_charge_id'
+        29: 'study_in_charge_id',
+        31: 'grihstha_counselor_id',
+        32: 'easy_incharge_id',
+        33: 'prerna_incharge_id'
     };
 
     const loadStructure = useCallback(async () => {
@@ -662,6 +670,7 @@ export default function ProjectManagerDashboard() {
                 // devotees: match users by current_center, center, or hierarchy fields
                 supabase.from('users')
                     .select('id', { count: 'exact', head: true })
+                    .eq('verification_status', 'approved')
                     .or(buildCenterMatch(cName)),
                 // pending profile requests
                 supabase.from('profile_update_requests')
@@ -839,6 +848,7 @@ export default function ProjectManagerDashboard() {
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
+                .eq('verification_status', 'approved')
                 .or(buildCenterMatch(currentCenter));
 
             if (error) throw error;
@@ -1116,6 +1126,32 @@ export default function ProjectManagerDashboard() {
         }
     };
 
+    const handleAssignKCStatus = async (userId: string, kcStatus: string) => {
+        if (!supabase) return;
+        setUpdatingKCStatusUserId(userId);
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ 
+                    hierarchy: { 
+                        ...users.find(u => u.id === userId)?.hierarchy,
+                        kcStatus 
+                    } 
+                })
+                .eq('id', userId);
+
+            if (error) throw error;
+            
+            toast.success(`KC Status updated to ${kcStatus}`);
+            loadUsers();
+        } catch (error: any) {
+            toast.error(error.message || 'KC Status update failed');
+        } finally {
+            setUpdatingKCStatusUserId(null);
+        }
+    };
+
     // --- Render ---
 
     if (loadingContext) {
@@ -1259,7 +1295,7 @@ export default function ProjectManagerDashboard() {
                     </div>
                     <div>
                         <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Team</p>
-                        <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">Manage Roles</p>
+                        <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">Management roles</p>
                     </div>
                 </div>
 
@@ -1311,7 +1347,7 @@ export default function ProjectManagerDashboard() {
                             }`}
                     >
                         <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        Manage Roles
+                        Management roles
                     </button>
                 </div>
             </div>
@@ -1903,6 +1939,30 @@ export default function ProjectManagerDashboard() {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <div className="mt-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">KC Status</label>
+                                            <div className="relative">
+                                                <select
+                                                    value={user.hierarchy?.kcStatus || ''}
+                                                    onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                    disabled={updatingKCStatusUserId === user.id}
+                                                    className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
+                                                >
+                                                    <option value="">-- No KC Status --</option>
+                                                    {KC_STATUS_OPTIONS.map(status => (
+                                                        <option key={status} value={status}>{status}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                    {updatingKCStatusUserId === user.id ? (
+                                                        <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                    ) : (
+                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                         </div>
@@ -1916,6 +1976,7 @@ export default function ProjectManagerDashboard() {
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Center Post</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">VOICE group level</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">KC Status</th>
                                         <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-16">Actions</th>
                                     </tr>
                                 </thead>
@@ -1997,6 +2058,28 @@ export default function ProjectManagerDashboard() {
                                                         </div>
                                                     </div>
                                                 </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="relative w-full">
+                                                        <select
+                                                            value={user.hierarchy?.kcStatus || ''}
+                                                            onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                            disabled={updatingKCStatusUserId === user.id}
+                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-orange-300"
+                                                        >
+                                                            <option value="">- No Status -</option>
+                                                            {KC_STATUS_OPTIONS.map(status => (
+                                                                <option key={status} value={status}>{status}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                            {updatingKCStatusUserId === user.id ? (
+                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                            ) : (
+                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <button
                                                         className="text-gray-400 hover:text-gray-600"
@@ -2034,7 +2117,7 @@ export default function ProjectManagerDashboard() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {MANAGEABLE_ROLES.filter(r => r.value >= 17).map((role) => {
-                                        const isMultiUser = [25, 26].includes(role.value);
+                                        const isMultiUser = [23, 25, 26, 31, 32, 33].includes(role.value);
                                         const idsCol = roleToColumnMap[role.value]?.replace('_id', '_ids');
 
                                         // Multi-user: read from _ids array

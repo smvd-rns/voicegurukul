@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Roles that support multiple holders
-const MULTI_USER_ROLES = [25, 26]; // 25 = Mentor, 26 = Frontliner
+const MULTI_USER_ROLES = [23, 25, 26, 31, 32, 33]; // 23 = Preaching Coordinator, 25 = Mentor, 26 = Frontliner, 31-33 = Grihstha, Easy, Prerna
 
 export async function POST(request: Request) {
     try {
@@ -86,7 +86,10 @@ export async function POST(request: Request) {
             26: 'frontliner_id',
             27: 'accountant_id',
             28: 'kitchen_head_id',
-            29: 'study_in_charge_id'
+            29: 'study_in_charge_id',
+            31: 'grihstha_counselor_id',
+            32: 'easy_incharge_id',
+            33: 'prerna_incharge_id'
         };
 
         const targetCol = roleToColumnMap[Number(roleValue)];
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
             // A. Fetch current center data
             const { data: centerInfo } = await supabase
                 .from('centers')
-                .select('id, name, mentor_ids, mentor_names, frontliner_ids, frontliner_names')
+                .select('id, name, mentor_ids, mentor_names, frontliner_ids, frontliner_names, preaching_coordinator_ids, preaching_coordinator_names, grihstha_counselor_ids, grihstha_counselor_names, easy_incharge_ids, easy_incharge_names, prerna_incharge_ids, prerna_incharge_names')
                 .eq('id', centerId)
                 .single() as { data: any, error: any };
 

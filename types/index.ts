@@ -230,6 +230,8 @@ export interface HierarchyLocation {
   parentTemple?: string;
   parentCenter?: string;
   otherParentCenter?: string;
+  kcStatus?: 'Active' | 'Passive' | 'Dormant';
+  bv_group?: string;
 }
 
 export interface SadhanaReport {
@@ -244,6 +246,7 @@ export interface SadhanaReport {
   wakeUp: number; // time or number
   dailyFilling: number;
   daySleep: number;
+  study?: number;
   bodyPercent: number; // calculated weekly (Mon-Sun): (toBed + wakeUp + dailyFilling + daySleep) / 280 * 100
   soulPercent: number; // calculated weekly (Mon-Sun): (japa + hearing + reading) / 210 * 100
   submittedAt: Date;

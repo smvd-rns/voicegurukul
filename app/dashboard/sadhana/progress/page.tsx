@@ -108,7 +108,11 @@ Daily Filling (${totalDailyFilling}/${maxMarks})
 Day Sleep (${totalDaySleep}/${maxMarks})
 
 Soul %: ${avgSoulPercent}%
-Body %: ${avgBodyPercent}%`;
+Body %: ${avgBodyPercent}%
+
+Education Study:
+${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof r.date === 'string' ? parseISO(r.date.split('T')[0]) : r.date as Date, 'MMM d')}: ${r.study} hrs`).join('\n')}
+`;
 
     return message;
   };
@@ -130,7 +134,7 @@ Body %: ${avgBodyPercent}%`;
   const exportToCSV = () => {
     if (reports.length === 0) return;
 
-    const headers = ['Date', 'Japa', 'Hearing', 'Reading', 'Book Name', 'To Bed', 'Wake Up', 'Daily Filling', 'Day Sleep', 'Body %', 'Soul %'];
+    const headers = ['Date', 'Japa', 'Hearing', 'Reading', 'Book Name', 'Study', 'To Bed', 'Wake Up', 'Daily Filling', 'Day Sleep', 'Body %', 'Soul %'];
 
     const csvData = reports.map((report: SadhanaReport) => {
       const reportDate = report.date instanceof Date ? report.date : new Date(report.date);
@@ -140,6 +144,7 @@ Body %: ${avgBodyPercent}%`;
         report.hearing || 0,
         report.reading || 0,
         report.bookName || '',
+        report.study || 0,
         report.toBed || 0,
         report.wakeUp || 0,
         report.dailyFilling || 0,
@@ -560,6 +565,9 @@ Body %: ${avgBodyPercent}%`;
                     <th className="px-2 sm:px-3 md:px-6 py-2 sm:py-3 text-left text-xs font-bold text-orange-800 uppercase tracking-wider">
                       Body %
                     </th>
+                    <th className="px-2 sm:px-3 md:px-6 py-2 sm:py-3 text-left text-xs font-bold text-orange-800 uppercase tracking-wider">
+                      Study
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-orange-100">
@@ -584,6 +592,9 @@ Body %: ${avgBodyPercent}%`;
                         </td>
                         <td className="px-2 sm:px-3 md:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-orange-700">
                           {report.bodyPercent ? `${report.bodyPercent.toFixed(1)}%` : '—'}
+                        </td>
+                        <td className="px-2 sm:px-3 md:px-6 py-2 sm:py-4 text-xs sm:text-sm font-bold text-gray-600">
+                          {report.study ? `${report.study} hr` : '—'}
                         </td>
                       </tr>
                     );

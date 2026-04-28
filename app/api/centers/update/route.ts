@@ -21,7 +21,11 @@ export async function POST(request: Request) {
             frontliner_ids, frontliner_names,
             accountant_id, accountant_name,
             kitchen_head_id, kitchen_head_name,
-            study_in_charge_id, study_in_charge_name
+            study_in_charge_id, study_in_charge_name,
+            preaching_coordinator_ids, preaching_coordinator_names,
+            grihstha_counselor_ids, grihstha_counselor_names,
+            easy_incharge_ids, easy_incharge_names,
+            prerna_incharge_ids, prerna_incharge_names
         } = body;
 
         if (!id) {
@@ -68,7 +72,7 @@ export async function POST(request: Request) {
         // 1. Fetch existing center details to check for role changes
         const { data: existingCenter, error: fetchCenterError } = await supabase
             .from('centers')
-            .select('project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, preaching_coordinator_id, morning_program_in_charge_id, mentor_id, frontliner_id, mentor_ids, frontliner_ids, accountant_id, kitchen_head_id, study_in_charge_id')
+            .select('project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, preaching_coordinator_id, morning_program_in_charge_id, mentor_id, frontliner_id, mentor_ids, frontliner_ids, preaching_coordinator_ids, preaching_coordinator_names, grihstha_counselor_ids, grihstha_counselor_names, easy_incharge_ids, easy_incharge_names, prerna_incharge_ids, prerna_incharge_names, accountant_id, kitchen_head_id, study_in_charge_id')
             .eq('id', id)
             .single();
 
@@ -113,8 +117,15 @@ export async function POST(request: Request) {
                 accountant_name,
                 kitchen_head_id,
                 kitchen_head_name,
-                study_in_charge_id,
                 study_in_charge_name,
+                preaching_coordinator_ids: Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : []),
+                preaching_coordinator_names: Array.isArray(preaching_coordinator_names) ? preaching_coordinator_names : (preaching_coordinator_name ? [preaching_coordinator_name] : []),
+                grihstha_counselor_ids: Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : (body.grihstha_counselor_id ? [body.grihstha_counselor_id] : []),
+                grihstha_counselor_names: Array.isArray(grihstha_counselor_names) ? grihstha_counselor_names : (body.grihstha_counselor_name ? [body.grihstha_counselor_name] : []),
+                easy_incharge_ids: Array.isArray(easy_incharge_ids) ? easy_incharge_ids : (body.easy_incharge_id ? [body.easy_incharge_id] : []),
+                easy_incharge_names: Array.isArray(easy_incharge_names) ? easy_incharge_names : (body.easy_incharge_name ? [body.easy_incharge_name] : []),
+                prerna_incharge_ids: Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : (body.prerna_incharge_id ? [body.prerna_incharge_id] : []),
+                prerna_incharge_names: Array.isArray(prerna_incharge_names) ? prerna_incharge_names : (body.prerna_incharge_name ? [body.prerna_incharge_name] : []),
                 updated_at: new Date().toISOString()
             })
             .eq('id', id);
@@ -246,10 +257,17 @@ export async function POST(request: Request) {
         }
 
         // Preaching Coordinator (23)
-        if (preaching_coordinator_id) tasks.push(ensureUserHasRole(preaching_coordinator_id, 'preaching_coordinator', 23));
-        if (existingCenter?.preaching_coordinator_id && existingCenter.preaching_coordinator_id !== preaching_coordinator_id) {
-            tasks.push(revokeUserRole(existingCenter.preaching_coordinator_id, 23));
-        }
+        const finalPCCIds: string[] = Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : []);
+        const existingPCCIds: string[] = Array.isArray(existingCenter?.preaching_coordinator_ids) ? existingCenter.preaching_coordinator_ids : (existingCenter?.preaching_coordinator_id ? [existingCenter.preaching_coordinator_id] : []);
+
+        // Add roles to new coordinators
+        finalPCCIds.filter(id => !existingPCCIds.includes(id)).forEach(uid => {
+            tasks.push(ensureUserHasRole(uid, 'preaching_coordinator', 23));
+        });
+        // Revoke roles from removed coordinators
+        existingPCCIds.filter(id => !finalPCCIds.includes(id)).forEach(uid => {
+            tasks.push(revokeUserRole(uid, 23));
+        });
 
         // Morning Program In-charge (24)
         if (morning_program_in_charge_id) tasks.push(ensureUserHasRole(morning_program_in_charge_id, 'morning_program_in_charge', 24));
@@ -300,6 +318,16 @@ export async function POST(request: Request) {
         if (existingCenter?.study_in_charge_id && existingCenter.study_in_charge_id !== study_in_charge_id) {
             tasks.push(revokeUserRole(existingCenter.study_in_charge_id, 29));
         }
+
+        // Multi-user role sync for new roles
+        const syncMultiRole = (roleId: number, roleName: string, newIds: string[], existingIds: string[]) => {
+            newIds.filter(id => !existingIds.includes(id)).forEach(uid => tasks.push(ensureUserHasRole(uid, roleName, roleId)));
+            existingIds.filter(id => !newIds.includes(id)).forEach(uid => tasks.push(revokeUserRole(uid, roleId)));
+        };
+
+        syncMultiRole(31, 'grihstha_counselor', Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : [], Array.isArray(existingCenter?.grihstha_counselor_ids) ? existingCenter.grihstha_counselor_ids : []);
+        syncMultiRole(32, 'easy_incharge', Array.isArray(easy_incharge_ids) ? easy_incharge_ids : [], Array.isArray(existingCenter?.easy_incharge_ids) ? existingCenter.easy_incharge_ids : []);
+        syncMultiRole(33, 'prerna_incharge', Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : [], Array.isArray(existingCenter?.prerna_incharge_ids) ? existingCenter.prerna_incharge_ids : []);
 
         await Promise.all(tasks);
 

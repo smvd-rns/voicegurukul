@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, SadhanaReport } from '@/types';
 import { fetchSadhanaReportsByRange } from '@/lib/api/sadhana-client';
 import {
     X, Calendar, User as UserIcon, Activity, BookOpen,
     Moon, Sun, Coffee, Bed, ChevronRight, Check, AlertCircle,
-    MapPin, Phone, Mail, Shield, Award, Briefcase, GraduationCap, Tent, Book, CheckCircle2, XCircle, Clock, Filter, Users
+    MapPin, Phone, Mail, Shield, Award, Briefcase, GraduationCap, Tent, Book, CheckCircle2, XCircle, Clock, Filter, Users, Search
 } from 'lucide-react';
 import { getRoleDisplayName } from '@/lib/utils/roles';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -129,6 +129,53 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
             loadSadhanaDetails();
         }
     }, [isOpen, user, activeTab, loadSadhanaDetails]);
+
+    const weeklySummaries = useMemo(() => {
+        const weeks: { [key: string]: any } = {};
+        reports.forEach(r => {
+            const date = r.date instanceof Date ? r.date : new Date(r.date);
+            const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+            const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+            const key = format(weekStart, 'yyyy-MM-dd');
+            if (!weeks[key]) {
+                weeks[key] = {
+                    weekStart,
+                    weekEnd,
+                    japa: 0,
+                    hearing: 0,
+                    reading: 0,
+                    toBed: 0,
+                    wakeUp: 0,
+                    dailyFilling: 0,
+                    daySleep: 0,
+                    study: 0,
+                    count: 0,
+                    books: new Set()
+                };
+            }
+            weeks[key].japa += r.japa || 0;
+            weeks[key].hearing += r.hearing || 0;
+            weeks[key].reading += r.reading || 0;
+            weeks[key].toBed += r.toBed || 0;
+            weeks[key].wakeUp += r.wakeUp || 0;
+            weeks[key].dailyFilling += r.dailyFilling || 0;
+            weeks[key].daySleep += r.daySleep || 0;
+            weeks[key].study += Number(r.study || 0);
+            weeks[key].count += 1;
+            if (r.bookName) weeks[key].books.add(r.bookName);
+        });
+
+        return Object.values(weeks).map(w => {
+            const soulPercent = (w.japa + w.hearing + w.reading) / 210 * 100;
+            const bodyPercent = (w.toBed + w.wakeUp + w.dailyFilling + w.daySleep) / 280 * 100;
+            return {
+                ...w,
+                soulPercent: Math.min(100, soulPercent),
+                bodyPercent: Math.min(100, bodyPercent),
+                bookNames: Array.from(w.books).join(', ')
+            };
+        }).sort((a, b) => b.weekStart.getTime() - a.weekStart.getTime());
+    }, [reports]);
 
     // Prepare weekly aggregated data for Body & Soul percentage chart
     const getWeeklyChartData = () => {
@@ -532,15 +579,48 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
                                         </div>
                                     </div>
 
-                                    {/* Aggregated Stats */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-center">
-                                            <span className="block text-xs font-bold text-amber-800 uppercase tracking-widest mb-1">Avg Soul %</span>
-                                            <span className="text-2xl font-black text-amber-600">{averages.soulPercent}%</span>
+                                    {/* Weekly Reports List */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="p-4 border-b border-gray-50 bg-gray-50/50">
+                                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                                <Calendar className="h-4 w-4 text-amber-500" /> Weekly Reports
+                                            </h3>
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
-                                            <span className="block text-xs font-bold text-blue-800 uppercase tracking-widest mb-1">Avg Body %</span>
-                                            <span className="text-2xl font-black text-blue-600">{averages.bodyPercent}%</span>
+                                        <div className="divide-y divide-gray-50">
+                                            {weeklySummaries.map((week, idx) => (
+                                                <div key={idx} className="p-4 hover:bg-gray-50/50 transition-colors">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className="text-xs font-bold text-gray-900">
+                                                            {format(week.weekStart, 'MMM d')} - {format(week.weekEnd, 'MMM d, yyyy')}
+                                                            <span className="ml-2 text-[10px] text-gray-400 font-normal">({week.count} reports)</span>
+                                                        </span>
+                                                        <div className="flex gap-2">
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 rounded">
+                                                                Soul: {week.soulPercent?.toFixed(1)}%
+                                                            </span>
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded">
+                                                                Body: {week.bodyPercent?.toFixed(1)}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Japa:</span> <span className="font-bold text-gray-700">{week.japa}</span></div>
+                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Hear:</span> <span className="font-bold text-gray-700">{week.hearing}</span></div>
+                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Read:</span> <span className="font-bold text-gray-700">{week.reading}</span></div>
+                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Books:</span> <span className="font-bold text-gray-700 truncate">{week.bookNames || '-'}</span></div>
+                                                    </div>
+                                                    {week.study > 0 && (
+                                                        <div className="mt-2 p-3 bg-orange-50/50 rounded-xl border border-orange-100">
+                                                            <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                                <GraduationCap className="h-3 w-3" /> Educational Progress
+                                                            </p>
+                                                            <p className="text-xs text-gray-700 font-bold">
+                                                                {week.study} Total Hours This Week
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>

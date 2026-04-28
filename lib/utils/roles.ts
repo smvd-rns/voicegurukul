@@ -1,6 +1,6 @@
 import { UserRole } from '@/types';
 
-export type RoleNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
+export type RoleNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33;
 
 // Helper function to get role hierarchy number
 export const getRoleHierarchyNumber = (role: UserRole): number => {
@@ -12,7 +12,7 @@ export const getRoleHierarchyNumber = (role: UserRole): number => {
   if (typeof role === 'string' && !isNaN(Number(role)) && role.trim() !== '') {
     const numRole = Number(role);
     if (numRole === 20) return 2; // Special case for Care Giver
-    if ((numRole >= 1 && numRole <= 17) || numRole === 21 || (numRole >= 22 && numRole <= 30)) {
+    if ((numRole >= 1 && numRole <= 17) || numRole === 21 || (numRole >= 22 && numRole <= 33)) {
       return numRole;
     }
   }
@@ -47,6 +47,9 @@ export const getRoleHierarchyNumber = (role: UserRole): number => {
     kitchen_head: 28,
     study_in_charge: 29,
     event_admin: 30,
+    grihstha_counselor: 31,
+    easy_incharge: 32,
+    prerna_incharge: 33,
     student: 1,
   };
   return hierarchy[role] || 1;
@@ -85,6 +88,9 @@ export const roleNumberToName: Record<RoleNumber, UserRole> = {
   28: 'kitchen_head',
   29: 'study_in_charge',
   30: 'event_admin',
+  31: 'grihstha_counselor',
+  32: 'easy_incharge',
+  33: 'prerna_incharge',
   1: 'student',
 };
 
@@ -181,6 +187,9 @@ export const getRoleDisplayName = (role: UserRole): string => {
     kitchen_head: 'Kitchen Head',
     study_in_charge: 'Study In-charge',
     event_admin: 'Event Admin',
+    grihstha_counselor: 'Grihstha Counselor',
+    easy_incharge: 'Easy Incharge',
+    prerna_incharge: 'Prerna Incharge',
     student: 'Student',
   };
   return displayNames[role as string] || 'Student';

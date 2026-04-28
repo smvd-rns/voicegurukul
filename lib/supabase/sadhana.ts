@@ -236,6 +236,7 @@ export const submitSadhanaReport = async (report: Omit<SadhanaReport, 'id' | 'su
       wake_up: report.wakeUp,
       daily_filling: report.dailyFilling,
       day_sleep: report.daySleep,
+      study: report.study || 0,
       body_percent: Math.min(100, Math.max(0, bodyPercent)),
       soul_percent: Math.min(100, Math.max(0, soulPercent)),
       submitted_at: existingReport ? (existingReport.submittedAt ? new Date(existingReport.submittedAt).toISOString() : new Date().toISOString()) : new Date().toISOString(),
@@ -268,6 +269,7 @@ export const getUserSadhanaReports = async (userId: string, limitCount: number =
       id: r.id, userId: r.user_id, date: normalizeDate(r.date),
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
+      study: r.study,
       bodyPercent: r.body_percent, soulPercent: r.soul_percent,
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];
@@ -285,6 +287,7 @@ export const getSadhanaReportsByRange = async (userId: string, fromDate: string,
       id: r.id, userId: r.user_id, date: normalizeDate(r.date),
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
+      study: r.study,
       bodyPercent: r.body_percent, soulPercent: r.soul_percent,
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];
@@ -304,6 +307,7 @@ export const getSadhanaReportByDate = async (userId: string, date: Date | string
       id: data.id, userId: data.user_id, date: normalizeDate(data.date),
       japa: data.japa, hearing: data.hearing, reading: data.reading, bookName: data.book_name,
       toBed: data.to_bed, wakeUp: data.wake_up, dailyFilling: data.daily_filling, daySleep: data.day_sleep,
+      study: data.study,
       bodyPercent: data.body_percent, soulPercent: data.soul_percent,
       submittedAt: new Date(data.submitted_at), updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
     } as SadhanaReport;
@@ -321,6 +325,7 @@ export const getBulkSadhanaReportsByRange = async (userIds: string[], fromDate: 
       id: r.id, userId: r.user_id, date: normalizeDate(r.date),
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
+      study: r.study,
       bodyPercent: r.body_percent, soulPercent: r.soul_percent,
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];

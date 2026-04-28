@@ -20,7 +20,11 @@ export async function POST(request: Request) {
       frontliner_ids, frontliner_names,
       accountant_id, accountant_name,
       kitchen_head_id, kitchen_head_name,
-      study_in_charge_id, study_in_charge_name
+      study_in_charge_id, study_in_charge_name,
+      preaching_coordinator_ids, preaching_coordinator_names,
+      grihstha_counselor_ids, grihstha_counselor_names,
+      easy_incharge_ids, easy_incharge_names,
+      prerna_incharge_ids, prerna_incharge_names
     } = body;
 
     const validation = validateCenterInput(name, state, city, address, contact);
@@ -233,6 +237,14 @@ export async function POST(request: Request) {
         kitchen_head_name: kitchen_head_name || null,
         study_in_charge_id: study_in_charge_id || null,
         study_in_charge_name: study_in_charge_name || null,
+        preaching_coordinator_ids: Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : []),
+        preaching_coordinator_names: Array.isArray(preaching_coordinator_names) ? preaching_coordinator_names : (preaching_coordinator_name ? [preaching_coordinator_name] : []),
+        grihstha_counselor_ids: Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : (body.grihstha_counselor_id ? [body.grihstha_counselor_id] : []),
+        grihstha_counselor_names: Array.isArray(grihstha_counselor_names) ? grihstha_counselor_names : (body.grihstha_counselor_name ? [body.grihstha_counselor_name] : []),
+        easy_incharge_ids: Array.isArray(easy_incharge_ids) ? easy_incharge_ids : (body.easy_incharge_id ? [body.easy_incharge_id] : []),
+        easy_incharge_names: Array.isArray(easy_incharge_names) ? easy_incharge_names : (body.easy_incharge_name ? [body.easy_incharge_name] : []),
+        prerna_incharge_ids: Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : (body.prerna_incharge_id ? [body.prerna_incharge_id] : []),
+        prerna_incharge_names: Array.isArray(prerna_incharge_names) ? prerna_incharge_names : (body.prerna_incharge_name ? [body.prerna_incharge_name] : []),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -341,7 +353,8 @@ export async function POST(request: Request) {
         updateUserRoleAndHierarchy(project_advisor_id, 14, 'project_advisor'),
         updateUserRoleAndHierarchy(acting_manager_id, 16, 'acting_manager'),
         updateUserRoleAndHierarchy(internal_manager_id, 22, 'internal_manager'),
-        updateUserRoleAndHierarchy(preaching_coordinator_id, 23, 'preaching_coordinator'),
+        // Preaching Coordinator (23) sync
+        ...(Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : [])).map((uid: string) => updateUserRoleAndHierarchy(uid, 23, 'preaching_coordinator')),
         updateUserRoleAndHierarchy(morning_program_in_charge_id, 24, 'morning_program_in_charge'),
         // Multi-user role sync for Mentor (25)
         ...(Array.isArray(mentor_ids) ? mentor_ids : (mentor_id ? [mentor_id] : [])).map((uid: string) => updateUserRoleAndHierarchy(uid, 25, 'mentor')),
@@ -349,7 +362,11 @@ export async function POST(request: Request) {
         ...(Array.isArray(frontliner_ids) ? frontliner_ids : (frontliner_id ? [frontliner_id] : [])).map((uid: string) => updateUserRoleAndHierarchy(uid, 26, 'frontliner')),
         updateUserRoleAndHierarchy(accountant_id, 27, 'accountant'),
         updateUserRoleAndHierarchy(kitchen_head_id, 28, 'kitchen_head'),
-        updateUserRoleAndHierarchy(study_in_charge_id, 29, 'study_in_charge')
+        updateUserRoleAndHierarchy(study_in_charge_id, 29, 'study_in_charge'),
+        // Multi-user role sync for new roles
+        ...(Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : []).map((uid: string) => updateUserRoleAndHierarchy(uid, 31, 'grihstha_counselor')),
+        ...(Array.isArray(easy_incharge_ids) ? easy_incharge_ids : []).map((uid: string) => updateUserRoleAndHierarchy(uid, 32, 'easy_incharge')),
+        ...(Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : []).map((uid: string) => updateUserRoleAndHierarchy(uid, 33, 'prerna_incharge'))
       ]);
     }
 

@@ -10,7 +10,7 @@ import {
     Activity, Building2, Users, FileCheck, Search, Plus, Trash2,
     MapPin, UserCheck, X, Check, AlertCircle, Eye, Home,
     ChevronDown, ChevronUp, History, ArrowRight, Clock, Mail, Calendar, Shield, Filter, Phone, Heart,
-    ChevronRight, ShieldAlert, Quote, ShieldCheck, AlertTriangle, Award, Lock, Edit
+    ChevronRight, ShieldAlert, Quote, ShieldCheck, AlertTriangle, Award, Lock, Edit, Loader2
 } from 'lucide-react';
 import { getRoleDisplayName, getRoleHierarchyNumber, canAdminManageTarget } from '@/lib/utils/roles';
 import { CenterData, addCenterToLocal, deleteCenterFromLocal } from '@/lib/data/local-centers';
@@ -68,6 +68,7 @@ export default function ManagingDirectorDashboard() {
     // Centers State
     const [centers, setCenters] = useState<CenterData[]>([]);
     const [loadingCenters, setLoadingCenters] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [showAddCenterModal, setShowAddCenterModal] = useState(false);
     const [newCenter, setNewCenter] = useState<{
         name: string;
@@ -77,13 +78,16 @@ export default function ManagingDirectorDashboard() {
         projectAdvisorId: string;
         actingManagerId: string;
         internalManagerId: string;
-        preachingCoordinatorId: string;
+        preachingCoordinatorIds: string[];
         morningProgramInChargeId: string;
         mentorIds: string[];
         frontlinerIds: string[];
         accountantId: string;
         kitchenHeadId: string;
         studyInChargeId: string;
+        grihsthaCounselorIds: string[];
+        easyInchargeIds: string[];
+        prernaInchargeIds: string[];
         ocId: string;
     }>({
         name: '',
@@ -93,13 +97,16 @@ export default function ManagingDirectorDashboard() {
         projectAdvisorId: '',
         actingManagerId: '',
         internalManagerId: '',
-        preachingCoordinatorId: '',
+        preachingCoordinatorIds: [] as string[],
         morningProgramInChargeId: '',
         mentorIds: [] as string[],
         frontlinerIds: [] as string[],
         accountantId: '',
         kitchenHeadId: '',
         studyInChargeId: '',
+        grihsthaCounselorIds: [] as string[],
+        easyInchargeIds: [] as string[],
+        prernaInchargeIds: [] as string[],
         ocId: ''
     });
 
@@ -114,13 +121,16 @@ export default function ManagingDirectorDashboard() {
         projectAdvisorId: string;
         actingManagerId: string;
         internalManagerId: string;
-        preachingCoordinatorId: string;
+        preachingCoordinatorIds: string[];
         morningProgramInChargeId: string;
         mentorIds: string[];
         frontlinerIds: string[];
         accountantId: string;
         kitchenHeadId: string;
         studyInChargeId: string;
+        grihsthaCounselorIds: string[];
+        easyInchargeIds: string[];
+        prernaInchargeIds: string[];
         ocId: string;
     } | null>(null);
 
@@ -136,7 +146,9 @@ export default function ManagingDirectorDashboard() {
     const [pendingAdminRole, setPendingAdminRole] = useState<number | null>(null);
     const [pendingSpiritualRole, setPendingSpiritualRole] = useState<number | 'none'>('none');
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
+    const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
     const BV_GROUPS = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva'];
+    const KC_STATUS_OPTIONS = ['Active', 'Passive', 'Dormant'];
 
     // --- Counselor Assignment States ---
     const [showCounselorModal, setShowCounselorModal] = useState(false);
@@ -350,7 +362,7 @@ export default function ManagingDirectorDashboard() {
                 supabase.from('centers').select('*', { count: 'exact', head: true }).eq('temple_name', tName).then(res => res.count || 0),
 
                 // Devotees count (filtered in memory for accuracy with hierarchy)
-                supabase.from('users').select('current_temple, hierarchy').then(({ data }) => {
+                supabase.from('users').select('current_temple, hierarchy').eq('verification_status', 'approved').then(({ data }) => {
                     return (data || []).filter((u: any) => {
                         const uH = u.hierarchy as any;
                         const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
@@ -496,6 +508,8 @@ export default function ManagingDirectorDashboard() {
                 return;
             }
 
+            setIsSubmitting(true);
+
             if (!newCenter.projectManagerId) {
                 toast.error('Project Manager is required');
                 return;
@@ -525,8 +539,10 @@ export default function ManagingDirectorDashboard() {
                     acting_manager_name: selectedAM?.name,
                     internal_manager_id: newCenter.internalManagerId,
                     internal_manager_name: users.find(u => u.id === newCenter.internalManagerId)?.name,
-                    preaching_coordinator_id: newCenter.preachingCoordinatorId,
-                    preaching_coordinator_name: users.find(u => u.id === newCenter.preachingCoordinatorId)?.name,
+                    preaching_coordinator_id: newCenter.preachingCoordinatorIds[0] || null,
+                    preaching_coordinator_name: users.find(u => u.id === newCenter.preachingCoordinatorIds[0])?.name || null,
+                    preaching_coordinator_ids: newCenter.preachingCoordinatorIds,
+                    preaching_coordinator_names: newCenter.preachingCoordinatorIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
                     morning_program_in_charge_id: newCenter.morningProgramInChargeId,
                     morning_program_in_charge_name: users.find(u => u.id === newCenter.morningProgramInChargeId)?.name,
                     mentor_ids: newCenter.mentorIds,
@@ -537,8 +553,19 @@ export default function ManagingDirectorDashboard() {
                     accountant_name: users.find(u => u.id === newCenter.accountantId)?.name,
                     kitchen_head_id: newCenter.kitchenHeadId,
                     kitchen_head_name: users.find(u => u.id === newCenter.kitchenHeadId)?.name,
-                    study_in_charge_id: newCenter.studyInChargeId,
                     study_in_charge_name: users.find(u => u.id === newCenter.studyInChargeId)?.name,
+                    grihstha_counselor_id: newCenter.grihsthaCounselorIds[0] || null,
+                    grihstha_counselor_name: users.find(u => u.id === newCenter.grihsthaCounselorIds[0])?.name || null,
+                    grihstha_counselor_ids: newCenter.grihsthaCounselorIds,
+                    grihstha_counselor_names: newCenter.grihsthaCounselorIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
+                    easy_incharge_id: newCenter.easyInchargeIds[0] || null,
+                    easy_incharge_name: users.find(u => u.id === newCenter.easyInchargeIds[0])?.name || null,
+                    easy_incharge_ids: newCenter.easyInchargeIds,
+                    easy_incharge_names: newCenter.easyInchargeIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
+                    prerna_incharge_id: newCenter.prernaInchargeIds[0] || null,
+                    prerna_incharge_name: users.find(u => u.id === newCenter.prernaInchargeIds[0])?.name || null,
+                    prerna_incharge_ids: newCenter.prernaInchargeIds,
+                    prerna_incharge_names: newCenter.prernaInchargeIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
                     oc_id: newCenter.ocId,
                     oc_name: users.find(u => u.id === newCenter.ocId)?.name
                 }),
@@ -554,17 +581,21 @@ export default function ManagingDirectorDashboard() {
                 projectManagerId: '', projectAdvisorId: '', actingManagerId: '',
                 internalManagerId: '', preachingCoordinatorId: '', morningProgramInChargeId: '',
                 mentorIds: [], frontlinerIds: [], accountantId: '', kitchenHeadId: '',
-                studyInChargeId: '', ocId: ''
+                studyInChargeId: '', grihsthaCounselorIds: [], easyInchargeIds: [], prernaInchargeIds: [], ocId: ''
             });
             loadCenters();
         } catch (error: any) {
             toast.error(error.message || 'Failed to add center');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     const handleEditCenter = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingCenter) return;
+
+        setIsSubmitting(true);
 
         try {
             const h = userData?.hierarchy as any;
@@ -598,14 +629,28 @@ export default function ManagingDirectorDashboard() {
                     acting_manager_name: selectedAM?.name,
                     internal_manager_id: editingCenter.internalManagerId,
                     internal_manager_name: users.find(u => u.id === editingCenter.internalManagerId)?.name,
-                    preaching_coordinator_id: editingCenter.preachingCoordinatorId,
-                    preaching_coordinator_name: users.find(u => u.id === editingCenter.preachingCoordinatorId)?.name,
+                    preaching_coordinator_id: editingCenter.preachingCoordinatorIds[0] || null,
+                    preaching_coordinator_name: users.find(u => u.id === editingCenter.preachingCoordinatorIds[0])?.name || null,
+                    preaching_coordinator_ids: editingCenter.preachingCoordinatorIds,
+                    preaching_coordinator_names: editingCenter.preachingCoordinatorIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
                     morning_program_in_charge_id: editingCenter.morningProgramInChargeId,
                     morning_program_in_charge_name: users.find(u => u.id === editingCenter.morningProgramInChargeId)?.name,
                     mentor_ids: editingCenter.mentorIds,
                     mentor_names: editingCenter.mentorIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
                     frontliner_ids: editingCenter.frontlinerIds,
                     frontliner_names: editingCenter.frontlinerIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
+                    grihstha_counselor_id: editingCenter.grihsthaCounselorIds[0] || null,
+                    grihstha_counselor_name: users.find(u => u.id === editingCenter.grihsthaCounselorIds[0])?.name || null,
+                    grihstha_counselor_ids: editingCenter.grihsthaCounselorIds,
+                    grihstha_counselor_names: editingCenter.grihsthaCounselorIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
+                    easy_incharge_id: editingCenter.easyInchargeIds[0] || null,
+                    easy_incharge_name: users.find(u => u.id === editingCenter.easyInchargeIds[0])?.name || null,
+                    easy_incharge_ids: editingCenter.easyInchargeIds,
+                    easy_incharge_names: editingCenter.easyInchargeIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
+                    prerna_incharge_id: editingCenter.prernaInchargeIds[0] || null,
+                    prerna_incharge_name: users.find(u => u.id === editingCenter.prernaInchargeIds[0])?.name || null,
+                    prerna_incharge_ids: editingCenter.prernaInchargeIds,
+                    prerna_incharge_names: editingCenter.prernaInchargeIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean),
                     accountant_id: editingCenter.accountantId,
                     accountant_name: users.find(u => u.id === editingCenter.accountantId)?.name,
                     kitchen_head_id: editingCenter.kitchenHeadId,
@@ -626,6 +671,8 @@ export default function ManagingDirectorDashboard() {
             loadCenters();
         } catch (error: any) {
             toast.error(error.message || 'Failed to update center');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -639,13 +686,16 @@ export default function ManagingDirectorDashboard() {
             projectAdvisorId: center.project_advisor_id || '',
             actingManagerId: center.acting_manager_id || '',
             internalManagerId: center.internal_manager_id || '',
-            preachingCoordinatorId: center.preaching_coordinator_id || '',
+            preachingCoordinatorIds: center.preaching_coordinator_ids || (center.preaching_coordinator_id ? [center.preaching_coordinator_id] : []),
             morningProgramInChargeId: center.morning_program_in_charge_id || '',
             mentorIds: center.mentor_ids || (center.mentor_id ? [center.mentor_id] : []),
             frontlinerIds: center.frontliner_ids || (center.frontliner_id ? [center.frontliner_id] : []),
             accountantId: center.accountant_id || '',
             kitchenHeadId: center.kitchen_head_id || '',
             studyInChargeId: center.study_in_charge_id || '',
+            grihsthaCounselorIds: center.grihstha_counselor_ids || (center.grihstha_counselor_id ? [center.grihstha_counselor_id] : []),
+            easyInchargeIds: center.easy_incharge_ids || (center.easy_incharge_id ? [center.easy_incharge_id] : []),
+            prernaInchargeIds: center.prerna_incharge_ids || (center.prerna_incharge_id ? [center.prerna_incharge_id] : []),
             ocId: center.oc_id || ''
         });
 
@@ -660,7 +710,29 @@ export default function ManagingDirectorDashboard() {
         checkAndAdd(center.project_advisor_id, center.project_advisor_name);
         checkAndAdd(center.acting_manager_id, center.acting_manager_name);
         checkAndAdd(center.internal_manager_id, center.internal_manager_name);
-        checkAndAdd(center.preaching_coordinator_id, center.preaching_coordinator_name);
+        if (center.preaching_coordinator_ids && center.preaching_coordinator_names && center.preaching_coordinator_ids.length === center.preaching_coordinator_names.length) {
+             center.preaching_coordinator_ids.forEach((id, idx) => checkAndAdd(id, center.preaching_coordinator_names![idx]));
+        } else {
+             checkAndAdd(center.preaching_coordinator_id, center.preaching_coordinator_name);
+        }
+
+        if (center.grihstha_counselor_ids && center.grihstha_counselor_names && center.grihstha_counselor_ids.length === center.grihstha_counselor_names.length) {
+             center.grihstha_counselor_ids.forEach((id, idx) => checkAndAdd(id, center.grihstha_counselor_names![idx]));
+        } else {
+             checkAndAdd(center.grihstha_counselor_id, center.grihstha_counselor_name);
+        }
+
+        if (center.easy_incharge_ids && center.easy_incharge_names && center.easy_incharge_ids.length === center.easy_incharge_names.length) {
+             center.easy_incharge_ids.forEach((id, idx) => checkAndAdd(id, center.easy_incharge_names![idx]));
+        } else {
+             checkAndAdd(center.easy_incharge_id, center.easy_incharge_name);
+        }
+
+        if (center.prerna_incharge_ids && center.prerna_incharge_names && center.prerna_incharge_ids.length === center.prerna_incharge_names.length) {
+             center.prerna_incharge_ids.forEach((id, idx) => checkAndAdd(id, center.prerna_incharge_names![idx]));
+        } else {
+             checkAndAdd(center.prerna_incharge_id, center.prerna_incharge_name);
+        }
         checkAndAdd(center.morning_program_in_charge_id, center.morning_program_in_charge_name);
         checkAndAdd(center.accountant_id, center.accountant_name);
         checkAndAdd(center.kitchen_head_id, center.kitchen_head_name);
@@ -714,7 +786,8 @@ export default function ManagingDirectorDashboard() {
 
             const { data, error } = await supabase
                 .from('users')
-                .select('*');
+                .select('*')
+                .eq('verification_status', 'approved');
 
             const filtered = (data || []).filter((u: any) => {
                 const uH = u.hierarchy as any;
@@ -1009,6 +1082,32 @@ export default function ManagingDirectorDashboard() {
             toast.error(error.message || 'Group assignment failed');
         } finally {
             setUpdatingGroupUserId(null);
+        }
+    };
+
+    const handleAssignKCStatus = async (userId: string, kcStatus: string) => {
+        if (!supabase) return;
+        setUpdatingKCStatusUserId(userId);
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ 
+                    hierarchy: { 
+                        ...users.find(u => u.id === userId)?.hierarchy,
+                        kcStatus 
+                    } 
+                })
+                .eq('id', userId);
+
+            if (error) throw error;
+            
+            toast.success(`KC Status updated to ${kcStatus}`);
+            loadUsers();
+        } catch (error: any) {
+            toast.error(error.message || 'KC Status update failed');
+        } finally {
+            setUpdatingKCStatusUserId(null);
         }
     };
     // --- Approvals Logic (Simplified from ProfileApprovalsPage) ---
@@ -1934,6 +2033,30 @@ export default function ManagingDirectorDashboard() {
                                                     </div>
                                                 </div>
 
+                                                <div className="mb-5">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">KC Status</label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={user.hierarchy?.kcStatus || ''}
+                                                            onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                            disabled={updatingKCStatusUserId === user.id}
+                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
+                                                        >
+                                                            <option value="">-- No KC Status --</option>
+                                                            {KC_STATUS_OPTIONS.map(status => (
+                                                                <option key={status} value={status}>{status}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                            {updatingKCStatusUserId === user.id ? (
+                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                            ) : (
+                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <div className="flex flex-wrap gap-1.5 mb-5">
                                                     {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
                                                         <span key={i} className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getRoleHierarchyNumber(r) >= 12
@@ -2027,6 +2150,7 @@ export default function ManagingDirectorDashboard() {
                                                     <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Spiritual Identity</th>
                                                     <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Privileges</th>
                                                     <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-40">VOICE group level</th>
+                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-40">KC Status</th>
                                                     <th className="px-6 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Quick Actions</th>
                                                 </tr>
                                             </thead>
@@ -2105,6 +2229,28 @@ export default function ManagingDirectorDashboard() {
                                                                     <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                                                                         {updatingGroupUserId === user.id ? (
                                                                             <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
+                                                                        ) : (
+                                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-6">
+                                                                <div className="relative w-full">
+                                                                    <select
+                                                                        value={user.hierarchy?.kcStatus || ''}
+                                                                        onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                                        disabled={updatingKCStatusUserId === user.id}
+                                                                        className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-orange-300"
+                                                                    >
+                                                                        <option value="">- No Status -</option>
+                                                                        {KC_STATUS_OPTIONS.map(status => (
+                                                                            <option key={status} value={status}>{status}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                                        {updatingKCStatusUserId === user.id ? (
+                                                                            <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
                                                                         ) : (
                                                                             <ChevronDown className="h-3.5 w-3.5" />
                                                                         )}
@@ -2915,7 +3061,6 @@ export default function ManagingDirectorDashboard() {
                                         {[
                                             { label: 'OC', key: 'ocId', placeholder: 'Select OC...' },
                                             { label: 'Internal Manager', key: 'internalManagerId', placeholder: 'Select Internal Manager...' },
-                                            { label: 'Preaching Coordinator', key: 'preachingCoordinatorId', placeholder: 'Select Coordinator...' },
                                             { label: 'Morning Program In-charge', key: 'morningProgramInChargeId', placeholder: 'Select In-charge...' },
                                             { label: 'Accountant', key: 'accountantId', placeholder: 'Select Accountant...' },
                                             { label: 'Kitchen Head', key: 'kitchenHeadId', placeholder: 'Select Kitchen Head...' },
@@ -2935,6 +3080,10 @@ export default function ManagingDirectorDashboard() {
 
                                         {/* Multi-user Roles (Mentor & Frontliner) */}
                                         {[
+                                            { label: 'Preaching Coordinators', key: 'preachingCoordinatorIds' as const },
+                                            { label: 'Grihstha Counselors', key: 'grihsthaCounselorIds' as const },
+                                            { label: 'Easy Incharges', key: 'easyInchargeIds' as const },
+                                            { label: 'Prerna Incharges', key: 'prernaInchargeIds' as const },
                                             { label: 'Mentors', key: 'mentorIds' as const },
                                             { label: 'Frontliners', key: 'frontlinerIds' as const }
                                         ].map((role) => (
@@ -3026,9 +3175,17 @@ export default function ManagingDirectorDashboard() {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 text-white font-medium rounded-lg hover:from-orange-700 hover:to-red-700 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                        disabled={isSubmitting}
+                                        className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 text-white font-medium rounded-lg hover:from-orange-700 hover:to-red-700 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                                     >
-                                        Create Center
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Creating...
+                                            </>
+                                        ) : (
+                                            'Create Center'
+                                        )}
                                     </button>
                                 </div>
                             </form>
@@ -3161,7 +3318,6 @@ export default function ManagingDirectorDashboard() {
                                         {[
                                             { label: 'OC', key: 'ocId', placeholder: 'Select OC...' },
                                             { label: 'Internal Manager', key: 'internalManagerId', placeholder: 'Select Internal Manager...' },
-                                            { label: 'Preaching Coordinator', key: 'preachingCoordinatorId', placeholder: 'Select Coordinator...' },
                                             { label: 'Morning Program In-charge', key: 'morningProgramInChargeId', placeholder: 'Select In-charge...' },
                                             { label: 'Accountant', key: 'accountantId', placeholder: 'Select Accountant...' },
                                             { label: 'Kitchen Head', key: 'kitchenHeadId', placeholder: 'Select Kitchen Head...' },
@@ -3181,6 +3337,10 @@ export default function ManagingDirectorDashboard() {
 
                                         {/* Multi-user Roles (Mentor & Frontliner) */}
                                         {[
+                                            { label: 'Preaching Coordinators', key: 'preachingCoordinatorIds' as const },
+                                            { label: 'Grihstha Counselors', key: 'grihsthaCounselorIds' as const },
+                                            { label: 'Easy Incharges', key: 'easyInchargeIds' as const },
+                                            { label: 'Prerna Incharges', key: 'prernaInchargeIds' as const },
                                             { label: 'Mentors', key: 'mentorIds' as const },
                                             { label: 'Frontliners', key: 'frontlinerIds' as const }
                                         ].map((role) => (
@@ -3242,9 +3402,17 @@ export default function ManagingDirectorDashboard() {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95"
+                                        disabled={isSubmitting}
+                                        className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
-                                        Update Center
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            'Update Center'
+                                        )}
                                     </button>
                                 </div>
                             </form>

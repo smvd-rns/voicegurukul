@@ -8,7 +8,7 @@ import {
     fetchSadhanaWeeklyTotals,
     submitSadhanaReportApi
 } from '@/lib/api/sadhana-client';
-import { Calendar, ChevronLeft, ChevronRight, Save, Loader2, CheckCircle2, AlertCircle, Sparkles, BookOpen, HeartPulse, Flower2, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Save, Loader2, CheckCircle2, AlertCircle, Sparkles, BookOpen, HeartPulse, Flower2, TrendingUp, Clock, BarChart3, Search, GraduationCap } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
 
 interface SadhanaFormData {
@@ -21,12 +21,14 @@ interface SadhanaFormData {
     wakeUp: number;
     dailyFilling: number;
     daySleep: number;
+    study: number;
 }
 
 const initialFormData: SadhanaFormData = {
     date: format(new Date(), 'yyyy-MM-dd'),
     japa: 0, hearing: 0, reading: 0, bookName: '',
     toBed: 0, wakeUp: 0, dailyFilling: 0, daySleep: 0,
+    study: 0,
 };
 
 const SPIRITUAL_TILES = [
@@ -70,6 +72,7 @@ export default function SadhanaPage() {
                     wakeUp: report.wakeUp || 0,
                     dailyFilling: report.dailyFilling || 0,
                     daySleep: report.daySleep || 0,
+                    study: (report as any).study || 0,
                 }));
                 // Check if updatedAt exists, fallback to submittedAt
                 const updatedStr = report.updatedAt ? new Date(report.updatedAt).toLocaleString() : (report.submittedAt ? new Date(report.submittedAt).toLocaleString() : '');
@@ -285,6 +288,29 @@ export default function SadhanaPage() {
                                                 onChange={e => setForm(p => ({ ...p, bookName: e.target.value }))}
                                                 className="w-full py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:bg-white transition-all"
                                             />
+                                        </div>
+
+                                        <div className="flex flex-col md:col-span-3 mt-2">
+                                            <label htmlFor="study" className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
+                                                <span className="flex items-center gap-2">
+                                                    <GraduationCap className="h-4 w-4 text-orange-500" />
+                                                    Education Study (Hours)
+                                                </span>
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    id="study"
+                                                    type="number"
+                                                    step="0.5"
+                                                    min="0"
+                                                    max="24"
+                                                    placeholder="0"
+                                                    value={form.study || ''}
+                                                    onChange={e => setForm(p => ({ ...p, study: parseFloat(e.target.value) || 0 }))}
+                                                    className="w-full py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all pr-12"
+                                                />
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase tracking-widest">Hrs</div>
+                                            </div>
                                         </div>
                                     </div>
                                 </section>

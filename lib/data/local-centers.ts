@@ -21,6 +21,8 @@ export interface CenterData {
   internal_manager_name?: string;
   preaching_coordinator_id?: string;
   preaching_coordinator_name?: string;
+  preaching_coordinator_ids?: string[];
+  preaching_coordinator_names?: string[];
   morning_program_in_charge_id?: string;
   morning_program_in_charge_name?: string;
   mentor_id?: string;
@@ -37,6 +39,18 @@ export interface CenterData {
   kitchen_head_name?: string;
   study_in_charge_id?: string;
   study_in_charge_name?: string;
+  grihstha_counselor_id?: string;
+  grihstha_counselor_name?: string;
+  grihstha_counselor_ids?: string[];
+  grihstha_counselor_names?: string[];
+  easy_incharge_id?: string;
+  easy_incharge_name?: string;
+  easy_incharge_ids?: string[];
+  easy_incharge_names?: string[];
+  prerna_incharge_id?: string;
+  prerna_incharge_name?: string;
+  prerna_incharge_ids?: string[];
+  prerna_incharge_names?: string[];
   oc_id?: string;
   oc_name?: string;
 }
