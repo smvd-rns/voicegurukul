@@ -36,6 +36,7 @@ interface ProfileRequest {
 }
 
 const MANAGEABLE_ROLES = [
+    { label: 'ROYAL', value: 'royal' },
     { label: 'Student', value: 1 },
     { label: 'Counselor', value: 2 },
     { label: 'Care Giver', value: 20 },
@@ -368,7 +369,7 @@ export default function ProjectManagerDashboard() {
     const [filterGroup, setFilterGroup] = useState('');
     const [filterKCStatus, setFilterKCStatus] = useState('');
     const [filterAshram, setFilterAshram] = useState('');
-    const [filterRole, setFilterRole] = useState<number | ''>('');
+    const [filterRole, setFilterRole] = useState<number | string | ''>('');
     const [filterCamp, setFilterCamp] = useState('');
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
     const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
@@ -1959,7 +1960,7 @@ export default function ProjectManagerDashboard() {
                                         </div>
                                         <select
                                             value={filterRole}
-                                            onChange={(e) => setFilterRole(e.target.value ? parseInt(e.target.value) : '')}
+                                            onChange={(e) => setFilterRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
                                             className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
                                         >
                                             <option value="">All Roles</option>
@@ -1970,7 +1971,7 @@ export default function ProjectManagerDashboard() {
                                                 
                                                 let visibleRoles = MANAGEABLE_ROLES;
                                                 if (isPMLelvel) {
-                                                    const allowedSet = [1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+                                                    const allowedSet = ['royal', 1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
                                                     visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
                                                 }
                                                 
@@ -2017,7 +2018,11 @@ export default function ProjectManagerDashboard() {
                                     const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
                                     
                                     const userRoles = Array.isArray(u.role) ? u.role : [u.role];
-                                    const roleMatch = !filterRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole);
+                                    const roleMatch = !filterRole || (
+                                        filterRole === 'royal'
+                                            ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
+                                            : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
+                                    );
                                     
                                     const campMatch = !filterCamp || (u as any)[filterCamp];
 
@@ -2165,7 +2170,11 @@ export default function ProjectManagerDashboard() {
                                             const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
                                             
                                             const userRoles = Array.isArray(u.role) ? u.role : [u.role];
-                                            const roleMatch = !filterRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole);
+                                            const roleMatch = !filterRole || (
+                                                filterRole === 'royal'
+                                                    ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
+                                                    : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
+                                            );
                                             
                                             const campMatch = !filterCamp || (u as any)[filterCamp];
 

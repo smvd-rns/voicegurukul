@@ -54,6 +54,7 @@ const CAMP_OPTIONS = [
 ];
 
 const MANAGEABLE_ROLES = [
+    { label: 'ROYAL', value: 'royal' },
     { label: 'Student', value: 1 },
     { label: 'Counselor', value: 2 },
     { label: 'Care Giver', value: 20 },
@@ -170,7 +171,7 @@ export default function ManagingDirectorDashboard() {
     const [selectedAshram, setSelectedAshram] = useState('');
     const [selectedCenter, setSelectedCenter] = useState('');
     const [selectedCamp, setSelectedCamp] = useState('');
-    const [selectedRole, setSelectedRole] = useState<number | ''>('');
+    const [selectedRole, setSelectedRole] = useState<number | string | ''>('');
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [pendingAdminRole, setPendingAdminRole] = useState<number | null>(null);
@@ -1271,12 +1272,12 @@ export default function ManagingDirectorDashboard() {
         const uH = u.hierarchy as any;
         const uCenter = uH?.currentCenter || uH?.center || u.center || '';
         const centerMatch = !selectedCenter || uCenter === selectedCenter;
-        const campMatch = !selectedCamp || (
-            selectedCamp === 'royal'
+        const campMatch = !selectedCamp || u[selectedCamp as keyof typeof u];
+        const roleMatch = !selectedRole || (
+            selectedRole === 'royal'
                 ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
-                : u[selectedCamp as keyof typeof u]
+                : userRoles.some((r: any) => getRoleHierarchyNumber(r) === selectedRole)
         );
-        const roleMatch = !selectedRole || userRoles.some((r: any) => getRoleHierarchyNumber(r) === selectedRole);
         const groupMatch = !selectedGroup || u.bv_group === selectedGroup;
         const kcMatch = !selectedKCStatus || u.hierarchy?.kcStatus === selectedKCStatus;
         const ashramMatch = !selectedAshram || u.hierarchy?.ashram === selectedAshram;
@@ -2024,7 +2025,7 @@ export default function ManagingDirectorDashboard() {
                                         </div>
                                         <select
                                             value={selectedRole}
-                                            onChange={(e) => setSelectedRole(e.target.value ? parseInt(e.target.value) : '')}
+                                            onChange={(e) => setSelectedRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
                                             className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
                                         >
                                             <option value="">All Categories</option>
@@ -2035,7 +2036,7 @@ export default function ManagingDirectorDashboard() {
                                                 
                                                 let visibleRoles = MANAGEABLE_ROLES;
                                                 if (isHighLevelAdmin) {
-                                                    const allowedSet = [1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+                                                    const allowedSet = ['royal', 1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
                                                     visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
                                                 }
                                                 
