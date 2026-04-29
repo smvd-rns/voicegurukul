@@ -2312,7 +2312,7 @@ export default function ProjectManagerDashboard() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {MANAGEABLE_ROLES.filter(r => r.value >= 17).map((role) => {
+                                    {MANAGEABLE_ROLES.filter(r => typeof r.value === 'number' && r.value >= 17).map((role) => {
                                         const isMultiUser = [23, 25, 26, 31, 32, 33].includes(role.value);
                                         const idsCol = roleToColumnMap[role.value]?.replace('_id', '_ids');
 
