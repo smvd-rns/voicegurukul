@@ -21,7 +21,7 @@ import {
     ChevronUp,
     User as UserIcon
 } from 'lucide-react';
-import { getEventById, getEventStats } from '@/lib/actions/events';
+import { getEventById, getEventStats, getEventTargetedUsers } from '@/lib/actions/events';
 import { supabase } from '@/lib/supabase/config';
 import { toast } from 'react-hot-toast';
 
@@ -81,6 +81,7 @@ export default function EventTrackingPage() {
                 userId: r.user_id,
                 status: r.status,
                 reason: r.reason,
+                guestCount: r.guest_count,
                 isBulk: r.is_bulk,
                 bulkAddedBy: r.bulk_added_by,
                 createdAt: r.created_at,
@@ -88,30 +89,9 @@ export default function EventTrackingPage() {
             }));
             setResponses(mappedResponses);
 
-            // 3. Fetch reached users
-            const { data: users } = await supabase!.from('users').select('*');
-            if (users) {
-                const reached = users.filter(user => {
-                    const userAshram = user.ashram || user.hierarchy?.ashram;
-                    const userTemple = user.current_temple || user.parent_temple || user.hierarchy?.temple || user.hierarchy?.currentTemple;
-                    const userCenter = user.center || user.current_center || user.hierarchy?.center || user.hierarchy?.currentCenter;
-
-                    const matchesAshram = !eventData.targetAshrams.length || eventData.targetAshrams.includes(userAshram);
-                    const userRoles = Array.isArray(user.role) ? user.role.map(String) : [String(user.role)];
-                    const matchesRole = !eventData.targetRoles.length || eventData.targetRoles.some(r => userRoles.includes(String(r)));
-                    const matchesTemple = !eventData.targetTemples.length || eventData.targetTemples.includes(userTemple);
-                    const matchesCenter = !eventData.targetCenters.length || eventData.targetCenters.includes(userCenter);
-
-                    const matchesCamps = !eventData.targetCamps.length || eventData.targetCamps.some(c => {
-                        const campField = `camp${c.charAt(0).toUpperCase()}${c.slice(1)}`;
-                        const dbField = `camp_${c.toLowerCase()}`;
-                        return user[campField] === true || user[dbField] === true;
-                    });
-
-                    return matchesAshram && matchesRole && matchesTemple && matchesCenter && matchesCamps;
-                });
-                setReachedUsers(reached);
-            }
+            // 3. Fetch reached users using the centralized secure action
+            const reached = await getEventTargetedUsers(id as string);
+            setReachedUsers(reached);
         } catch (error) {
             console.error('Error fetching tracking data:', error);
             toast.error('Failed to load tracking data');
@@ -262,7 +242,17 @@ export default function EventTrackingPage() {
                         </>
                     ) : (
                         [
-                            { label: 'Coming', value: responses.filter(r => r.status === 'coming').length, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+                            (() => {
+                                const comingResponses = responses.filter(r => r.status === 'coming');
+                                const userCount = comingResponses.length;
+                                const guestCount = comingResponses.reduce((sum, r) => sum + (r.guestCount || 0), 0);
+                                return { 
+                                    label: 'Coming', 
+                                    value: userCount + guestCount, 
+                                    subValue: guestCount > 0 ? `${userCount} Users + ${guestCount} Guests` : undefined,
+                                    icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' 
+                                };
+                            })(),
                             { label: 'Not Coming', value: responses.filter(r => r.status === 'not_coming').length, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
                             { label: 'Seen Only', value: responses.filter(r => r.status === 'seen').length, icon: Eye, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200' },
                             { label: 'Pending', value: Math.max(0, reachedUsers.length - responses.length), icon: Clock, color: 'text-slate-600', bg: 'bg-white', border: 'border-slate-200' }
@@ -270,7 +260,10 @@ export default function EventTrackingPage() {
                             <div key={i} className={`${s.bg} ${s.border} border-2 p-4 md:p-6 rounded-[1.5rem] shadow-sm flex items-center justify-between transition-transform hover:-translate-y-0.5`}>
                                 <div>
                                     <p className={`text-[10px] font-black uppercase tracking-widest ${s.color} mb-1 opacity-80`}>{s.label}</p>
-                                    <h3 className="text-2xl md:text-3xl font-black text-slate-900">{s.value}</h3>
+                                    <div className="flex flex-col">
+                                        <h3 className="text-2xl md:text-3xl font-black text-slate-900 leading-none">{s.value}</h3>
+                                        {(s as any).subValue && <p className={`text-[9px] font-bold mt-1 ${s.color} opacity-80 leading-none`}>{(s as any).subValue}</p>}
+                                    </div>
                                 </div>
                                 <div className={`p-2 bg-white rounded-xl shadow-sm ${s.color}`}>
                                     <s.icon className="h-5 w-5 md:h-6 md:w-6" />
@@ -469,7 +462,7 @@ export default function EventTrackingPage() {
                                             </td>
                                             <td className="p-4 md:p-6">
                                                 {response ? (
-                                                    <div className="flex flex-col gap-1">
+                                                    <div className="flex flex-col gap-1 items-start">
                                                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight border-2 ${response.status === 'coming' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
                                                             response.status === 'not_coming' ? 'bg-rose-50 border-rose-100 text-rose-700' :
                                                                 response.status === 'understood' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
@@ -481,8 +474,13 @@ export default function EventTrackingPage() {
                                                             {response.status === 'seen' && <Eye className="h-3 w-3" />}
                                                             {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
                                                         </span>
+                                                        {response.status === 'coming' && (response.guestCount || 0) > 0 && (
+                                                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 uppercase tracking-widest mt-0.5 ml-1">
+                                                                +{response.guestCount} Guest{(response.guestCount || 0) > 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
                                                         {response.isBulk && (
-                                                            <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">PM Verified</span>
+                                                            <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1 mt-0.5">PM Verified</span>
                                                         )}
                                                     </div>
                                                 ) : (

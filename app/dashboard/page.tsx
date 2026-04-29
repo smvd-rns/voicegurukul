@@ -50,6 +50,7 @@ export default function DashboardPage() {
             role: String(Array.isArray(userData.role) ? userData.role[0] : userData.role),
             temple: userData.hierarchy?.temple || userData.currentTemple,
             center: userData.hierarchy?.center || userData.currentCenter,
+            voiceGroup: userData.bv_group,
             completedCamps: Object.entries(userData)
               .filter(([key, val]) => key.startsWith('camp') && val === true)
               .map(([key]) => key),

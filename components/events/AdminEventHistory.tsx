@@ -268,7 +268,14 @@ export default function AdminEventHistory({ events, onRefresh }: AdminEventHisto
                                     }`}>
                                         {event.type === 'event' ? <Users className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
                                         <span className={`${event.type === 'event' ? 'text-blue-900' : 'text-emerald-900'} font-black`}>
-                                            {event.type === 'event' ? (event.comingCount || 0) : (event.understoodCount || 0)}
+                                            {event.type === 'event' ? (
+                                                <>
+                                                    {event.comingCount || 0}
+                                                    {(event.guestCount || 0) > 0 && (
+                                                        <span className="text-[8px] ml-0.5 opacity-60">+{event.guestCount}</span>
+                                                    )}
+                                                </>
+                                            ) : (event.understoodCount || 0)}
                                         </span>
                                         <span className={`${event.type === 'event' ? 'text-blue-300' : 'text-emerald-300'} mx-0.5`}>/</span>
                                         <span className="font-bold opacity-70">{event.reachedCount || 0}</span>

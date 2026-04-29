@@ -82,6 +82,14 @@ function EventsPageContent() {
 
     const fetchEvents = useCallback(async () => {
         if (!userData) return;
+        
+        // Block unapproved users from seeing events
+        if (userData.verificationStatus && userData.verificationStatus !== 'approved' && !isSuperAdmin) {
+            setLoading(false);
+            setEvents([]);
+            return;
+        }
+
         setLoading(true);
         setEvents([]); // Clear old events to prevent UI flash when switching tabs
         try {
@@ -105,6 +113,7 @@ function EventsPageContent() {
                 role: (activeTab === 'audience' || !isAdmin) ? String(Array.isArray(userData.role) ? userData.role[0] : userData.role) : undefined,
                 temple: (activeTab === 'audience' || !isAdmin) ? (userData.hierarchy?.temple || userData.currentTemple) : undefined,
                 center: (activeTab === 'audience' || !isAdmin) ? (userData.hierarchy?.center || userData.currentCenter) : undefined,
+                voiceGroup: (activeTab === 'audience' || !isAdmin) ? userData.bv_group : undefined,
                 completedCamps: (activeTab === 'audience' || !isAdmin) ? Object.entries(userData)
                     .filter(([key, val]) => key.startsWith('camp') && val === true)
                     .map(([key]) => key) : [],

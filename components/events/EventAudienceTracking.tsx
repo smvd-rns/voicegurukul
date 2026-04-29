@@ -7,9 +7,9 @@ import {
     Users, Search, Filter, Building, MapPin,
     CheckCircle, XCircle, Eye, Clock,
     CheckCircle2, X, User as UserIcon,
-    Loader2, ChevronLeft, ChevronRight
+    Loader2, ChevronLeft, ChevronRight, Edit3
 } from 'lucide-react';
-import { getEventTargetedUsers, bulkSubmitResponses } from '@/lib/actions/events';
+import { getEventTargetedUsers, bulkSubmitResponses, getEventResponses } from '@/lib/actions/events';
 import { supabase } from '@/lib/supabase/config';
 import { toast } from 'react-hot-toast';
 
@@ -31,6 +31,10 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
     const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role].filter(Boolean);
     const isSuperAdmin = userRoles.some(r => ['super_admin', 8].includes(r as any));
     const isPM = userRoles.some(r => ['project_manager', 15].includes(r as any));
+    const isAuthorizedManager = userRoles.some(role => 
+        ['project_advisor', 'project_manager', 'acting_manager', 'super_admin'].includes(String(role)) ||
+        (typeof role === 'number' && (role >= 14 && role <= 16 || role === 8))
+    );
 
     // Filters (Only relevant if super admin, otherwise locked to their center)
     const [filterTemple, setFilterTemple] = useState('all');
@@ -42,57 +46,45 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
 
     const fetchData = useCallback(async () => {
         setLoading(true);
-        setTargetedUsers([]); // Clear previous data to prevent flashing
-        setResponses([]);
         try {
-            // Fetch users with geographic filters applied at server if posssible
-            const users = await getEventTargetedUsers(event.id, {
-                temple: isSuperAdmin ? filterTemple : undefined,
-                center: isSuperAdmin ? filterCenter : undefined
-            });
+            const [users, eventResponses] = await Promise.all([
+                getEventTargetedUsers(event.id, {
+                    temple: isSuperAdmin ? filterTemple : undefined,
+                    center: isSuperAdmin ? filterCenter : undefined
+                }),
+                getEventResponses(event.id)
+            ]);
 
-            // If not super admin, strictly filter to their own center in JS as well
-            const finalUsers = isSuperAdmin ? users : users.filter(u => {
-                const userCenter = u.center || u.current_center || u.hierarchy?.center || u.hierarchy?.currentCenter;
-                const adminCenter = userData?.hierarchy?.center || userData?.currentCenter;
-                return userCenter === adminCenter;
-            });
-
-            setTargetedUsers(finalUsers);
-
-            // Fetch responses for these users
-            const { getActiveSadhanaSupabase } = await import('@/lib/supabase/sadhana');
-            const sadhanaSupabase = getActiveSadhanaSupabase();
-            if (sadhanaSupabase) {
-                const { data: respData } = await sadhanaSupabase
-                    .from('event_responses')
-                    .select('*')
-                    .eq('event_id', event.id);
-
-                const mapped: ManagedEventResponse[] = (respData || []).map(r => ({
-                    id: r.id,
-                    eventId: r.event_id,
-                    userId: r.user_id,
-                    status: r.status,
-                    reason: r.reason,
-                    isBulk: r.is_bulk,
-                    bulkAddedBy: r.bulk_added_by,
-                    createdAt: r.created_at,
-                    updatedAt: r.updated_at
-                }));
-                setResponses(mapped);
-            }
+            setTargetedUsers(users);
+            setResponses(eventResponses);
         } catch (error) {
             console.error('Error fetching audience data:', error);
-            toast.error('Failed to load audience list');
+            toast.error('Failed to load tracking data');
         } finally {
             setLoading(false);
         }
-    }, [event.id, filterTemple, filterCenter, isSuperAdmin, userData]);
+    }, [event.id, isSuperAdmin, filterTemple, filterCenter]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleGuestCountUpdate = async (userId: string, count: number) => {
+        const { submitEventResponse } = await import('@/lib/actions/events');
+        try {
+            await submitEventResponse({
+                eventId: event.id,
+                userId: userId,
+                status: 'coming',
+                guestCount: count
+            });
+            // Update local state immediately for snappy UI
+            setResponses(prev => prev.map(r => r.userId === userId ? { ...r, guestCount: count } : r));
+            toast.success("Guest count updated");
+        } catch (error) {
+            toast.error("Failed to update guest count");
+        }
+    };
 
     const filteredUsers = useMemo(() => {
         return targetedUsers.filter(user => {
@@ -160,13 +152,29 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                     </div>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black text-orange-600 uppercase tracking-tight">
-                        {event.type === 'event' 
-                            ? `${responses.filter(r => r.status === 'coming').length} Confirmations`
-                            : `${responses.filter(r => r.status === 'understood').length} Understood • ${responses.filter(r => r.status === 'seen').length} Seen`
-                        }
-                    </span>
-                    <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest leading-none">
+                    <div className="flex items-center gap-2">
+                        {event.type === 'event' ? (
+                            <>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-tight">
+                                        {responses.filter(r => r.status === 'coming').length} Users
+                                    </span>
+                                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-tight">
+                                        + {responses.reduce((sum, r) => sum + (r.guestCount || 0), 0)} Guests
+                                    </span>
+                                </div>
+                                <div className="h-8 w-[1px] bg-gray-100 mx-1" />
+                                <span className="text-sm font-black text-gray-900">
+                                    {responses.filter(r => r.status === 'coming').length + responses.reduce((sum, r) => sum + (r.guestCount || 0), 0)}
+                                </span>
+                            </>
+                        ) : (
+                            <span className="text-[10px] font-black text-orange-600 uppercase tracking-tight">
+                                {responses.filter(r => r.status === 'understood').length} Understood • {responses.filter(r => r.status === 'seen').length} Seen
+                            </span>
+                        )}
+                    </div>
+                    <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest leading-none mt-1">
                         Out of {targetedUsers.length} targeted
                     </span>
                 </div>
@@ -215,6 +223,15 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                         >
                             Confirm
                         </button>
+                        {isAuthorizedManager && (
+                            <button
+                                onClick={() => handleBulkSubmit('not_coming')}
+                                disabled={isBulkSubmitting}
+                                className="px-4 py-1.5 bg-rose-500 text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 transition-all border border-rose-400"
+                            >
+                                Not Coming
+                            </button>
+                        )}
                         <button onClick={() => setSelectedUserIds([])} className="p-1.5 hover:bg-white/10 rounded-lg">
                             <X className="h-4 w-4" />
                         </button>
@@ -233,7 +250,13 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                         type="checkbox"
                                         onChange={(e) => {
                                             if (e.target.checked) {
-                                                const pageIds = paginatedUsers.map(u => u.id);
+                                                const pageIds = paginatedUsers
+                                                    .filter(u => {
+                                                        const resp = responses.find(r => r.userId === u.id);
+                                                        // Managers can select everyone, others can only select non-confirmed
+                                                        return isAuthorizedManager || !resp || resp.status !== 'coming';
+                                                    })
+                                                    .map(u => u.id);
                                                 setSelectedUserIds(prev => Array.from(new Set([...prev, ...pageIds])));
                                             } else {
                                                 const pageIds = new Set(paginatedUsers.map(u => u.id));
@@ -255,10 +278,21 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                         ) : paginatedUsers.map(user => {
                             const response = responses.find(r => r.userId === user.id);
                             const isSelected = selectedUserIds.includes(user.id);
+                            const isComing = response?.status === 'coming' || response?.status === 'understood';
+                            const isNotComing = response?.status === 'not_coming';
+                            
+                            const rowBgClass = isComing 
+                                ? 'bg-emerald-50/80 hover:bg-emerald-100/80 border-l-4 border-emerald-500' 
+                                : isNotComing 
+                                    ? 'bg-rose-50/80 hover:bg-rose-100/80 border-l-4 border-rose-500' 
+                                    : isSelected 
+                                        ? 'bg-orange-50/30 border-l-4 border-orange-400' 
+                                        : 'hover:bg-gray-50/50 border-l-4 border-transparent';
+
                             return (
-                                <tr key={user.id} className={`group ${isSelected ? 'bg-orange-50/30' : 'hover:bg-gray-50/50'} transition-colors`}>
+                                <tr key={user.id} className={`group ${rowBgClass} transition-colors`}>
                                     <td className="p-4">
-                                        {event.type === 'event' && (
+                                        {event.type === 'event' && (isAuthorizedManager || !isComing) && (
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
@@ -266,7 +300,7 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                                     if (isSelected) setSelectedUserIds(prev => prev.filter(id => id !== user.id));
                                                     else setSelectedUserIds(prev => [...prev, user.id]);
                                                 }}
-                                                className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                                className="rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
                                             />
                                         )}
                                     </td>
@@ -291,11 +325,39 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                                 {response.status === 'understood' && <CheckCircle2 className="h-3 w-3" />}
                                                 {response.status === 'seen' && <Eye className="h-3 w-3" />}
                                                 {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
+                                                {(response.guestCount || 0) > 0 ? ` (+${response.guestCount} guests)` : ''}
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-300">
                                                 <Clock className="h-3 w-3" /> Pending
                                             </span>
+                                        )}
+                                        {isAuthorizedManager && isComing && (
+                                            <div className="mt-1.5 flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                                                <div className="flex items-center bg-emerald-100/50 rounded-lg p-1 border border-emerald-200">
+                                                    <Edit3 className="h-2.5 w-2.5 text-emerald-600 mr-1.5 ml-1" />
+                                                    <input 
+                                                        type="number"
+                                                        min="0"
+                                                        defaultValue={response?.guestCount || 0}
+                                                        onBlur={(e) => {
+                                                            const val = parseInt(e.target.value) || 0;
+                                                            if (val !== (response?.guestCount || 0)) {
+                                                                handleGuestCountUpdate(user.id, val);
+                                                            }
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                const val = parseInt((e.target as HTMLInputElement).value) || 0;
+                                                                handleGuestCountUpdate(user.id, val);
+                                                                (e.target as HTMLInputElement).blur();
+                                                            }
+                                                        }}
+                                                        className="w-10 bg-transparent text-[10px] font-black text-emerald-700 outline-none border-none p-0 focus:ring-0"
+                                                    />
+                                                    <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest mr-1">Guests</span>
+                                                </div>
+                                            </div>
                                         )}
                                     </td>
                                     <td className="p-4 text-right">

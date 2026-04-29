@@ -18,6 +18,12 @@ interface EventDetailViewProps {
 export default function EventDetailView({ event, onResponseUpdate }: EventDetailViewProps) {
     const { userData } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [guestCount, setGuestCount] = useState<number>(event.userResponse?.guestCount || 0);
+
+    // Sync state when event changes
+    useEffect(() => {
+        setGuestCount(event.userResponse?.guestCount || 0);
+    }, [event.userResponse?.guestCount, event.id]);
 
     const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
     const isAdmin = userRoles.some(role =>
@@ -25,7 +31,9 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
         (typeof role === 'number' && ((role >= 4 && role <= 8) || (role >= 11 && role <= 16) || role === 21))
     );
 
-    const handleResponse = useCallback(async (status: 'coming' | 'not_coming' | 'seen' | 'understood', reason?: string) => {
+    const canGiveGuestCount = event.type === 'event';
+
+    const handleResponse = useCallback(async (status: 'coming' | 'not_coming' | 'seen' | 'understood', reason?: string, overrideGuestCount?: number) => {
         if (!userData) return;
         setIsSubmitting(true);
         try {
@@ -34,7 +42,8 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                 userId: userData.id,
                 status,
                 reason,
-                isBulk: false
+                isBulk: false,
+                guestCount: status === 'coming' ? (overrideGuestCount !== undefined ? overrideGuestCount : guestCount) : 0
             });
             toast.success(status === 'coming' ? "See you there! 🙏" : "Response recorded.");
             onResponseUpdate();
@@ -45,7 +54,7 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
         } finally {
             setIsSubmitting(false);
         }
-    }, [event.id, userData, onResponseUpdate]);
+    }, [event.id, userData, onResponseUpdate, guestCount]);
 
     useEffect(() => {
         // Auto-record 'seen' status when opening an announcement
@@ -281,17 +290,37 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                                 </h5>
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
                                     {event.userResponse.isBulk ? 'Assigned by Manager' : 'Selection saved'}
+                                    {event.userResponse.guestCount ? ` • ${event.userResponse.guestCount} Guests` : ''}
                                 </p>
                             </div>
                         </div>
 
                         {!event.userResponse.isBulk && (
-                            <button
-                                onClick={() => handleResponse(event.userResponse?.status === 'coming' ? 'not_coming' : 'coming')}
-                                className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors px-4 py-2"
-                            >
-                                Change
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {event.type === 'event' && event.userResponse.status === 'coming' && (
+                                    <button
+                                        onClick={() => {
+                                            // Trigger a special mode or just re-show the guest count input
+                                            // For simplicity, we can use a prompt or just toggle a local state
+                                            const newCount = prompt("How many guests are with you?", String(event.userResponse?.guestCount || 0));
+                                            if (newCount !== null) {
+                                                const val = parseInt(newCount) || 0;
+                                                setGuestCount(val);
+                                                handleResponse('coming', undefined, val);
+                                            }
+                                        }}
+                                        className="text-[10px] font-black text-orange-600 uppercase tracking-widest hover:bg-orange-50 transition-all px-4 py-2 rounded-xl"
+                                    >
+                                        Edit Guests
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => handleResponse(event.userResponse?.status === 'coming' ? 'not_coming' : 'coming')}
+                                    className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors px-4 py-2"
+                                >
+                                    Change
+                                </button>
+                            </div>
                         )}
                     </div>
                 ) : (event.rsvpDeadline && new Date() > new Date(event.rsvpDeadline)) ? (
@@ -309,7 +338,43 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col gap-4">
+                        {canGiveGuestCount && (
+                            <div className="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl mb-2">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white rounded-xl shadow-sm border border-orange-200 text-orange-600">
+                                            <Users className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-orange-900 uppercase tracking-widest">Guest Count</p>
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">How many people are with you?</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-white rounded-xl border border-orange-200 p-1">
+                                        <button 
+                                            onClick={() => setGuestCount(Math.max(0, guestCount - 1))}
+                                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 rounded-lg text-orange-600 font-black"
+                                        >
+                                            -
+                                        </button>
+                                        <input 
+                                            type="number" 
+                                            value={guestCount}
+                                            onChange={(e) => setGuestCount(Math.max(0, parseInt(e.target.value) || 0))}
+                                            className="w-12 text-center font-black text-sm bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button 
+                                            onClick={() => setGuestCount(guestCount + 1)}
+                                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 rounded-lg text-orange-600 font-black"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row gap-4">
                         <button
                             onClick={() => handleResponse('coming')}
                             disabled={isSubmitting}
@@ -325,6 +390,7 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                         >
                             <span>Decline</span>
                         </button>
+                        </div>
                     </div>
                 )}
             </div>

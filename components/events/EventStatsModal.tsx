@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ManagedEvent, ManagedEventResponse, User } from '@/types';
 import { X, Users, Check, X as CloseIcon, Info, Eye, Search, Filter, CheckCircle2, BarChart3, TrendingUp, CheckCircle, XCircle, Clock, MapPin, Building } from 'lucide-react';
-import { getEventStats, bulkSubmitResponses } from '@/lib/actions/events';
+import { getEventStats, bulkSubmitResponses, getEventTargetedUsers } from '@/lib/actions/events';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/config';
@@ -56,6 +56,7 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                 userId: r.user_id,
                 status: r.status,
                 reason: r.reason,
+                guestCount: r.guest_count,
                 isBulk: r.is_bulk,
                 bulkAddedBy: r.bulk_added_by,
                 createdAt: r.created_at,
@@ -64,36 +65,10 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
 
             setResponses(mappedResponses);
 
-            // 2. Fetch all users from Main DB to calculate reach
-            // Select all fields to ensure we have camps and hierarchy data
-            let query = supabase!.from('users').select('*');
-
-            // Apply filters if they exist (approximate filtering, refined in JS)
-            const { data: users } = await query;
-
-            if (users) {
-                const reached = users.filter((user: any) => {
-                    // Handle both flat and hierarchy object structure
-                    const userAshram = user.ashram || user.hierarchy?.ashram;
-                    const userTemple = user.current_temple || user.parent_temple || user.hierarchy?.temple || user.hierarchy?.currentTemple;
-                    const userCenter = user.center || user.current_center || user.hierarchy?.center || user.hierarchy?.currentCenter;
-
-                    const matchesAshram = !event.targetAshrams.length || event.targetAshrams.includes(userAshram);
-                    const userRolesArray = Array.isArray(user.role) ? user.role.map(String) : [String(user.role)];
-                    const matchesRole = !event.targetRoles.length || event.targetRoles.some(r => userRolesArray.includes(String(r)));
-                    const matchesTemple = !event.targetTemples.length || event.targetTemples.includes(userTemple);
-                    const matchesCenter = !event.targetCenters.length || event.targetCenters.includes(userCenter);
-
-                    const matchesCamps = !event.targetCamps.length || event.targetCamps.some(c => {
-                        const campField = `camp${c.charAt(0).toUpperCase()}${c.slice(1)}`;
-                        const dbField = `camp_${c.toLowerCase()}`;
-                        return user[campField] === true || user[dbField] === true;
-                    });
-
-                    return matchesAshram && matchesRole && matchesTemple && matchesCenter && matchesCamps;
-                });
-                setReachedUsers(reached);
-            }
+            // 2. Fetch the exact list of targeted users using the centralized server action
+            // This ensures verification_status and target_user_ids are perfectly respected
+            const reached = await getEventTargetedUsers(event.id);
+            setReachedUsers(reached);
 
             // 3. Stats
             setStats(await getEventStats(event.id));
@@ -104,7 +79,7 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
         } finally {
             setLoading(false);
         }
-    }, [event.id, event.targetAshrams, event.targetRoles, event.targetTemples, event.targetCenters, event.targetCamps]);
+    }, [event.id]);
 
     useEffect(() => {
         if (isOpen) fetchData();
@@ -220,9 +195,23 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                             <div className="flex items-center justify-between px-3 py-2 bg-white rounded-xl border border-emerald-100 shadow-sm">
                                 <div className="flex flex-col">
                                     <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tight">Coming</span>
-                                    <span className="text-base font-black text-gray-900 leading-none">{responses.filter(r => r.status === 'coming').length}</span>
+                                    {(() => {
+                                        const comingResponses = responses.filter(r => r.status === 'coming');
+                                        const userCount = comingResponses.length;
+                                        const guestCount = comingResponses.reduce((sum, r) => sum + (r.guestCount || 0), 0);
+                                        return (
+                                            <>
+                                                <span className="text-base font-black text-gray-900 leading-none">{userCount + guestCount}</span>
+                                                {guestCount > 0 && (
+                                                    <span className="text-[8px] font-bold text-emerald-600 opacity-80 mt-0.5 leading-none">
+                                                        ({userCount} Users + {guestCount} Guests)
+                                                    </span>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
-                                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 ml-2" />
                             </div>
 
                             {/* Not Coming */}
@@ -414,11 +403,18 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                                             </td>
                                             <td className="px-3 py-2">
                                                 {response ? (
-                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${response.status === 'coming' || response.status === 'understood' ? 'bg-emerald-100 text-emerald-700' :
-                                                        response.status === 'not_coming' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                                                        }`}>
-                                                        {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${response.status === 'coming' || response.status === 'understood' ? 'bg-emerald-100 text-emerald-700' :
+                                                            response.status === 'not_coming' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                                                            }`}>
+                                                            {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
+                                                        </span>
+                                                        {response.status === 'coming' && (response.guestCount || 0) > 0 && (
+                                                            <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest mt-0.5">
+                                                                +{response.guestCount} Guest{(response.guestCount || 0) > 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 ) : (
                                                     <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-gray-100 text-gray-400">
                                                         No Response

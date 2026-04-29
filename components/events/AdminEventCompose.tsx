@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Users, Layout, Send, User, Smile, Code, Type, RefreshCw, Layers, Shield, Globe, Building2, MapPin, Check, X, Info, Search, Calendar, Star, Pin, Clock } from 'lucide-react';
+import { Mail, Plus, Users, Layout, Send, User, Smile, Code, Type, RefreshCw, Layers, Shield, Globe, Building2, MapPin, Check, X, Info, Search, Calendar, Star, Pin, Clock, Bell } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/config';
 import { toast } from 'react-hot-toast';
-import { createEvent } from '@/lib/actions/events';
+import { createEvent, getAllApprovedUsersForMatching } from '@/lib/actions/events';
 import MultiSelect from '@/components/ui/MultiSelect';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import LiveMessagePreview from '@/components/ui/LiveMessagePreview';
 import AttachmentPicker from '@/components/ui/AttachmentPicker';
-import { roleOptions, ashramOptions, campOptions } from '@/lib/utils/event-constants';
+import { roleOptions, ashramOptions, campOptions, bvGroupOptions } from '@/lib/utils/event-constants';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ManagedEventAttachment } from '@/types';
 import { useMemo } from 'react';
@@ -34,6 +34,12 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
     const [isPinned, setIsPinned] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Auto-reminder state
+    const [autoReminderEnabled, setAutoReminderEnabled] = useState(false);
+    const [reminderDate, setReminderDate] = useState('');
+    const [reminderTime, setReminderTime] = useState('');
+    const [reminderTarget, setReminderTarget] = useState<('no_reply' | 'seen')[]>(['no_reply', 'seen']);
+
 
 
     // Filters
@@ -42,6 +48,7 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
     const [targetTemples, setTargetTemples] = useState<string[]>([]);
     const [targetCenters, setTargetCenters] = useState<string[]>([]);
     const [targetCamps, setTargetCamps] = useState<string[]>([]);
+    const [targetVoiceGroups, setTargetVoiceGroups] = useState<string[]>([]);
 
     // Meta
     const [temples, setTemples] = useState<any[]>([]);
@@ -53,6 +60,8 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
     const [showUserList, setShowUserList] = useState(false);
     const [modalSearchTerm, setModalSearchTerm] = useState('');
     const [modalCenterFilter, setModalCenterFilter] = useState('');
+    const [modalVoiceGroupFilter, setModalVoiceGroupFilter] = useState('');
+    const [modalCampFilter, setModalCampFilter] = useState('');
     const [excludedUserIds, setExcludedUserIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
@@ -142,38 +151,17 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
         setIsFetchingUsers(true);
         setExcludedUserIds(new Set()); // Reset exclusions on new search
         try {
-            let query = supabase!.from('users').select('id, name, email, hierarchy, current_temple, current_center, center', { count: 'exact' });
-
-            if (targetAshrams.length > 0 && targetAshrams.length < ashramOptions.length) {
-                query = query.in('hierarchy->>ashram', targetAshrams);
-            }
-
-            if (targetRoles.length > 0 && targetRoles.length < roleOptions.length) {
-                // Use .in() for cleaner and more robust filtering
-                query = query.in('role', targetRoles);
-            }
-
-            if (targetTemples.length > 0 && targetTemples.length < temples.length) {
-                const values = `(${targetTemples.map(v => `"${v}"`).join(',')})`;
-                query = query.or(`current_temple.in.${values},hierarchy->>temple.in.${values},hierarchy->>currentTemple.in.${values}`);
-            }
-
-            if (targetCenters.length > 0 && targetCenters.length < centers.length) {
-                const values = `(${targetCenters.map(v => `"${v}"`).join(',')})`;
-                query = query.or(`current_center.in.${values},center.in.${values},hierarchy->>center.in.${values},hierarchy->>currentCenter.in.${values}`);
-            }
-
-            // Apply global role-based restrictions to the final query
-            const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
-            const normalizedRoles = userRoles.map(r => String(r));
+            const userRolesStr = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+            const normalizedRoles = userRolesStr.map(r => String(r));
 
             const isSuperAdmin = normalizedRoles.some(r => r === '8' || r === 'super_admin');
             const isTempleAdmin = normalizedRoles.some(r => ['11', '12', '13', '21', 'managing_director', 'director', 'central_voice_manager', 'youth_preacher'].includes(r));
             const isCenterAdmin = normalizedRoles.some(r => ['14', '15', '16', 'project_advisor', 'project_manager', 'acting_manager'].includes(r));
             const isEventAdmin = normalizedRoles.some(r => r === '30' || r === 'event_admin');
 
+            let scopeOrCondition: string | null = null;
+
             if (isEventAdmin && !isSuperAdmin && !isTempleAdmin && !isCenterAdmin) {
-                // Fetch allocations again (or rely on what was loaded in `temples`/`centers`)
                 const allowedTempleNames = temples.map(t => t.name);
                 const allowedCenterNames = centers.map(c => c.name);
 
@@ -187,7 +175,7 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                         const values = `(${allowedCenterNames.map(v => `"${v}"`).join(',')})`;
                         orConditions.push(`current_center.in.${values}`, `center.in.${values}`, `hierarchy->>center.in.${values}`, `hierarchy->>currentCenter.in.${values}`);
                     }
-                    query = query.or(orConditions.join(','));
+                    scopeOrCondition = orConditions.join(',');
                 } else {
                     setRecipientCount(0);
                     setSelectedUsersList([]);
@@ -195,11 +183,10 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                     return;
                 }
             } else if (isTempleAdmin && !isSuperAdmin) {
-                // If Temple Admin (MD, Director, etc.), restrict to users in their assigned temples
                 const allowedTempleNames = temples.map(t => t.name);
                 if (allowedTempleNames.length > 0) {
                     const values = `(${allowedTempleNames.map(v => `"${v}"`).join(',')})`;
-                    query = query.or(`current_temple.in.${values},hierarchy->>temple.in.${values},hierarchy->>currentTemple.in.${values}`);
+                    scopeOrCondition = `current_temple.in.${values},hierarchy->>temple.in.${values},hierarchy->>currentTemple.in.${values}`;
                 } else {
                     setRecipientCount(0);
                     setSelectedUsersList([]);
@@ -207,11 +194,10 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                     return;
                 }
             } else if (isCenterAdmin && !isSuperAdmin) {
-                // If Center Admin (PM, Advisor, etc.), restrict to users in their centers
                 const allowedCenterNames = centers.map(c => c.name);
                 if (allowedCenterNames.length > 0) {
                     const values = `(${allowedCenterNames.map(v => `"${v}"`).join(',')})`;
-                    query = query.or(`current_center.in.${values},center.in.${values},hierarchy->>center.in.${values},hierarchy->>currentCenter.in.${values}`);
+                    scopeOrCondition = `current_center.in.${values},center.in.${values},hierarchy->>center.in.${values},hierarchy->>currentCenter.in.${values}`;
                 } else {
                     setRecipientCount(0);
                     setSelectedUsersList([]);
@@ -220,13 +206,99 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                 }
             }
 
-            const { data, count, error } = await query;
+            // Use the server action to fetch users — bypasses RLS so we get full profile_details for camp matching
+            const users = await getAllApprovedUsersForMatching(scopeOrCondition || undefined);
+            console.log(`Fetched ${users.length} approved users within scope for matching`);
 
-            if (error) throw error;
+            // Now apply exact JS filtering (same as triggerPushNotificationsForEvent and getEventTargetedUsers)
+            const matchedUsers = (users || []).filter(user => {
+                // 1. Ashram Check
+                const userAshram = String(user.ashram || user.hierarchy?.ashram || '').trim().toLowerCase();
+                const matchesAshram = targetAshrams.length === 0 || targetAshrams.length === ashramOptions.length || 
+                    targetAshrams.some(a => String(a).trim().toLowerCase() === userAshram);
+                if (!matchesAshram) return false;
 
-            setRecipientCount(count || 0);
-            setSelectedUsersList(data || []);
-            toast.success(`Found ${count || 0} matching users`);
+                // 2. Role Check
+                let parsedRoles: any[] = [];
+                try {
+                    if (typeof user.role === 'string' && user.role.startsWith('[')) {
+                        parsedRoles = JSON.parse(user.role);
+                    } else if (Array.isArray(user.role)) {
+                        parsedRoles = user.role;
+                    } else {
+                        parsedRoles = [user.role];
+                    }
+                } catch {
+                    parsedRoles = [user.role];
+                }
+                const uRoles = parsedRoles.map(String);
+                const matchesRole = targetRoles.length === 0 || targetRoles.length === roleOptions.length || targetRoles.some(r => uRoles.includes(String(r)));
+                if (!matchesRole) return false;
+
+                // 3. Temple Check
+                const userLocations = [
+                    user.current_temple, 
+                    user.parent_temple, 
+                    user.hierarchy?.temple, 
+                    user.hierarchy?.currentTemple
+                ].map(l => String(l || '').trim().toLowerCase());
+                
+                const matchesTemple = targetTemples.length === 0 || targetTemples.length === temples.length || 
+                    targetTemples.some(t => userLocations.includes(String(t).trim().toLowerCase()));
+                if (!matchesTemple) return false;
+
+                // 4. Center Check
+                const userCenters = [
+                    user.center,
+                    user.current_center,
+                    user.parent_center,
+                    user.hierarchy?.center,
+                    user.hierarchy?.currentCenter
+                ].map(l => String(l || '').trim().toLowerCase());
+
+                const matchesCenter = targetCenters.length === 0 || targetCenters.length === centers.length || 
+                    targetCenters.some(c => userCenters.includes(String(c).trim().toLowerCase()));
+                if (!matchesCenter) return false;
+
+                // 5. Camp Check
+                const matchesCamps = targetCamps.length === 0 || targetCamps.some((c: string) => {
+                    const snakeCaseField = c.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                    const variations = [c, snakeCaseField];
+                    if (c === 'campNishtha') variations.push('camp_nistha', 'campNistha');
+                    if (c === 'campAshraya') variations.push('camp_ashray', 'campAshraya');
+                    
+                    const profileData = (user as any).user_profile_details;
+                    const profile = Array.isArray(profileData) ? profileData[0] : profileData;
+                    const hierarchy = user.hierarchy || {};
+                    
+                    // Debug: log the first user's camp-related data to trace the issue
+                    if (users.indexOf(user) === 0) {
+                        console.log('[Camp Debug] User:', user.name, '| Checking variations:', variations);
+                        console.log('[Camp Debug] user_profile_details:', profile);
+                        console.log('[Camp Debug] camp values in profile:', variations.map(v => `${v}=${profile?.[v]}`));
+                    }
+                    
+                    return variations.some(v => 
+                        (user as any)[v] === true || 
+                        (profile && profile[v] === true) ||
+                        hierarchy[v] === true ||
+                        hierarchy[v] === 'true'
+                    );
+                });
+                if (!matchesCamps) return false;
+
+                // 6. Voice Group Check
+                const userVoiceGroup = String(user.bv_group || '').trim().toLowerCase();
+                const matchesVoiceGroup = targetVoiceGroups.length === 0 || 
+                    targetVoiceGroups.some(g => String(g).trim().toLowerCase() === userVoiceGroup);
+                if (!matchesVoiceGroup) return false;
+
+                return true;
+            });
+
+            setRecipientCount(matchedUsers.length);
+            setSelectedUsersList(matchedUsers);
+            toast.success(`Found ${matchedUsers.length} matching users`);
         } catch (error: any) {
             console.error('Error fetching matching users:', error);
             toast.error('Failed to calculate audience');
@@ -409,12 +481,23 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                 targetRoles,
                 targetTemples: finalTargetTemples,
                 targetCenters: finalTargetCenters,
-                targetCamps,
-                excludedUserIds: Array.from(excludedUserIds),
+                targetCamps: targetCamps,
+                targetVoiceGroups: targetVoiceGroups,
+                targetUserIds: (excludedUserIds.size > 0 || (activeRecipientCount > 0 && activeRecipientCount < 20)) 
+                    ? selectedUsersList.filter(u => !excludedUserIds.has(u.id)).map(u => u.id) 
+                    : undefined,
+                excludedUserIds: (excludedUserIds.size > 0 && activeRecipientCount >= 20) 
+                    ? Array.from(excludedUserIds) 
+                    : [],
                 reachedCount: activeRecipientCount,
                 isImportant: isImportant,
                 isPinned: isPinned,
-                rsvpDeadline: parsedRsvpDeadline
+                rsvpDeadline: parsedRsvpDeadline,
+                autoReminderEnabled: type === 'event' && autoReminderEnabled,
+                reminderDateTime: type === 'event' && autoReminderEnabled && reminderDate && reminderTime 
+                    ? new Date(`${reminderDate}T${reminderTime}`) 
+                    : undefined,
+                reminderTarget: type === 'event' && autoReminderEnabled ? reminderTarget : [],
             });
 
 
@@ -581,6 +664,108 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                             </div>
                         )}
 
+                        {/* ── Auto Reminder ── */}
+                        {type === 'event' && (
+                            <div className="col-span-1 md:col-span-2 space-y-3">
+                                {/* Toggle Row */}
+                                <div
+                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${autoReminderEnabled ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-100 hover:bg-gray-100/60'}`}
+                                    onClick={() => setAutoReminderEnabled(!autoReminderEnabled)}
+                                >
+                                    <div className={`p-2 rounded-lg transition-all ${autoReminderEnabled ? 'bg-indigo-500 text-white' : 'bg-white text-gray-400'}`}>
+                                        <Bell className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Auto Reminder</p>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">
+                                            {autoReminderEnabled ? 'Automatic reminders are ON — configured below' : 'Send automatic reminders before the event'}
+                                        </p>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={autoReminderEnabled}
+                                        onChange={(e) => setAutoReminderEnabled(e.target.checked)}
+                                        className="w-5 h-5 rounded-md border-indigo-300 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </div>
+
+                                {/* Config Panel — visible when enabled */}
+                                {autoReminderEnabled && (
+                                    <div className="p-4 bg-indigo-50/60 border-2 border-indigo-100 rounded-2xl space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                        {/* When to remind */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-indigo-800 uppercase tracking-widest ml-1">Reminder Date</label>
+                                                <div className="relative">
+                                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400" />
+                                                    <input
+                                                        type="date"
+                                                        value={reminderDate}
+                                                        onChange={(e) => setReminderDate(e.target.value)}
+                                                        className="w-full pl-10 pr-4 py-3 bg-white border-2 border-indigo-100 rounded-xl focus:border-indigo-500 transition-all font-bold text-gray-900 outline-none text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-indigo-800 uppercase tracking-widest ml-1">Reminder Time</label>
+                                                <div className="relative">
+                                                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-400" />
+                                                    <input
+                                                        type="time"
+                                                        value={reminderTime}
+                                                        onChange={(e) => setReminderTime(e.target.value)}
+                                                        className="w-full pl-10 pr-4 py-3 bg-white border-2 border-indigo-100 rounded-xl focus:border-indigo-500 transition-all font-bold text-gray-900 outline-none text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {(!reminderDate || !reminderTime) && (
+                                            <p className="text-[9px] text-red-500 font-bold ml-1">⚠ Please set both date and time for the reminder</p>
+                                        )}
+
+                                        {/* Who to remind */}
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">Who to Remind</p>
+                                            <div className="flex gap-3">
+                                                {[
+                                                    { id: 'no_reply' as const, label: 'No Reply', desc: 'Users who haven\'t responded' },
+                                                    { id: 'seen' as const, label: 'Seen Only', desc: 'Users who saw but didn\'t confirm' }
+                                                ].map(opt => {
+                                                    const active = reminderTarget.includes(opt.id);
+                                                    return (
+                                                        <button
+                                                            key={opt.id}
+                                                            type="button"
+                                                            onClick={() => setReminderTarget(prev =>
+                                                                active ? prev.filter(t => t !== opt.id) : [...prev, opt.id]
+                                                            )}
+                                                            className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${active
+                                                                ? 'bg-indigo-500 text-white border-indigo-500'
+                                                                : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+                                                            }`}
+                                                        >
+                                                            <p className={`text-[10px] font-black uppercase tracking-widest ${active ? 'text-white' : 'text-gray-800'}`}>{opt.label}</p>
+                                                            <p className={`text-[9px] font-bold mt-0.5 ${active ? 'text-indigo-100' : 'text-gray-400'}`}>{opt.desc}</p>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            {reminderTarget.length === 0 && (
+                                                <p className="text-[9px] text-red-500 font-bold ml-1">⚠ Select at least one target group</p>
+                                            )}
+                                        </div>
+
+                                        <p className="text-[9px] text-indigo-500 font-bold">
+                                            🔔 Reminders will be sent automatically via push notification at the selected times. Users who confirm attendance won&apos;t receive reminders.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+
+
                         <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border-2 border-amber-100/50 cursor-pointer transition-all hover:bg-amber-100/50" onClick={() => setIsImportant(!isImportant)}>
                             <div className={`p-2 rounded-lg transition-all ${isImportant ? 'bg-amber-500 text-white' : 'bg-white text-gray-400'}`}>
                                 <Star className={`h-4 w-4 ${isImportant ? 'fill-current' : ''}`} />
@@ -707,6 +892,14 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                                 <label className="text-[9px] font-black text-gray-900 uppercase tracking-tighter">Target Ashram</label>
                                 <MultiSelect options={ashramOptions} selectedValues={targetAshrams} onChange={setTargetAshrams} placeholder="All Ashrams" valueProperty="id" />
                             </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-tighter">VOICE Group Level</label>
+                                <MultiSelect options={bvGroupOptions} selectedValues={targetVoiceGroups} onChange={setTargetVoiceGroups} placeholder="All Groups" valueProperty="id" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-tighter">Camp Completed</label>
+                                <MultiSelect options={campOptions} selectedValues={targetCamps} onChange={setTargetCamps} placeholder="All Camps" valueProperty="id" />
+                            </div>
                             <button
                                 onClick={handleFetchMatchingUsers}
                                 disabled={isFetchingUsers}
@@ -737,9 +930,23 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                             <div className="flex justify-between items-center">
                                 <div>
                                     <h3 className="text-lg font-black text-gray-900 tracking-tight">Recipient Audit</h3>
-                                    <div className="flex items-baseline gap-2">
+                                    <div className="flex items-baseline gap-3">
                                         <p className="text-[14px] font-black text-purple-600 tracking-tight">{activeRecipientCount}</p>
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Active recipients out of {recipientCount} matched</p>
+                                        <div className="flex gap-2 ml-2">
+                                            <button 
+                                                onClick={() => setExcludedUserIds(new Set())}
+                                                className="text-[8px] font-black text-purple-600 uppercase tracking-widest px-2 py-1 bg-purple-50 rounded hover:bg-purple-100 transition-colors"
+                                            >
+                                                Select All
+                                            </button>
+                                            <button 
+                                                onClick={() => setExcludedUserIds(new Set(selectedUsersList.map(u => u.id)))}
+                                                className="text-[8px] font-black text-gray-400 uppercase tracking-widest px-2 py-1 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                                            >
+                                                Select None
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <button
@@ -762,13 +969,31 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                                     />
                                 </div>
                                 <SearchableSelect
-                                    options={centers}
+                                    options={[{ id: '', name: 'All Centers' }, ...centers]}
                                     value={modalCenterFilter}
                                     onChange={setModalCenterFilter}
                                     placeholder="All Centers"
-                                    className="min-w-[160px]"
+                                    className="min-w-[140px]"
                                     triggerClassName="h-9 px-3 py-0 border border-gray-200 rounded-lg text-[11px] font-bold shadow-none flex items-center"
                                     valueProperty="name"
+                                />
+                                <SearchableSelect
+                                    options={[{ id: '', name: 'All VOICE Groups' }, ...bvGroupOptions]}
+                                    value={modalVoiceGroupFilter}
+                                    onChange={setModalVoiceGroupFilter}
+                                    placeholder="All Groups"
+                                    className="min-w-[140px]"
+                                    triggerClassName="h-9 px-3 py-0 border border-gray-200 rounded-lg text-[11px] font-bold shadow-none flex items-center"
+                                    valueProperty="name"
+                                />
+                                <SearchableSelect
+                                    options={[{ id: '', name: 'All Camps' }, ...campOptions]}
+                                    value={modalCampFilter}
+                                    onChange={setModalCampFilter}
+                                    placeholder="All Camps"
+                                    className="min-w-[140px]"
+                                    triggerClassName="h-9 px-3 py-0 border border-gray-200 rounded-lg text-[11px] font-bold shadow-none flex items-center"
+                                    valueProperty="id"
                                 />
                             </div>
                         </div>
@@ -797,8 +1022,31 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                                                 user.name?.toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
                                                 user.email?.toLowerCase().includes(modalSearchTerm.toLowerCase());
                                             const userCenter = user.current_center || user.center || user.hierarchy?.currentCenter || user.hierarchy?.center;
-                                            const matchesCenter = !modalCenterFilter || userCenter === modalCenterFilter;
-                                            return matchesSearch && matchesCenter;
+                                            const matchesCenter = !modalCenterFilter || modalCenterFilter === 'All Centers' || userCenter === modalCenterFilter;
+                                            
+                                            const userVoiceGroup = user.bv_group || '';
+                                            const matchesVoiceGroup = !modalVoiceGroupFilter || modalVoiceGroupFilter === 'All VOICE Groups' || userVoiceGroup === modalVoiceGroupFilter;
+
+                                            const matchesCamp = !modalCampFilter || modalCampFilter === 'All Camps' || (() => {
+                                                const c = modalCampFilter;
+                                                const snakeCaseField = c.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                                                const variations = [c, snakeCaseField];
+                                                if (c === 'campNishtha') variations.push('camp_nistha', 'campNistha');
+                                                if (c === 'campAshraya') variations.push('camp_ashray', 'campAshraya');
+                                                
+                                                const profileData = (user as any).user_profile_details;
+                                                const profile = Array.isArray(profileData) ? profileData[0] : profileData;
+                                                const hierarchy = user.hierarchy || {};
+                                                
+                                                return variations.some(v => 
+                                                    (user as any)[v] === true || 
+                                                    (profile && profile[v] === true) ||
+                                                    hierarchy[v] === true ||
+                                                    hierarchy[v] === 'true'
+                                                );
+                                            })();
+
+                                            return matchesSearch && matchesCenter && matchesVoiceGroup && matchesCamp;
                                         })
                                         .map((user, idx) => {
                                             const isExcluded = excludedUserIds.has(user.id);

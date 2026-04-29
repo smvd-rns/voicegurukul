@@ -168,6 +168,7 @@ export interface User {
   relative3Phone?: string;
   // Health fields
   healthChronicDisease?: string;
+  bv_group?: string;
 }
 
 export interface EducationEntry {
@@ -402,6 +403,8 @@ export interface ManagedEvent {
   targetTemples: string[];
   targetCenters: string[];
   targetCamps: string[];
+  targetVoiceGroups?: string[];
+  targetUserIds?: string[];
   excludedUserIds: string[];
   reachedUsers?: number;
   reachedCount?: number;
@@ -412,7 +415,15 @@ export interface ManagedEvent {
   isImportantDismissed?: boolean;
   isPinned?: boolean;
   rsvpDeadline?: Date;
+  guestCount?: number;
+  totalGuestCount?: number;
   userResponse?: ManagedEventResponse;
+
+  // Auto-reminder configuration
+  autoReminderEnabled?: boolean;
+  reminderDateTime?: Date;            // Specific date and time for the reminder
+  reminderTarget?: ('no_reply' | 'seen')[];  // who to remind
+  reminderSentAt?: Date;              // When the reminder was actually sent
 
   updatedAt: Date;
 }
@@ -423,6 +434,7 @@ export interface ManagedEventResponse {
   userId: string;
   status: 'seen' | 'coming' | 'not_coming' | 'understood';
   reason?: string;
+  guestCount?: number;
   isBulk: boolean;
   isPinned?: boolean;
   isImportantDismissed?: boolean;

@@ -34,3 +34,13 @@ export const campOptions = [
     { id: 'campSelfManager', name: 'Self Manager' },
     { id: 'campProactiveLeader', name: 'Proactive Leader' }
 ];
+
+export const bvGroupOptions = [
+    { id: 'Yudhishthira', name: 'Yudhishthira' },
+    { id: 'Bhima', name: 'Bhima' },
+    { id: 'Arjuna', name: 'Arjuna' },
+    { id: 'Nakula', name: 'Nakula' },
+    { id: 'Sahadeva', name: 'Sahadeva' },
+    { id: 'Prerna', name: 'Prerna' },
+    { id: 'Non Residential Alumni', name: 'Non Residential Alumni' }
+];
