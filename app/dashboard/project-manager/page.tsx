@@ -72,7 +72,7 @@ const MANAGEABLE_ROLES = [
 
 const CENTER_POST_OPTIONS = [
     { label: 'Member / No Post', value: 1 },
-    ...MANAGEABLE_ROLES.filter(r => r.value !== 1)
+    ...MANAGEABLE_ROLES.filter(r => r.value !== 1 && r.value !== 'royal') as { label: string; value: number }[]
 ];
 
 const CAMP_OPTIONS = [
