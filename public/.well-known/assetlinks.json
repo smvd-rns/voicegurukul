@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.voicegurukul.app",
+      "sha256_cert_fingerprints": [
+        "2B:55:5D:33:35:00:75:BA:A7:3D:CF:AC:B5:FF:21:C4:78:86:79:0E:A6:FE:0D:65:E1:3A:C8:31:DE:4C:CE:36",
+        "A2:93:C9:0B:5F:34:9B:82:2E:48:DC:CD:B9:FB:70:79:D4:29:A1:20:1C:86:35:EE:55:12:64:7C:45:9E:24:9C"
+      ]
+    }
+  }
+]
