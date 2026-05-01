@@ -151,7 +151,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 relative overflow-hidden via-orange-50/50 to-amber-50/30 py-6 sm:py-10 px-4 sm:px-6">
+    <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-orange-50/50 to-amber-50/30 px-4 sm:px-6">
       {/* Background blobs for aesthetics */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-orange-200/20 blur-[100px]" />

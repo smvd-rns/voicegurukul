@@ -267,7 +267,7 @@ function EventsPageContent() {
     const selectedEvent = events.find(e => e.id === selectedEventId);
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] flex flex-col pt-24 pb-12">
+        <div className="flex flex-col animate-in slide-in-from-left-4 duration-500">
             {/* Tab Switcher for Admins */}
             {isAdmin && (
                 <div className="max-w-[1600px] mx-auto w-full px-4 sm:px-6 mb-8">

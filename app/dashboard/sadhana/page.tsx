@@ -138,7 +138,7 @@ export default function SadhanaPage() {
     const weekDateRangeStr = `${format(currentWeekStart, 'MMM d')} - ${format(currentWeekEnd, 'MMM d, yyyy')}`;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 pb-12 pt-4">
+        <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6">
             {/* ── Tabs Navigation ── */}
             <div className="flex p-1 bg-white/50 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm max-w-fit">
                 <button

@@ -3,11 +3,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { logout } from '@/lib/supabase/auth';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
-import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard } from 'lucide-react';
+import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart } from 'lucide-react';
 import ProfileCompletionModal from '@/components/auth/ProfileCompletionModal';
 import ProfileCreationLoadingModal from '@/components/auth/ProfileCreationLoadingModal';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
@@ -21,8 +21,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarImgError, setSidebarImgError] = useState(false);
   const [topbarImgError, setTopbarImgError] = useState(false);
   const { user, userData, loading } = useAuth();
-  const router = useRouter();
-  const [showProfileModal, setShowProfileModal] = useState(false);
+   const router = useRouter();
+   const pathname = usePathname();
+   const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
 
@@ -231,25 +232,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-75 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20 lg:hidden transition-opacity duration-300"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar / More Menu */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 w-72 bg-gradient-to-b from-white via-orange-50 to-amber-50 shadow-xl border-r border-gray-100 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex-shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+        className={`fixed z-30 w-72 bg-white shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] 
+          lg:inset-y-0 lg:left-0 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex-shrink-0 lg:border-r lg:rounded-none
+          ${sidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 lg:opacity-100 lg:translate-x-0'} 
+          lg:static lg:block
+          rounded-[2.5rem] lg:rounded-none
+          ${!sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}
+          bottom-24 right-4 max-h-[calc(100vh-140px)] flex flex-col border border-gray-100
+        `}
       >
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Decorative background gradient */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-orange-100/40 via-amber-100/30 to-yellow-100/20 rounded-full blur-3xl -translate-y-48 translate-x-48"></div>
 
           {/* Header */}
-          <div className="flex items-center justify-between h-20 px-6 border-b border-gray-200/60 flex-shrink-0 relative z-10 bg-white/80 backdrop-blur-xl">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200/60 flex-shrink-0 relative z-10 bg-white lg:rounded-none rounded-tl-[2rem]">
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 bg-clip-text text-transparent font-display tracking-tight">
-                VOICE Gurukul
+              <h1 className="text-lg font-bold bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 bg-clip-text text-transparent font-display tracking-tight">
+                Menu
               </h1>
             </div>
             <button
@@ -261,63 +268,66 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Navigation */}
-          <div className="flex-1 overflow-y-auto py-6 px-4 relative z-10">
-            <nav className="space-y-1.5">
-              {navigation.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className="group flex items-center px-4 py-3 text-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 hover:text-orange-700 transition-all duration-300 transform hover:translate-x-1 hover:shadow-md relative overflow-hidden"
-                    onClick={() => setSidebarOpen(false)}
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    {/* Subtle hover gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-400/0 via-amber-400/5 to-yellow-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-                    <div className="relative z-10 flex items-center w-full">
-                      <div className="p-2.5 bg-gradient-to-br from-orange-100 to-amber-100 rounded-xl group-hover:from-orange-200 group-hover:to-amber-200 transition-all duration-300 group-hover:scale-110 shadow-sm">
-                        <Icon className="h-5 w-5 text-orange-600 group-hover:text-amber-600 transition-colors duration-300" />
+          <div className="flex-1 overflow-y-auto py-4 px-4 relative z-10">
+            <nav className="space-y-1">
+              {navigation
+                .filter(item => {
+                  // Only filter on mobile view
+                  if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                    return !['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
+                  }
+                  return true;
+                })
+                .map((item, index) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className="group flex items-center px-4 py-3 text-gray-600 rounded-xl hover:bg-orange-50 hover:text-orange-700 transition-all duration-200"
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <div className="relative z-10 flex items-center w-full">
+                        <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-orange-100 transition-all duration-200">
+                          <Icon className="h-4 w-4 text-gray-500 group-hover:text-orange-600 transition-colors duration-200" />
+                        </div>
+                        <span className="ml-4 font-bold text-[11px] tracking-widest uppercase font-sans">
+                          {item.name}
+                        </span>
                       </div>
-                      <span className="ml-4 font-semibold text-base tracking-wide font-serif">
-                        {item.name}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
+                    </Link>
+                  );
+                })}
             </nav>
           </div>
 
           {/* User Profile Section */}
-          <div className="border-t border-gray-200/60 p-5 flex-shrink-0 relative z-10 bg-white/60 backdrop-blur-xl lg:hidden">
-            <div className="flex items-center mb-4 p-3 bg-gradient-to-br from-orange-50/80 to-amber-50/80 backdrop-blur-md rounded-xl hover:from-orange-100/80 hover:to-amber-100/80 transition-all duration-300 transform hover:scale-[1.02] shadow-sm hover:shadow-md">
+          <div className="border-t border-gray-100 p-4 flex-shrink-0 relative z-10 bg-gray-50/50">
+            <div className="flex items-center mb-4 p-3 bg-white rounded-2xl shadow-sm border border-gray-100">
               <div className="mr-3 flex-shrink-0">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full blur-sm opacity-40"></div>
                   {userData?.profileImage && !sidebarImgError ? (
                     <Image
                       src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
                       alt={userData.name || 'Profile'}
-                      width={48}
-                      height={48}
-                      className="relative w-12 h-12 rounded-full object-cover border-2 border-white shadow-lg"
+                      width={40}
+                      height={40}
+                      className="relative w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
                       unoptimized={true}
                       onError={() => setSidebarImgError(true)}
                     />
                   ) : (
-                    <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 border-2 border-white shadow-lg flex items-center justify-center">
-                      <UserCircle2 className="w-8 h-8 text-orange-500" />
+                    <div className="relative w-10 h-10 rounded-full bg-orange-100 border-2 border-white shadow-sm flex items-center justify-center">
+                      <UserCircle2 className="w-6 h-6 text-orange-500" />
                     </div>
                   )}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-800 truncate font-display tracking-wide">
+                <p className="text-xs font-bold text-gray-900 truncate uppercase tracking-tight">
                   {userData?.name}
                 </p>
-                <p className="text-xs text-gray-600 font-medium">
+                <p className="text-[10px] text-gray-500 font-medium truncate uppercase">
                   {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
                 </p>
               </div>
@@ -325,10 +335,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <button
               onClick={handleLogout}
-              className="group flex items-center justify-center w-full px-4 py-3 text-red-600 bg-red-50 hover:bg-red-500 hover:text-white rounded-xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg font-semibold border border-red-200 hover:border-red-500 relative z-50 cursor-pointer"
+              className="group flex items-center justify-center w-full px-4 py-3 text-gray-500 hover:text-red-600 rounded-xl transition-all duration-200 font-bold text-[11px] uppercase tracking-widest"
             >
-              <LogOut className="h-5 w-5 mr-3 group-hover:rotate-12 transition-transform duration-300" />
-              <span className="font-serif tracking-wide">Logout</span>
+              <LogOut className="h-4 w-4 mr-3 group-hover:text-red-500 transition-colors" />
+              <span>Logout Session</span>
             </button>
           </div>
         </div>
@@ -339,12 +349,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-16 flex items-center px-4 lg:px-8 flex-shrink-0 border-b border-gray-200/60 justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-lg transition-all"
-            >
-              <Menu className="h-6 w-6" />
-            </button>
             <span className="lg:hidden font-display font-bold text-lg text-orange-700">
               VOICE Gurukul
             </span>
@@ -434,7 +438,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6 xl:p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-4 pb-32 lg:p-6 lg:pb-8 xl:p-8 overflow-y-auto">{children}</main>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-200 z-40 px-1 pb-safe">
+          <div className="flex justify-around items-center h-18">
+            <Link 
+              href="/dashboard" 
+              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard' ? 'text-orange-600' : 'text-gray-500'}`}
+            >
+              <Home className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">Home</span>
+            </Link>
+            <Link 
+              href="/dashboard/sadhana" 
+              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/sadhana' ? 'text-orange-600' : 'text-gray-500'}`}
+            >
+              <BookOpen className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">Sadhana</span>
+            </Link>
+            <Link 
+              href="/dashboard/events" 
+              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/events' ? 'text-orange-600' : 'text-gray-500'}`}
+            >
+              <Bell className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">Connect</span>
+            </Link>
+            <Link 
+              href="/dashboard/data-center" 
+              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/data-center' ? 'text-orange-600' : 'text-gray-500'}`}
+            >
+              <Database className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">Data</span>
+            </Link>
+            <Link 
+              href="/dashboard/donations" 
+              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/donations' ? 'text-orange-600' : 'text-gray-500'}`}
+            >
+              <Heart className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">Donate</span>
+            </Link>
+            <button 
+              onClick={() => setSidebarOpen(true)}
+              className="flex flex-col items-center justify-center flex-1 py-2 text-gray-500"
+            >
+              <MoreHorizontal className="h-5 w-5 mb-1" />
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          </div>
+        </div>
 
 
       </div>
