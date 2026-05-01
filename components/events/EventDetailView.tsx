@@ -19,10 +19,14 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
     const { userData } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [guestCount, setGuestCount] = useState<number>(event.userResponse?.guestCount || 0);
+    const [isEditingGuests, setIsEditingGuests] = useState(false);
+    const [tempGuestCount, setTempGuestCount] = useState<number>(event.userResponse?.guestCount || 0);
 
     // Sync state when event changes
     useEffect(() => {
-        setGuestCount(event.userResponse?.guestCount || 0);
+        const count = event.userResponse?.guestCount || 0;
+        setGuestCount(count);
+        setTempGuestCount(count);
     }, [event.userResponse?.guestCount, event.id]);
 
     const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
@@ -305,7 +309,7 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                                         {event.userResponse.isBulk ? 'Assigned by Manager' : 'Selection saved'}
                                     </p>
-                                    {event.userResponse.guestCount > 0 && (
+                                    {((event.userResponse.guestCount as number) || 0) > 0 && (
                                         <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-100/50 px-2 py-0.5 rounded-lg border border-emerald-200/50">
                                             {event.userResponse.guestCount} Guests
                                         </p>
