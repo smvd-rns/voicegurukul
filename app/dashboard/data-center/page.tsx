@@ -10,6 +10,7 @@ import {
     ChevronLeft, X, Presentation, FileSpreadsheet, ShieldCheck, Settings2, Check, Users
 } from 'lucide-react';
 import sadhanaDb from '@/lib/supabase/sadhanaDb';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/config';
@@ -128,12 +129,18 @@ export default function DataCenterPage() {
     const containerRef = useRef<HTMLDivElement>(null);
 
     const { user, userData } = useAuth();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const urlFolderId = searchParams?.get('folderId') || 'root';
+    const urlCategory = searchParams?.get('category') || 'all';
+
     const [activeTab, setActiveTab] = useState<'global' | 'my'>('global');
     const [allowedUploadRoles, setAllowedUploadRoles] = useState<number[]>([2, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 21]);
     const [isUpdatingPermissions, setIsUpdatingPermissions] = useState(false);
     const [isPermissionDropdownOpen, setIsPermissionDropdownOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeCategory, setActiveCategory] = useState('all');
+    const [activeCategory, setActiveCategory] = useState(urlCategory);
     const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc' | 'views_desc'>('newest');
     const [files, setFiles] = useState<FileRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -159,11 +166,21 @@ export default function DataCenterPage() {
 
     // Explorer State
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [currentFolderId, setCurrentFolderId] = useState<string | 'root'>('root');
+    const [currentFolderId, setCurrentFolderId] = useState<string | 'root'>(urlFolderId);
     const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string; name: string }>>([]);
     const [folders, setFolders] = useState<FolderRecord[]>([]);
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+
+    // Sync state with URL for back button support
+    useEffect(() => {
+        if (urlFolderId && urlFolderId !== currentFolderId) {
+            setCurrentFolderId(urlFolderId);
+        }
+        if (urlCategory && urlCategory !== activeCategory) {
+            setActiveCategory(urlCategory);
+        }
+    }, [urlFolderId, urlCategory, activeCategory, currentFolderId]);
 
     // Delete State
     const [fileToDelete, setFileToDelete] = useState<FileRecord | null>(null);
@@ -967,8 +984,14 @@ export default function DataCenterPage() {
     };
 
     const navigateToFolder = (folder: FolderRecord | 'root', globalUserId: string | null = null) => {
+        const id = folder === 'root' ? (globalUserId ? `root-${globalUserId}` : 'root') : folder.id;
+        
+        // Push to history for back button support
+        const params = new URLSearchParams(searchParams?.toString() || '');
+        params.set('folderId', id);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+
         if (folder === 'root') {
-            const id = globalUserId ? `root-${globalUserId}` : 'root';
             setCurrentFolderId(id);
             setBreadcrumbs([]);
         } else {
@@ -1522,7 +1545,12 @@ export default function DataCenterPage() {
                                             return (
                                                 <button
                                                     key={cat.id}
-                                                    onClick={() => setActiveCategory(cat.id)}
+                                                    onClick={() => {
+                                                    setActiveCategory(cat.id);
+                                                    const params = new URLSearchParams(searchParams?.toString() || '');
+                                                    params.set('category', cat.id);
+                                                    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+                                                }}
                                                     className={`group flex items-center justify-center lg:justify-start gap-2 px-3 py-1.5 lg:px-4 lg:py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap border-2 shadow-sm ${isActive
                                                         ? `${activeBg} text-white ${activeBorder} shadow-lg shadow-${theme.shadow.split('-')[1]}-500/30 scale-105 -translate-y-0.5`
                                                         : `${inactiveBg} ${inactiveBorder} ${inactiveText} hover:scale-105 hover:shadow-md hover:border-${theme.shadow.split('-')[1]}-200`

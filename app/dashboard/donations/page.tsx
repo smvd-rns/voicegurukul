@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { 
   Heart, 
@@ -28,15 +28,38 @@ import { fetchUserDonations } from './actions';
 
 export default function MyDonationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  
+  const statusParam = searchParams?.get('status') || 'captured';
+  const pageParam = parseInt(searchParams?.get('page') || '1');
+
   const { user } = useAuth();
   const [donations, setDonations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [copying, setCopying] = useState(false);
   const [userSlug, setUserSlug] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('captured');
+  const [selectedStatus, setSelectedStatus] = useState(statusParam);
   const [pageSize, setPageSize] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(pageParam);
+
+  // Sync state with URL for back button support
+  useEffect(() => {
+    if (statusParam && statusParam !== selectedStatus) {
+      setSelectedStatus(statusParam);
+    }
+    if (pageParam && pageParam !== currentPage) {
+      setCurrentPage(pageParam);
+    }
+  }, [statusParam, pageParam, selectedStatus, currentPage]);
+
+  const updateUrl = (newStatus?: string, newPage?: number) => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    if (newStatus) params.set('status', newStatus);
+    if (newPage) params.set('page', newPage.toString());
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,7 +205,11 @@ export default function MyDonationsPage() {
             {/* Status Dropdown */}
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedStatus(val);
+                updateUrl(val, 1);
+              }}
               className="w-full sm:w-auto px-4 py-3 bg-white border border-slate-200 rounded-2xl text-[11px] font-black text-slate-800 uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm appearance-none cursor-pointer"
             >
               <option value="all">All Statuses</option>
@@ -368,14 +395,22 @@ export default function MyDonationsPage() {
                   <div className="flex items-center gap-1.5">
                     <button 
                       disabled={currentPage === 1} 
-                      onClick={() => setCurrentPage(p => p - 1)}
+                      onClick={() => {
+                        const next = Math.max(1, currentPage - 1);
+                        setCurrentPage(next);
+                        updateUrl(undefined, next);
+                      }}
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 bg-white border border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition-all font-bold"
                     >
                       <ChevronLeft className="w-4 h-4 ml-[-2px]" />
                     </button>
                     <button 
                       disabled={currentPage === totalPages} 
-                      onClick={() => setCurrentPage(p => p + 1)}
+                      onClick={() => {
+                        const next = Math.min(totalPages, currentPage + 1);
+                        setCurrentPage(next);
+                        updateUrl(undefined, next);
+                      }}
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 bg-white border border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:border-slate-200 disabled:hover:text-slate-500 transition-all font-bold"
                     >
                       <ChevronRight className="w-4 h-4 mr-[-2px]" />

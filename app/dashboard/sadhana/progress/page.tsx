@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { fetchSadhanaHistory } from '@/lib/api/sadhana-client';
 import { SadhanaReport } from '@/types';
@@ -11,16 +11,43 @@ import { format, subDays, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 
 export default function ProgressPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  
+  const rangeParam = searchParams?.get('range') || 'month';
+  const pageParam = parseInt(searchParams?.get('page') || '1');
+
   const { userData } = useAuth();
   const [reports, setReports] = useState<SadhanaReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all' | 'custom'>('month');
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all' | 'custom'>(
+    (rangeParam === 'week' || rangeParam === 'month' || rangeParam === 'all' || rangeParam === 'custom') 
+    ? rangeParam as any 
+    : 'month'
+  );
   const [customDateRange, setCustomDateRange] = useState({
     from: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
   });
   const [showCustomRange, setShowCustomRange] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(pageParam);
+
+  // Sync state with URL for back button support
+  useEffect(() => {
+    if (rangeParam && rangeParam !== timeRange) {
+      setTimeRange(rangeParam as any);
+    }
+    if (pageParam && pageParam !== currentPage) {
+      setCurrentPage(pageParam);
+    }
+  }, [rangeParam, pageParam, timeRange, currentPage]);
+
+  const updateUrl = (newRange?: string, newPage?: number) => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    if (newRange) params.set('range', newRange);
+    if (newPage) params.set('page', newPage.toString());
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const reportsPerPage = 10;
   const maxPages = 10;
   const [copied, setCopied] = useState(false);
@@ -356,7 +383,7 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
             {/* Time Range Filters */}
             <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center sm:justify-start">
               <button
-                onClick={() => { setTimeRange('week'); setShowCustomRange(false); }}
+                onClick={() => { setTimeRange('week'); setShowCustomRange(false); updateUrl('week', 1); }}
                 className={`px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all ${timeRange === 'week'
                   ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg'
                   : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
@@ -365,7 +392,7 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                 Week
               </button>
               <button
-                onClick={() => { setTimeRange('month'); setShowCustomRange(false); }}
+                onClick={() => { setTimeRange('month'); setShowCustomRange(false); updateUrl('month', 1); }}
                 className={`px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all ${timeRange === 'month'
                   ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg'
                   : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
@@ -374,7 +401,7 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                 Month
               </button>
               <button
-                onClick={() => { setTimeRange('all'); setShowCustomRange(false); }}
+                onClick={() => { setTimeRange('all'); setShowCustomRange(false); updateUrl('all', 1); }}
                 className={`px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all ${timeRange === 'all'
                   ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg'
                   : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
@@ -439,7 +466,7 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                 </div>
               </div>
               <button
-                onClick={() => { setTimeRange('custom'); loadReports(); }}
+                onClick={() => { setTimeRange('custom'); loadReports(); updateUrl('custom', 1); }}
                 className="mt-3 sm:mt-4 w-full px-3 sm:px-4 py-2 text-sm sm:text-base rounded-xl font-semibold bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 transition-all shadow-lg"
               >
                 Apply Date Range
@@ -612,7 +639,11 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setCurrentPage((prev: number) => Math.max(1, prev - 1))}
+                    onClick={() => { 
+                      const next = Math.max(1, currentPage - 1);
+                      setCurrentPage(next);
+                      updateUrl(undefined, next);
+                    }}
                     disabled={currentPage === 1}
                     className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
@@ -623,7 +654,10 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                       <button
                         key={page}
-                        onClick={() => setCurrentPage(page)}
+                        onClick={() => {
+                          setCurrentPage(page);
+                          updateUrl(undefined, page);
+                        }}
                         className={`px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm rounded-lg font-semibold transition-all ${currentPage === page
                           ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg'
                           : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
@@ -634,7 +668,11 @@ ${sortedReports.filter(r => r.study && r.study > 0).map(r => `- ${format(typeof 
                     ))}
                   </div>
                   <button
-                    onClick={() => setCurrentPage((prev: number) => Math.min(totalPages, prev + 1))}
+                    onClick={() => {
+                      const next = Math.min(totalPages, currentPage + 1);
+                      setCurrentPage(next);
+                      updateUrl(undefined, next);
+                    }}
                     disabled={currentPage === totalPages}
                     className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >

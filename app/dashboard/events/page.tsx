@@ -177,8 +177,30 @@ function EventsPageContent() {
         
         const params = new URLSearchParams(searchParams?.toString() || '');
         params.set('eventId', eventId);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
     };
+
+    const handleTabChange = (tab: 'manage' | 'audience') => {
+        setActiveTab(tab);
+        const params = new URLSearchParams(searchParams?.toString() || '');
+        params.set('tab', tab);
+        // Reset event selection when switching views to prevent context confusion
+        params.delete('eventId');
+        setSelectedEventId(null);
+        setIsMobileDetailOpen(false);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    };
+
+    // Keep mobile detail state in sync with URL for physical back button support
+    useEffect(() => {
+        if (!urlEventId) {
+            setIsMobileDetailOpen(false);
+            setSelectedEventId(null);
+        } else {
+            setSelectedEventId(urlEventId);
+            setIsMobileDetailOpen(true);
+        }
+    }, [urlEventId]);
 
     // Handle marking events as 'seen' only when selected
     useEffect(() => {
@@ -273,7 +295,7 @@ function EventsPageContent() {
                 <div className="max-w-[1600px] mx-auto w-full px-4 sm:px-6 mb-8">
                     <div className="bg-white/50 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 shadow-sm inline-flex items-center gap-1">
                         <button
-                            onClick={() => setActiveTab('audience')}
+                            onClick={() => handleTabChange('audience')}
                             className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'audience'
                                 ? 'bg-orange-600 text-white shadow-md shadow-orange-100'
                                 : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
@@ -282,7 +304,7 @@ function EventsPageContent() {
                             Audience View
                         </button>
                         <button
-                            onClick={() => setActiveTab('manage')}
+                            onClick={() => handleTabChange('manage')}
                             className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'manage'
                                 ? 'bg-orange-600 text-white shadow-md shadow-orange-100'
                                 : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
@@ -451,7 +473,13 @@ function EventsPageContent() {
                                 <div className={`flex-1 flex flex-col min-w-0 bg-white ${!isMobileDetailOpen ? 'hidden md:flex' : 'flex'}`}>
                                     <div className="md:hidden p-3 border-b-2 border-gray-50 bg-white/95 backdrop-blur-md sticky top-0 z-30 flex items-center gap-3 shadow-sm">
                                         <button 
-                                            onClick={() => setIsMobileDetailOpen(false)} 
+                                            onClick={() => {
+                                                setIsMobileDetailOpen(false);
+                                                setSelectedEventId(null);
+                                                const params = new URLSearchParams(searchParams?.toString() || '');
+                                                params.delete('eventId');
+                                                router.push(`${pathname}?${params.toString()}`);
+                                            }} 
                                             className="p-2.5 bg-gray-50 text-gray-900 rounded-xl active:scale-95 transition-all border border-gray-100 shadow-sm"
                                         >
                                             <ChevronLeft className="h-5 w-5" />

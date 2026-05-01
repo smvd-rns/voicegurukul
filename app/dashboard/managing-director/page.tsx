@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase/config';
 import { toast } from 'react-hot-toast';
@@ -91,7 +91,28 @@ const MANAGEABLE_ROLES = [
 export default function ManagingDirectorDashboard() {
     const { userData } = useAuth();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'centers' | 'user-management' | 'approvals' | 'registrations'>('centers');
+    const searchParams = useSearchParams();
+    const tabParam = searchParams?.get('tab');
+    
+    const [activeTab, setActiveTab] = useState<'centers' | 'user-management' | 'approvals' | 'registrations'>(
+        (tabParam === 'centers' || tabParam === 'user-management' || tabParam === 'approvals' || tabParam === 'registrations') 
+        ? tabParam as any 
+        : 'centers'
+    );
+
+    // Sync activeTab with URL for back button support
+    useEffect(() => {
+        if (tabParam && tabParam !== activeTab && ['approvals', 'user-management', 'registrations', 'service-team', 'center-management', 'sadhana-report'].includes(tabParam)) {
+            setActiveTab(tabParam as any);
+        }
+    }, [tabParam, activeTab]);
+
+    const handleTabChange = (tab: 'centers' | 'user-management' | 'approvals' | 'registrations') => {
+        setActiveTab(tab);
+        const params = new URLSearchParams(searchParams?.toString() || '');
+        params.set('tab', tab);
+        router.push(`/dashboard/managing-director?${params.toString()}`, { scroll: false });
+    };
 
     // Centers State
     const [centers, setCenters] = useState<CenterData[]>([]);
@@ -218,6 +239,31 @@ export default function ManagingDirectorDashboard() {
     // View User State
     const [showViewModal, setShowViewModal] = useState(false);
     const [userForView, setUserForView] = useState<User | null>(null);
+
+    // Physical Back Button Support for User View Modal
+    useEffect(() => {
+        const handleHashChange = () => {
+            if (window.location.hash !== '#user-detail' && showViewModal) {
+                setShowViewModal(false);
+            }
+        };
+        window.addEventListener('popstate', handleHashChange);
+        return () => window.removeEventListener('popstate', handleHashChange);
+    }, [showViewModal]);
+
+    const openUserView = (user: User) => {
+        setUserForView(user);
+        setShowViewModal(true);
+        window.location.hash = 'user-detail';
+    };
+
+    const closeUserView = () => {
+        if (window.location.hash === '#user-detail') {
+            window.history.back();
+        } else {
+            setShowViewModal(false);
+        }
+    };
 
     const ADMIN_ROLES = [8, 11, 12, 13, 21];
     const isMD = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).some(r =>
@@ -1553,7 +1599,7 @@ export default function ManagingDirectorDashboard() {
                                         return (
                                             <button
                                                 key={tab}
-                                                onClick={() => setActiveTab(tab)}
+                                                onClick={() => handleTabChange(tab)}
                                                 className={`relative px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${isActive
                                                     ? 'bg-white text-primary-600 shadow-md transform scale-[1.02]'
                                                     : 'text-gray-500 hover:text-gray-900 hover:bg-white/30'
@@ -1572,7 +1618,7 @@ export default function ManagingDirectorDashboard() {
                 {/* Stats Section */}
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
                     <div
-                        onClick={() => setActiveTab('centers')}
+                        onClick={() => handleTabChange('centers')}
                         className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
                     >
                         <div className="absolute -right-4 -top-4 w-20 h-20 bg-blue-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
@@ -1586,7 +1632,7 @@ export default function ManagingDirectorDashboard() {
                     </div>
 
                     <div
-                        onClick={() => setActiveTab('user-management')}
+                        onClick={() => handleTabChange('user-management')}
                         className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
                     >
                         <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
@@ -1600,7 +1646,7 @@ export default function ManagingDirectorDashboard() {
                     </div>
 
                     <div
-                        onClick={() => setActiveTab('approvals')}
+                        onClick={() => handleTabChange('approvals')}
                         className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex flex-col"
                     >
                         <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
@@ -1631,7 +1677,7 @@ export default function ManagingDirectorDashboard() {
                                                 e.stopPropagation();
                                                 const temple = assignedTemples.find(t => t.name === item.name);
                                                 if (temple) setSelectedTemple(temple);
-                                                setActiveTab('approvals');
+                                                handleTabChange('approvals');
                                             }}
                                             className={`flex items-center justify-between p-2 rounded-xl transition-all ${isCurrent
                                                 ? 'bg-amber-100/30 border border-amber-200/30'
@@ -1657,7 +1703,7 @@ export default function ManagingDirectorDashboard() {
                     </div>
 
                     <div
-                        onClick={() => setActiveTab('registrations')}
+                        onClick={() => handleTabChange('registrations')}
                         className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex flex-col"
                     >
                         <div className="absolute -right-4 -top-4 w-20 h-20 bg-rose-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
@@ -1688,7 +1734,7 @@ export default function ManagingDirectorDashboard() {
                                                 e.stopPropagation();
                                                 const temple = assignedTemples.find(t => t.name === item.name);
                                                 if (temple) setSelectedTemple(temple);
-                                                setActiveTab('registrations');
+                                                handleTabChange('registrations');
                                             }}
                                             className={`flex items-center justify-between p-2 rounded-xl transition-all ${isCurrent
                                                 ? 'bg-emerald-100/30 border border-emerald-200/30'
@@ -2195,7 +2241,7 @@ export default function ManagingDirectorDashboard() {
                                                             <button
                                                                 onClick={() => {
                                                                     setUserForView(user);
-                                                                    setShowViewModal(true);
+                                                                    openUserView(user);
                                                                 }}
                                                                 className="w-full py-3 bg-white text-emerald-600 border-2 border-emerald-50 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
                                                             >
@@ -2384,8 +2430,7 @@ export default function ManagingDirectorDashboard() {
                                                                         <div className="flex justify-end gap-2">
                                                                             <button
                                                                                 onClick={() => {
-                                                                                    setUserForView(user);
-                                                                                    setShowViewModal(true);
+                                                                                    openUserView(user);
                                                                                 }}
                                                                                 className="inline-flex items-center gap-2 px-4 py-2 bg-white text-emerald-600 border-2 border-emerald-50 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white hover:shadow-lg hover:shadow-emerald-100 transition-all active:scale-95"
                                                                                 title="View Profile"

@@ -25,6 +25,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const pathname = usePathname();
    const [showProfileModal, setShowProfileModal] = useState(false);
 
+   // Physical Back Button Support for Mobile Menu
+   useEffect(() => {
+     const handleHashChange = () => {
+       if (window.location.hash !== '#menu' && sidebarOpen) {
+         setSidebarOpen(false);
+       } else if (window.location.hash === '#menu' && !sidebarOpen) {
+         setSidebarOpen(true);
+       }
+     };
+
+     window.addEventListener('popstate', handleHashChange);
+     return () => window.removeEventListener('popstate', handleHashChange);
+   }, [sidebarOpen]);
+
+   // Close menu when navigating to a new page
+   useEffect(() => {
+     setSidebarOpen(false);
+   }, [pathname]);
+
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
 
 
@@ -233,7 +252,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20 lg:hidden transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => {
+            if (window.location.hash === '#menu') {
+              window.history.back();
+            } else {
+              setSidebarOpen(false);
+            }
+          }}
         />
       )}
 
@@ -262,12 +287,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Menu
               </h1>
             </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-all duration-200"
-            >
-              <X className="h-6 w-6" />
-            </button>
+             <button
+               onClick={() => {
+                 if (window.location.hash === '#menu') {
+                   window.history.back();
+                 } else {
+                   setSidebarOpen(false);
+                 }
+               }}
+               className="lg:hidden text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-all duration-200"
+             >
+               <X className="h-6 w-6" />
+             </button>
           </div>
 
           {/* Navigation */}
@@ -474,13 +505,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Heart className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Donate</span>
             </Link>
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${sidebarOpen ? 'text-orange-600' : 'text-gray-500'}`}
-            >
-              <MoreHorizontal className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">More</span>
-            </button>
+             <button 
+               onClick={() => {
+                 if (!sidebarOpen) {
+                   window.location.hash = 'menu';
+                 } else {
+                   if (window.location.hash === '#menu') {
+                     window.history.back();
+                   } else {
+                     setSidebarOpen(false);
+                   }
+                 }
+               }}
+               className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${sidebarOpen ? 'text-orange-600' : 'text-gray-500'}`}
+             >
+               <MoreHorizontal className="h-5 w-5 mb-1" />
+               <span className="text-[10px] font-medium">More</span>
+             </button>
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/config';
 import { toast } from 'react-hot-toast';
 import {
@@ -300,7 +300,28 @@ const RoleMultiSelect = ({
 export default function ProjectManagerDashboard() {
     const { userData } = useAuth();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'approvals' | 'user-management' | 'registrations' | 'service-team'>('approvals');
+    const searchParams = useSearchParams();
+    const tabParam = searchParams?.get('tab');
+    
+    const [activeTab, setActiveTab] = useState<'approvals' | 'user-management' | 'registrations' | 'service-team'>(
+        (tabParam === 'approvals' || tabParam === 'user-management' || tabParam === 'registrations' || tabParam === 'service-team')
+        ? tabParam as any
+        : 'approvals'
+    );
+
+    // Sync activeTab with URL for back button support
+    useEffect(() => {
+        if (tabParam && tabParam !== activeTab && ['approvals', 'user-management', 'registrations', 'service-team'].includes(tabParam)) {
+            setActiveTab(tabParam as any);
+        }
+    }, [tabParam, activeTab]);
+
+    const handleTabChange = (tab: 'approvals' | 'user-management' | 'registrations' | 'service-team') => {
+        setActiveTab(tab);
+        const params = new URLSearchParams(searchParams?.toString() || '');
+        params.set('tab', tab);
+        router.push(`/dashboard/project-manager?${params.toString()}`, { scroll: false });
+    };
 
     // Context State
     const [currentCenter, setCurrentCenter] = useState<string>('');
@@ -494,6 +515,31 @@ export default function ProjectManagerDashboard() {
     // View User Modal
     const [showViewModal, setShowViewModal] = useState(false);
     const [userForView, setUserForView] = useState<User | null>(null);
+
+    // Physical Back Button Support for User View Modal
+    useEffect(() => {
+        const handleHashChange = () => {
+            if (window.location.hash !== '#user-detail' && showViewModal) {
+                setShowViewModal(false);
+            }
+        };
+        window.addEventListener('popstate', handleHashChange);
+        return () => window.removeEventListener('popstate', handleHashChange);
+    }, [showViewModal]);
+
+    const openUserView = (user: User) => {
+        setUserForView(user);
+        setShowViewModal(true);
+        window.location.hash = 'user-detail';
+    };
+
+    const closeUserView = () => {
+        if (window.location.hash === '#user-detail') {
+            window.history.back();
+        } else {
+            setShowViewModal(false);
+        }
+    };
 
     // Access Control
     // Allowed Roles: 14 (Project Advisor), 15 (Project Manager), 16 (Acting Manager)
@@ -1250,7 +1296,7 @@ export default function ProjectManagerDashboard() {
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div
-                    onClick={() => setActiveTab('user-management')}
+                    onClick={() => handleTabChange('user-management')}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-center cursor-pointer hover:shadow-md transition-all group"
                 >
                     <div className="h-12 w-12 sm:h-14 sm:w-14 bg-blue-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 group-hover:bg-blue-100 transition-colors">
@@ -1262,7 +1308,7 @@ export default function ProjectManagerDashboard() {
                     </div>
                 </div>
                 <div
-                    onClick={() => setActiveTab('approvals')}
+                    onClick={() => handleTabChange('approvals')}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-start cursor-pointer hover:shadow-md transition-all group"
                 >
                     <div className="h-12 w-12 sm:h-14 sm:w-14 bg-orange-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 flex-shrink-0 group-hover:bg-orange-100 transition-colors">
@@ -1282,7 +1328,7 @@ export default function ProjectManagerDashboard() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleCenterChange(c.name);
-                                                setActiveTab('approvals');
+                                                handleTabChange('approvals');
                                             }}
                                             className="flex justify-between items-center text-[11px] sm:text-sm p-1.5 rounded hover:bg-orange-100/50 cursor-pointer transition-colors group/item">
                                             <span className="font-medium text-gray-700 truncate mr-2 group-hover/item:text-orange-800">{c.name}</span>
@@ -1296,7 +1342,7 @@ export default function ProjectManagerDashboard() {
                 </div>
 
                 <div
-                    onClick={() => setActiveTab('registrations')}
+                    onClick={() => handleTabChange('registrations')}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-start cursor-pointer hover:shadow-md transition-all group"
                 >
                     <div className="h-12 w-12 sm:h-14 sm:w-14 bg-emerald-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 flex-shrink-0 group-hover:bg-emerald-100 transition-colors">
@@ -1316,7 +1362,7 @@ export default function ProjectManagerDashboard() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleCenterChange(c.name);
-                                                setActiveTab('registrations');
+                                                handleTabChange('registrations');
                                             }}
                                             className="flex justify-between items-center text-[11px] sm:text-sm p-1.5 rounded hover:bg-emerald-100/50 cursor-pointer transition-colors group/item">
                                             <span className="font-medium text-gray-700 truncate mr-2 group-hover/item:text-emerald-800">{c.name}</span>
@@ -1330,7 +1376,7 @@ export default function ProjectManagerDashboard() {
                 </div>
 
                 <div
-                    onClick={() => setActiveTab('service-team')}
+                    onClick={() => handleTabChange('service-team')}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-center cursor-pointer hover:shadow-md transition-all group"
                 >
                     <div className="h-12 w-12 sm:h-14 sm:w-14 bg-teal-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 group-hover:bg-teal-100 transition-colors">
@@ -1360,7 +1406,7 @@ export default function ProjectManagerDashboard() {
             <div className="overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="flex gap-2 p-1.5 bg-white/60 backdrop-blur-md rounded-2xl w-fit border border-gray-200/50 shadow-sm">
                     <button
-                        onClick={() => setActiveTab('approvals')}
+                        onClick={() => handleTabChange('approvals')}
                         className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'approvals'
                             ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
@@ -1370,7 +1416,7 @@ export default function ProjectManagerDashboard() {
                         Spiritual Approval
                     </button>
                     <button
-                        onClick={() => setActiveTab('registrations')}
+                        onClick={() => handleTabChange('registrations')}
                         className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'registrations'
                             ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
@@ -1383,7 +1429,7 @@ export default function ProjectManagerDashboard() {
                         )}
                     </button>
                     <button
-                        onClick={() => setActiveTab('user-management')}
+                        onClick={() => handleTabChange('user-management')}
                         className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'user-management'
                             ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
@@ -2039,7 +2085,7 @@ export default function ProjectManagerDashboard() {
                                                 className="p-2 bg-gray-50 text-gray-400 hover:text-teal-600 rounded-lg transition-colors"
                                                 onClick={() => {
                                                     setUserForView(user);
-                                                    setShowViewModal(true);
+                                                    openUserView(user);
                                                 }}
                                             >
                                                 <Activity className="h-4 w-4" />
@@ -2281,7 +2327,7 @@ export default function ProjectManagerDashboard() {
                                                         className="text-gray-400 hover:text-gray-600"
                                                         onClick={() => {
                                                             setUserForView(user);
-                                                            setShowViewModal(true);
+                                                            openUserView(user);
                                                         }}
                                                     >
                                                         <Activity className="h-5 w-5" />
@@ -2583,10 +2629,7 @@ export default function ProjectManagerDashboard() {
             <UserDetailModal
                 user={userForView}
                 isOpen={showViewModal}
-                onClose={() => {
-                    setShowViewModal(false);
-                    setUserForView(null);
-                }}
+                onClose={() => closeUserView()}
             />
         </div >
     );
