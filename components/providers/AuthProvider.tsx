@@ -1,6 +1,6 @@
 'use client';
 
-import { registerPushNotifications, setupForegroundMessageListener } from '@/lib/utils/push-notifications';
+import { registerPushNotifications, setupForegroundMessageListener, setupNativePushListener } from '@/lib/utils/push-notifications';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/config';
 import { getUserData, onAuthStateChange } from '@/lib/supabase/auth';
@@ -37,6 +37,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (unsubscribe) unsubscribe();
     };
   }, []);
+
+  // Setup native push token listener
+  useEffect(() => {
+    if (userData) {
+      const unsubscribe = setupNativePushListener(userData.id, userData.pushTokens || []);
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [userData]);
 
 
   useEffect(() => {
