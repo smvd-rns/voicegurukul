@@ -112,7 +112,14 @@ async function sendV1Notification(accessToken: string, token: string, payload: a
             token,
             notification: { title: payload.title, body: payload.body },
             data: payload.data,
-            android: { priority: 'high' },
+            android: {
+                priority: 'high',
+                notification: {
+                    channel_id: 'voice_gurukul_official_alerts',
+                    sound: 'default',
+                    notification_priority: 'PRIORITY_HIGH'
+                }
+            },
             webpush: {
                 notification: { icon: '/favicon.ico', click_action: payload.data?.url || '/dashboard/events' }
             }

@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   description: 'Daily spiritual practice tracking and mentorship communication platform',
 };
 
+import { DeepLinkHandler } from '@/components/providers/DeepLinkHandler';
+
 export default function RootLayout({
   children,
 }: {
@@ -29,6 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} ${merriweather.variable} font-sans`}>
+        <DeepLinkHandler />
         <AuthProvider>{children}</AuthProvider>
         <Toaster 
           position="top-center" 

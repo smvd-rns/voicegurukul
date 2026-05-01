@@ -63,8 +63,9 @@ export async function sendPushNotification(tokens: string[], title: string, body
         android: {
             priority: 'high',
             notification: {
-                clickAction: 'FLUTTER_NOTIFICATION_CLICK', // Common for capacitor/mobile
+                channelId: 'voice_gurukul_official_alerts',
                 sound: 'default',
+                notificationPriority: 'PRIORITY_HIGH',
             },
         },
         apns: {
