@@ -1136,7 +1136,7 @@ export default function DataCenterPage() {
                     <div className="absolute bottom-[-10%] left-[10%] w-[70%] h-[70%] bg-indigo-100/30 rounded-full mix-blend-multiply filter blur-[100px] animate-blob animation-delay-4000" />
                 </div>
 
-                <div className="relative z-10 p-2 lg:p-8 space-y-3 lg:space-y-6 max-w-[1600px] mx-auto">
+                <div className="relative z-10 px-1 lg:p-8 space-y-3 lg:space-y-6 max-w-[1600px] mx-auto">
                     {/* Stats Bar */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4">
                         {[
@@ -1168,7 +1168,7 @@ export default function DataCenterPage() {
 
                     {/* Header & Main Search Section */}
                     <div className="bg-white/95 backdrop-blur-xl rounded-[2.5rem] border-2 border-blue-100 shadow-2xl shadow-blue-900/10 relative z-0">
-                        <div className="p-3 md:p-8 space-y-4 lg:space-y-8">
+                        <div className="p-2 md:p-8 space-y-4 lg:space-y-8">
                             {/* Tabs & Active View */}
                             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div className="flex bg-slate-100/80 backdrop-blur-md p-1.5 rounded-2xl w-full lg:w-fit border-2 border-slate-200/50 shadow-inner">
@@ -1507,28 +1507,28 @@ export default function DataCenterPage() {
                                     </AnimatePresence>
 
                                     {/* Categories Strip */}
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2 pt-2">
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2 pt-1">
                                         {CATEGORIES.map(cat => {
                                             const theme = CATEGORY_THEMES[cat.id] || CATEGORY_THEMES.other;
                                             const isActive = activeCategory === cat.id;
-
+ 
                                             // Extract colors for active/inactive states
                                             const activeBg = theme.iconBg;
                                             const activeBorder = theme.border.split(' ')[0];
                                             const inactiveBg = theme.bg;
                                             const inactiveText = theme.text;
                                             const inactiveBorder = theme.border.split(' ')[0].replace('200', '100');
-
+ 
                                             return (
                                                 <button
                                                     key={cat.id}
                                                     onClick={() => setActiveCategory(cat.id)}
-                                                    className={`group flex items-center justify-center lg:justify-start gap-2.5 px-4 py-2 lg:px-6 lg:py-3 rounded-2xl text-[11px] font-black transition-all whitespace-nowrap border-2 shadow-sm ${isActive
+                                                    className={`group flex items-center justify-center lg:justify-start gap-2 px-3 py-1.5 lg:px-4 lg:py-2.5 rounded-xl text-[10px] font-black transition-all whitespace-nowrap border-2 shadow-sm ${isActive
                                                         ? `${activeBg} text-white ${activeBorder} shadow-lg shadow-${theme.shadow.split('-')[1]}-500/30 scale-105 -translate-y-0.5`
                                                         : `${inactiveBg} ${inactiveBorder} ${inactiveText} hover:scale-105 hover:shadow-md hover:border-${theme.shadow.split('-')[1]}-200`
                                                         }`}
                                                 >
-                                                    <cat.icon className={`w-4 h-4 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : inactiveText}`} />
+                                                    <cat.icon className={`w-3.5 h-3.5 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : inactiveText}`} />
                                                     <span className="hidden lg:block">{cat.label}</span>
                                                 </button>
                                             );
@@ -1536,7 +1536,7 @@ export default function DataCenterPage() {
                                     </div>
 
                                     {/* File Results Area */}
-                                    <div className="bg-white/95 backdrop-blur-xl border-2 border-blue-100 p-3 md:p-6 min-h-[500px] rounded-2xl lg:rounded-[2.5rem] shadow-2xl shadow-blue-900/5 mt-2">
+                                    <div className="bg-white/95 backdrop-blur-xl p-1 md:p-6 min-h-[500px] rounded-2xl lg:rounded-[2.5rem] shadow-2xl shadow-blue-900/5 mt-1">
                                         {isLoading && files.length === 0 ? (
                                             <div 
                                                 className={viewMode === 'grid' 
@@ -1561,7 +1561,7 @@ export default function DataCenterPage() {
                                         ) : (
                                             <div
                                                 className={viewMode === 'grid' 
-                                                    ? "grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4 md:gap-6" 
+                                                    ? "grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 md:gap-4" 
                                                     : "flex flex-col gap-2"
                                                 }
                                             >
@@ -1582,9 +1582,9 @@ export default function DataCenterPage() {
                                                                 <div className={`absolute top-3 left-3 z-20 ${viewMode === 'list' ? 'relative top-0 left-0' : ''}`}>
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); toggleSelect(folder.id); }}
-                                                                        className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(folder.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
+                                                                        className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(folder.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
                                                                     >
-                                                                        {selectedIds.has(folder.id) && <CheckCircle2 className="w-4 h-4 fill-white text-blue-600" />}
+                                                                        {selectedIds.has(folder.id) && <CheckCircle2 className="w-3 h-3 fill-white text-blue-600" />}
                                                                     </button>
                                                                 </div>
                                                                 {viewMode === 'grid' ? (
@@ -1634,18 +1634,18 @@ export default function DataCenterPage() {
                                                                 animate={{ opacity: 1, scale: 1 }}
                                                                 exit={{ opacity: 0, scale: 0.98 }}
                                                                 onClick={() => setSelectedFile(file)}
-                                                                className={`group relative bg-white rounded-[1.25rem] md:rounded-[1.5rem] border-2 cursor-pointer ${selectedIds.has(file.id) ? 'border-blue-700 shadow-2xl ring-4 ring-blue-500/20 translate-y-[-4px]' : 'border-slate-200 shadow-lg hover:shadow-2xl hover:border-blue-400 hover:-translate-y-2'} transition-all duration-300 overflow-hidden ${viewMode === 'list' ? 'flex items-center gap-4 p-4' : 'p-3 md:p-4 flex flex-col h-full'}`}
+                                                                className={`group relative bg-white rounded-xl border-2 cursor-pointer ${selectedIds.has(file.id) ? 'border-blue-700 shadow-2xl ring-4 ring-blue-500/20 translate-y-[-4px]' : 'border-slate-200 shadow-lg hover:shadow-2xl hover:border-blue-400 hover:-translate-y-2'} transition-all duration-300 overflow-hidden ${viewMode === 'list' ? 'flex items-center gap-3 p-3' : 'p-2 md:p-3 flex flex-col h-full'}`}
                                                             >
                                                                 {viewMode === 'grid' ? (
                                                                     <>
                                                                         <div className="relative aspect-video mb-3 md:mb-4 rounded-[1rem] bg-slate-50 overflow-hidden border-2 border-slate-100">
                                                                             <div className={`absolute top-0 left-0 right-0 h-1 md:h-2 z-10 ${theme.iconBg}`} />
-                                                                            <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20">
+                                                                            <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2 z-20">
                                                                                 <button
                                                                                     onClick={(e) => { e.stopPropagation(); toggleSelect(file.id); }}
-                                                                                    className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(file.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
+                                                                                    className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(file.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
                                                                                 >
-                                                                                    {selectedIds.has(file.id) && <CheckCircle2 className="w-4 h-4 fill-white text-blue-600" />}
+                                                                                    {selectedIds.has(file.id) && <CheckCircle2 className="w-3 h-3 fill-white text-blue-600" />}
                                                                                 </button>
                                                                             </div>
                                                                             {getThumbnailUrl(file) && !failedThumbnails[file.id] ? (
@@ -1702,12 +1702,12 @@ export default function DataCenterPage() {
                                                                 ) : (
                                                                     <div className="flex items-center gap-4 w-full relative">
                                                                         <div className={`absolute left-0 top-0 bottom-0 w-2 ${theme.iconBg} rounded-l-[1.5rem]`} />
-                                                                        <div className="ml-3">
+                                                                        <div className="ml-2">
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); toggleSelect(file.id); }}
-                                                                                className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(file.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
+                                                                                className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center backdrop-blur-md shadow-md ${selectedIds.has(file.id) ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white/90 border-slate-300 hover:border-blue-500'}`}
                                                                             >
-                                                                                {selectedIds.has(file.id) && <CheckCircle2 className="w-4 h-4 fill-white text-blue-600" />}
+                                                                                {selectedIds.has(file.id) && <CheckCircle2 className="w-3 h-3 fill-white text-blue-600" />}
                                                                             </button>
                                                                         </div>
                                                                         <div className={`w-12 h-12 rounded-[1rem] ${theme.iconBg} text-white flex items-center justify-center shrink-0 shadow-inner border-2 border-white/20`}>
@@ -2285,7 +2285,7 @@ export default function DataCenterPage() {
                         initial={{ opacity: 0, y: 100 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 100 }}
-                        className="fixed bottom-0 sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 bg-white sm:bg-white/95 backdrop-blur-2xl border-t sm:border-2 border-blue-100 p-3 sm:p-3 sm:rounded-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] sm:shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center gap-3 sm:gap-6 z-[1000] w-full sm:w-[calc(100%-1.5rem)] max-w-none sm:max-w-[550px]"
+                        className="fixed bottom-[88px] sm:bottom-6 left-0 sm:left-1/2 sm:-translate-x-1/2 bg-white sm:bg-white/95 backdrop-blur-2xl border-t-2 sm:border-2 border-blue-100 p-3 sm:p-3 sm:rounded-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] sm:shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center gap-3 sm:gap-6 z-[1000] w-full sm:w-[calc(100%-1.5rem)] max-w-none sm:max-w-[550px]"
                     >
                         {/* Selected count badge - compact on mobile */}
                         <div className="flex items-center gap-1.5 sm:gap-2.5 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest shrink-0 shadow-lg shadow-blue-500/20">

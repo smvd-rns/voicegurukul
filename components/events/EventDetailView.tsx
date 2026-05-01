@@ -251,75 +251,124 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
             {/* Footer Actions */}
             <div className="p-6 border-t border-gray-100 bg-white shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
                 {event.type === 'announcement' ? (
-                    <div className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                    <div className="flex flex-col gap-4 p-5 bg-blue-50/50 border-2 border-blue-100 rounded-[2rem]">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-xl shadow-sm border border-blue-200 text-blue-600">
+                            <div className="p-2.5 bg-white rounded-xl shadow-sm border-2 border-blue-100 text-blue-600">
                                 <Info className="h-4 w-4" />
                             </div>
-                            <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Announcement</p>
+                            <div>
+                                <p className="text-[11px] font-black text-blue-900 uppercase tracking-widest leading-none">Important Update</p>
+                                <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest mt-1">Please acknowledge after reading</p>
+                            </div>
                         </div>
                         <button 
                             onClick={() => handleResponse('understood')}
                             disabled={isSubmitting || event.userResponse?.status === 'understood'}
-                            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl ${
                                 event.userResponse?.status === 'understood'
-                                ? 'bg-white text-gray-400 border border-gray-100 cursor-default' 
-                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md active:scale-95'
+                                ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-100 cursor-default shadow-none' 
+                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-95'
                             }`}
                         >
-                            {event.userResponse?.status === 'understood' ? 'Acknowledged' : 'I have read & understood this message'}
+                            {event.userResponse?.status === 'understood' ? (
+                                <>
+                                    <Check className="h-4 w-4 stroke-[3px]" />
+                                    <span>Message Acknowledged</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="h-4 w-4 stroke-[3px]" />
+                                    <span>I have read & understood</span>
+                                </>
+                            )}
                         </button>
                     </div>
                 ) : event.userResponse && (event.userResponse.status === 'coming' || event.userResponse.status === 'not_coming') ? (
-                    <div className={`p-4 rounded-2xl border flex items-center justify-between transition-all duration-500 ${event.userResponse.status === 'coming'
-                        ? 'bg-emerald-50/50 border-emerald-100'
-                        : 'bg-rose-50/50 border-rose-100'
+                    <div className={`p-4 sm:p-5 rounded-[2rem] border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-500 ${event.userResponse.status === 'coming'
+                        ? 'bg-emerald-50/50 border-emerald-100 shadow-sm shadow-emerald-100/20'
+                        : 'bg-rose-50/50 border-rose-100 shadow-sm shadow-rose-100/20'
                         }`}>
                         <div className="flex items-center gap-4">
-                            <div className={`p-2.5 rounded-xl bg-white shadow-sm ring-1 ${event.userResponse.status === 'coming' ? 'ring-emerald-500/20' : 'ring-rose-500/20'
+                            <div className={`p-3 rounded-2xl bg-white shadow-md ring-2 ${event.userResponse.status === 'coming' ? 'ring-emerald-500/10' : 'ring-rose-500/10'
                                 }`}>
                                 {event.userResponse.status === 'coming'
-                                    ? <Check className="h-5 w-5 text-emerald-600 animate-in zoom-in-50" />
-                                    : <X className="h-5 w-5 text-rose-600 animate-in zoom-in-50" />
+                                    ? <Check className="h-6 w-6 text-emerald-600 animate-in zoom-in-50 stroke-[3px]" />
+                                    : <X className="h-6 w-6 text-rose-600 animate-in zoom-in-50 stroke-[3px]" />
                                 }
                             </div>
                             <div>
-                                <h5 className={`text-[11px] font-black uppercase tracking-widest mb-0.5 ${event.userResponse.status === 'coming' ? 'text-emerald-700' : 'text-rose-700'
+                                <h5 className={`text-[12px] font-black uppercase tracking-widest mb-0.5 ${event.userResponse.status === 'coming' ? 'text-emerald-800' : 'text-rose-800'
                                     }`}>
                                     {event.userResponse.status === 'coming' ? "You're Going!" : "Response: No"}
                                 </h5>
-                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                                    {event.userResponse.isBulk ? 'Assigned by Manager' : 'Selection saved'}
-                                    {event.userResponse.guestCount ? ` • ${event.userResponse.guestCount} Guests` : ''}
-                                </p>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                                        {event.userResponse.isBulk ? 'Assigned by Manager' : 'Selection saved'}
+                                    </p>
+                                    {event.userResponse.guestCount > 0 && (
+                                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-100/50 px-2 py-0.5 rounded-lg border border-emerald-200/50">
+                                            {event.userResponse.guestCount} Guests
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
                         {!event.userResponse.isBulk && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-emerald-100/50">
                                 {event.type === 'event' && event.userResponse.status === 'coming' && (
+                                    <>
+                                        {isEditingGuests ? (
+                                            <div className="flex items-center gap-2 bg-white rounded-xl border-2 border-emerald-200 p-1 animate-in zoom-in-95">
+                                                <button 
+                                                    onClick={() => setTempGuestCount(Math.max(0, tempGuestCount - 1))}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-emerald-50 rounded-lg text-emerald-600 font-black"
+                                                >
+                                                    -
+                                                </button>
+                                                <input 
+                                                    type="number" 
+                                                    value={tempGuestCount}
+                                                    onChange={(e) => setTempGuestCount(Math.max(0, parseInt(e.target.value) || 0))}
+                                                    className="w-10 text-center font-black text-xs bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                />
+                                                <button 
+                                                    onClick={() => setTempGuestCount(tempGuestCount + 1)}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-emerald-50 rounded-lg text-emerald-600 font-black"
+                                                >
+                                                    +
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        handleResponse('coming', undefined, tempGuestCount);
+                                                        setIsEditingGuests(false);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest"
+                                                >
+                                                    Save
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    setTempGuestCount(event.userResponse?.guestCount || 0);
+                                                    setIsEditingGuests(true);
+                                                }}
+                                                className="px-4 py-2 rounded-xl bg-white text-[10px] font-black text-emerald-700 uppercase tracking-widest border-2 border-emerald-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all active:scale-95 shadow-sm"
+                                            >
+                                                Edit Guests
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                                {!isEditingGuests && (
                                     <button
-                                        onClick={() => {
-                                            // Trigger a special mode or just re-show the guest count input
-                                            // For simplicity, we can use a prompt or just toggle a local state
-                                            const newCount = prompt("How many guests are with you?", String(event.userResponse?.guestCount || 0));
-                                            if (newCount !== null) {
-                                                const val = parseInt(newCount) || 0;
-                                                setGuestCount(val);
-                                                handleResponse('coming', undefined, val);
-                                            }
-                                        }}
-                                        className="text-[10px] font-black text-orange-600 uppercase tracking-widest hover:bg-orange-50 transition-all px-4 py-2 rounded-xl"
+                                        onClick={() => handleResponse(event.userResponse?.status === 'coming' ? 'not_coming' : 'coming')}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 hover:bg-orange-50 transition-all active:scale-95"
                                     >
-                                        Edit Guests
+                                        Change
                                     </button>
                                 )}
-                                <button
-                                    onClick={() => handleResponse(event.userResponse?.status === 'coming' ? 'not_coming' : 'coming')}
-                                    className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors px-4 py-2"
-                                >
-                                    Change
-                                </button>
                             </div>
                         )}
                     </div>

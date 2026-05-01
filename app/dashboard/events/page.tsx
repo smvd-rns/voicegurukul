@@ -449,11 +449,17 @@ function EventsPageContent() {
 
                                 {/* Content Area */}
                                 <div className={`flex-1 flex flex-col min-w-0 bg-white ${!isMobileDetailOpen ? 'hidden md:flex' : 'flex'}`}>
-                                    <div className="md:hidden p-4 border-b border-gray-100 bg-white sticky top-0 z-20 flex items-center gap-4">
-                                        <button onClick={() => setIsMobileDetailOpen(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-all">
-                                            <ChevronLeft className="h-5 w-5 text-gray-400" />
+                                    <div className="md:hidden p-3 border-b-2 border-gray-50 bg-white/95 backdrop-blur-md sticky top-0 z-30 flex items-center gap-3 shadow-sm">
+                                        <button 
+                                            onClick={() => setIsMobileDetailOpen(false)} 
+                                            className="p-2.5 bg-gray-50 text-gray-900 rounded-xl active:scale-95 transition-all border border-gray-100 shadow-sm"
+                                        >
+                                            <ChevronLeft className="h-5 w-5" />
                                         </button>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Back to Announcements</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-orange-600 leading-none">Announcements</span>
+                                            <span className="text-[11px] font-black uppercase tracking-widest text-gray-900 mt-1">Return to Inbox</span>
+                                        </div>
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto custom-scrollbar">

@@ -239,13 +239,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar / More Menu */}
       <div
-        className={`fixed z-30 w-72 bg-white shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] 
-          lg:inset-y-0 lg:left-0 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex-shrink-0 lg:border-r lg:rounded-none
+        className={`fixed z-30 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] 
+          bg-white shadow-2xl lg:shadow-none
+          w-72 lg:w-80
+          bottom-[88px] lg:bottom-0 lg:top-0 right-0 lg:left-0
+          max-h-[calc(100vh-140px)] lg:max-h-none lg:h-screen
           ${sidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 lg:opacity-100 lg:translate-x-0'} 
-          lg:static lg:block
-          rounded-[2.5rem] lg:rounded-none
+          lg:static lg:block lg:translate-x-0 lg:border-r lg:border-gray-200/60
+          rounded-t-[2.5rem] lg:rounded-none
           ${!sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}
-          bottom-24 right-4 max-h-[calc(100vh-140px)] flex flex-col border border-gray-100
+          flex flex-col
         `}
       >
         <div className="flex flex-col h-full relative overflow-hidden">
@@ -270,34 +273,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Navigation */}
           <div className="flex-1 overflow-y-auto py-4 px-4 relative z-10">
             <nav className="space-y-1">
-              {navigation
-                .filter(item => {
-                  // Only filter on mobile view
-                  if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                    return !['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
-                  }
-                  return true;
-                })
-                .map((item, index) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className="group flex items-center px-4 py-3 text-gray-600 rounded-xl hover:bg-orange-50 hover:text-orange-700 transition-all duration-200"
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <div className="relative z-10 flex items-center w-full">
-                        <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-orange-100 transition-all duration-200">
-                          <Icon className="h-4 w-4 text-gray-500 group-hover:text-orange-600 transition-colors duration-200" />
-                        </div>
-                        <span className="ml-4 font-bold text-[11px] tracking-widest uppercase font-sans">
-                          {item.name}
-                        </span>
+              {navigation.map((item, index) => {
+                const Icon = item.icon;
+                const isMobileHidden = ['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`group items-center px-4 py-3 lg:px-6 lg:py-3.5 text-gray-600 rounded-xl lg:rounded-none hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'}`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <div className="relative z-10 flex items-center w-full">
+                      <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-orange-100 transition-all duration-200">
+                        <Icon className="h-4 w-4 lg:h-5 lg:w-5 text-gray-500 group-hover:text-orange-600 transition-colors duration-200" />
                       </div>
-                    </Link>
-                  );
-                })}
+                      <span className="ml-4 font-bold text-[11px] lg:text-[13px] tracking-widest uppercase font-sans">
+                        {item.name}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
             </nav>
           </div>
 
@@ -441,8 +437,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 p-4 pb-32 lg:p-6 lg:pb-8 xl:p-8 overflow-y-auto">{children}</main>
 
         {/* Mobile Bottom Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-200 z-40 px-1 pb-safe">
-          <div className="flex justify-around items-center h-18">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-200 z-40 px-1 pb-2 pb-safe">
+          <div className="flex justify-around items-center h-20">
             <Link 
               href="/dashboard" 
               className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard' ? 'text-orange-600' : 'text-gray-500'}`}
@@ -479,8 +475,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-[10px] font-medium">Donate</span>
             </Link>
             <button 
-              onClick={() => setSidebarOpen(true)}
-              className="flex flex-col items-center justify-center flex-1 py-2 text-gray-500"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${sidebarOpen ? 'text-orange-600' : 'text-gray-500'}`}
             >
               <MoreHorizontal className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">More</span>
