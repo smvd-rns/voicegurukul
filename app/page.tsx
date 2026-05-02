@@ -149,9 +149,15 @@ export default function Home() {
 
         {/* Footer */}
         <div className="mt-10 text-center border-t border-orange-100 pt-6">
-          <p className="text-xs text-orange-900/40">
+          <p className="text-xs text-orange-900/40 mb-2">
             Chant Hare Krishna and be Happy
           </p>
+          <Link 
+            href="/privacy" 
+            className="text-[10px] text-orange-900/30 hover:text-orange-600 transition-colors uppercase tracking-widest"
+          >
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </div>
