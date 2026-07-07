@@ -151,41 +151,41 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-orange-50/50 to-amber-50/30 px-4 sm:px-6">
+    <div className="relative overflow-hidden px-4 sm:px-6">
       {/* Background blobs for aesthetics */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-orange-200/20 blur-[100px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-rose-200/20 blur-[100px]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full t-blob-a blur-[100px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full t-blob-b blur-[100px]" />
       </div>
 
       <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 relative z-10">
 
         {/* Hero Section */}
         <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2rem] shadow-xl shadow-orange-900/5 border border-white/50 p-4 sm:p-10 overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 sm:w-64 sm:h-64 rounded-full bg-gradient-to-br from-orange-400/20 to-amber-300/20 blur-2xl sm:blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-24 h-24 sm:w-48 sm:h-48 rounded-full bg-gradient-to-tr from-rose-400/20 to-orange-300/20 blur-xl sm:blur-2xl pointer-events-none" />
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 sm:w-64 sm:h-64 rounded-full t-blob-a blur-2xl sm:blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-24 h-24 sm:w-48 sm:h-48 rounded-full t-blob-b blur-xl sm:blur-2xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
             <div>
-              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-gradient-to-r from-orange-100 to-amber-50 text-orange-800 text-[10px] sm:text-sm font-semibold mb-3 sm:mb-5 shadow-sm border border-orange-200/50">
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500" />
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full t-bg-badge t-text-badge text-[10px] sm:text-sm font-semibold mb-3 sm:mb-5 shadow-sm border t-border">
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 t-text-accent" />
                 <span>Hare Krishna</span>
               </div>
               <h1 className="text-2xl sm:text-4xl md:text-4xl xl:text-5xl font-extrabold text-slate-800 tracking-tight mb-2 sm:mb-3">
                 {greeting}, <br className="sm:hidden" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-600">{userData?.name?.split(' ')[0] || 'Devotee'}</span>
+                <span className="t-text-accent">{userData?.name?.split(' ')[0] || 'Devotee'}</span>
               </h1>
               <div className="flex items-start gap-2 sm:gap-3 mt-3 sm:mt-5">
-                <div className="mt-1 w-1 h-8 sm:h-12 bg-gradient-to-b from-orange-400 to-orange-200 rounded-full shrink-0" />
+                <div className="mt-1 w-1 h-8 sm:h-12 t-bg-primary rounded-full shrink-0 opacity-70" />
                 <p className="text-xs sm:text-base text-slate-600 max-w-xl italic font-medium leading-relaxed">
                   &quot;{quote}&quot;
                 </p>
               </div>
             </div>
 
-            <div className="hidden md:flex flex-col items-center justify-center min-w-[120px] p-5 bg-gradient-to-b from-white to-orange-50/50 rounded-3xl border border-orange-100 shadow-sm">
+            <div className="hidden md:flex flex-col items-center justify-center min-w-[120px] p-5 t-bg-light rounded-3xl border t-border shadow-sm">
               <div className="text-center">
-                <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-orange-500 to-rose-500">{new Date().getDate()}</div>
+                <div className="text-4xl font-black t-text-accent">{new Date().getDate()}</div>
                 <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">{new Date().toLocaleString('default', { month: 'short' })}</div>
                 <div className="text-xs font-semibold text-slate-400 mt-1">{new Date().getFullYear()}</div>
               </div>
@@ -202,11 +202,11 @@ export default function DashboardPage() {
               <Link
                 key={stat.name}
                 href={stat.href}
-                className={`group relative overflow-hidden bg-white/60 backdrop-blur-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-white/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${stat.shadow} ${colSpan}`}
+                className={`group relative overflow-hidden bg-white/60 backdrop-blur-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-white/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${colSpan}`}
               >
-                <div className={`absolute top-0 left-0 w-1 sm:w-1.5 h-full bg-gradient-to-b ${stat.gradient}`} />
+                <div className="absolute top-0 left-0 w-1 sm:w-1.5 h-full t-gradient" />
                 <div className="flex justify-between items-start mb-3 sm:mb-6">
-                  <div className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-br ${stat.gradient} text-white shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300`}>
+                  <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl t-gradient text-white shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300">
                     <Icon className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                   <div className="p-1.5 sm:p-2.5 bg-slate-100/50 text-slate-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:bg-slate-100 group-hover:text-slate-600 transition-all duration-300 transform group-hover:translate-x-1">
@@ -230,12 +230,12 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/40 border border-white/60 overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 border-b border-slate-100/50 flex items-center justify-between">
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 sm:p-2.5 bg-gradient-to-br from-orange-100 to-amber-50 rounded-lg sm:rounded-xl border border-orange-200/50 shadow-sm">
-                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+                <div className="p-2 sm:p-2.5 t-bg-light rounded-lg sm:rounded-xl border t-border shadow-sm">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 t-text-accent" />
                 </div>
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Recent Sadhana</h2>
               </div>
-              <Link href="/dashboard/sadhana/progress" className="text-xs sm:text-sm font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 group transition-colors">
+              <Link href="/dashboard/sadhana/progress" className="text-xs sm:text-sm font-bold t-text-accent hover:opacity-80 flex items-center gap-1 group transition-opacity">
                 View All
                 <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
                       <div key={idx} className="p-4 sm:p-6 hover:bg-slate-50/50 transition-colors group">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs border border-slate-200 shadow-sm group-hover:border-orange-200 group-hover:bg-orange-50 group-hover:text-orange-600 transition-all">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs border border-slate-200 shadow-sm group-hover:t-border group-hover:t-bg-light group-hover:t-text-accent transition-all">
                               {date.getDate()}
                             </div>
                             <div>
@@ -261,8 +261,8 @@ export default function DashboardPage() {
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{date.toLocaleString('default', { month: 'short', year: 'numeric' })}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black uppercase tracking-wider border border-orange-100">
-                             <Sparkles className="w-3 h-3" />
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full t-bg-badge t-text-badge text-[10px] font-black uppercase tracking-wider border t-border">
+                             <Sparkles className="w-3 h-3 t-text-accent" />
                              Day {30 - idx}
                           </div>
                         </div>
@@ -293,12 +293,12 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-center py-20 px-4">
-                  <div className="w-20 h-20 bg-gradient-to-br from-orange-50 to-amber-50 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border border-orange-100/50">
-                    <BookOpen className="w-10 h-10 text-orange-400" />
+                  <div className="w-20 h-20 t-bg-light rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border t-border">
+                     <BookOpen className="w-10 h-10 t-text-accent" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Your Path Starts Here</h3>
                   <p className="text-sm text-slate-500 max-w-sm mx-auto mb-8 font-medium leading-relaxed">View your progress and streak on the Progress page.</p>
-                  <Link href="/dashboard/sadhana/progress" className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-500 text-white font-bold hover:shadow-lg hover:shadow-orange-500/30 hover:-translate-y-0.5 transition-all">
+                  <Link href="/dashboard/sadhana/progress" className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl t-gradient t-text-on-bg font-bold hover:shadow-lg hover:opacity-90 hover:-translate-y-0.5 transition-all">
                     <Sparkles className="w-4 h-4" />
                     View Progress
                   </Link>
@@ -313,27 +313,27 @@ export default function DashboardPage() {
             
             {/* Quick Actions */}
             <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl shadow-2xl shadow-slate-900/20 overflow-hidden relative flex flex-col">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-500/20 to-rose-500/5 rounded-full blur-3xl transform translate-x-10 -translate-y-10" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-blue-500/20 to-indigo-500/5 rounded-full blur-3xl transform -translate-x-10 translate-y-10" />
+              <div className="absolute top-0 right-0 w-64 h-64 t-blob-a rounded-full blur-3xl transform translate-x-10 -translate-y-10" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 t-blob-b rounded-full blur-3xl transform -translate-x-10 translate-y-10" />
 
               <div className="p-7 border-b border-white/5 relative z-10">
                 <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                  <Zap className="w-6 h-6 text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+                  <Zap className="w-6 h-6 text-white/70 fill-current drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" />
                   Quick Actions
                 </h2>
               </div>
 
               <div className="p-7 flex-1 flex flex-col gap-5 relative z-10">
                 <Link href="/dashboard/sadhana" className="group flex items-center gap-5 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 hover:shadow-lg transition-all backdrop-blur-sm">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+                  <div className="w-14 h-14 rounded-2xl t-gradient flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
                     <BookOpen className="w-7 h-7 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-white mb-0.5 group-hover:text-orange-300 transition-colors">Submit Sadhana</h3>
+                    <h3 className="text-lg font-bold text-white mb-0.5 group-hover:text-white/80 transition-colors">Submit Sadhana</h3>
                     <p className="text-xs text-slate-400 font-medium">Record today&apos;s practices</p>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-orange-300 group-hover:translate-x-0.5 transition-all" />
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/15 transition-colors">
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </div>
                 </Link>
 
@@ -356,11 +356,11 @@ export default function DashboardPage() {
                 </Link>
 
                 <div className="mt-auto pt-4">
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-orange-500/20 backdrop-blur-md relative overflow-hidden group">
+                  <div className="p-5 rounded-2xl t-bg-light/10 border t-border-primary/20 backdrop-blur-md relative overflow-hidden group" style={{backgroundColor: 'rgb(var(--t-primary) / 0.08)'}}>
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     <div className="flex items-center gap-2 mb-3">
-                      <Heart className="w-4 h-4 text-orange-400 animate-pulse" />
-                      <span className="text-[10px] font-black text-orange-300 uppercase tracking-widest">Inspiration</span>
+                      <Heart className="w-4 h-4 text-white/60 animate-pulse" />
+                      <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">Inspiration</span>
                     </div>
                     <p className="text-sm font-semibold text-slate-200 italic leading-relaxed">
                       &quot;Service to the devotees is the highest of all services.&quot;

@@ -15,6 +15,7 @@ import { requestNotificationPermission, getNotificationPermission, isNotificatio
 
 import { useEventNotifications } from '@/hooks/useEventNotifications';
 import { Bell, X as CloseIcon } from 'lucide-react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -24,6 +25,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const router = useRouter();
    const pathname = usePathname();
    const [showProfileModal, setShowProfileModal] = useState(false);
+
+   const { theme, themeName, setTheme } = useTheme();
+
+   const themesList = [
+     { id: 'chaitanya', name: 'Chaitanya', dot: 'bg-orange-500'  },
+     { id: 'nitai',     name: 'Nitai',     dot: 'bg-blue-600'    },
+     { id: 'varaha',    name: 'Varaha',    dot: 'bg-purple-700'  },
+     { id: 'rama',      name: 'Rama',      dot: 'bg-emerald-600' },
+     { id: 'radharani', name: 'Radharani', dot: 'bg-rose-600'    },
+     { id: 'govinda',   name: 'Govinda',   dot: 'bg-slate-400'   },
+     { id: 'yamuna',    name: 'Yamuna',    dot: 'bg-amber-700'   },
+     { id: 'krishna',   name: 'Krishna',   dot: 'bg-gray-900 border border-white/40' },
+   ] as const;
 
    // Physical Back Button Support for Mobile Menu
    useEffect(() => {
@@ -233,7 +247,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [userData]);
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden">
+    <div className="t-page-bg h-screen flex overflow-hidden transition-colors duration-500">
       {/* Profile Creation Loading Modal */}
       <ProfileCreationLoadingModal isOpen={!!showLoadingModal} />
 
@@ -265,25 +279,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar / More Menu */}
       <div
         className={`fixed z-30 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] 
-          bg-white shadow-2xl lg:shadow-none
+          t-sidebar-gradient shadow-2xl lg:shadow-none
           w-72 lg:w-80
           bottom-[88px] lg:bottom-0 lg:top-0 right-0 lg:left-0
           max-h-[calc(100vh-140px)] lg:max-h-none lg:h-screen
           ${sidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 lg:opacity-100 lg:translate-x-0'} 
-          lg:static lg:block lg:translate-x-0 lg:border-r lg:border-gray-200/60
+          lg:static lg:block lg:translate-x-0 lg:border-r lg:border-white/10
           rounded-t-[2.5rem] lg:rounded-none
           ${!sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}
           flex flex-col
         `}
       >
         <div className="flex flex-col h-full relative overflow-hidden">
-          {/* Decorative background gradient */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-orange-100/40 via-amber-100/30 to-yellow-100/20 rounded-full blur-3xl -translate-y-48 translate-x-48"></div>
-
           {/* Header */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200/60 flex-shrink-0 relative z-10 bg-white lg:rounded-none rounded-tl-[2rem]">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]">
             <div className="flex items-center space-x-3">
-              <h1 className="text-lg font-bold bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 bg-clip-text text-transparent font-display tracking-tight">
+              <h1 className="text-lg font-extrabold text-white font-display tracking-wider uppercase">
                 Menu
               </h1>
             </div>
@@ -295,7 +306,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                    setSidebarOpen(false);
                  }
                }}
-               className="lg:hidden text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-all duration-200"
+               className="lg:hidden text-white/60 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all duration-200"
              >
                <X className="h-6 w-6" />
              </button>
@@ -307,16 +318,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {navigation.map((item, index) => {
                 const Icon = item.icon;
                 const isMobileHidden = ['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
+                const isActive = pathname === item.href;
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`group items-center px-4 py-2 lg:px-5 lg:py-2 text-gray-600 rounded-xl lg:rounded-none hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'}`}
+                    className={`group items-center px-4 py-2.5 lg:px-5 lg:py-3.5 rounded-xl lg:rounded-none transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${isActive ? 'bg-white/20 text-white font-bold' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
                     <div className="relative z-10 flex items-center w-full">
-                      <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-orange-100 transition-all duration-200">
-                        <Icon className="h-4 w-4 lg:h-5 lg:w-5 text-gray-500 group-hover:text-orange-600 transition-colors duration-200" />
+                      <div className={`p-1.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-white/20' : 'bg-white/5 group-hover:bg-white/15'}`}>
+                        <Icon className={`h-4 w-4 lg:h-5 lg:w-5 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`} />
                       </div>
                       <span className="ml-4 font-bold text-[10px] lg:text-[11.5px] tracking-widest uppercase font-sans">
                         {item.name}
@@ -328,9 +340,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
           </div>
 
+          {/* Theme Selector */}
+          <div className="px-5 py-4 border-t border-white/10 bg-black/15 relative z-10">
+            <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase block mb-3">
+              Theme: <span className="text-white">{themeName}</span>
+            </span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {themesList.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  title={t.name}
+                  className={`w-5 h-5 rounded-full ${t.dot} transition-all duration-200 ${
+                    theme === t.id
+                      ? 'ring-2 ring-white ring-offset-2 ring-offset-transparent scale-110 shadow-md'
+                      : 'opacity-50 hover:opacity-90 hover:scale-105'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
           {/* User Profile Section */}
-          <div className="border-t border-gray-100 p-4 flex-shrink-0 relative z-10 bg-gray-50/50">
-            <div className="flex items-center mb-4 p-3 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="border-t border-white/10 p-4 flex-shrink-0 relative z-10 bg-black/25">
+            <div className="flex items-center mb-4 p-3 bg-white/10 rounded-2xl shadow-sm border border-white/10">
               <div className="mr-3 flex-shrink-0">
                 <div className="relative">
                   {userData?.profileImage && !sidebarImgError ? (
@@ -339,22 +372,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       alt={userData.name || 'Profile'}
                       width={40}
                       height={40}
-                      className="relative w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
+                      className="relative w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-sm"
                       unoptimized={true}
                       onError={() => setSidebarImgError(true)}
                     />
                   ) : (
-                    <div className="relative w-10 h-10 rounded-full bg-orange-100 border-2 border-white shadow-sm flex items-center justify-center">
-                      <UserCircle2 className="w-6 h-6 text-orange-500" />
+                    <div className="relative w-10 h-10 rounded-full bg-white/15 border-2 border-white/20 shadow-sm flex items-center justify-center">
+                      <UserCircle2 className="w-6 h-6 text-white" />
                     </div>
                   )}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-gray-900 truncate uppercase tracking-tight">
+                <p className="text-xs font-bold text-white truncate uppercase tracking-tight">
                   {userData?.name}
                 </p>
-                <p className="text-[10px] text-gray-500 font-medium truncate uppercase">
+                <p className="text-[10px] text-white/60 font-medium truncate uppercase">
                   {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
                 </p>
               </div>
@@ -362,9 +395,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <button
               onClick={handleLogout}
-              className="group flex items-center justify-center w-full px-4 py-3 text-gray-500 hover:text-red-600 rounded-xl transition-all duration-200 font-bold text-[11px] uppercase tracking-widest"
+              className="group flex items-center justify-center w-full px-4 py-3 text-white/60 hover:text-red-400 hover:bg-white/5 rounded-xl transition-all duration-200 font-bold text-[11px] uppercase tracking-widest"
             >
-              <LogOut className="h-4 w-4 mr-3 group-hover:text-red-500 transition-colors" />
+              <LogOut className="h-4 w-4 mr-3 text-white/60 group-hover:text-red-400 transition-colors" />
               <span>Logout Session</span>
             </button>
           </div>
@@ -376,19 +409,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-16 flex items-center px-4 lg:px-8 flex-shrink-0 border-b border-gray-200/60 justify-between">
           <div className="flex items-center gap-3">
-            <span className="lg:hidden font-display font-bold text-lg text-orange-700">
+            <span className="lg:hidden font-display font-bold text-lg t-text-accent transition-colors duration-500">
               VOICE Gurukul
             </span>
           </div>
 
           <div className="flex-1 lg:block hidden" />
 
-          {/* User Profile & Logout - Visible on both Mobile and Desktop now, adapted styling */}
+          {/* User Profile & Logout */}
           <div className="flex items-center gap-2 lg:gap-3">
             {/* User Profile */}
-            <div className="flex items-center gap-2 lg:gap-2.5 px-2 py-1.5 lg:px-3 lg:py-2 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg hover:from-orange-100 hover:to-amber-100 transition-all duration-200 border border-orange-100/50">
+            <div className="flex items-center gap-2 lg:gap-2.5 px-2 py-1.5 lg:px-3 lg:py-2 t-bg-light rounded-lg transition-all duration-200 border t-border">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full blur-sm opacity-30"></div>
+                <div className="absolute inset-0 bg-white/20 rounded-full blur-sm opacity-30"></div>
                 {userData?.profileImage && !topbarImgError ? (
                   <Image
                     src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
@@ -400,8 +433,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     onError={() => setTopbarImgError(true)}
                   />
                 ) : (
-                  <div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 border-2 border-white shadow-sm flex items-center justify-center">
-                    <UserCircle2 className="w-5 h-5 text-orange-500" />
+                  <div className="relative w-8 h-8 rounded-full bg-white border-2 border-white shadow-sm flex items-center justify-center">
+                    <UserCircle2 className="w-5 h-5 t-text-accent" />
                   </div>
                 )}
               </div>
@@ -468,7 +501,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 p-4 pb-32 lg:p-6 lg:pb-8 xl:p-8 overflow-y-auto">{children}</main>
 
         {/* Mobile Bottom Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-2xl z-40 px-1 pb-2 pb-safe border-t border-white/10">
+        <div className="t-gradient lg:hidden fixed bottom-0 left-0 right-0 shadow-2xl z-40 px-1 pb-2 pb-safe border-t border-white/10 transition-all duration-500">
           <div className="flex justify-around items-center h-20">
             <Link 
               href="/dashboard" 

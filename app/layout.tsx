@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 };
 
 import { DeepLinkHandler } from '@/components/providers/DeepLinkHandler';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 
 export default function RootLayout({
   children,
@@ -32,7 +33,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} ${merriweather.variable} font-sans`}>
         <DeepLinkHandler />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </AuthProvider>
         <Toaster 
           position="top-center" 
           toastOptions={{ 

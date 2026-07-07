@@ -139,12 +139,12 @@ export default function SadhanaPage() {
     const weekDateRangeStr = `${format(currentWeekStart, 'MMM d')} - ${format(currentWeekEnd, 'MMM d, yyyy')}`;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 bg-blue-100 p-4 sm:p-6 md:p-8 rounded-3xl border border-blue-250 border-blue-300/60 shadow-sm">
+        <div className="max-w-7xl mx-auto space-y-6 t-page-bg p-4 sm:p-6 md:p-8 rounded-3xl border t-border shadow-sm transition-colors duration-500">
             {/* ── Tabs Navigation ── */}
             <div className="flex p-1 bg-white/50 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm max-w-fit">
                 <button
                     onClick={() => router.push('/dashboard/sadhana')}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white text-orange-600 shadow-sm border border-orange-100"
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white t-text-accent shadow-sm border t-border"
                 >
                     <BookOpen className="h-4 w-4" />
                     Daily Record
@@ -162,7 +162,7 @@ export default function SadhanaPage() {
             <div className="flex flex-col items-center sm:flex-row justify-between gap-5 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center sm:text-left">
                 <div className="flex flex-col items-center sm:items-start">
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
-                        <Sparkles className="h-6 w-6 text-orange-500" />
+                        <Sparkles className="h-6 w-6 t-text-accent" />
                         Daily Sadhana
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">
@@ -177,7 +177,7 @@ export default function SadhanaPage() {
                         <ChevronLeft className="h-4 w-4" />
                     </button>
                     <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg shadow-sm border border-gray-100">
-                        <Calendar className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                        <Calendar className="h-4 w-4 t-text-accent flex-shrink-0" />
                         <input
                             type="date" value={form.date}
                             onChange={e => setForm(p => ({ ...p, date: e.target.value }))}

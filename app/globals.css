@@ -30,23 +30,205 @@ html {
   --background-end-rgb: 255, 255, 255;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+/* =============================================
+   DEVOTIONAL THEME VARIABLES
+   Each theme defines a semantic set of colors.
+   Light bg = dark text. Colored bg = white text.
+   ============================================= */
+
+/* Chaitanya — Golden Orange (default) */
+[data-theme="chaitanya"] {
+  --t-primary:        249 115 22;   /* orange-500  — buttons, icons on white */
+  --t-primary-dark:   194 65 12;    /* orange-700  — text on light bg */
+  --t-primary-light:  255 247 237;  /* orange-50   — card tint bg */
+  --t-primary-mid:    254 215 170;  /* orange-200  — borders, dividers */
+  --t-page-bg:        255 251 245;  /* warm white page background */
+  --t-blob-a:         253 186 116;  /* orange-300  — decorative blob A */
+  --t-blob-b:         254 202 202;  /* red-200     — decorative blob B */
+  --t-gradient-from:  249 115 22;   /* orange-500 */
+  --t-gradient-to:    239 68 68;    /* red-500 */
+  --t-sidebar-from:   154 52 18;    /* orange-900 */
+  --t-sidebar-to:     120 53 15;    /* amber-900 */
+  /* Text contrast rules */
+  --t-text-on-primary: 255 255 255; /* white — text on colored (primary) bg */
+  --t-text-accent:    194 65 12;    /* orange-700 — accent text on white bg */
+  --t-badge-bg:       255 237 213;  /* orange-100 */
+  --t-badge-text:     154 52 18;    /* orange-900 */
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+/* Nitai — Deep Ocean Blue */
+[data-theme="nitai"] {
+  --t-primary:        37 99 235;    /* blue-600 */
+  --t-primary-dark:   29 78 216;    /* blue-700 */
+  --t-primary-light:  239 246 255;  /* blue-50 */
+  --t-primary-mid:    191 219 254;  /* blue-200 */
+  --t-page-bg:        245 248 255;  /* cool blue-white */
+  --t-blob-a:         147 197 253;  /* blue-300 */
+  --t-blob-b:         196 181 253;  /* violet-300 */
+  --t-gradient-from:  37 99 235;    /* blue-600 */
+  --t-gradient-to:    99 102 241;   /* indigo-500 */
+  --t-sidebar-from:   30 58 138;    /* blue-900 */
+  --t-sidebar-to:     49 46 129;    /* indigo-900 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    29 78 216;    /* blue-700 */
+  --t-badge-bg:       219 234 254;  /* blue-100 */
+  --t-badge-text:     30 64 175;    /* blue-800 */
 }
+
+/* Varaha — Royal Purple */
+[data-theme="varaha"] {
+  --t-primary:        126 34 206;   /* purple-700 */
+  --t-primary-dark:   107 33 168;   /* purple-800 */
+  --t-primary-light:  250 245 255;  /* purple-50 */
+  --t-primary-mid:    221 214 254;  /* violet-200 */
+  --t-page-bg:        248 245 255;  /* soft purple-white */
+  --t-blob-a:         196 181 253;  /* violet-300 */
+  --t-blob-b:         249 168 212;  /* pink-300 */
+  --t-gradient-from:  126 34 206;   /* purple-700 */
+  --t-gradient-to:    219 39 119;   /* pink-600 */
+  --t-sidebar-from:   59 7 100;     /* purple-950 */
+  --t-sidebar-to:     30 27 75;     /* indigo-950 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    107 33 168;   /* purple-800 */
+  --t-badge-bg:       243 232 255;  /* purple-100 */
+  --t-badge-text:     88 28 135;    /* purple-900 */
+}
+
+/* Rama — Emerald Forest */
+[data-theme="rama"] {
+  --t-primary:        5 150 105;    /* emerald-600 */
+  --t-primary-dark:   4 120 87;     /* emerald-700 */
+  --t-primary-light:  236 253 245;  /* emerald-50 */
+  --t-primary-mid:    167 243 208;  /* emerald-200 */
+  --t-page-bg:        240 253 248;  /* cool green-white */
+  --t-blob-a:         110 231 183;  /* emerald-300 */
+  --t-blob-b:         103 232 249;  /* cyan-300 */
+  --t-gradient-from:  5 150 105;    /* emerald-600 */
+  --t-gradient-to:    6 182 212;    /* cyan-500 */
+  --t-sidebar-from:   6 78 59;      /* emerald-900 */
+  --t-sidebar-to:     8 51 68;      /* cyan-900 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    4 120 87;     /* emerald-700 */
+  --t-badge-bg:       209 250 229;  /* emerald-100 */
+  --t-badge-text:     6 78 59;      /* emerald-900 */
+}
+
+/* Radharani — Soft Rose */
+[data-theme="radharani"] {
+  --t-primary:        225 29 72;    /* rose-600 */
+  --t-primary-dark:   190 18 60;    /* rose-700 */
+  --t-primary-light:  255 241 242;  /* rose-50 */
+  --t-primary-mid:    254 205 211;  /* rose-200 */
+  --t-page-bg:        255 244 246;  /* warm rose-white */
+  --t-blob-a:         249 168 212;  /* pink-300 */
+  --t-blob-b:         216 180 254;  /* violet-300 */
+  --t-gradient-from:  225 29 72;    /* rose-600 */
+  --t-gradient-to:    168 85 247;   /* purple-500 */
+  --t-sidebar-from:   136 19 55;    /* rose-900 */
+  --t-sidebar-to:     88 28 135;    /* purple-900 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    190 18 60;    /* rose-700 */
+  --t-badge-bg:       255 228 230;  /* rose-100 */
+  --t-badge-text:     136 19 55;    /* rose-900 */
+}
+
+/* Govinda — Pure White / Silver */
+[data-theme="govinda"] {
+  --t-primary:        71 85 105;    /* slate-600 */
+  --t-primary-dark:   51 65 85;     /* slate-700 */
+  --t-primary-light:  248 250 252;  /* slate-50 */
+  --t-primary-mid:    226 232 240;  /* slate-200 */
+  --t-page-bg:        255 255 255;  /* pure white */
+  --t-blob-a:         226 232 240;  /* slate-200 */
+  --t-blob-b:         241 245 249;  /* slate-100 */
+  --t-gradient-from:  71 85 105;    /* slate-600 */
+  --t-gradient-to:    100 116 139;  /* slate-500 */
+  --t-sidebar-from:   30 41 59;     /* slate-800 */
+  --t-sidebar-to:     15 23 42;     /* slate-950 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    51 65 85;     /* slate-700 — dark, visible on white */
+  --t-badge-bg:       241 245 249;  /* slate-100 */
+  --t-badge-text:     30 41 59;     /* slate-800 */
+}
+
+/* Yamuna — Milky Warm Cream */
+[data-theme="yamuna"] {
+  --t-primary:        180 83 9;     /* amber-700 */
+  --t-primary-dark:   146 64 14;    /* amber-800 */
+  --t-primary-light:  255 251 235;  /* amber-50 */
+  --t-primary-mid:    253 230 138;  /* amber-200 */
+  --t-page-bg:        254 252 243;  /* warm ivory/cream */
+  --t-blob-a:         253 230 138;  /* amber-200 */
+  --t-blob-b:         254 215 170;  /* orange-200 */
+  --t-gradient-from:  180 83 9;     /* amber-700 */
+  --t-gradient-to:    161 98 7;     /* yellow-700 */
+  --t-sidebar-from:   120 53 15;    /* amber-900 */
+  --t-sidebar-to:     78 33 9;      /* amber-950 */
+  --t-text-on-primary: 255 255 255;
+  --t-text-accent:    146 64 14;    /* amber-800 — warm dark, visible on cream */
+  --t-badge-bg:       254 243 199;  /* amber-100 */
+  --t-badge-text:     120 53 15;    /* amber-900 */
+}
+
+/* Krishna — Midnight Black */
+[data-theme="krishna"] {
+  --t-primary:        251 191 36;   /* amber-400 — gold accent on black */
+  --t-primary-dark:   245 158 11;   /* amber-500 */
+  --t-primary-light:  254 252 232;  /* yellow-50 — light bg for cards/badges */
+  --t-primary-mid:    253 230 138;  /* amber-200 */
+  --t-page-bg:        15 15 20;     /* near-black page background */
+  --t-blob-a:         245 158 11;   /* amber-500 */
+  --t-blob-b:         168 85 247;   /* purple-500 */
+  --t-gradient-from:  251 191 36;   /* amber-400 */
+  --t-gradient-to:    245 158 11;   /* amber-500 */
+  --t-sidebar-from:   0 0 0;        /* pure black */
+  --t-sidebar-to:     10 10 15;     /* near black */
+  --t-text-on-primary: 0 0 0;       /* black text on gold buttons — high contrast */
+  --t-text-accent:    245 158 11;   /* amber-500 — gold, visible on dark bg AND on white cards */
+  --t-badge-bg:       254 252 232;  /* yellow-50 */
+  --t-badge-text:     120 53 15;    /* amber-900 */
+}
+
+/* =============================================
+   SEMANTIC THEME UTILITY CLASSES
+   Use these instead of hardcoded Tailwind colors
+   ============================================= */
+
+/* Backgrounds */
+.t-page-bg       { background-color: rgb(var(--t-page-bg)); }
+.t-bg-primary    { background-color: rgb(var(--t-primary)); }
+.t-bg-light      { background-color: rgb(var(--t-primary-light)); }
+.t-bg-badge      { background-color: rgb(var(--t-badge-bg)); }
+
+/* Gradients */
+.t-gradient {
+  background: linear-gradient(135deg, rgb(var(--t-gradient-from)), rgb(var(--t-gradient-to)));
+}
+.t-gradient-soft {
+  background: linear-gradient(135deg, rgb(var(--t-primary-light)), rgb(var(--t-primary-mid) / 0.4));
+}
+.t-sidebar-gradient {
+  background: linear-gradient(180deg, rgb(var(--t-sidebar-from)), rgb(var(--t-sidebar-to)));
+}
+
+/* Text — CONTRAST SAFE */
+.t-text-accent   { color: rgb(var(--t-text-accent)); }       /* On white bg: dark theme color */
+.t-text-on-bg    { color: rgb(var(--t-text-on-primary)); }   /* On colored bg: always white */
+.t-text-badge    { color: rgb(var(--t-badge-text)); }        /* On light badge bg: dark shade */
+
+/* Borders */
+.t-border        { border-color: rgb(var(--t-primary-mid)); }
+.t-border-primary { border-color: rgb(var(--t-primary)); }
+
+/* Blobs */
+.t-blob-a        { background-color: rgb(var(--t-blob-a) / 0.25); }
+.t-blob-b        { background-color: rgb(var(--t-blob-b) / 0.25); }
+
+/* Interactive */
+.t-ring          { --tw-ring-color: rgb(var(--t-primary) / 0.5); }
+.t-hover-bg:hover { background-color: rgb(var(--t-primary-light)); }
+.t-hover-text:hover { color: rgb(var(--t-text-accent)); }
+
 
 /* Ensure form inputs have visible text */
 input[type="text"],
