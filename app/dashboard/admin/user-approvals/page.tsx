@@ -8,6 +8,7 @@ import { getPendingUsers, updateUser } from '@/lib/supabase/users'; // We need t
 import { User } from '@/types';
 import { CheckCircle, XCircle, Search, Filter, Loader2, Shield } from 'lucide-react';
 import { getRoleDisplayName } from '@/lib/utils/roles';
+import { supabase } from '@/lib/supabase/config';
 
 export default function UserApprovalsPage() {
     const { userData } = useAuth();
@@ -64,7 +65,7 @@ export default function UserApprovalsPage() {
         if (confirmApprove.userId) setProcessingId(confirmApprove.userId);
 
         try {
-            const session = await (window as any).supabase.auth.getSession();
+            const session = await supabase!.auth.getSession();
             const token = session.data.session?.access_token;
             if (!token) throw new Error('No auth token');
 
@@ -113,7 +114,7 @@ export default function UserApprovalsPage() {
         if (rejectionDialog.userId) setProcessingId(rejectionDialog.userId);
 
         try {
-            const session = await (window as any).supabase.auth.getSession();
+            const session = await supabase!.auth.getSession();
             const token = session.data.session?.access_token;
             if (!token) throw new Error('No auth token');
 

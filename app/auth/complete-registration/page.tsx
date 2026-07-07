@@ -224,6 +224,62 @@ export default function CompleteRegistrationPage() {
             return;
         }
 
+        if (!formData.temple) {
+            setError('Current Temple is required');
+            return;
+        }
+
+        if (formData.temple === 'Other' && !formData.otherTemple.trim()) {
+            setError('Please specify the other temple name');
+            return;
+        }
+
+        const requiresCurrentCenter = formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha';
+        if (requiresCurrentCenter && !formData.center) {
+            setError('Current Center is required');
+            return;
+        }
+
+        if (requiresCurrentCenter && formData.center === 'Other' && !formData.otherCenter.trim()) {
+            setError('Please specify the other center name');
+            return;
+        }
+
+        if (!formData.parentTemple) {
+            setError('Parent Temple is required');
+            return;
+        }
+
+        if (formData.parentTemple === 'Other' && !formData.otherParentTemple.trim()) {
+            setError('Please specify the other parent temple name');
+            return;
+        }
+
+        if (!formData.parentCenter) {
+            setError('Parent Center is required');
+            return;
+        }
+
+        if (formData.parentCenter === 'Other' && !formData.otherParentCenter.trim()) {
+            setError('Please specify the other parent center name');
+            return;
+        }
+
+        if (!formData.introducedToKcIn) {
+            setError('Introduced to KC date is required');
+            return;
+        }
+
+        if (!formData.counselor) {
+            setError('Counselor is required. Please select a counselor or select "Other" and enter their name.');
+            return;
+        }
+
+        if (formData.counselor === 'Other' && !formData.otherCounselor.trim()) {
+            setError('Please specify the counselor name for "Other"');
+            return;
+        }
+
         if (!user) {
             setError('User session not found');
             return;
@@ -424,7 +480,7 @@ export default function CompleteRegistrationPage() {
                             {/* Name */}
                             <div className="group">
                                 <label htmlFor="name" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Full Name
+                                    Full Name <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -444,7 +500,7 @@ export default function CompleteRegistrationPage() {
                             {/* Phone */}
                             <div className="group">
                                 <label htmlFor="phone" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Phone Number
+                                    Phone Number <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -464,7 +520,7 @@ export default function CompleteRegistrationPage() {
                             {/* Email (Read-only) */}
                             <div>
                                 <label htmlFor="email" className="block text-sm font-medium leading-6 text-gray-900 mb-1">
-                                    Email Address
+                                    Email Address <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -483,7 +539,7 @@ export default function CompleteRegistrationPage() {
                             {/* Date of Birth */}
                             <div className="group">
                                 <label htmlFor="birthDate" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Date of Birth
+                                    Date of Birth <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -513,7 +569,7 @@ export default function CompleteRegistrationPage() {
                             {/* Ashram Selection */}
                             <div className="group">
                                 <label htmlFor="ashram" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Ashram Status
+                                    Ashram Status <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     id="ashram"
@@ -546,7 +602,7 @@ export default function CompleteRegistrationPage() {
                                 {/* Temple Selection */}
                                 <div className="group">
                                     <label htmlFor="temple" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-emerald-600 transition-colors">
-                                        Temple
+                                        Temple <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -598,7 +654,7 @@ export default function CompleteRegistrationPage() {
                                 {formData.temple && formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
                                     <div className="group animate-in slide-in-from-top-2 fade-in duration-200">
                                         <label htmlFor="center" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-emerald-600 transition-colors">
-                                            Center
+                                            Center <span className="text-red-500">*</span>
                                         </label>
                                         <div className="relative">
                                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -650,7 +706,7 @@ export default function CompleteRegistrationPage() {
                                 {/* Parent Temple Selection */}
                                 <div className="group">
                                     <label htmlFor="parentTemple" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
-                                        Parent Temple
+                                        Parent Temple <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -703,7 +759,7 @@ export default function CompleteRegistrationPage() {
                                 {formData.parentTemple && (
                                     <div className="group animate-in slide-in-from-top-2 fade-in duration-200">
                                         <label htmlFor="parentCenter" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
-                                            Parent Center
+                                            Parent Center <span className="text-red-500">*</span>
                                         </label>
                                         <div className="relative">
                                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -749,7 +805,7 @@ export default function CompleteRegistrationPage() {
                             {/* Introduced to KC */}
                             <div className="group">
                                 <label htmlFor="introducedToKcIn" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Introduced to KC Since
+                                    Introduced to KC Since <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -770,7 +826,7 @@ export default function CompleteRegistrationPage() {
                             {/* Counselor Selection */}
                             <div className="group">
                                 <label htmlFor="counselor" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Counselor / Care Giver
+                                    Counselor / Care Giver <span className="text-red-500">*</span>
                                 </label>
                                 <SearchableSelect
                                     options={[

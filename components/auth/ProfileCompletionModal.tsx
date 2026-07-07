@@ -160,6 +160,11 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
       return;
     }
 
+    if (!formData.counselor) {
+      setError('Please select your counselor/care giver');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -376,7 +381,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
             {/* Counselor/Care Giver */}
             <div>
               <label htmlFor="counselor" className="block text-sm font-medium text-gray-700 mb-1">
-                Counselor / Care Giver
+                Counselor / Care Giver <span className="text-red-500">*</span>
               </label>
               <select
                 id="counselor"
@@ -385,7 +390,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={loadingCounselors}
               >
-                <option value="">{loadingCounselors ? 'Loading counselors...' : 'Select Counselor (Optional)'}</option>
+                <option value="">{loadingCounselors ? 'Loading counselors...' : 'Select Counselor'}</option>
                 {counselors.map((counselor) => (
                   <option key={counselor.id} value={counselor.id}>
                     {counselor.name} {counselor.ashram ? `(${counselor.ashram})` : ''}

@@ -311,14 +311,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`group items-center px-4 py-3 lg:px-6 lg:py-3.5 text-gray-600 rounded-xl lg:rounded-none hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'}`}
+                    className={`group items-center px-4 py-2 lg:px-5 lg:py-2 text-gray-600 rounded-xl lg:rounded-none hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
                     <div className="relative z-10 flex items-center w-full">
                       <div className="p-1.5 bg-gray-50 rounded-lg group-hover:bg-orange-100 transition-all duration-200">
                         <Icon className="h-4 w-4 lg:h-5 lg:w-5 text-gray-500 group-hover:text-orange-600 transition-colors duration-200" />
                       </div>
-                      <span className="ml-4 font-bold text-[11px] lg:text-[13px] tracking-widest uppercase font-sans">
+                      <span className="ml-4 font-bold text-[10px] lg:text-[11.5px] tracking-widest uppercase font-sans">
                         {item.name}
                       </span>
                     </div>
