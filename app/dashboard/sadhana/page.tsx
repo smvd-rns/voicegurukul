@@ -32,16 +32,17 @@ const initialFormData: SadhanaFormData = {
 };
 
 const SPIRITUAL_TILES = [
-    { id: 'japa', label: 'Japa', icon: '📿', sub: 'rounds', ring: 'focus:ring-orange-400' },
-    { id: 'hearing', label: 'Hearing', icon: '👂', sub: 'minutes', ring: 'focus:ring-amber-400' },
-    { id: 'reading', label: 'Reading', icon: '📖', sub: 'minutes', ring: 'focus:ring-emerald-400' },
+    { id: 'japa', label: 'Japa', icon: '📿', sub: 'rounds', ring: 'focus:ring-orange-400', color: 'text-orange-500', bar: 'bg-orange-400', bgLight: 'bg-orange-100/70', bgHex: '#ffedd5', borderHex: '#fdba74', textClass: 'text-orange-600' },
+    { id: 'hearing', label: 'Hearing', icon: '👂', sub: 'minutes', ring: 'focus:ring-amber-400', color: 'text-amber-500', bar: 'bg-amber-400', bgLight: 'bg-amber-100/70', bgHex: '#fef3c7', borderHex: '#fcd34d', textClass: 'text-amber-600' },
+    { id: 'reading', label: 'Reading', icon: '📖', sub: 'minutes', ring: 'focus:ring-emerald-400', color: 'text-emerald-500', bar: 'bg-emerald-400', bgLight: 'bg-emerald-100/70', bgHex: '#d1fae5', borderHex: '#6ee7b7', textClass: 'text-emerald-600' },
+    { id: 'study', label: 'Study', icon: '🎓', sub: 'Hrs', ring: 'focus:ring-indigo-400', color: 'text-indigo-500', bar: 'bg-indigo-400', bgLight: 'bg-indigo-100/70', bgHex: '#e0e7ff', borderHex: '#a5b4fc', textClass: 'text-indigo-600' },
 ] as const;
 
 const PHYSICAL_TILES = [
-    { id: 'toBed', label: 'To Bed', icon: '🌙', sub: 'min', ring: 'focus:ring-indigo-400' },
-    { id: 'wakeUp', label: 'Wake Up', icon: '☀️', sub: 'min', ring: 'focus:ring-sky-400' },
-    { id: 'dailyFilling', label: 'Refilling', icon: '💧', sub: 'min', ring: 'focus:ring-blue-400' },
-    { id: 'daySleep', label: 'Day Sleep', icon: '🛋️', sub: 'min', ring: 'focus:ring-violet-400' },
+    { id: 'toBed', label: 'To Bed', icon: '🌙', sub: 'min', ring: 'focus:ring-violet-400', color: 'text-violet-500', bar: 'bg-violet-400', bgLight: 'bg-violet-100/70', bgHex: '#ede9fe', borderHex: '#c084fc', textClass: 'text-violet-600' },
+    { id: 'wakeUp', label: 'Wake Up', icon: '☀️', sub: 'min', ring: 'focus:ring-sky-400', color: 'text-sky-500', bar: 'bg-sky-400', bgLight: 'bg-sky-100/70', bgHex: '#e0f2fe', borderHex: '#7dd3fc', textClass: 'text-sky-600' },
+    { id: 'dailyFilling', label: 'Daily Filling', icon: '💧', sub: 'min', ring: 'focus:ring-blue-400', color: 'text-blue-500', bar: 'bg-blue-400', bgLight: 'bg-blue-100/70', bgHex: '#dbeafe', borderHex: '#93c5fd', textClass: 'text-blue-600' },
+    { id: 'daySleep', label: 'Day Sleep', icon: '🛋️', sub: 'min', ring: 'focus:ring-rose-400', color: 'text-rose-500', bar: 'bg-rose-400', bgLight: 'bg-rose-100/70', bgHex: '#ffe4e6', borderHex: '#fda4af', textClass: 'text-rose-600' },
 ] as const;
 
 export default function SadhanaPage() {
@@ -138,7 +139,7 @@ export default function SadhanaPage() {
     const weekDateRangeStr = `${format(currentWeekStart, 'MMM d')} - ${format(currentWeekEnd, 'MMM d, yyyy')}`;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto space-y-6 bg-blue-100 p-4 sm:p-6 md:p-8 rounded-3xl border border-blue-250 border-blue-300/60 shadow-sm">
             {/* ── Tabs Navigation ── */}
             <div className="flex p-1 bg-white/50 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm max-w-fit">
                 <button
@@ -158,9 +159,9 @@ export default function SadhanaPage() {
             </div>
 
             {/* ── Header Section ── */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <div className="flex flex-col items-center sm:flex-row justify-between gap-5 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center sm:text-left">
+                <div className="flex flex-col items-center sm:items-start">
+                    <h1 className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
                         <Sparkles className="h-6 w-6 text-orange-500" />
                         Daily Sadhana
                     </h1>
@@ -170,7 +171,7 @@ export default function SadhanaPage() {
                 </div>
 
                 {/* Date navigator */}
-                <div className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-center gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full max-w-[280px] sm:w-auto">
                     <button type="button" onClick={() => shiftDate(-1)}
                         className="p-2 rounded-lg hover:bg-white hover:shadow-sm transition-all text-gray-600 hover:text-gray-900">
                         <ChevronLeft className="h-4 w-4" />
@@ -224,11 +225,11 @@ export default function SadhanaPage() {
                                         </div>
                                         <div>
                                             <h2 className="text-lg font-bold text-gray-900">Spiritual Practices</h2>
-                                            <p className="text-sm text-gray-500 font-medium">Japa, hearing, and reading</p>
+                                            <p className="text-sm text-gray-500 font-medium">Japa, hearing, reading, and study</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
                                         {SPIRITUAL_TILES.map(t => {
                                             const val = (form as any)[t.id] as number;
                                             const weeklyVal = Math.min(70, weeklyTotals?.[t.id] || 0);
@@ -236,44 +237,47 @@ export default function SadhanaPage() {
                                             return (
                                                 <div key={t.id} className="flex flex-col">
                                                     <label className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
-                                                        <span className="flex items-center gap-2">
-                                                            <span className="text-base">{t.icon}</span>
-                                                            {t.label}
+                                                        <span className="flex items-center gap-1.5 truncate">
+                                                            <span className={`w-7 h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-base flex-shrink-0`}>{t.icon}</span>
+                                                            <span className="truncate">{t.label}</span>
                                                         </span>
                                                     </label>
                                                     <div className="relative">
                                                         <input
                                                             type="number"
                                                             min="0"
+                                                            step={t.id === 'study' ? '0.5' : undefined}
                                                             id={t.id}
-                                                            value={val || ''}
-                                                            onChange={e => setForm(p => ({ ...p, [t.id]: parseInt(e.target.value) || 0 }))}
-                                                            className={`w-full py-3 px-4 pr-16 bg-gray-50 border border-gray-200 rounded-xl text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 ${t.ring} focus:bg-white transition-all`}
+                                                            value={val}
+                                                            onChange={e => setForm(p => ({ ...p, [t.id]: t.id === 'study' ? parseFloat(e.target.value) || 0 : parseInt(e.target.value) || 0 }))}
+                                                            className={`w-full py-3 pl-3 pr-10 border rounded-xl text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
+                                                            style={{ backgroundColor: t.bgHex, borderColor: t.borderHex }}
                                                             placeholder="0"
                                                         />
-                                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400 pointer-events-none">
-                                                            {t.sub}
-                                                        </span>
                                                     </div>
-                                                    <div className="mt-2 space-y-1">
-                                                        <div className="flex items-center justify-between text-[11px] font-semibold">
-                                                            <span className="text-gray-400">Week:</span>
-                                                            <span className={weeklyVal >= 70 ? "text-emerald-500" : "text-gray-500"}>
-                                                                {weeklyVal} / 70
-                                                            </span>
+                                                    {t.id !== 'study' && (
+                                                        <div className="mt-2 space-y-1">
+                                                            <div className="flex items-center justify-between text-[11px] font-semibold">
+                                                                <span className="text-gray-400">Week:</span>
+                                                                <span className={weeklyVal >= 70 ? t.color : "text-gray-500"}>
+                                                                    {weeklyVal} / 70
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-700 ease-out ${weeklyVal >= 70 ? t.bar : `${t.bar} opacity-60`}`}
+                                                                    style={{ width: `${progressPct}%` }}
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-700 ease-out ${weeklyVal >= 70 ? 'bg-emerald-400' : 'bg-orange-300'}`}
-                                                                style={{ width: `${progressPct}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
+                                    </div>
 
-                                        <div className="flex flex-col md:col-span-3 mt-2">
+                                    <div className="mt-5 space-y-4">
+                                        <div className="flex flex-col">
                                             <label htmlFor="bookName" className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
                                                 <span className="flex items-center gap-2">
                                                     <BookOpen className="h-4 w-4 text-emerald-500" />
@@ -288,29 +292,6 @@ export default function SadhanaPage() {
                                                 onChange={e => setForm(p => ({ ...p, bookName: e.target.value }))}
                                                 className="w-full py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:bg-white transition-all"
                                             />
-                                        </div>
-
-                                        <div className="flex flex-col md:col-span-3 mt-2">
-                                            <label htmlFor="study" className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
-                                                <span className="flex items-center gap-2">
-                                                    <GraduationCap className="h-4 w-4 text-orange-500" />
-                                                    Education Study (Hours)
-                                                </span>
-                                            </label>
-                                            <div className="relative">
-                                                <input
-                                                    id="study"
-                                                    type="number"
-                                                    step="0.5"
-                                                    min="0"
-                                                    max="24"
-                                                    placeholder="0"
-                                                    value={form.study || ''}
-                                                    onChange={e => setForm(p => ({ ...p, study: parseFloat(e.target.value) || 0 }))}
-                                                    className="w-full py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all pr-12"
-                                                />
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase tracking-widest">Hrs</div>
-                                            </div>
                                         </div>
                                     </div>
                                 </section>
@@ -338,7 +319,7 @@ export default function SadhanaPage() {
                                                 <div key={t.id} className="flex flex-col">
                                                     <label className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
                                                         <span className="flex items-center gap-1.5 truncate">
-                                                            <span className="text-base flex-shrink-0">{t.icon}</span>
+                                                            <span className={`w-7 h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-base flex-shrink-0`}>{t.icon}</span>
                                                             <span className="truncate">{t.label}</span>
                                                         </span>
                                                     </label>
@@ -347,25 +328,24 @@ export default function SadhanaPage() {
                                                             type="number"
                                                             min="0"
                                                             id={t.id}
-                                                            value={val || ''}
+                                                            value={val}
                                                             onChange={e => setForm(p => ({ ...p, [t.id]: parseInt(e.target.value) || 0 }))}
-                                                            className={`w-full py-3 pl-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 ${t.ring} focus:bg-white transition-all`}
+                                                            className={`w-full py-3 pl-3 pr-10 border rounded-xl text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
+                                                            style={{ backgroundColor: t.bgHex, borderColor: t.borderHex }}
                                                             placeholder="0"
                                                         />
-                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400 pointer-events-none">
-                                                            {t.sub}
-                                                        </span>
+                                                        {/* Sub label removed */}
                                                     </div>
                                                     <div className="mt-2 space-y-1">
                                                         <div className="flex items-center justify-between text-[11px] font-semibold">
                                                             <span className="text-gray-400">Week:</span>
-                                                            <span className={weeklyVal >= 70 ? "text-blue-500" : "text-gray-500"}>
+                                                            <span className={weeklyVal >= 70 ? t.color : "text-gray-500"}>
                                                                 {weeklyVal} / 70
                                                             </span>
                                                         </div>
                                                         <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                                             <div
-                                                                className={`h-full rounded-full transition-all duration-700 ease-out ${weeklyVal >= 70 ? 'bg-blue-400' : 'bg-sky-300'}`}
+                                                                className={`h-full rounded-full transition-all duration-700 ease-out ${weeklyVal >= 70 ? t.bar : `${t.bar} opacity-60`}`}
                                                                 style={{ width: `${progressPct}%` }}
                                                             />
                                                         </div>

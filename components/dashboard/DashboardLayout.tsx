@@ -468,39 +468,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 p-4 pb-32 lg:p-6 lg:pb-8 xl:p-8 overflow-y-auto">{children}</main>
 
         {/* Mobile Bottom Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-200 z-40 px-1 pb-2 pb-safe">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-2xl z-40 px-1 pb-2 pb-safe border-t border-white/10">
           <div className="flex justify-around items-center h-20">
             <Link 
               href="/dashboard" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard' ? 'text-orange-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
             >
               <Home className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Home</span>
             </Link>
             <Link 
               href="/dashboard/sadhana" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/sadhana' ? 'text-orange-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/sadhana' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
             >
               <BookOpen className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Sadhana</span>
             </Link>
             <Link 
               href="/dashboard/events" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/events' ? 'text-orange-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/events' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
             >
               <Bell className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Connect</span>
             </Link>
             <Link 
               href="/dashboard/data-center" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/data-center' ? 'text-orange-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/data-center' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
             >
               <Database className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Data</span>
             </Link>
             <Link 
               href="/dashboard/donations" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 ${pathname === '/dashboard/donations' ? 'text-orange-600' : 'text-gray-500'}`}
+              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/donations' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
             >
               <Heart className="h-5 w-5 mb-1" />
               <span className="text-[10px] font-medium">Donate</span>
@@ -517,7 +517,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                    }
                  }
                }}
-               className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${sidebarOpen ? 'text-orange-600' : 'text-gray-500'}`}
+               className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${sidebarOpen ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
              >
                <MoreHorizontal className="h-5 w-5 mb-1" />
                <span className="text-[10px] font-medium">More</span>
