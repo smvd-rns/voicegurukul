@@ -5,13 +5,15 @@ importScripts('https://www.gstatic.com/firebasejs/10.9.0/firebase-messaging-comp
 // Initialize Firebase with the config from URL parameters
 // Since we don't have access to process.env here, we need to hardcode it or use URL params.
 // It's safe to expose these as they are public client keys.
+// Parse config from Service Worker URL search params
+const params = new URLSearchParams(self.location.search);
 firebase.initializeApp({
-    apiKey: "AIzaSyCbxge8PB17jabrAdZVEHyMAH_PEYeRcoo",
-    authDomain: "communication-iskcon.firebaseapp.com",
-    projectId: "communication-iskcon",
-    storageBucket: "communication-iskcon.firebasestorage.app",
-    messagingSenderId: "697373526800",
-    appId: "1:697373526800:web:f066ee07b8422df18a7395"
+    apiKey: params.get('apiKey') || "",
+    authDomain: params.get('authDomain') || "",
+    projectId: params.get('projectId') || "",
+    storageBucket: params.get('storageBucket') || "",
+    messagingSenderId: params.get('messagingSenderId') || "",
+    appId: params.get('appId') || ""
 });
 
 const messaging = firebase.messaging();
