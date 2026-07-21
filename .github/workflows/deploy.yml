@@ -36,7 +36,7 @@ jobs:
           script: |
             cd /var/www/voicegurukul
             git pull origin main
-            npm ci --production
+            npm ci
             npx next build
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
             pm2 save
