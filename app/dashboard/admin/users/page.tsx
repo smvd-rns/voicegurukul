@@ -264,13 +264,14 @@ export default function UsersPage() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      
+      const { data: sessionData } = await supabase?.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
+
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
       });
       

@@ -11,7 +11,7 @@ import { Loader2, User, Phone, Mail, Calendar, Home, Building2, CheckCircle2, Ch
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function CompleteRegistrationPage() {
-    const { user, userData, loading: authLoading } = useAuth();
+    const { user, userData, loading: authLoading, refreshUserData } = useAuth();
     const router = useRouter();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -60,13 +60,20 @@ export default function CompleteRegistrationPage() {
         'Staying Single (Not planning to marry)',
     ];
 
+    // Redirect user to pending page if they have already submitted and status is pending
+    useEffect(() => {
+        if (!authLoading && userData?.verificationStatus === 'pending') {
+            router.push('/auth/pending');
+        }
+    }, [userData, authLoading, router]);
+
     // Load initial data
     useEffect(() => {
         if (user) {
             setFormData(prev => ({
                 ...prev,
-                name: userData?.name || user.user_metadata?.full_name || '',
-                email: user.email || '',
+                name: prev.name || userData?.name || user.user_metadata?.name || user.user_metadata?.full_name || '',
+                email: prev.email || user.email || '',
                 // Initialize spiritual fields if they exist in userData
                 introducedToKcIn: userData?.hierarchy?.introducedToKcIn || (userData as any)?.introducedToKcIn || '',
                 parentTemple: userData?.hierarchy?.parentTemple || (userData as any)?.parentTemple || '',
@@ -362,7 +369,10 @@ export default function CompleteRegistrationPage() {
 
             setSuccess('Registration submitted! Redirecting...');
 
-            // Immediate redirect to pending page
+            // Refresh auth state in memory before redirect
+            await refreshUserData();
+
+            // Redirect to pending approval page
             window.location.href = '/auth/pending';
         } catch (err: any) {
             console.error('Registration error:', err);

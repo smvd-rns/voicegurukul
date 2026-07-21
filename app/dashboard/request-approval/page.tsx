@@ -138,7 +138,7 @@ export default function RequestApprovalPage() {
           if (!fetchError && targetUser) {
             let existingRoles: number[] = [];
             if (Array.isArray(targetUser.role)) {
-              existingRoles = targetUser.role.map(r => typeof r === 'number' ? r : (r === 'counselor' ? 2 : 1));
+              existingRoles = targetUser.role.map((r: any) => typeof r === 'number' ? r : (r === 'counselor' ? 2 : 1));
             } else {
               existingRoles = [typeof targetUser.role === 'number' ? targetUser.role : (targetUser.role === 'counselor' ? 2 : 1)];
             }

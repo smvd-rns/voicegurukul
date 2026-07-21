@@ -135,10 +135,10 @@ export const getWeeklyTotals = async (userId: string, date: Date | string): Prom
     const startDateStr = fmt(startOfWeek);
     const endDateStr = fmt(endOfWeek);
 
-    const { data, error } = await freshClient
+    const { data, error } = await (freshClient
       .from('sadhana_reports')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', userId) as any)
       .gte('date', startDateStr)
       .lte('date', endDateStr);
 
@@ -178,10 +178,10 @@ export const getMonthlyTotals = async (userId: string, date: Date | string): Pro
     const startDateStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const endDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
-    const { data, error } = await client
+    const { data, error } = await (client
       .from('sadhana_reports')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', userId) as any)
       .gte('date', startDateStr)
       .lte('date', endDateStr);
 
@@ -281,7 +281,7 @@ export const getSadhanaReportsByRange = async (userId: string, fromDate: string,
   if (!client) { console.error('Supabase is not initialized'); return []; }
 
   try {
-    const { data, error } = await client.from('sadhana_reports').select('*').eq('user_id', userId).gte('date', fromDate).lte('date', toDate).order('date', { ascending: false });
+    const { data, error } = await (client.from('sadhana_reports').select('*').eq('user_id', userId) as any).gte('date', fromDate).lte('date', toDate).order('date', { ascending: false });
     if (error) { console.error('Error fetching sadhana reports range:', error); return []; }
     return (data || []).map((r: any) => ({
       id: r.id, userId: r.user_id, date: normalizeDate(r.date),
@@ -319,7 +319,7 @@ export const getBulkSadhanaReportsByRange = async (userIds: string[], fromDate: 
   if (!client || !userIds || userIds.length === 0) return [];
 
   try {
-    const { data, error } = await client.from('sadhana_reports').select('*').in('user_id', userIds).gte('date', fromDate).lte('date', toDate).order('date', { ascending: false });
+    const { data, error } = await (client.from('sadhana_reports').select('*').in('user_id', userIds) as any).gte('date', fromDate).lte('date', toDate).order('date', { ascending: false });
     if (error) { console.error('Error fetching bulk sadhana reports:', error); return []; }
     return (data || []).map((r: any) => ({
       id: r.id, userId: r.user_id, date: normalizeDate(r.date),

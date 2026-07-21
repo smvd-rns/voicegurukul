@@ -1,41 +1,41 @@
-import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { NextRequest, NextResponse } from 'next/server';
+import { query as dbQuery } from '@/lib/db';
+import { verifyToken } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
 export async function DELETE(
-    request: Request,
+    request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
-        const supabase = getAdminClient();
-        
-        // Auth check (must be super admin)
+
+        // Extract token from cookie or authorization header
+        const cookieToken = (request as any).cookies?.get('session_token')?.value;
         const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const token = cookieToken || (authHeader ? authHeader.replace('Bearer ', '') : null);
+
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized: Missing token' }, { status: 401 });
         }
-        
-        const { data: { user: adminUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-        if (authError || !adminUser) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const decoded = verifyToken(token);
+        if (!decoded || !decoded.userId) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
-        
-        // Check Permissions (only Super Admin role 8)
-        const { data: adminProfile } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', adminUser.id)
-            .single();
-            
+
+        // Fetch requesting admin profile from Droplet DB
+        const adminRes = await dbQuery('SELECT role FROM users WHERE id = $1', [decoded.userId]);
+        const adminProfile = adminRes.rows[0];
+
         if (!adminProfile) {
             return NextResponse.json({ error: 'Admin profile not found' }, { status: 404 });
         }
-        
+
         const roles = Array.isArray(adminProfile.role) ? adminProfile.role : [adminProfile.role];
         const roleNums = roles.map((r: any) => Number(r));
         const isSuperAdmin = roleNums.includes(8) || roles.includes('super_admin');
-        
+
         if (!isSuperAdmin) {
             return NextResponse.json({ error: 'Forbidden. Only Super Admins can delete users.' }, { status: 403 });
         }
@@ -45,23 +45,14 @@ export async function DELETE(
              return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
 
-        // 1. Delete from public.users table
-        const { error: dbError } = await supabase
-            .from('users')
-            .delete()
-            .eq('id', userIdToDelete);
+        // 1. Delete associated profile details first (if any)
+        await dbQuery('DELETE FROM user_profile_details WHERE user_id = $1', [userIdToDelete]);
 
-        if (dbError) {
-             console.error('Error deleting from public.users:', dbError);
-             return NextResponse.json({ error: 'Failed to delete user profile data' }, { status: 500 });
-        }
+        // 2. Delete user row from Droplet DB
+        const delRes = await dbQuery('DELETE FROM users WHERE id = $1', [userIdToDelete]);
 
-        // 2. Delete from Supabase Auth
-        // If they don't exist in auth, this might just fail, but that's fine.
-        const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userIdToDelete);
-        
-        if (authDeleteError) {
-             console.error('Error deleting from auth.users (may not exist):', authDeleteError);
+        if (delRes.rowCount === 0) {
+             return NextResponse.json({ error: 'User not found or already deleted' }, { status: 404 });
         }
 
         return NextResponse.json({ success: true, message: 'User deleted successfully' });

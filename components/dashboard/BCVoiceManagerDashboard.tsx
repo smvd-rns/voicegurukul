@@ -235,7 +235,7 @@ export default function BCVoiceManagerDashboard() {
             });
 
             const devsWithProgress = await Promise.all(
-                uniqueDevs.map(async (dev) => {
+                uniqueDevs.map(async (dev: any) => {
                     try {
                         const reports = await fetchSadhanaHistory(30, dev.id);
 

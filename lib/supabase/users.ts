@@ -14,9 +14,9 @@ export const getUsersByRole = async (role: UserRole) => {
     const roleNumber = roleToNumber(role);
     const roleNumberArray = Array.isArray(roleNumber) ? roleNumber : [roleNumber];
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('users')
-      .select('*, user_profile_details(*)')
+      .select('*, user_profile_details(*)') as any)
       .contains('role', roleNumberArray);
 
     if (error) {
@@ -153,6 +153,10 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
       }
     });
 
+    if (updates.otherCounselor !== undefined) dbUpdates.other_counselor = updates.otherCounselor;
+    if (updates.otherTemple !== undefined) dbUpdates.other_temple = updates.otherTemple;
+    if (updates.otherCenter !== undefined) dbUpdates.other_center = updates.otherCenter;
+
     if (enrichedHierarchy) {
       dbUpdates.current_temple = enrichedHierarchy.currentTemple || null;
       dbUpdates.state = enrichedHierarchy.state || null;
@@ -170,7 +174,9 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
       dbUpdates.royal_member = enrichedHierarchy.royalMember || null;
       dbUpdates.introduced_to_kc_in = enrichedHierarchy.introducedToKcIn || null;
       dbUpdates.parent_temple = enrichedHierarchy.parentTemple || null;
+      dbUpdates.other_parent_temple = enrichedHierarchy.otherParentTemple || null;
       dbUpdates.parent_center = enrichedHierarchy.parentCenter || null;
+      dbUpdates.other_parent_center = enrichedHierarchy.otherParentCenter || null;
       
       if (enrichedHierarchy.counselor) {
         dbUpdates.counselor = enrichedHierarchy.counselor;
@@ -221,9 +227,10 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
       if (detailsError) console.error('Error updating details:', detailsError);
     }
 
-  } catch (error: any) {
+    } catch (error: any) {
     console.error('Error updating user:', error);
-    throw new Error(error.message || 'Failed to update user');
+    const errMsg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
+    throw new Error(errMsg || 'Failed to update user');
   }
 };
 

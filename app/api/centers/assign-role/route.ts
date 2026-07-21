@@ -80,7 +80,7 @@ export async function POST(request: Request) {
                     .single()
             ]);
 
-            const managedCenters = (requesterCentersResult.data || []).map(c => c.name?.trim().toLowerCase());
+            const managedCenters = ((requesterCentersResult.data || []) as any[]).map((c: any) => c.name?.trim().toLowerCase());
             const targetUser = targetUserResult.data;
 
             if (!targetUser) {

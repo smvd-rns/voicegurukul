@@ -286,7 +286,7 @@ export const resetPassword = async (email: string) => {
       ? `${window.location.origin}/auth/reset-password`
       : undefined;
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    const { error } = await (supabase.auth as any).resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo: redirectUrl,
     });
 
@@ -305,38 +305,24 @@ export const resetPassword = async (email: string) => {
   }
 };
 
-// Sign in with Google OAuth
+// Sign in with Google OAuth (Native custom OAuth on Droplet)
 export const signInWithGoogle = async (nextPath?: string) => {
-  if (!supabase) {
-    throw new Error('Supabase is not initialized');
-  }
-
   try {
-    let redirectUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback`
-      : undefined;
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '280450471879-qck9d7rl11gi8f4g3i6fptsqejhd137i.apps.googleusercontent.com';
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
+    const redirectUri = `${siteUrl}/api/auth/google`;
 
-    if (redirectUrl && nextPath) {
-      redirectUrl += `?next=${encodeURIComponent(nextPath)}`;
-    }
+    const state = nextPath ? encodeURIComponent(nextPath) : '/';
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
+    const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${clientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=code&` +
+      `scope=${encodeURIComponent('openid email profile')}&` +
+      `state=${state}&` +
+      `prompt=select_account`;
 
-    if (error) {
-      console.error('OAuth error:', error);
-      throw error;
-    }
-
-    return { data, error: null };
+    return { data: { url: googleOAuthUrl }, error: null };
   } catch (error: any) {
     console.error('Sign in with Google error:', error);
     throw error;

@@ -56,15 +56,15 @@ function EventsPageContent() {
             const logs = await getRecentResponses(30, userData?.id, isSuperAdmin);
 
             // Map user names from main Supabase
-            const userIds = Array.from(new Set(logs.map(l => l.userId)));
+            const userIds = Array.from(new Set((logs as any[]).map((l: any) => l.userId)));
             if (userIds.length > 0) {
                 const { data: users } = await supabase!
                     .from('users')
                     .select('id, name, email')
                     .in('id', userIds);
 
-                const userMap = new Map(users?.map(u => [u.id, u]) || []);
-                const detailedLogs = logs.map(log => ({
+                const userMap = new Map(((users || []) as any[]).map((u: any) => [u.id, u]));
+                const detailedLogs = (logs as any[]).map((log: any) => ({
                     ...log,
                     userName: userMap.get(log.userId)?.name,
                     userEmail: userMap.get(log.userId)?.email

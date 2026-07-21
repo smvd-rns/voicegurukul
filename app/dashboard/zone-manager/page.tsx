@@ -57,27 +57,25 @@ export default function ZoneManagerPage() {
             console.log('Zone Manager: Found users:', zoneUsers.length);
 
             // Get all unique states in this zone
-            const uniqueStates = [...new Set(zoneUsers.map(u => u.hierarchy?.state).filter(Boolean))] as string[];
+            const uniqueStates = [...new Set(zoneUsers.map((u: any) => u.hierarchy?.state).filter(Boolean))] as string[];
             setStatesInZone(uniqueStates.sort());
-
-
 
             // Filter out users with higher role than current user
             const currentUserRoleNum = getUserMaxRoleLevel(userData.role);
-            const visibleUsers = zoneUsers.filter(u => {
+            const visibleUsers = zoneUsers.filter((u: any) => {
                 const targetUserRoleNum = getUserMaxRoleLevel(u.role);
                 return targetUserRoleNum <= currentUserRoleNum;
             });
             console.log(`Zone Manager: Filtered ${zoneUsers.length} users to ${visibleUsers.length} visible users (role <= ${currentUserRoleNum})`);
 
             // Fetch spiritual progress for students only
-            const students = visibleUsers.filter(user => {
+            const students = visibleUsers.filter((user: any) => {
                 const roles = Array.isArray(user.role) ? user.role : [user.role];
                 return roles.includes('student') || roles.includes(1);
             });
 
             const usersWithProgress = await Promise.all(
-                students.map(async (user) => {
+                students.map(async (user: any) => {
                     try {
                         const reports = await fetchSadhanaHistory(30, user.id);
 
@@ -140,14 +138,14 @@ export default function ZoneManagerPage() {
             );
 
             // Add non-student users without progress data
-            const otherUsers = visibleUsers.filter(user => {
+            const otherUsers = visibleUsers.filter((user: any) => {
                 const roles = Array.isArray(user.role) ? user.role : [user.role];
                 return !(roles.includes('student') || roles.includes(1));
             });
 
             const allUsers = [
                 ...usersWithProgress,
-                ...otherUsers.map(user => ({
+                ...otherUsers.map((user: any) => ({
                     ...user,
                     avgSoulPercent: undefined,
                     progressRating: undefined,

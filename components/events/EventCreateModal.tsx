@@ -51,11 +51,11 @@ export default function EventCreateModal({ isOpen, onClose, onSuccess }: EventCr
             try {
                 // Fetch Temples
                 const { data: templeData } = await supabase!.from('temples').select('id, name').order('name');
-                setTemples(templeData?.map(t => ({ id: t.name, name: t.name })) || []);
+                setTemples(templeData?.map((t: any) => ({ id: t.name, name: t.name })) || []);
 
                 // Fetch Centers
                 const { data: centerData } = await supabase!.from('centers').select('id, name').order('name');
-                setCenters(centerData?.map(c => ({ id: c.name, name: c.name })) || []);
+                setCenters(centerData?.map((c: any) => ({ id: c.name, name: c.name })) || []);
             } catch (error) {
                 console.error('Error fetching filter data:', error);
             } finally {

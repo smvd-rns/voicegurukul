@@ -114,7 +114,7 @@ export default function BroadcastPage() {
                         .in('id', centerIds);
 
                     if (centersData) {
-                        setApprovedCentersList(centersData.map(c => ({ value: c.id.toString(), label: c.name })));
+                        setApprovedCentersList(((centersData || []) as any[]).map((c: any) => ({ value: c.id.toString(), label: c.name })));
                     } else {
                         // Fallback if fetch fails or no names found
                         setApprovedCentersList(centerIds.map((id: string) => ({ value: id, label: `Center ${id}` })));

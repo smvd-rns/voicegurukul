@@ -69,7 +69,7 @@ export default function EventAdminAssignmentPage() {
                 const { data: allocData } = await supabase.from('event_admin_allocations').select('*');
                 if (allocData) {
                     const allocMap: Record<string, any> = {};
-                    allocData.forEach(item => {
+                    ((allocData || []) as any[]).forEach((item: any) => {
                         allocMap[item.user_id] = item;
                     });
                     setAllocations(allocMap);
@@ -81,8 +81,8 @@ export default function EventAdminAssignmentPage() {
                     supabase.from('centers').select('id, name, temple_name').order('name')
                 ]);
 
-                setTemples(templeData?.map(t => ({ id: t.name, name: t.name })) || []);
-                setCenters(centerData?.map(c => ({ id: c.name, name: c.name, temple_name: c.temple_name })) || []);
+                setTemples(((templeData || []) as any[]).map((t: any) => ({ id: t.name, name: t.name })));
+                setCenters(((centerData || []) as any[]).map((c: any) => ({ id: c.name, name: c.name, temple_name: c.temple_name })));
             }
         } catch (error) {
             console.error('Error loading data:', error);

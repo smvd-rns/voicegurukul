@@ -594,7 +594,7 @@ export default function ProjectManagerDashboard() {
                     const centersWithRegCounts: { name: string, _count: number }[] = [];
                     if (!regError && regStats) {
                         const counts: Record<string, number> = {};
-                        regStats.forEach(u => {
+                        (regStats as any[]).forEach((u: any) => {
                             const uH = u.hierarchy as any;
                             const cName = u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '';
                             if (cName) {
@@ -677,7 +677,7 @@ export default function ProjectManagerDashboard() {
                 if (error) throw error;
 
                 if (data && data.length > 0) {
-                    const mappedCenters = data.map(center => {
+                    const mappedCenters = (data as any[]).map((center: any) => {
                         const role = center.project_manager_id === adminId ? 'Project Manager' :
                             center.project_advisor_id === adminId ? 'Project Advisor' :
                                 center.acting_manager_id === adminId ? 'Acting Manager' : 'Member';
@@ -819,7 +819,7 @@ export default function ProjectManagerDashboard() {
                 .or(buildCenterMatch(currentCenter));
 
             if (error) throw error;
-            setPendingUsers((data || []).map(u => ({
+            setPendingUsers((data || []).map((u: any) => ({
                 ...u,
                 hierarchy: u.hierarchy || {}
             })));

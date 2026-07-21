@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         // 2. Find all child folders recursively
         const idsToDelete: string[] = [id];
         const findChildren = (parentId: string) => {
-            const children = allFolders.filter(f => f.parent_id === parentId);
+            const children = (allFolders as any[] || []).filter((f: any) => f.parent_id === parentId);
             children.forEach(child => {
                 idsToDelete.push(child.id);
                 findChildren(child.id);

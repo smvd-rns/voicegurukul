@@ -57,6 +57,15 @@ export async function middleware(request: NextRequest) {
 
   await supabase.auth.getUser()
 
+  // Check custom JWT session cookie
+  const token = request.cookies.get('session_token')?.value;
+  const path = request.nextUrl.pathname;
+
+  // If user is logged in with valid token and tries to access login or home page, auto-redirect to dashboard
+  if (token && (path === '/auth/login' || path === '/auth/register' || path === '/')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
   return response
 }
 

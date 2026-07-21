@@ -65,15 +65,14 @@ export default function UserApprovalsPage() {
         if (confirmApprove.userId) setProcessingId(confirmApprove.userId);
 
         try {
-            const session = await supabase!.auth.getSession();
-            const token = session.data.session?.access_token;
-            if (!token) throw new Error('No auth token');
+            const session = await supabase?.auth.getSession();
+            const token = session?.data.session?.access_token || '';
 
             const res = await fetch('/api/admin/verify-data', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -114,15 +113,14 @@ export default function UserApprovalsPage() {
         if (rejectionDialog.userId) setProcessingId(rejectionDialog.userId);
 
         try {
-            const session = await supabase!.auth.getSession();
-            const token = session.data.session?.access_token;
-            if (!token) throw new Error('No auth token');
+            const session = await supabase?.auth.getSession();
+            const token = session?.data.session?.access_token || '';
 
             const res = await fetch('/api/admin/verify-data', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -141,9 +139,9 @@ export default function UserApprovalsPage() {
                 userIdsToReject.forEach(id => newSet.delete(id));
                 return newSet;
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to reject user(s):', error);
-            alert('Failed to reject user(s)');
+            alert(`Failed to reject user: ${error?.message || error}`);
         } finally {
             setProcessingId(null);
         }

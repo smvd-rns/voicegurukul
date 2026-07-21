@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         const numericRoles = roles.map((r: any) => typeof r === 'number' ? r : parseInt(r)).filter((r: number) => !isNaN(r));
 
         // Roles 8, 9, 10 see all policies
-        const seesAll = numericRoles.some(r => [8, 9, 10].includes(r)) || roles.includes('super_admin');
+        const seesAll = (numericRoles as number[]).some((r: number) => [8, 9, 10].includes(r)) || roles.includes('super_admin');
 
         let query = supabase.from('policies')
             .select('id, title, description, applicable_date, file_name, file_url, file_id, file_type, target_roles')

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { query as dbQuery } from '@/lib/db';
 import { sendRegistrationNotification } from '@/lib/utils/email';
 import crypto from 'crypto';
 
@@ -9,17 +9,12 @@ export async function POST(request: Request) {
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
-
-        const supabase = getAdminClient();
         
-        // Fetch the new user
-        const { data: newUser, error: userError } = await supabase
-            .from('users')
-            .select('id, name, email, phone, hierarchy')
-            .eq('id', userId)
-            .single();
+        // Fetch the new user directly from Droplet DB
+        const userRes = await dbQuery('SELECT id, name, email, phone, hierarchy FROM users WHERE id = $1', [userId]);
+        const newUser = userRes.rows[0];
 
-        if (userError || !newUser) {
+        if (!newUser) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
@@ -32,28 +27,30 @@ export async function POST(request: Request) {
 
         // 1. If Center is selected (and not None)
         if (userCenterName && userCenterName !== 'None' && userCenterName !== 'None/None') {
-            const { data: center } = await supabase
-                .from('centers')
-                .select('project_manager_id, acting_manager_id')
-                .eq('name', userCenterName)
-                .single();
+            try {
+                const centerRes = await dbQuery('SELECT * FROM centers WHERE name = $1 LIMIT 1', [userCenterName]);
+                const center = centerRes.rows[0];
 
-            if (center) {
-                if (center.project_manager_id) managerIdsToNotify.push(center.project_manager_id);
-                if (center.acting_manager_id) managerIdsToNotify.push(center.acting_manager_id);
+                if (center) {
+                    if (center.project_manager_id) managerIdsToNotify.push(center.project_manager_id);
+                    if (center.acting_manager_id) managerIdsToNotify.push(center.acting_manager_id);
+                }
+            } catch (cErr) {
+                console.warn('Center lookup notice:', cErr);
             }
         }
 
         // 2. If no IDs yet (either Center was None or Center had no managers), check if Temple is selected
         if (managerIdsToNotify.length === 0 && userTempleName && userTempleName !== 'None' && userTempleName !== 'None/None') {
-            const { data: temple } = await supabase
-                .from('temples')
-                .select('central_voice_manager_id')
-                .eq('name', userTempleName)
-                .single();
+            try {
+                const templeRes = await dbQuery('SELECT central_voice_manager_id FROM temples WHERE name = $1 LIMIT 1', [userTempleName]);
+                const temple = templeRes.rows[0];
 
-            if (temple && temple.central_voice_manager_id) {
-                managerIdsToNotify.push(temple.central_voice_manager_id);
+                if (temple && temple.central_voice_manager_id) {
+                    managerIdsToNotify.push(temple.central_voice_manager_id);
+                }
+            } catch (tErr) {
+                console.warn('Temple lookup notice:', tErr);
             }
         }
 
@@ -65,29 +62,19 @@ export async function POST(request: Request) {
         let notifyManagers: { id: string, name: string, email: string }[] = [];
 
         if (notifyByRole8) {
-            const { data: superAdmins, error: saError } = await supabase
-                .from('users')
-                .select('id, name, email')
-                .contains('role', [8]); // Role 8 in array
-
-            if (saError) {
-                // Try literal 8 if array check fails (depends on how roles are stored)
-                const { data: saLiteral } = await supabase
-                    .from('users')
-                    .select('id, name, email')
-                    .eq('role', 8);
-                notifyManagers = saLiteral || [];
-            } else {
-                notifyManagers = superAdmins || [];
+            try {
+                // Query Super Admins (role array containing 8) from Droplet DB
+                const res = await dbQuery("SELECT id, name, email FROM users WHERE role::text LIKE '%8%' AND email IS NOT NULL AND email != ''");
+                notifyManagers = res.rows || [];
+            } catch (err) {
+                console.error('Failed to query super admins for registration mail:', err);
             }
         } else if (managerIdsToNotify.length > 0) {
-            const { data: managers, error: managersError } = await supabase
-                .from('users')
-                .select('id, name, email')
-                .in('id', managerIdsToNotify);
-            
-            if (!managersError && managers) {
-                notifyManagers = managers;
+            try {
+                const mgrRes = await dbQuery('SELECT id, name, email FROM users WHERE id = ANY($1::uuid[]) AND email IS NOT NULL AND email != \'\'', [managerIdsToNotify]);
+                notifyManagers = mgrRes.rows || [];
+            } catch (mErr) {
+                console.error('Failed to query manager emails for registration mail:', mErr);
             }
         }
 

@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
                 .select('name')
                 .in('id', approvedCenterIds);
 
-            const approvedCenterNames = centerData ? centerData.map(c => c.name) : [];
+            const approvedCenterNames = centerData ? (centerData as any[]).map((c: any) => c.name) : [];
 
             // Filter users in approved centers (by Name)
             query = query.in('center', approvedCenterNames);

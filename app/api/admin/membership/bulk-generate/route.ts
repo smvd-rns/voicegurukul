@@ -42,9 +42,9 @@ export async function POST(request: Request) {
 
         // Fetch existing membership IDs to avoid duplicates
         const { data: existingIds } = await supabaseAdmin.from('membership_ids').select('user_id');
-        const existingIdSet = new Set(existingIds?.map(m => m.user_id) || []);
+        const existingIdSet = new Set(existingIds?.map((m: any) => m.user_id) || []);
 
-        const eligibleUsers = users.filter(u => !existingIdSet.has(u.id));
+        const eligibleUsers = (users as any[]).filter((u: any) => !existingIdSet.has(u.id));
         
         const results = [];
         let successCount = 0;

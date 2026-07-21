@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { query as dbQuery } from '@/lib/db';
 import { createClient } from '@supabase/supabase-js';
 import { revalidateTag } from 'next/cache';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { type, id, ids, action } = body;
@@ -32,27 +33,31 @@ export async function POST(request: Request) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
 
         // Verify the requester is an admin (Role 8)
+        // Verify the requester using custom JWT session token or Bearer token
+        const { verifyToken } = require('@/lib/auth-server');
+        const cookieToken = request.cookies.get('session_token')?.value;
         const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        const token = cookieToken || (authHeader ? authHeader.replace('Bearer ', '') : null);
 
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized: Missing token' }, { status: 401 });
         }
 
-        // Check role in users table
-        const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .single();
+        const decoded = verifyToken(token);
+        if (!decoded || !decoded.userId) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+        }
 
-        if (userError || !userData) {
+        // Fetch user from Droplet DB
+        const dbRes = await dbQuery('SELECT id, email, role FROM users WHERE id = $1', [decoded.userId]);
+        const dbUser = dbRes.rows[0];
+
+        if (!dbUser) {
             return NextResponse.json({ error: 'User profile not found' }, { status: 401 });
         }
+
+        const user = { id: dbUser.id, email: dbUser.email };
+        const userData = { role: dbUser.role };
 
         // Check if role 8 (Super Admin) is present
         // Role can be number or array
@@ -134,7 +139,7 @@ export async function POST(request: Request) {
                     });
                 }
 
-                const allMatch = targetUsers.every(u => {
+                const allMatch = (targetUsers as any[]).every((u: any) => {
                     const uH = u.hierarchy || {};
                     const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
                     const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
@@ -170,47 +175,30 @@ export async function POST(request: Request) {
                 }
             }
 
-            const updateData: any = {
-                reviewed_at: new Date().toISOString(),
-                reviewed_by: user.id
-            };
+            // Execute update via raw Droplet DB query
+            const statusVal = action === 'approve' ? 'approved' : 'rejected';
+            const reasonVal = action === 'reject' ? (reason || null) : null;
+            const now = new Date().toISOString();
 
-            if (action === 'approve') {
-                updateData.verification_status = 'approved';
-                updateData.rejection_reason = null; // Clear any previous reason
-            } else if (action === 'reject') {
-                updateData.verification_status = 'rejected';
-                updateData.rejection_reason = reason || null;
-            } else {
-                return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-            }
+            await dbQuery(
+                `UPDATE users SET verification_status = $1, rejection_reason = $2, reviewed_at = $3, reviewed_by = $4 WHERE id = ANY($5::uuid[])`,
+                [statusVal, reasonVal, now, user.id, targetIds]
+            );
 
-            const { error } = await supabase
-                .from('users')
-                .update(updateData)
-                .in('id', targetIds);
+            // Side Effects (Emails & Membership IDs)
+            const { sendApprovalNotification, sendRejectionNotification } = await import('@/lib/utils/email');
 
-            if (error) throw error;
-
-            // NEW: Processing Side Effects (Emails & Membership IDs) if Approved
             if (action === 'approve') {
                 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-                const { sendApprovalNotification } = await import('@/lib/utils/email');
                 const { generateMembershipIdForUser } = await import('@/lib/utils/membership');
 
                 for (const userId of targetIds) {
                     try {
-                        const { data: userDetails } = await supabase
-                            .from('users')
-                            .select('email, name')
-                            .eq('id', userId)
-                            .single();
+                        const userRes = await dbQuery('SELECT email, name FROM users WHERE id = $1', [userId]);
+                        const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
-                            // Trigger welcome email
                             await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`);
-                            
-                            // Generate Membership ID
                             try {
                                 await generateMembershipIdForUser(supabase, userId);
                             } catch (genErr) {
@@ -218,7 +206,24 @@ export async function POST(request: Request) {
                             }
                         }
                     } catch (sideEffectError) {
-                        console.error(`Error in side effects for user ${userId}:`, sideEffectError);
+                        console.error(`Error in approval side effects for user ${userId}:`, sideEffectError);
+                    }
+                }
+            } else if (action === 'reject') {
+                for (const userId of targetIds) {
+                    try {
+                        const userRes = await dbQuery('SELECT email, name FROM users WHERE id = $1', [userId]);
+                        const userDetails = userRes.rows[0];
+
+                        if (userDetails?.email) {
+                            await sendRejectionNotification(
+                                userDetails.email,
+                                userDetails.name || 'Devotee',
+                                reason || 'Information provided was insufficient.'
+                            );
+                        }
+                    } catch (sideEffectError) {
+                        console.error(`Error sending rejection email for user ${userId}:`, sideEffectError);
                     }
                 }
             }

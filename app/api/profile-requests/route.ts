@@ -163,7 +163,7 @@ export async function GET(request: Request) {
                 .select('name')
                 .or(`managing_director_id.eq.${adminUser.id},director_id.eq.${adminUser.id},central_voice_manager_id.eq.${adminUser.id},yp_id.eq.${adminUser.id}`);
 
-            const assignedNames = (assignedTemples || []).map(t => t.name);
+            const assignedNames = ((assignedTemples || []) as any[]).map((t: any) => t.name);
 
             if (templeFilter && assignedNames.includes(templeFilter)) {
                 targetTemple = templeFilter;
@@ -285,7 +285,7 @@ export async function GET(request: Request) {
                 .select('name')
                 .or(`project_manager_id.eq.${adminUser.id},project_advisor_id.eq.${adminUser.id},acting_manager_id.eq.${adminUser.id}`);
 
-            const allowedCenterNames = (managedCenters || []).map(c => c.name.trim().toLowerCase());
+            const allowedCenterNames = ((managedCenters || []) as any[]).map((c: any) => c.name.trim().toLowerCase());
 
             // If user is also Temple Admin, we should technically allow union of Temple U Centers
             // But for now, if they are PM, we enforce PM restrictions if they are NOT viewing a specific Temple?

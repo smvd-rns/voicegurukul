@@ -45,7 +45,7 @@ export async function GET(request: Request) {
         }
 
         // Extract unique states
-        const states = Array.from(new Set(data.map(item => item.state))).sort();
+        const states = Array.from(new Set(((data || []) as any[]).map((item: any) => item.state))).sort();
 
         return NextResponse.json(states);
 

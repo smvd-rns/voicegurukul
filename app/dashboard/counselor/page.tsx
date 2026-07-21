@@ -206,7 +206,7 @@ export default function CounselorPage() {
       }
 
       // 3. Bulk Fetch Reports
-      const userIds = assignedStudents.map(s => s.id);
+      const userIds = (assignedStudents as any[]).map((s: any) => s.id);
       const allReports = await fetchBulkSadhanaReports(userIds, dateRange.from, dateRange.to);
 
       // 4. Map reports to students & calculate aggregate stats
@@ -219,7 +219,7 @@ export default function CounselorPage() {
         return acc;
       }, {} as Record<string, SadhanaReport[]>);
 
-      const studentsWithProgress = assignedStudents.map(student => {
+      const studentsWithProgress = (assignedStudents as any[]).map((student: any) => {
         const reports = reportsByUser[student.id] || [];
 
         // Manual aggregation for this specific student

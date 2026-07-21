@@ -50,10 +50,10 @@ async function debug() {
     console.log(`Searching from ${startDateStr} to ${endDateStr}`);
 
     // 3. Query the range
-    const { data: rangeData, error } = await activeSupabase
+    const { data: rangeData, error } = await (activeSupabase
         .from('sadhana_reports')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', userId) as any)
         .gte('date', startDateStr)
         .lte('date', endDateStr);
 

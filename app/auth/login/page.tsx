@@ -50,7 +50,6 @@ function LoginContent() {
       if (urlError === 'oauth_error') {
         let errorMessage = 'Failed to sign in with Google. Please try again.';
         if (errorDetails) {
-          // Provide more specific error messages
           if (errorDetails.includes('redirect_uri_mismatch')) {
             errorMessage = 'OAuth configuration error: Redirect URI mismatch. Please ensure the redirect URI is configured in Google Cloud Console.';
           } else if (errorDetails.includes('access_denied')) {
@@ -60,10 +59,16 @@ function LoginContent() {
           }
         }
         setError(errorMessage);
+      } else if (urlError === 'token_exchange_failed') {
+        setError(`Google token exchange failed: ${errorDetails || 'Check Client Secret'}`);
+      } else if (urlError === 'profile_fetch_failed') {
+        setError('Failed to fetch profile from Google.');
+      } else if (urlError === 'no_code') {
+        setError('No authorization code returned from Google.');
       } else if (urlError === 'configuration') {
         setError('Authentication configuration error. Please contact support.');
       } else {
-        setError('An error occurred. Please try again.');
+        setError(`Google login error: ${urlError}`);
       }
       // Clean up URL
       router.replace('/auth/login');
@@ -177,11 +182,72 @@ function LoginContent() {
           </div>
         )}
 
+        {/* Email & Password Form */}
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setError('');
+          const form = e.currentTarget;
+          const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+          const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+          
+          try {
+            const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Login failed');
+            window.location.href = searchParams.get('next') || '/dashboard';
+          } catch (err: any) {
+            setError(err.message || 'Invalid email or password');
+          }
+        }} className="space-y-4 mb-6">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Email Address</label>
+            <div className="relative">
+              <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="name@domain.com"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm text-gray-800"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Password</label>
+            <div className="relative">
+              <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                name="password"
+                type="password"
+                required
+                placeholder="••••••••"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm text-gray-800"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold py-3 rounded-xl shadow-md hover:from-amber-700 hover:to-orange-700 transition-all text-sm sm:text-base"
+          >
+            Sign In with Email
+          </button>
+        </form>
+
+        <div className="relative flex py-2 items-center mb-6">
+          <div className="flex-grow border-t border-gray-200"></div>
+          <span className="flex-shrink mx-4 text-xs font-semibold text-gray-400 uppercase">Or</span>
+          <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
         <button
           type="button"
           onClick={handleGoogleSignIn}
           disabled={googleLoading}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 text-gray-700 py-3 sm:py-4 rounded-xl font-semibold text-sm sm:text-base md:text-lg hover:bg-gray-50 hover:border-gray-300 hover:shadow-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 text-gray-700 py-3 sm:py-4 rounded-xl font-semibold text-sm sm:text-base md:text-lg hover:bg-gray-50 hover:border-gray-300 hover:shadow-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mb-6"
         >
           {googleLoading ? (
             <>
@@ -200,6 +266,16 @@ function LoginContent() {
             </>
           )}
         </button>
+
+        {/* Create Account Link */}
+        <div className="text-center">
+          <p className="text-sm text-gray-600">
+            Don&apos;t have an account?{' '}
+            <Link href="/auth/register" className="font-semibold text-amber-700 hover:text-amber-800 hover:underline">
+              Create New Account
+            </Link>
+          </p>
+        </div>
 
         {/* Hare Krishna Mahamantra */}
         <div className="mt-8 sm:mt-10 md:mt-12 pt-6 sm:pt-8 border-t border-amber-200">

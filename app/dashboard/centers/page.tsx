@@ -121,7 +121,7 @@ export default function CentersPage() {
       if (error) throw error;
 
       // Map to match CenterData interface but include new fields
-      const formattedCenters = (data || []).map(center => ({
+      const formattedCenters = ((data || []) as any[]).map((center: any) => ({
         ...center,
         // Ensure backward compatibility if types mismatch
         templeId: center.temple_id,

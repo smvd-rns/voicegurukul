@@ -209,7 +209,7 @@ export default function AdminDataCenterPage() {
             // Fetch Unique Uploaders count (global)
             const { data: uploaderData } = await sadhanaDb.from('files').select('user_id');
             if (uploaderData) {
-                setUniqueUploadersCount(new Set(uploaderData.map(f => f.user_id)).size);
+                setUniqueUploadersCount(new Set(((uploaderData || []) as any[]).map((f: any) => f.user_id)).size);
             }
 
             // 3. Fetch unique uploaders from PRIMARY Database for the CURRENT page
@@ -257,7 +257,7 @@ export default function AdminDataCenterPage() {
             
             if (error) throw error;
 
-            const uniqueIds = Array.from(new Set(data.map(f => f.user_id).filter(Boolean)));
+            const uniqueIds = Array.from(new Set(((data || []) as any[]).map((f: any) => f.user_id).filter(Boolean)));
 
             if (uniqueIds.length === 0) return;
 

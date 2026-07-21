@@ -14,7 +14,7 @@ async function check() {
         .eq('user_id', 'ec09780b-6421-4b7f-a4a2-455c223218e5');
 
     if (data) {
-        console.log(data.map(d => ({ d: d.date, l: d.date.length })));
+        console.log(data.map((d: any) => ({ d: d.date, l: d.date.length })));
     }
 }
 

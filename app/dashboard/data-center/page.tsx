@@ -337,14 +337,14 @@ export default function DataCenterPage() {
                 if (totalFiles <= 1000) {
                     const { data } = await sizeQuery;
                     if (data) {
-                        totalSize = data.reduce((acc, f) => acc + (f.file_size || 0), 0);
+                        totalSize = (data as any[]).reduce((acc: number, f: any) => acc + (f.file_size || 0), 0);
                     }
                 } else {
                     let fetchedCount = 0;
                     while (fetchedCount < totalFiles) {
                         const { data } = await sizeQuery.range(fetchedCount, fetchedCount + 999);
                         if (!data || data.length === 0) break;
-                        totalSize += data.reduce((acc, f) => acc + (f.file_size || 0), 0);
+                        totalSize += (data as any[]).reduce((acc: number, f: any) => acc + (f.file_size || 0), 0);
                         fetchedCount += data.length;
                         if (data.length < 1000) break;
                     }
@@ -431,7 +431,7 @@ export default function DataCenterPage() {
                 if (error) throw error;
                 if (!data || data.length === 0) break;
 
-                data.forEach(f => {
+                (data as any[]).forEach((f: any) => {
                     if (f.folder_id) allFolderIds.add(f.folder_id);
                 });
 
@@ -666,10 +666,11 @@ export default function DataCenterPage() {
                     treeFilterQuery = treeFilterQuery.or(`file_name.ilike.%${word}%,description.ilike.%${word}%`);
                 }
 
-                treeFilterQuery.then(({ data }) => {
+                (treeFilterQuery as any).then((res: any) => {
+                    const data = res?.data;
                     if (data) {
-                        const matchingFolderIds = new Set(data.filter(f => f.folder_id).map(f => f.folder_id!));
-                        const matchingUserIds = new Set(data.map(f => f.user_id));
+                        const matchingFolderIds = new Set(((data || []) as any[]).filter((f: any) => f.folder_id).map((f: any) => f.folder_id!));
+                        const matchingUserIds = new Set(((data || []) as any[]).map((f: any) => f.user_id));
                         setFoldersWithMatchingResources(matchingFolderIds);
                         setMatchingResourceUserIds(matchingUserIds);
                     }

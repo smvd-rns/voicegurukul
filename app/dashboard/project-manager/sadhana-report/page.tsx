@@ -147,7 +147,7 @@ export default function SadhanaReportPage() {
                     .eq('current_center', selectedCenter);
 
                 if (error) throw error;
-                const mappedUsers: User[] = (data || []).map(user => {
+                const mappedUsers: User[] = (data || []).map((user: any) => {
                     return {
                         ...user,
                         // Relative contact fields

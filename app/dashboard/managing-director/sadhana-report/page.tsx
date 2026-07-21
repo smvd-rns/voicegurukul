@@ -79,7 +79,7 @@ export default function MDSadhanaReportPage() {
                 if (data && data.length > 0) {
                     setAssignedTemples(data);
                     const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    const match = data.find(t => t.name === profileTempleName);
+                    const match = (data as any[]).find((t: any) => t.name === profileTempleName);
                     setSelectedTemple(match || data[0]);
                 } else {
                     const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
@@ -152,7 +152,7 @@ export default function MDSadhanaReportPage() {
                 });
 
                 // Mapping to proper User type structure to be compatible with UserDetailModal
-                const mappedUsers: User[] = filtered.map(user => {
+                const mappedUsers: User[] = (filtered as any[]).map((user: any) => {
                     const normalizedRole = Array.isArray(user.role) ? user.role : [user.role || 1];
                     const hierarchy = {
                         ...(user.hierarchy || {}),

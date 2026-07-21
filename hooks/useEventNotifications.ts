@@ -44,7 +44,7 @@ export function useEventNotifications() {
                 });
 
                 // An event is unread if there's no userResponse or the status isn't 'seen'
-                const unreadEvents = events.filter(event =>
+                const unreadEvents = events.filter((event: any) =>
                     !event.userResponse || event.userResponse.status !== 'seen'
                 );
 

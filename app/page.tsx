@@ -117,14 +117,20 @@ export default function Home() {
         )}
 
         {/* Action Buttons */}
-        <div className="space-y-6">
+        <div className="space-y-4">
+          <Link
+            href="/auth/login"
+            className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:shadow-lg hover:to-orange-600"
+          >
+            Sign In with Email & Password
+          </Link>
+
           <button
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            className="group relative block w-full overflow-hidden rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 p-[1px] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-orange-50 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="group relative block w-full overflow-hidden rounded-xl bg-white border border-orange-200 p-[1px] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-orange-50 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#F59E0B_0%,#EA580C_50%,#F59E0B_100%)] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <span className="relative flex w-full cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:shadow-lg hover:to-orange-600">
+            <span className="relative flex w-full cursor-pointer items-center justify-center rounded-xl bg-white px-8 py-3 text-sm font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50">
               {googleLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -138,13 +144,11 @@ export default function Home() {
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
-                  Sign In / Sign Up with Google
+                  Sign In with Google
                 </>
               )}
             </span>
           </button>
-
-
         </div>
 
         {/* Footer */}

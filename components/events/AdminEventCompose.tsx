@@ -114,19 +114,19 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                     centerQuery
                 ]);
 
-                let filteredTemples = templeData?.map(t => ({ id: t.name, name: t.name })) || [];
-                let filteredCenters = centerData?.map(c => ({ id: c.name, name: c.name, temple_name: c.temple_name })) || [];
+                let filteredTemples = templeData?.map((t: any) => ({ id: t.name, name: t.name })) || [];
+                let filteredCenters = centerData?.map((c: any) => ({ id: c.name, name: c.name, temple_name: c.temple_name })) || [];
 
                 // Filter for Event Admin
                 if (isEventAdmin && !isSuperAdmin && !isTempleAdmin && !isCenterAdmin) {
-                    filteredTemples = filteredTemples.filter(t => eventAdminTemples.includes(t.name));
-                    filteredCenters = filteredCenters.filter(c => eventAdminCenters.includes(c.name) || eventAdminTemples.includes(c.temple_name));
+                    filteredTemples = filteredTemples.filter((t: any) => eventAdminTemples.includes(t.name));
+                    filteredCenters = filteredCenters.filter((c: any) => eventAdminCenters.includes(c.name) || eventAdminTemples.includes(c.temple_name));
                 }
 
                 // If MD/Temple Admin, also restrict centers to those belonging to their temples
                 if (isTempleAdmin && !isSuperAdmin && templeData) {
-                    const allowedTempleNames = templeData.map(t => t.name);
-                    filteredCenters = filteredCenters.filter(c => allowedTempleNames.includes(c.temple_name));
+                    const allowedTempleNames = templeData.map((t: any) => t.name);
+                    filteredCenters = filteredCenters.filter((c: any) => allowedTempleNames.includes(c.temple_name));
                 }
 
                 setTemples(filteredTemples);

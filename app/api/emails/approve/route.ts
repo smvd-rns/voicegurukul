@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { sendApprovalNotification } from '@/lib/utils/email';
 import { generateMembershipIdForUser } from '@/lib/utils/membership';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);

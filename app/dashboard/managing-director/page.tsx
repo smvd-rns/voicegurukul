@@ -906,7 +906,7 @@ export default function ManagingDirectorDashboard() {
                 .eq('user_id', user.id);
 
             if (centersData) {
-                setPendingCenters(centersData.map(c => c.center_id));
+                setPendingCenters(((centersData || []) as any[]).map((c: any) => c.center_id));
             }
         }
 
@@ -926,13 +926,13 @@ export default function ManagingDirectorDashboard() {
             .select('center_id')
             .eq('user_id', selectedUser.id);
 
-        const currentCenterIds = currentCentersData?.map(c => c.center_id) || [];
+        const currentCenterIds = ((currentCentersData || []) as any[]).map((c: any) => c.center_id) || [];
         const adminRoleId = Number(pendingAdminRole);
         const isMultiCenterRole = [14, 15, 16, 17].includes(adminRoleId);
 
         const centersChanged = isMultiCenterRole && (
             currentCenterIds.length !== pendingCenters.length ||
-            !currentCenterIds.every(id => pendingCenters.includes(id))
+            !currentCenterIds.every((id: any) => pendingCenters.includes(id))
         );
 
         const adminChanged = Number(currentAdminRole) !== Number(pendingAdminRole);
@@ -1239,7 +1239,7 @@ export default function ManagingDirectorDashboard() {
 
                     // Preference: If current profile temple is in assigned list, use it. Otherwise use first.
                     const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    const match = data.find(t => t.name === profileTempleName);
+                    const match = (data as any[]).find((t: any) => t.name === profileTempleName);
                     return match || data[0];
                 });
             } else {

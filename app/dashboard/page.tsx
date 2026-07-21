@@ -72,7 +72,7 @@ export default function DashboardPage() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const upcomingEvents = fetchedEvents.filter(event => {
+        const upcomingEvents = (fetchedEvents as any[]).filter((event: any) => {
           const dateToUse = event.eventDate || event.createdAt;
           if (!dateToUse) return false;
           const eventDate = new Date(dateToUse);
@@ -80,7 +80,7 @@ export default function DashboardPage() {
         });
 
         setRecentReports(reports);
-        setUnreadMessages(messages.filter(m => !m.readBy.includes(userData.id)));
+        setUnreadMessages((messages as any[]).filter((m: any) => !m.readBy.includes(userData.id)));
         setEvents(upcomingEvents);
         setLoading(false);
       }

@@ -75,7 +75,7 @@ export default function EventTrackingPage() {
                 .select('*')
                 .eq('event_id', id);
 
-            const mappedResponses: ManagedEventResponse[] = (respData || []).map(r => ({
+            const mappedResponses: ManagedEventResponse[] = ((respData || []) as any[]).map((r: any) => ({
                 id: r.id,
                 eventId: r.event_id,
                 userId: r.user_id,

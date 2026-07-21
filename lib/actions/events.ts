@@ -336,7 +336,7 @@ export async function getEventsForUser(userParams: {
     // 1c. Fetch creator names (for Management Hub / Admin view)
     let creatorNamesMap = new Map<string, string>();
     if (eventsData && eventsData.length > 0) {
-        const creatorIds = Array.from(new Set(eventsData.map(e => e.created_by)));
+        const creatorIds = Array.from(new Set(eventsData.map((e: any) => e.created_by)));
         try {
             const { getAdminClient } = await import('@/lib/supabase/admin');
             const supabaseAdmin = getAdminClient();
@@ -346,7 +346,7 @@ export async function getEventsForUser(userParams: {
                     .select('id, name')
                     .in('id', creatorIds);
                 if (userData) {
-                    userData.forEach(u => creatorNamesMap.set(u.id, u.name));
+                    userData.forEach((u: any) => creatorNamesMap.set(u.id, u.name));
                 }
             }
         } catch (err) {
@@ -368,7 +368,7 @@ export async function getEventsForUser(userParams: {
             .eq('user_id', userParams.userId);
 
         if (respData) {
-            respData.forEach(r => responsesMap.set(r.event_id, {
+            respData.forEach((r: any) => responsesMap.set(r.event_id, {
                 ...r,
                 guestCount: r.guest_count
             }));
@@ -384,7 +384,7 @@ export async function getEventsForUser(userParams: {
             .eq('status', 'coming');
 
         if (comingStats) {
-            comingStats.forEach(r => {
+            comingStats.forEach((r: any) => {
                 comingCountsMap.set(r.event_id, (comingCountsMap.get(r.event_id) || 0) + 1);
             });
         }
@@ -395,7 +395,7 @@ export async function getEventsForUser(userParams: {
             .gt('guest_count', 0);
 
         if (guestStats) {
-            guestStats.forEach(r => {
+            guestStats.forEach((r: any) => {
                 guestCountsMap.set(r.event_id, (guestCountsMap.get(r.event_id) || 0) + (r.guest_count || 0));
             });
         }
@@ -406,7 +406,7 @@ export async function getEventsForUser(userParams: {
             .eq('status', 'seen');
 
         if (seenStats) {
-            seenStats.forEach(r => {
+            seenStats.forEach((r: any) => {
                 seenCountsMap.set(r.event_id, (seenCountsMap.get(r.event_id) || 0) + 1);
             });
         }
@@ -417,13 +417,13 @@ export async function getEventsForUser(userParams: {
             .eq('status', 'understood');
 
         if (understoodStats) {
-            understoodStats.forEach(r => {
+            understoodStats.forEach((r: any) => {
                 understoodCountsMap.set(r.event_id, (understoodCountsMap.get(r.event_id) || 0) + 1);
             });
         }
     }
 
-    const filtered = (eventsData || []).filter(event => {
+    const filtered = (eventsData || []).filter((event: any) => {
         // If we are in Management View, we show what we fetched (already SQL isolated)
         if (userParams.isManagementView || isTargetingEmpty) return true;
 
@@ -460,7 +460,7 @@ export async function getEventsForUser(userParams: {
         return matchesAshram && matchesRole && matchesTemple && matchesCenter && matchesCamps && matchesVoiceGroup && isExplicitlyTargeted && !isExcluded;
     });
 
-    return filtered.map(event => {
+    return filtered.map((event: any) => {
         const managed = mapDbEventToManagedEvent(event, creatorNamesMap.get(event.created_by));
         const userResp = responsesMap.get(event.id);
 
@@ -660,11 +660,11 @@ export async function getEventStats(eventId: string) {
     }
 
     const stats = {
-        totalSeen: data.filter(r => r.status === 'seen').length,
-        totalComing: data.filter(r => r.status === 'coming').length,
-        totalNotComing: data.filter(r => r.status === 'not_coming').length,
-        totalUnderstood: data.filter(r => r.status === 'understood').length,
-        totalGuests: data.reduce((sum, r) => sum + (r.guest_count || 0), 0),
+        totalSeen: data.filter((r: any) => r.status === 'seen').length,
+        totalComing: data.filter((r: any) => r.status === 'coming').length,
+        totalNotComing: data.filter((r: any) => r.status === 'not_coming').length,
+        totalUnderstood: data.filter((r: any) => r.status === 'understood').length,
+        totalGuests: data.reduce((sum: any, r: any) => sum + (r.guest_count || 0), 0),
         totalResponses: data.length
     };
 

@@ -65,14 +65,14 @@ export default function CityManagerPage() {
 
             // Filter out users with higher role than current user
             const currentUserRoleNum = getUserMaxRoleLevel(userData.role);
-            const visibleUsers = cityUsers.filter(u => {
+            const visibleUsers = (cityUsers as any[]).filter((u: any) => {
                 const targetUserRoleNum = getUserMaxRoleLevel(u.role);
                 return targetUserRoleNum <= currentUserRoleNum;
             });
             console.log(`City Manager: Filtered ${cityUsers.length} users to ${visibleUsers.length} visible users (role <= ${currentUserRoleNum})`);
 
             // Fetch spiritual progress for students only
-            const students = visibleUsers.filter(user => {
+            const students = (visibleUsers as any[]).filter((user: any) => {
                 const roles = Array.isArray(user.role) ? user.role : [user.role];
                 return roles.includes('student') || roles.includes(1);
             });

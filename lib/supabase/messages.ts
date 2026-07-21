@@ -43,12 +43,12 @@ export const getUserMessages = async (userId: string, limitCount: number = 50) =
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('messages')
       .select(`
         *,
         sender:users!messages_sender_id_fkey(name)
-      `)
+      `) as any)
       .contains('recipient_ids', [userId])
       .order('created_at', { ascending: false })
       .limit(limitCount);
@@ -129,9 +129,9 @@ export const getGroupMessages = async (groupId: string, limitCount: number = 50)
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('messages')
-      .select('*')
+      .select('*') as any)
       .contains('recipient_groups', [groupId])
       .order('created_at', { ascending: false })
       .limit(limitCount);

@@ -46,3 +46,9 @@ firestore-debug.log
 *.exe
 *.dll
 *.bin
+
+# Temporary & Deployment Scripts/Archives
+scratch/
+scripts/
+*.zip
+*.log

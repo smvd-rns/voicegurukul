@@ -149,7 +149,7 @@ export async function POST(request: Request) {
                         if (user) {
                             let currentRoles = Array.isArray(user.role) ? user.role : [user.role];
                             if (currentRoles.includes(config.role)) {
-                                const newRoles = currentRoles.filter(r => r !== config.role);
+                                const newRoles = (currentRoles as any[]).filter((r: any) => r !== config.role);
                                 await authenticatedClient
                                     .from('users')
                                     .update({ role: newRoles })

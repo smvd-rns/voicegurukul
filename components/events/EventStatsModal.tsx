@@ -50,7 +50,7 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                 .select('*')
                 .eq('event_id', event.id);
 
-            const mappedResponses: ManagedEventResponse[] = (respData || []).map(r => ({
+            const mappedResponses: ManagedEventResponse[] = (respData || []).map((r: any) => ({
                 id: r.id,
                 eventId: r.event_id,
                 userId: r.user_id,

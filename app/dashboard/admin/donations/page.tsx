@@ -246,7 +246,7 @@ export default function AdminDonationsPage() {
       const userMap: Record<string, {name: string, center: string}> = {};
       const centerList = new Set<string>();
 
-      userData?.forEach(u => {
+      ((userData || []) as any[]).forEach((u: any) => {
         userMap[u.id] = { 
           name: u.name || 'Unknown', 
           center: u.center || 'No Center' 

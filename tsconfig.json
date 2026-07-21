@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@supabase/supabase-js": [
+        "./lib/supabase/config.ts"
       ]
     }
   },

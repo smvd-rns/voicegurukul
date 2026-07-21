@@ -134,9 +134,9 @@ export default function BCVoiceManagerPage() {
         console.log(`Found ${usersByLocation.length} total users in ${location.city}, ${location.state}`);
 
         // Filter by center names (case-insensitive, trim whitespace)
-        const centerUsers = usersByLocation.filter(user => {
+        const centerUsers = (usersByLocation as any[]).filter((user: any) => {
           const userCenter = user.hierarchy?.center?.trim().toLowerCase() || '';
-          const matches = location.centerNames.some(centerName => {
+          const matches = (location.centerNames as string[]).some((centerName: string) => {
             const targetCenter = centerName.trim().toLowerCase();
             return userCenter === targetCenter;
           });
