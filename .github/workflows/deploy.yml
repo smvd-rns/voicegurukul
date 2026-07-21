@@ -1,4 +1,4 @@
-name: Deploy to DigitalOcean Droplet
+name: Build and Deploy to DigitalOcean Droplet
 
 on:
   push:
@@ -6,14 +6,14 @@ on:
       - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Source Code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v3
         with:
           node-version: 20
@@ -22,20 +22,28 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build Next.js Application
+      - name: Build Next.js Production Bundle (Fast Cloud Runner)
         run: npm run build
         env:
           NEXT_PUBLIC_SITE_URL: http://168.144.188.213:3000
 
-      - name: Deploy to Droplet via SSH
+      - name: Sync Built Output to Droplet via Rsync SSH
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: '168.144.188.213'
+          REMOTE_USER: 'root'
+          TARGET: '/var/www/voicegurukul'
+          EXCLUDE: '/node_modules/, /.git/'
+
+      - name: Restart Application Service on Droplet
         uses: appleboy/ssh-action@master
         with:
-          host: 168.144.188.213
-          username: root
+          host: '168.144.188.213'
+          username: 'root'
           password: ${{ secrets.DROPLET_PASSWORD }}
           script: |
             cd /var/www/voicegurukul
-            git pull origin main
             npm ci --production
-            npm run build
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
+            pm2 save
