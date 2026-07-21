@@ -6,14 +6,28 @@ on:
       - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Trigger Remote Pull & Build on Droplet via SSH
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Next.js Application (Cloud Runner)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: http://168.144.188.213:3000
+
+      - name: Deploy Built App to Droplet via SSH
         uses: appleboy/ssh-action@master
         with:
           host: '168.144.188.213'
@@ -22,7 +36,7 @@ jobs:
           script: |
             cd /var/www/voicegurukul
             git pull origin main
-            export NODE_OPTIONS="--max-old-space-size=2048"
-            ./node_modules/.bin/next build
+            npm ci --production
+            npx next build
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
             pm2 save
