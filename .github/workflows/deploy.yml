@@ -1,0 +1,41 @@
+name: Deploy to DigitalOcean Droplet
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Next.js Application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: http://168.144.188.213:3000
+
+      - name: Deploy to Droplet via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: 168.144.188.213
+          username: root
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          script: |
+            cd /var/www/voicegurukul
+            git pull origin main
+            npm ci --production
+            npm run build
+            pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
