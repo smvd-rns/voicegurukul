@@ -24,10 +24,17 @@ jobs:
 
       - name: Build Next.js Application (Cloud Runner)
         run: npm run build
-        env:
-          NEXT_PUBLIC_SITE_URL: http://168.144.188.213:3000
 
-      - name: Deploy Built App to Droplet via SSH
+      - name: Copy Build Artifacts to Droplet via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: '168.144.188.213'
+          username: 'root'
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          source: ".next"
+          target: "/var/www/voicegurukul"
+
+      - name: Restart Server via SSH
         uses: appleboy/ssh-action@master
         with:
           host: '168.144.188.213'
@@ -36,7 +43,6 @@ jobs:
           script: |
             cd /var/www/voicegurukul
             git pull origin main
-            npm ci
-            npx next build
+            npm ci --production
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
             pm2 save
