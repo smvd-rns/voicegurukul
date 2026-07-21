@@ -284,7 +284,7 @@ export const supabase = {
     signInWithOAuth: async ({ provider, options }: any) => {
       if (provider === 'google') {
         const clientId = '975011285696-l77icaiao221q7bfbfm0mtcrd3s0s2b4.apps.googleusercontent.com';
-        const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
+        const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || '');
         const redirectUri = encodeURIComponent(`${siteUrl}/api/auth/google`);
         
         let nextPath = '/';

@@ -309,7 +309,7 @@ export const resetPassword = async (email: string) => {
 export const signInWithGoogle = async (nextPath?: string) => {
   try {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '280450471879-qck9d7rl11gi8f4g3i6fptsqejhd137i.apps.googleusercontent.com';
-    const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || '');
     const redirectUri = `${siteUrl}/api/auth/google`;
 
     const state = nextPath ? encodeURIComponent(nextPath) : '/';
