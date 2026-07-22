@@ -340,45 +340,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
           </div>
 
-          {/* Theme Selector */}
-          <div className="px-5 py-4 border-t border-white/10 bg-black/15 relative z-10">
-            <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase block mb-3">
-              Theme: <span className="text-white">{themeName}</span>
+          {/* Theme Selector Dropdown */}
+          <div className="px-5 py-3 border-t border-white/10 bg-black/15 relative z-10 lg:px-4 lg:py-2.5">
+            <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase block mb-1.5">
+              Theme
             </span>
-            <div className="flex flex-wrap items-center gap-2.5">
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as any)}
+              className="w-full bg-white/10 text-white border border-white/20 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
+            >
               {themesList.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
-                  title={t.name}
-                  className={`w-5 h-5 rounded-full ${t.dot} transition-all duration-200 ${
-                    theme === t.id
-                      ? 'ring-2 ring-white ring-offset-2 ring-offset-transparent scale-110 shadow-md'
-                      : 'opacity-50 hover:opacity-90 hover:scale-105'
-                  }`}
-                />
+                <option key={t.id} value={t.id} className="text-gray-900 bg-white font-sans">
+                  {t.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* User Profile Section */}
-          <div className="border-t border-white/10 p-4 flex-shrink-0 relative z-10 bg-black/25">
-            <div className="flex items-center mb-4 p-3 bg-white/10 rounded-2xl shadow-sm border border-white/10">
-              <div className="mr-3 flex-shrink-0">
+          <div className="border-t border-white/10 p-4 lg:p-3 flex-shrink-0 relative z-10 bg-black/25">
+            <div className="flex items-center mb-3 lg:mb-2 p-3 lg:p-2 bg-white/10 rounded-xl shadow-sm border border-white/10">
+              <div className="mr-3 lg:mr-2.5 flex-shrink-0">
                 <div className="relative">
                   {userData?.profileImage && !sidebarImgError ? (
                     <Image
                       src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
                       alt={userData.name || 'Profile'}
-                      width={40}
-                      height={40}
-                      className="relative w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-sm"
+                      width={32}
+                      height={32}
+                      className="relative w-8 h-8 rounded-full object-cover border-2 border-white/20 shadow-sm"
                       unoptimized={true}
                       onError={() => setSidebarImgError(true)}
                     />
                   ) : (
-                    <div className="relative w-10 h-10 rounded-full bg-white/15 border-2 border-white/20 shadow-sm flex items-center justify-center">
-                      <UserCircle2 className="w-6 h-6 text-white" />
+                    <div className="relative w-8 h-8 rounded-full bg-white/15 border-2 border-white/20 shadow-sm flex items-center justify-center">
+                      <UserCircle2 className="w-5 h-5 text-white" />
                     </div>
                   )}
                 </div>
@@ -387,7 +384,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <p className="text-xs font-bold text-white truncate uppercase tracking-tight">
                   {userData?.name}
                 </p>
-                <p className="text-[10px] text-white/60 font-medium truncate uppercase">
+                <p className="text-[9px] text-white/60 font-medium truncate uppercase">
                   {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
                 </p>
               </div>
@@ -395,9 +392,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <button
               onClick={handleLogout}
-              className="group flex items-center justify-center w-full px-4 py-3 text-white/60 hover:text-red-400 hover:bg-white/5 rounded-xl transition-all duration-200 font-bold text-[11px] uppercase tracking-widest"
+              className="group flex items-center justify-center w-full px-4 py-2.5 lg:py-2 text-white/60 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all duration-200 font-bold text-[10px] uppercase tracking-widest"
             >
-              <LogOut className="h-4 w-4 mr-3 text-white/60 group-hover:text-red-400 transition-colors" />
+              <LogOut className="h-3.5 w-3.5 mr-2.5 text-white/60 group-hover:text-red-400 transition-colors" />
               <span>Logout Session</span>
             </button>
           </div>
