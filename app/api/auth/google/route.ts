@@ -11,15 +11,19 @@ export async function GET(req: NextRequest) {
     const code = searchParams.get('code');
     const nextPath = searchParams.get('state') || '/';
 
+    // Construct the origin dynamically using headers to handle reverse proxy (Nginx) correctly
+    const forwardedHost = req.headers.get('x-forwarded-host');
+    const host = forwardedHost || req.headers.get('host');
+    const proto = req.headers.get('x-forwarded-proto') || 'http';
+    const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+
     if (!code) {
-      return NextResponse.redirect(new URL('/auth/login?error=no_code', req.url));
+      return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     
-    // Construct the redirect URL dynamically from incoming request origin (guarantees 100% exact match with browser URL)
-    const origin = req.nextUrl.origin;
     const redirectUri = `${origin}/api/auth/google`;
 
     // 1. Exchange OAuth code for tokens
@@ -39,7 +43,7 @@ export async function GET(req: NextRequest) {
       const errText = await tokenRes.text();
       console.error('[Google OAuth Token Error]', errText);
       const encodedErr = encodeURIComponent(errText.substring(0, 100));
-      return NextResponse.redirect(new URL(`/auth/login?error=token_exchange_failed&details=${encodedErr}`, req.url));
+      return NextResponse.redirect(new URL(`/auth/login?error=token_exchange_failed&details=${encodedErr}`, origin));
     }
 
     const tokens = await tokenRes.json();
@@ -51,7 +55,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!userRes.ok) {
-      return NextResponse.redirect(new URL('/auth/login?error=profile_fetch_failed', req.url));
+      return NextResponse.redirect(new URL('/auth/login?error=profile_fetch_failed', origin));
     }
 
     const googleUser = await userRes.json();
@@ -60,7 +64,7 @@ export async function GET(req: NextRequest) {
     const profileImage = googleUser.picture;
 
     if (!email) {
-      return NextResponse.redirect(new URL('/auth/login?error=no_email', req.url));
+      return NextResponse.redirect(new URL('/auth/login?error=no_email', origin));
     }
 
     // 3. Find or Create User in local database
@@ -89,12 +93,15 @@ export async function GET(req: NextRequest) {
     });
 
     // 5. Set Cookie and Redirect to app
-    const response = NextResponse.redirect(new URL(nextPath, req.url));
+    const response = NextResponse.redirect(new URL(nextPath, origin));
     setSessionCookie(response, sessionToken);
 
     return response;
   } catch (error) {
     console.error('[Google OAuth Callback Exception]', error);
-    return NextResponse.redirect(new URL('/auth/login?error=auth_error', req.url));
+    const fallbackOrigin = req.headers.get('x-forwarded-host') 
+      ? `https://${req.headers.get('x-forwarded-host')}` 
+      : req.nextUrl.origin;
+    return NextResponse.redirect(new URL('/auth/login?error=auth_error', fallbackOrigin));
   }
 }
