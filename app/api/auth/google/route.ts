@@ -11,11 +11,11 @@ export async function GET(req: NextRequest) {
     const code = searchParams.get('code');
     const nextPath = searchParams.get('state') || '/';
 
-    // Construct the origin dynamically using headers to handle reverse proxy (Nginx) correctly
-    const forwardedHost = req.headers.get('x-forwarded-host');
-    const host = forwardedHost || req.headers.get('host');
-    const proto = req.headers.get('x-forwarded-proto') || 'http';
-    const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+    // Construct the origin using the environment variable to guarantee a 100% exact match 
+    // with the client-side redirect URI, bypassing any Nginx proxy header weirdness (like injected ports).
+    const fallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const fallbackProto = req.headers.get('x-forwarded-proto') || 'http';
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || (fallbackHost ? `${fallbackProto}://${fallbackHost}` : req.nextUrl.origin);
 
     if (!code) {
       return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
@@ -99,9 +99,7 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (error) {
     console.error('[Google OAuth Callback Exception]', error);
-    const fallbackOrigin = req.headers.get('x-forwarded-host') 
-      ? `https://${req.headers.get('x-forwarded-host')}` 
-      : req.nextUrl.origin;
+    const fallbackOrigin = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
     return NextResponse.redirect(new URL('/auth/login?error=auth_error', fallbackOrigin));
   }
 }
