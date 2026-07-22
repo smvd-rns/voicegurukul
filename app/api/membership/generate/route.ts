@@ -1,48 +1,47 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth-server';
+import { query } from '@/lib/db';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
-
-        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
+        // Retrieve token from cookie or Authorization header
+        let token = cookies().get('session_token')?.value;
+        if (!token) {
+            const authHeader = request.headers.get('Authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.replace('Bearer ', '');
             }
-        });
-
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
         }
 
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Invalid token or user not found' }, { status: 401 });
+        if (!token || token === 'undefined') {
+            return NextResponse.json({ error: 'Missing or invalid session token' }, { status: 401 });
         }
 
-        // Fetch user data needed for ID generation
-        const { data: userData, error: userError } = await supabaseAdmin
-            .from('users')
-            .select('introduced_to_kc_in, parent_temple, other_parent_temple, other_temple, hierarchy')
-            .eq('id', user.id)
-            .single();
+        const decoded = verifyToken(token);
+        if (!decoded || !decoded.userId) {
+            return NextResponse.json({ error: 'Invalid token or session expired' }, { status: 401 });
+        }
 
-        if (userError || !userData) {
+        const userId = decoded.userId;
+
+        // Fetch user data needed for ID generation from PostgreSQL database
+        const dbRes = await query(
+            'SELECT introduced_to_kc_in, parent_temple, other_parent_temple, other_temple, hierarchy FROM users WHERE id = $1',
+            [userId]
+        );
+        const userData = dbRes.rows[0];
+
+        if (!userData) {
             return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
         }
 
-        if (!userData.introduced_to_kc_in || !userData.parent_temple) {
+        const introducedToKcIn = userData.introduced_to_kc_in;
+        const parentTemple = userData.parent_temple;
+
+        if (!introducedToKcIn || !parentTemple) {
             return NextResponse.json({ 
                 error: 'Missing required profile information. Please ensure "Introduced to KC on" and "Parent Temple" are filled in your profile.' 
             }, { status: 400 });
@@ -51,12 +50,10 @@ export async function POST(request: Request) {
         // 1. Extract year (expecting YYYY-MM-DD or similar)
         let year;
         try {
-            // introduced_to_kc_in might be a year string or a full date
-            const dateVal = userData.introduced_to_kc_in;
-            if (/^\d{4}$/.test(dateVal)) {
-                year = parseInt(dateVal);
+            if (/^\d{4}$/.test(introducedToKcIn)) {
+                year = parseInt(introducedToKcIn);
             } else {
-                year = new Date(dateVal).getFullYear();
+                year = new Date(introducedToKcIn).getFullYear();
             }
             if (isNaN(year)) throw new Error('Invalid date');
         } catch (e) {
@@ -64,9 +61,12 @@ export async function POST(request: Request) {
         }
         
         // 2. Extract temple code (3 letters)
-        let templeName = userData.parent_temple;
+        let templeName = parentTemple;
         if (templeName === 'Other') {
-            templeName = userData.other_parent_temple || userData.other_temple || userData.hierarchy?.otherParentTemple || 'OTH';
+            const hierarchy = typeof userData.hierarchy === 'string' 
+                ? JSON.parse(userData.hierarchy) 
+                : (userData.hierarchy || {});
+            templeName = userData.other_parent_temple || userData.other_temple || hierarchy.otherParentTemple || 'OTH';
         }
 
         if (!templeName || templeName.trim().length < 1) {
@@ -76,23 +76,28 @@ export async function POST(request: Request) {
         // Clean name (remove special characters, take first 3)
         const templeCode = templeName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
 
-        // 3. Call the atomic RPC function
-        const { data: membershipId, error: rpcError } = await supabaseAdmin.rpc('generate_membership_id', {
-            p_user_id: user.id,
-            p_year: year,
-            p_temple_code: templeCode
-        });
+        // 3. Call the atomic PostgreSQL function directly
+        let membershipId = '';
+        try {
+            const rpcRes = await query(
+                'SELECT generate_membership_id($1, $2, $3) AS id',
+                [userId, year, templeCode]
+            );
+            membershipId = rpcRes.rows[0]?.id;
+        } catch (dbError: any) {
+            console.error('Database RPC function error:', dbError);
+            return NextResponse.json({ error: `Internal database error: ${dbError.message}` }, { status: 500 });
+        }
 
-        if (rpcError) {
-            console.error('RPC Error:', rpcError);
-            return NextResponse.json({ error: `Internal database error: ${rpcError.message}` }, { status: 500 });
+        if (!membershipId) {
+            return NextResponse.json({ error: 'Failed to generate membership ID' }, { status: 500 });
         }
 
         // Sync donation_slug in users table
-        await supabaseAdmin
-            .from('users')
-            .update({ donation_slug: membershipId })
-            .eq('id', user.id);
+        await query(
+            'UPDATE users SET donation_slug = $1 WHERE id = $2',
+            [membershipId, userId]
+        );
 
         return NextResponse.json({ 
             success: true, 

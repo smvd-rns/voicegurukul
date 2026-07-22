@@ -38,9 +38,12 @@ export default function EventListItem({ event, isActive, onClick, onPinToggle, o
 
     return (
         <div className="relative border-b border-gray-100 group">
-            <button
+            <div
+                role="button"
+                tabIndex={0}
                 onClick={onClick}
-                className={`w-full text-left p-4 transition-all duration-300 flex gap-3 relative ${isActive
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+                className={`w-full text-left p-4 transition-all duration-300 flex gap-3 relative cursor-pointer ${isActive
                     ? 'bg-orange-50/80 border-l-4 border-l-orange-600'
                     : hasBeenSeen
                         ? 'bg-gray-100/60 hover:bg-gray-200/50 border-l-4 border-l-transparent'
@@ -115,7 +118,7 @@ export default function EventListItem({ event, isActive, onClick, onPinToggle, o
                         )}
                     </div>
                 </div>
-            </button>
+            </div>
 
             {/* Personal Pin Toggle */}
             <button

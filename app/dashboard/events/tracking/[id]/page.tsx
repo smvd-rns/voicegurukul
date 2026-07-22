@@ -245,7 +245,7 @@ export default function EventTrackingPage() {
                             (() => {
                                 const comingResponses = responses.filter(r => r.status === 'coming');
                                 const userCount = comingResponses.length;
-                                const guestCount = comingResponses.reduce((sum, r) => sum + (r.guestCount || 0), 0);
+                                const guestCount = comingResponses.reduce((sum, r) => sum + Number(r.guestCount || 0), 0);
                                 return { 
                                     label: 'Coming', 
                                     value: userCount + guestCount, 
@@ -474,9 +474,9 @@ export default function EventTrackingPage() {
                                                             {response.status === 'seen' && <Eye className="h-3 w-3" />}
                                                             {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
                                                         </span>
-                                                        {response.status === 'coming' && (response.guestCount || 0) > 0 && (
+                                                        {response.status === 'coming' && Number(response.guestCount || 0) > 0 && (
                                                             <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 uppercase tracking-widest mt-0.5 ml-1">
-                                                                +{response.guestCount} Guest{(response.guestCount || 0) > 1 ? 's' : ''}
+                                                                +{response.guestCount} Guest{Number(response.guestCount || 0) > 1 ? 's' : ''}
                                                             </span>
                                                         )}
                                                         {response.isBulk && (

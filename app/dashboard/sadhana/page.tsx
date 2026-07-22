@@ -8,7 +8,7 @@ import {
     fetchSadhanaWeeklyTotals,
     submitSadhanaReportApi
 } from '@/lib/api/sadhana-client';
-import { Calendar, ChevronLeft, ChevronRight, Save, Loader2, CheckCircle2, AlertCircle, Sparkles, BookOpen, HeartPulse, Flower2, TrendingUp, Clock, BarChart3, Search, GraduationCap } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Save, Loader2, CheckCircle2, AlertCircle, Sparkles, BookOpen, HeartPulse, Flower2, TrendingUp, Clock, BarChart3, Search, GraduationCap, Share2, X, Copy, Check } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
 
 interface SadhanaFormData {
@@ -56,6 +56,33 @@ export default function SadhanaPage() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [weeklyTotals, setWeeklyTotals] = useState<any>(null);
     const [reportUpdatedAt, setReportUpdatedAt] = useState<string>('');
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [customMessage, setCustomMessage] = useState('');
+    const [selectedFields, setSelectedFields] = useState<any>({
+        japa: true,
+        hearing: true,
+        reading: true,
+        study: true,
+        toBed: true,
+        wakeUp: true,
+        dailyFilling: true,
+        daySleep: true,
+        soulScore: true,
+        bodyScore: true,
+    });
+    const [fieldIcons, setFieldIcons] = useState<any>({
+        japa: '📿',
+        hearing: '👂',
+        reading: '📖',
+        study: '🎓',
+        toBed: '🌙',
+        wakeUp: '☀️',
+        dailyFilling: '💧',
+        daySleep: '🛋️',
+        soulScore: '🌟',
+        bodyScore: '💪',
+    });
+    const [copied, setCopied] = useState(false);
 
     const loadData = useCallback(async () => {
         if (!userData?.id || !form.date) return;
@@ -137,6 +164,78 @@ export default function SadhanaPage() {
     const currentWeekStart = startOfWeek(new Date(form.date), { weekStartsOn: 1 }); // Monday
     const currentWeekEnd = endOfWeek(new Date(form.date), { weekStartsOn: 1 }); // Sunday
     const weekDateRangeStr = `${format(currentWeekStart, 'MMM d')} - ${format(currentWeekEnd, 'MMM d, yyyy')}`;
+
+    const handleShare = () => {
+        setIsShareModalOpen(true);
+    };
+
+    const generateShareText = () => {
+        const formattedDate = format(new Date(form.date + 'T12:00:00'), 'EEEE, MMM d, yyyy');
+        let text = `*My Sadhana Report - ${formattedDate}*\n\n`;
+
+        const fieldsList = [
+            { id: 'japa', label: 'Japa', val: `${form.japa} rounds` },
+            { id: 'hearing', label: 'Hearing', val: `${form.hearing} mins` },
+            { id: 'reading', label: 'Reading', val: `${form.reading} mins${form.bookName ? ` (${form.bookName})` : ''}` },
+            { id: 'study', label: 'Study', val: `${form.study} hrs` },
+            { id: 'toBed', label: 'To Bed', val: `${form.toBed} mins` },
+            { id: 'wakeUp', label: 'Wake Up', val: `${form.wakeUp} mins` },
+            { id: 'dailyFilling', label: 'Daily Filling', val: `${form.dailyFilling} mins` },
+            { id: 'daySleep', label: 'Day Sleep', val: `${form.daySleep} mins` },
+        ];
+
+        let hasFields = false;
+        fieldsList.forEach(f => {
+            if (selectedFields[f.id]) {
+                const icon = fieldIcons[f.id] || '';
+                text += `${icon} ${f.label}: ${f.val}\n`;
+                hasFields = true;
+            }
+        });
+
+        const showScores = selectedFields.soulScore || selectedFields.bodyScore;
+        if (showScores) {
+            if (hasFields) text += `\n`;
+            text += `*Weekly Scores:*\n`;
+            if (selectedFields.soulScore) {
+                const icon = fieldIcons.soulScore || '🌟';
+                text += `${icon} Soul Score (Spiritual): ${soulPercentStr}%\n`;
+            }
+            if (selectedFields.bodyScore) {
+                const icon = fieldIcons.bodyScore || '💪';
+                text += `${icon} Body Score (Physical): ${bodyPercentStr}%\n`;
+            }
+        }
+
+        if (customMessage.trim()) {
+            text += `\n${customMessage.trim()}\n`;
+        }
+
+        text += `\nGenerated via Voicegurukul ✨`;
+        return text;
+    };
+
+    const executeShare = (mode: 'share' | 'whatsapp' | 'copy') => {
+        const shareText = generateShareText();
+
+        if (mode === 'copy') {
+            navigator.clipboard.writeText(shareText);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            return;
+        }
+
+        if (mode === 'share' && navigator.share) {
+            navigator.share({
+                title: 'Daily Sadhana Report',
+                text: shareText,
+            }).catch(() => {
+                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
+            });
+        } else {
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
+        }
+    };
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 t-page-bg p-4 sm:p-6 md:p-8 rounded-3xl border t-border shadow-sm transition-colors duration-500">
@@ -430,6 +529,15 @@ export default function SadhanaPage() {
                                     <p className="text-[10px] text-gray-400 font-semibold text-right">Target 280 units/week</p>
                                 </div>
 
+                                <button
+                                    type="button"
+                                    onClick={handleShare}
+                                    className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm shadow-sm transition-all"
+                                >
+                                    <Share2 className="h-4 w-4" />
+                                    Share Sadhana Score
+                                </button>
+
                                 <div className="pt-4 mt-4 border-t border-gray-100">
                                     <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100/50">
                                         <p className="text-xs text-indigo-800 font-medium leading-relaxed">
@@ -443,6 +551,108 @@ export default function SadhanaPage() {
                 </div>
 
             </div>
+
+            {isShareModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md transition-all duration-300">
+                    <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col transform transition-all scale-100">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                                    <Share2 className="h-5 w-5 text-indigo-500" />
+                                    Customize Share Report
+                                </h3>
+                                <p className="text-xs text-gray-500 font-semibold mt-0.5">Select fields, custom message, and emojis</p>
+                            </div>
+                            <button
+                                onClick={() => setIsShareModalOpen(false)}
+                                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+                            {/* Choose Fields */}
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">Include Fields & Custom Emojis</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {[
+                                        { id: 'japa', label: 'Japa' },
+                                        { id: 'hearing', label: 'Hearing' },
+                                        { id: 'reading', label: 'Reading' },
+                                        { id: 'study', label: 'Study' },
+                                        { id: 'toBed', label: 'To Bed' },
+                                        { id: 'wakeUp', label: 'Wake Up' },
+                                        { id: 'dailyFilling', label: 'Daily Filling' },
+                                        { id: 'daySleep', label: 'Day Sleep' },
+                                        { id: 'soulScore', label: 'Soul Score' },
+                                        { id: 'bodyScore', label: 'Body Score' },
+                                    ].map(field => (
+                                        <div key={field.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100 hover:border-gray-200 transition-all">
+                                            <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedFields[field.id]}
+                                                    onChange={e => setSelectedFields((prev: any) => ({ ...prev, [field.id]: e.target.checked }))}
+                                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                                />
+                                                <span className="text-sm font-bold text-gray-700">{field.label}</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={fieldIcons[field.id] || ''}
+                                                onChange={e => setFieldIcons((prev: any) => ({ ...prev, [field.id]: e.target.value }))}
+                                                className="w-8 h-8 text-center bg-white border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-400 font-semibold"
+                                                maxLength={4}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Custom Message */}
+                            <div className="space-y-2">
+                                <label htmlFor="customMessageInput" className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Add Custom Note</label>
+                                <textarea
+                                    id="customMessageInput"
+                                    placeholder="Add a custom note (e.g. Keep chanting! Haribol! ✨)"
+                                    value={customMessage}
+                                    onChange={e => setCustomMessage(e.target.value)}
+                                    className="w-full min-h-[80px] p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all resize-none"
+                                />
+                            </div>
+
+                            {/* Preview */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Message Preview</label>
+                                <div className="bg-gray-100 border border-gray-200 rounded-2xl p-4 text-xs font-mono text-gray-600 whitespace-pre-wrap leading-relaxed max-h-[160px] overflow-y-auto">
+                                    {generateShareText()}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={() => executeShare('copy')}
+                                className="flex-1 flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-100 text-gray-700 py-3.5 px-4 rounded-2xl text-sm font-bold transition-all shadow-sm"
+                            >
+                                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                                {copied ? 'Copied!' : 'Copy Text'}
+                            </button>
+                            <button
+                                onClick={() => executeShare('share')}
+                                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 px-4 rounded-2xl text-sm font-bold shadow-md hover:shadow-lg transition-all"
+                            >
+                                <Share2 className="h-4 w-4" />
+                                Share Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       singleRow,
       rpcFunc,
       rpcParams,
+      onConflictCols,
     } = body;
 
     let sql = '';
@@ -119,12 +120,17 @@ export async function POST(req: NextRequest) {
         return `(${rowVals.join(', ')})`;
       });
 
-      let conflictTarget = 'id';
-      if (table === 'event_admin_allocations') {
-        conflictTarget = 'user_id';
+      let conflictTarget = onConflictCols || 'id';
+      if (!onConflictCols) {
+        if (table === 'event_admin_allocations') {
+          conflictTarget = 'user_id';
+        } else if (table === 'event_responses') {
+          conflictTarget = 'event_id, user_id';
+        }
       }
 
-      const updateCols = columns.filter(col => col !== conflictTarget);
+      const conflictColsArr = conflictTarget.split(',').map((c: string) => c.trim());
+      const updateCols = columns.filter(col => !conflictColsArr.includes(col));
       const updateSet = updateCols.map(col => `${col} = EXCLUDED.${col}`).join(', ');
 
       sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${valStrings.join(', ')}`;
@@ -154,9 +160,15 @@ export async function POST(req: NextRequest) {
         } else if (f.type === 'lt') {
           params.push(f.val);
           whereClauses.push(`${f.col} < $${paramCounter++}`);
+        } else if (f.type === 'lte') {
+          params.push(f.val);
+          whereClauses.push(`${f.col} <= $${paramCounter++}`);
         } else if (f.type === 'gt') {
           params.push(f.val);
           whereClauses.push(`${f.col} > $${paramCounter++}`);
+        } else if (f.type === 'gte') {
+          params.push(f.val);
+          whereClauses.push(`${f.col} >= $${paramCounter++}`);
         } else if (f.type === 'ilike') {
           params.push(f.val);
           whereClauses.push(`${f.col} ILIKE $${paramCounter++}`);

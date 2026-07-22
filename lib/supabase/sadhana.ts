@@ -212,13 +212,23 @@ export const submitSadhanaReport = async (report: Omit<SadhanaReport, 'id' | 'su
     const existingReport = await getSadhanaReportByDate(report.userId, dateStr);
     const weeklyTotals = await getWeeklyTotals(report.userId, dateStr);
 
-    const currentJapaTotal = weeklyTotals.japa - (existingReport?.japa || 0) + report.japa;
-    const currentHearingTotal = weeklyTotals.hearing - (existingReport?.hearing || 0) + report.hearing;
-    const currentReadingTotal = weeklyTotals.reading - (existingReport?.reading || 0) + report.reading;
-    const currentToBedTotal = weeklyTotals.toBed - (existingReport?.toBed || 0) + report.toBed;
-    const currentWakeUpTotal = weeklyTotals.wakeUp - (existingReport?.wakeUp || 0) + report.wakeUp;
-    const currentDailyFillingTotal = weeklyTotals.dailyFilling - (existingReport?.dailyFilling || 0) + report.dailyFilling;
-    const currentDaySleepTotal = weeklyTotals.daySleep - (existingReport?.daySleep || 0) + report.daySleep;
+    // Parse all input values to numbers to prevent JS string concatenation (+ operator coercion)
+    const inputJapa = Number(report.japa || 0);
+    const inputHearing = Number(report.hearing || 0);
+    const inputReading = Number(report.reading || 0);
+    const inputToBed = Number(report.toBed || 0);
+    const inputWakeUp = Number(report.wakeUp || 0);
+    const inputDailyFilling = Number(report.dailyFilling || 0);
+    const inputDaySleep = Number(report.daySleep || 0);
+    const inputStudy = Number(report.study || 0);
+
+    const currentJapaTotal = weeklyTotals.japa - (existingReport?.japa || 0) + inputJapa;
+    const currentHearingTotal = weeklyTotals.hearing - (existingReport?.hearing || 0) + inputHearing;
+    const currentReadingTotal = weeklyTotals.reading - (existingReport?.reading || 0) + inputReading;
+    const currentToBedTotal = weeklyTotals.toBed - (existingReport?.toBed || 0) + inputToBed;
+    const currentWakeUpTotal = weeklyTotals.wakeUp - (existingReport?.wakeUp || 0) + inputWakeUp;
+    const currentDailyFillingTotal = weeklyTotals.dailyFilling - (existingReport?.dailyFilling || 0) + inputDailyFilling;
+    const currentDaySleepTotal = weeklyTotals.daySleep - (existingReport?.daySleep || 0) + inputDaySleep;
 
     const cappedSoulTotal = Math.min(70, currentJapaTotal) + Math.min(70, currentHearingTotal) + Math.min(70, currentReadingTotal);
     const soulPercent = (cappedSoulTotal / 210) * 100;
@@ -228,15 +238,15 @@ export const submitSadhanaReport = async (report: Omit<SadhanaReport, 'id' | 'su
     const reportData = {
       user_id: report.userId,
       date: dateStr,
-      japa: report.japa,
-      hearing: report.hearing,
-      reading: report.reading,
+      japa: inputJapa,
+      hearing: inputHearing,
+      reading: inputReading,
       book_name: report.bookName || null,
-      to_bed: report.toBed,
-      wake_up: report.wakeUp,
-      daily_filling: report.dailyFilling,
-      day_sleep: report.daySleep,
-      study: report.study || 0,
+      to_bed: inputToBed,
+      wake_up: inputWakeUp,
+      daily_filling: inputDailyFilling,
+      day_sleep: inputDaySleep,
+      study: inputStudy,
       body_percent: Math.min(100, Math.max(0, bodyPercent)),
       soul_percent: Math.min(100, Math.max(0, soulPercent)),
       submitted_at: existingReport ? (existingReport.submittedAt ? new Date(existingReport.submittedAt).toISOString() : new Date().toISOString()) : new Date().toISOString(),
@@ -245,11 +255,12 @@ export const submitSadhanaReport = async (report: Omit<SadhanaReport, 'id' | 'su
 
     if (existingReport) {
       const { error } = await client.from('sadhana_reports').update(reportData).eq('id', existingReport.id);
-      if (error) throw error;
+      if (error) throw typeof error === 'string' ? new Error(error) : error;
       return existingReport.id;
     } else {
       const { data, error } = await client.from('sadhana_reports').insert(reportData).select().single();
-      if (error) throw error;
+      if (error) throw typeof error === 'string' ? new Error(error) : error;
+      if (!data) throw new Error('Database inserted report returned no data');
       return data.id;
     }
   } catch (error: any) {
@@ -270,7 +281,7 @@ export const getUserSadhanaReports = async (userId: string, limitCount: number =
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
       study: r.study,
-      bodyPercent: r.body_percent, soulPercent: r.soul_percent,
+      bodyPercent: Number(r.body_percent || 0), soulPercent: Number(r.soul_percent || 0),
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];
   } catch (error) { console.error('Error fetching sadhana reports:', error); return []; }
@@ -288,7 +299,7 @@ export const getSadhanaReportsByRange = async (userId: string, fromDate: string,
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
       study: r.study,
-      bodyPercent: r.body_percent, soulPercent: r.soul_percent,
+      bodyPercent: Number(r.body_percent || 0), soulPercent: Number(r.soul_percent || 0),
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];
   } catch (error) { console.error('Error fetching sadhana reports range:', error); return []; }
@@ -308,7 +319,7 @@ export const getSadhanaReportByDate = async (userId: string, date: Date | string
       japa: data.japa, hearing: data.hearing, reading: data.reading, bookName: data.book_name,
       toBed: data.to_bed, wakeUp: data.wake_up, dailyFilling: data.daily_filling, daySleep: data.day_sleep,
       study: data.study,
-      bodyPercent: data.body_percent, soulPercent: data.soul_percent,
+      bodyPercent: Number(data.body_percent || 0), soulPercent: Number(data.soul_percent || 0),
       submittedAt: new Date(data.submitted_at), updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
     } as SadhanaReport;
   } catch (error) { console.error('Error fetching sadhana report:', error); return null; }
@@ -326,7 +337,7 @@ export const getBulkSadhanaReportsByRange = async (userIds: string[], fromDate: 
       japa: r.japa, hearing: r.hearing, reading: r.reading, bookName: r.book_name,
       toBed: r.to_bed, wakeUp: r.wake_up, dailyFilling: r.daily_filling, daySleep: r.day_sleep,
       study: r.study,
-      bodyPercent: r.body_percent, soulPercent: r.soul_percent,
+      bodyPercent: Number(r.body_percent || 0), soulPercent: Number(r.soul_percent || 0),
       submittedAt: new Date(r.submitted_at), updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
     })) as SadhanaReport[];
   } catch (error) { console.error('Error fetching bulk sadhana reports:', error); return []; }

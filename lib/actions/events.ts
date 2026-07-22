@@ -21,7 +21,7 @@ export async function createEvent(eventData: Omit<ManagedEvent, 'id' | 'createdA
             title: eventData.title,
             event_date: eventData.type === 'event' ? eventData.eventDate : null,
             message: eventData.message,
-            attachments: eventData.attachments,
+            attachments: JSON.stringify(eventData.attachments || []),
             target_ashrams: eventData.targetAshrams,
             target_roles: eventData.targetRoles,
             target_temples: eventData.targetTemples,
@@ -70,9 +70,13 @@ export async function createEvent(eventData: Omit<ManagedEvent, 'id' | 'createdA
         }
     }
 
-    // Trigger push notifications (don't await to avoid blocking response)
-    triggerPushNotificationsForEvent(event.id, eventData);
-
+    // Trigger push notifications in background so it does not block the Server Action response
+    setTimeout(() => {
+        triggerPushNotificationsForEvent(event.id, eventData).catch(err => {
+            console.error('Push notification background error:', err);
+        });
+    }, 0);
+ 
     return event;
 }
 
@@ -396,7 +400,7 @@ export async function getEventsForUser(userParams: {
 
         if (guestStats) {
             guestStats.forEach((r: any) => {
-                guestCountsMap.set(r.event_id, (guestCountsMap.get(r.event_id) || 0) + (r.guest_count || 0));
+                guestCountsMap.set(r.event_id, (guestCountsMap.get(r.event_id) || 0) + Number(r.guest_count || 0));
             });
         }
 
@@ -961,7 +965,17 @@ function mapDbEventToManagedEvent(dbEvent: any, creatorName?: string): ManagedEv
         title: dbEvent.title,
         eventDate: dbEvent.event_date ? new Date(dbEvent.event_date) : undefined,
         message: dbEvent.message,
-        attachments: (dbEvent.attachments || []) as ManagedEventAttachment[],
+        attachments: (() => {
+            if (!dbEvent.attachments) return [];
+            if (typeof dbEvent.attachments === 'string') {
+                try {
+                    return JSON.parse(dbEvent.attachments) as ManagedEventAttachment[];
+                } catch {
+                    return [];
+                }
+            }
+            return dbEvent.attachments as ManagedEventAttachment[];
+        })(),
         targetAshrams: dbEvent.target_ashrams || [],
         targetRoles: dbEvent.target_roles || [],
         targetTemples: dbEvent.target_temples || [],

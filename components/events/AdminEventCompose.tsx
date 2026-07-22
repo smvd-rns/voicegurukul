@@ -335,48 +335,55 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
 
         setIsSubmitting(true);
         try {
-            // 1. Ensure 'event material' parent folder exists
-            const findParentFormData = new FormData();
-            findParentFormData.append('action', 'find-folder');
-            findParentFormData.append('folderName', 'event material');
+            let folderId = '';
+            const needsDriveFolder = Array.from(pendingImages.keys()).some(localUrl => message.includes(localUrl)) ||
+                                     attachments.some(att => att.file);
 
-            const findParentRes = await fetch('/api/upload/google-drive', {
-                method: 'POST',
-                body: findParentFormData,
-            });
-            const { folderId: existingParentId } = await findParentRes.json();
+            if (needsDriveFolder) {
+                // 1. Ensure 'event material' parent folder exists
+                const findParentFormData = new FormData();
+                findParentFormData.append('action', 'find-folder');
+                findParentFormData.append('folderName', 'event material');
 
-            let eventMaterialFolderId = existingParentId;
-
-            if (!eventMaterialFolderId) {
-                const createParentFormData = new FormData();
-                createParentFormData.append('action', 'create-folder');
-                createParentFormData.append('folderName', 'event material');
-
-                const createParentRes = await fetch('/api/upload/google-drive', {
+                const findParentRes = await fetch('/api/upload/google-drive', {
                     method: 'POST',
-                    body: createParentFormData,
+                    body: findParentFormData,
                 });
-                const { folderId: newParentId } = await createParentRes.json();
-                eventMaterialFolderId = newParentId;
-                if (!eventMaterialFolderId) throw new Error('Failed to create "event material" folder');
+                const { folderId: existingParentId } = await findParentRes.json();
+
+                let eventMaterialFolderId = existingParentId;
+
+                if (!eventMaterialFolderId) {
+                    const createParentFormData = new FormData();
+                    createParentFormData.append('action', 'create-folder');
+                    createParentFormData.append('folderName', 'event material');
+
+                    const createParentRes = await fetch('/api/upload/google-drive', {
+                        method: 'POST',
+                        body: createParentFormData,
+                    });
+                    const { folderId: newParentId } = await createParentRes.json();
+                    eventMaterialFolderId = newParentId;
+                    if (!eventMaterialFolderId) throw new Error('Failed to create "event material" folder');
+                }
+
+                // 2. Create a dated folder inside 'event material'
+                const folderName = `${eventDate} - ${title.substring(0, 50)}`;
+
+                const folderFormData = new FormData();
+                folderFormData.append('action', 'create-folder');
+                folderFormData.append('folderName', folderName);
+                folderFormData.append('parentFolderId', eventMaterialFolderId);
+
+                const folderRes = await fetch('/api/upload/google-drive', {
+                    method: 'POST',
+                    body: folderFormData,
+                });
+
+                if (!folderRes.ok) throw new Error('Failed to create announcement folder in Drive');
+                const { folderId: createdFolderId } = await folderRes.json();
+                folderId = createdFolderId;
             }
-
-            // 2. Create a dated folder inside 'event material'
-            const folderName = `${eventDate} - ${title.substring(0, 50)}`;
-
-            const folderFormData = new FormData();
-            folderFormData.append('action', 'create-folder');
-            folderFormData.append('folderName', folderName);
-            folderFormData.append('parentFolderId', eventMaterialFolderId);
-
-            const folderRes = await fetch('/api/upload/google-drive', {
-                method: 'POST',
-                body: folderFormData,
-            });
-
-            if (!folderRes.ok) throw new Error('Failed to create announcement folder in Drive');
-            const { folderId } = await folderRes.json();
 
             // 2. Upload pending images from the editor
             let updatedMessage = message;

@@ -79,7 +79,23 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                 guestCount: count
             });
             // Update local state immediately for snappy UI
-            setResponses(prev => prev.map(r => r.userId === userId ? { ...r, guestCount: count } : r));
+            setResponses(prev => {
+                const exists = prev.some(r => r.userId === userId);
+                if (exists) {
+                    return prev.map(r => r.userId === userId ? { ...r, guestCount: count } : r);
+                } else {
+                    return [...prev, {
+                        id: '',
+                        eventId: event.id,
+                        userId: userId,
+                        status: 'coming',
+                        guestCount: count,
+                        isBulk: false,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }];
+                }
+            });
             toast.success("Guest count updated");
         } catch (error) {
             toast.error("Failed to update guest count");
@@ -160,12 +176,12 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                         {responses.filter(r => r.status === 'coming').length} Users
                                     </span>
                                     <span className="text-[10px] font-black text-amber-600 uppercase tracking-tight">
-                                        + {responses.reduce((sum, r) => sum + (r.guestCount || 0), 0)} Guests
+                                        + {responses.reduce((sum, r) => sum + Number(r.guestCount || 0), 0)} Guests
                                     </span>
                                 </div>
                                 <div className="h-8 w-[1px] bg-gray-100 mx-1" />
                                 <span className="text-sm font-black text-gray-900">
-                                    {responses.filter(r => r.status === 'coming').length + responses.reduce((sum, r) => sum + (r.guestCount || 0), 0)}
+                                    {responses.filter(r => r.status === 'coming').length + responses.reduce((sum, r) => sum + Number(r.guestCount || 0), 0)}
                                 </span>
                             </>
                         ) : (
@@ -325,7 +341,7 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                                 {response.status === 'understood' && <CheckCircle2 className="h-3 w-3" />}
                                                 {response.status === 'seen' && <Eye className="h-3 w-3" />}
                                                 {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
-                                                {(response.guestCount || 0) > 0 ? ` (+${response.guestCount} guests)` : ''}
+                                                {Number(response.guestCount || 0) > 0 ? ` (+${response.guestCount} guests)` : ''}
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-300">
@@ -339,12 +355,14 @@ export default function EventAudienceTracking({ event }: EventAudienceTrackingPr
                                                     <input 
                                                         type="number"
                                                         min="0"
-                                                        defaultValue={response?.guestCount || 0}
+                                                        value={response?.guestCount || 0}
+                                                        onChange={(e) => {
+                                                            const val = parseInt(e.target.value) || 0;
+                                                            setResponses(prev => prev.map(r => r.userId === user.id ? { ...r, guestCount: val } : r));
+                                                        }}
                                                         onBlur={(e) => {
                                                             const val = parseInt(e.target.value) || 0;
-                                                            if (val !== (response?.guestCount || 0)) {
-                                                                handleGuestCountUpdate(user.id, val);
-                                                            }
+                                                            handleGuestCountUpdate(user.id, val);
                                                         }}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') {

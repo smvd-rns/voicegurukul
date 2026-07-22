@@ -19,6 +19,7 @@ export default function DataCenterUploadPage() {
     const [allFolders, setAllFolders] = useState<any[]>([]);
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+    const [isSubmittingFolder, setIsSubmittingFolder] = useState(false);
     const [isPickerOpen, setIsPickerOpen] = useState(false);
 
     // Upload State
@@ -224,7 +225,8 @@ export default function DataCenterUploadPage() {
     }
 
     const handleCreateFolder = async () => {
-        if (!newFolderName.trim() || !user) return;
+        if (!newFolderName.trim() || !user || isSubmittingFolder) return;
+        setIsSubmittingFolder(true);
         try {
             const session = await supabase?.auth.getSession();
             const token = session?.data.session?.access_token;
@@ -253,6 +255,8 @@ export default function DataCenterUploadPage() {
         } catch (err: any) {
             console.error('Create folder error:', err);
             alert(err.message || 'Failed to create folder');
+        } finally {
+            setIsSubmittingFolder(false);
         }
     };
 
@@ -343,21 +347,13 @@ export default function DataCenterUploadPage() {
                 setCurrentFileIndex(i);
                 setUploadProgress(0);
 
-                // 1. Check for Duplicate
+                // 1. Check for Duplicate (Global check across all users and folders)
                 if (sadhanaDb) {
-                    let query = sadhanaDb
+                    const { data: existing } = await sadhanaDb
                         .from('files')
                         .select('id')
                         .eq('file_name', file.name)
-                        .eq('user_id', user.id);
-
-                    if (targetFolderId !== 'root') {
-                        query = query.eq('folder_id', targetFolderId);
-                    } else {
-                        query = query.is('folder_id', null);
-                    }
-
-                    const { data: existing } = await query.maybeSingle();
+                        .maybeSingle();
 
                     if (existing) {
                         setFileStatuses(prev => ({ ...prev, [file.name]: 'skipped' }));
@@ -374,7 +370,7 @@ export default function DataCenterUploadPage() {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-                    const tokenRes = await fetch(`${RENDER_SERVICE_URL}/upload-token`, {
+                    const tokenRes = await fetch('/api/upload-token', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         signal: controller.signal,
@@ -795,7 +791,7 @@ export default function DataCenterUploadPage() {
                                                                 <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest block">Processing Batch</span>
                                                                 <span className="text-sm font-black text-slate-800 flex items-center gap-2">
                                                                     {currentFileIndex + 1} / {selectedFiles.length} Files
-                                                                    <span className="text-xs font-bold text-slate-400 truncate max-w-[150px]">({selectedFiles[currentFileIndex].name})</span>
+                                                                    <span className="text-xs font-bold text-slate-400 truncate max-w-[150px]">({selectedFiles[currentFileIndex]?.name})</span>
                                                                 </span>
                                                             </div>
                                                             <span className="text-2xl font-black text-orange-600 tracking-tighter">{uploadProgress}%</span>
@@ -1141,16 +1137,24 @@ export default function DataCenterUploadPage() {
                                     <div className="flex gap-3 pt-2">
                                         <button
                                             onClick={() => setIsCreatingFolder(false)}
-                                            className="flex-1 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all border-2 border-transparent"
+                                            disabled={isSubmittingFolder}
+                                            className="flex-1 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all border-2 border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={handleCreateFolder}
-                                            disabled={!newFolderName.trim()}
-                                            className="flex-1 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:scale-[1.02] hover:bg-orange-500 transition-all disabled:opacity-50 active:scale-95"
+                                            disabled={!newFolderName.trim() || isSubmittingFolder}
+                                            className="flex-1 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:scale-[1.02] hover:bg-orange-500 transition-all disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2"
                                         >
-                                            Create Folder
+                                            {isSubmittingFolder ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                                    <span>Creating...</span>
+                                                </>
+                                            ) : (
+                                                <span>Create Folder</span>
+                                            )}
                                         </button>
                                     </div>
                                 </div>

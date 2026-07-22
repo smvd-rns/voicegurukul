@@ -171,6 +171,7 @@ export default function DataCenterPage() {
     const [folders, setFolders] = useState<FolderRecord[]>([]);
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+    const [isSubmittingFolder, setIsSubmittingFolder] = useState(false);
 
     // Sync state with URL for back button support
     useEffect(() => {
@@ -398,7 +399,7 @@ export default function DataCenterPage() {
                     // Populate initial fallback mapping using user ID prefixes
                     const mapping: Record<string, string> = {};
                     uniqueUserIds.forEach(id => {
-                        mapping[id] = `User (${id.substring(0, 6)})`;
+                        mapping[id] = 'Loading...';
                     });
                     setUserMap(mapping);
 
@@ -408,10 +409,17 @@ export default function DataCenterPage() {
                             .select('id, name, email')
                             .in('id', uniqueUserIds);
 
-                        if (userData && userData.length > 0) {
+                        if (userData) {
                             const updatedMapping = { ...mapping };
                             userData.forEach((u: any) => {
                                 updatedMapping[u.id] = u.name || u.email?.split('@')[0] || `User (${u.id.substring(0, 6)})`;
+                            });
+                            // Set fallback for users not found in the users table
+                            const foundIds = new Set(userData.map((u: any) => u.id));
+                            uniqueUserIds.forEach(id => {
+                                if (!foundIds.has(id)) {
+                                    updatedMapping[id] = `Unknown User (${id.substring(0, 6)})`;
+                                }
                             });
                             setUserMap(updatedMapping);
                         }
@@ -857,7 +865,8 @@ export default function DataCenterPage() {
     };
 
     const handleCreateFolder = async () => {
-        if (!newFolderName.trim() || !user) return;
+        if (!newFolderName.trim() || !user || isSubmittingFolder) return;
+        setIsSubmittingFolder(true);
         try {
             const session = await supabase?.auth.getSession();
             const token = session?.data.session?.access_token;
@@ -883,9 +892,15 @@ export default function DataCenterPage() {
                 setTimeout(() => {
                     fetchStats();
                 }, 1000);
+            } else {
+                const errData = await res.json();
+                showToast(errData.error || 'Failed to create folder', 'error');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Create folder error:', err);
+            showToast(err?.message || 'Create folder error', 'error');
+        } finally {
+            setIsSubmittingFolder(false);
         }
     };
 
@@ -1119,8 +1134,12 @@ export default function DataCenterPage() {
                     </button>
 
                     <Folder className={`w-3.5 h-3.5 ${isSelected ? 'fill-blue-200 text-blue-600' : 'fill-blue-100 text-blue-500'} group-hover:scale-110 transition-transform`} />
-                    <span className={`text-[11px] whitespace-nowrap overflow-hidden text-overflow-ellipsis font-bold flex-1`}>
-                        {name}
+                    <span className={`text-[11px] whitespace-nowrap overflow-hidden text-overflow-ellipsis font-bold flex-1 flex items-center`}>
+                        {name === 'Loading...' || name.startsWith('User (') ? (
+                            <span className="inline-block w-24 h-3 bg-slate-200 animate-pulse rounded-md" />
+                        ) : (
+                            name
+                        )}
                     </span>
 
                     {/* Individual delete removed in favor of bulk delete at bottom */}
@@ -2062,16 +2081,24 @@ export default function DataCenterPage() {
                             <div className="flex gap-3 mt-8">
                                 <button
                                     onClick={() => setIsCreatingFolder(false)}
-                                    className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
+                                    disabled={isSubmittingFolder}
+                                    className="flex-1 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleCreateFolder}
-                                    disabled={!newFolderName.trim()}
-                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    disabled={!newFolderName.trim() || isSubmittingFolder}
+                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                                 >
-                                    Create
+                                    {isSubmittingFolder ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>Creating...</span>
+                                        </>
+                                    ) : (
+                                        <span>Create</span>
+                                    )}
                                 </button>
                             </div>
                         </motion.div>

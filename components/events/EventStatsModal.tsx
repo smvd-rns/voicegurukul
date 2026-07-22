@@ -198,7 +198,7 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                                     {(() => {
                                         const comingResponses = responses.filter(r => r.status === 'coming');
                                         const userCount = comingResponses.length;
-                                        const guestCount = comingResponses.reduce((sum, r) => sum + (r.guestCount || 0), 0);
+                                        const guestCount = comingResponses.reduce((sum, r) => sum + Number(r.guestCount || 0), 0);
                                         return (
                                             <>
                                                 <span className="text-base font-black text-gray-900 leading-none">{userCount + guestCount}</span>
@@ -409,9 +409,9 @@ export default function EventStatsModal({ isOpen, event, onClose }: EventStatsMo
                                                             }`}>
                                                             {response.status === 'understood' ? 'Understood' : response.status.replace('_', ' ')}
                                                         </span>
-                                                        {response.status === 'coming' && (response.guestCount || 0) > 0 && (
+                                                        {response.status === 'coming' && Number(response.guestCount || 0) > 0 && (
                                                             <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest mt-0.5">
-                                                                +{response.guestCount} Guest{(response.guestCount || 0) > 1 ? 's' : ''}
+                                                                +{response.guestCount} Guest{Number(response.guestCount || 0) > 1 ? 's' : ''}
                                                             </span>
                                                         )}
                                                     </div>

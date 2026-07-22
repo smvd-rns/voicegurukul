@@ -271,7 +271,7 @@ export default function AdminEventHistory({ events, onRefresh }: AdminEventHisto
                                             {event.type === 'event' ? (
                                                 <>
                                                     {event.comingCount || 0}
-                                                    {(event.guestCount || 0) > 0 && (
+                                                    {Number(event.guestCount || 0) > 0 && (
                                                         <span className="text-[8px] ml-0.5 opacity-60">+{event.guestCount}</span>
                                                     )}
                                                 </>

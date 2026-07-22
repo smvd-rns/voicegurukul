@@ -1,5 +1,8 @@
-// Mock Supabase Client compatibility shim that proxies all queries to /api/db-proxy
-// and auth operations to /api/auth/* routes.
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined') return '';
+  const port = process.env.PORT || 3000;
+  return `http://localhost:${port}`;
+};
 
 class QueryBuilder {
   private table: string;
@@ -7,7 +10,7 @@ class QueryBuilder {
   private selectCols: string = '*';
   private insertData: any = null;
   private updateData: any = null;
-  private filters: Array<{ type: 'eq' | 'in' | 'lt' | 'gt' | 'ilike' | 'is' | 'overlaps'; col: string; val: any }> = [];
+  private filters: Array<{ type: 'eq' | 'in' | 'lt' | 'gt' | 'gte' | 'lte' | 'ilike' | 'is' | 'overlaps'; col: string; val: any }> = [];
   private orFilters: string[] = [];
   private notFilters: Array<{ col: string; op: string; val: any }> = [];
   private orderByCol: string | null = null;
@@ -15,13 +18,16 @@ class QueryBuilder {
   private limitNum: number | null = null;
   private offsetNum: number | null = null;
   private singleRow: boolean = false;
+  private onConflictCols?: string;
 
   constructor(table: string) {
     this.table = table;
   }
 
   select(cols: string = '*', options?: any) {
-    this.method = 'select';
+    if (!['insert', 'update', 'upsert', 'delete'].includes(this.method)) {
+      this.method = 'select';
+    }
     this.selectCols = cols;
     return this;
   }
@@ -46,6 +52,9 @@ class QueryBuilder {
   upsert(data: any, options?: any) {
     this.method = 'upsert';
     this.insertData = data;
+    if (options?.onConflict) {
+      this.onConflictCols = options.onConflict;
+    }
     return this;
   }
 
@@ -66,6 +75,16 @@ class QueryBuilder {
 
   gt(col: string, val: any) {
     this.filters.push({ type: 'gt', col, val });
+    return this;
+  }
+
+  gte(col: string, val: any) {
+    this.filters.push({ type: 'gte', col, val });
+    return this;
+  }
+
+  lte(col: string, val: any) {
+    this.filters.push({ type: 'lte', col, val });
     return this;
   }
 
@@ -121,10 +140,9 @@ class QueryBuilder {
     return this;
   }
 
-  // Makes the builder thenable (awaitable)
   async then(onfulfilled?: (value: any) => any, onrejected?: (reason: any) => any) {
     try {
-      const baseUrl = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000') : '';
+      const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/api/db-proxy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,6 +160,7 @@ class QueryBuilder {
           limitNum: this.limitNum,
           offsetNum: this.offsetNum,
           singleRow: this.singleRow,
+          onConflictCols: this.onConflictCols,
         }),
       });
       
@@ -170,7 +189,7 @@ export const supabase = {
   },
   rpc: async (func: string, params?: any) => {
     try {
-      const baseUrl = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000') : '';
+      const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/api/db-proxy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -191,7 +210,7 @@ export const supabase = {
   auth: {
     getSession: async () => {
       try {
-        const baseUrl = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000') : '';
+        const baseUrl = getBaseUrl();
         const res = await fetch(`${baseUrl}/api/auth/session`);
         if (!res.ok) return { data: { session: null }, error: null };
         const data = await res.json();

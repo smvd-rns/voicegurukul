@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ManagedEvent, ManagedEventAttachment } from '@/types';
 import { Calendar, MapPin, Users, Paperclip, Check, X, ExternalLink, Play, Music, Image as ImageIcon, Star, Clock, Image as LucideImage, Share2, Info } from 'lucide-react';
 import NextImage from 'next/image';
@@ -22,12 +22,28 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
     const [isEditingGuests, setIsEditingGuests] = useState(false);
     const [tempGuestCount, setTempGuestCount] = useState<number>(event.userResponse?.guestCount || 0);
 
+    const [localStatus, setLocalStatus] = useState<string | undefined>(event.userResponse?.status);
+
     // Sync state when event changes
     useEffect(() => {
         const count = event.userResponse?.guestCount || 0;
         setGuestCount(count);
         setTempGuestCount(count);
-    }, [event.userResponse?.guestCount, event.id]);
+        setLocalStatus(event.userResponse?.status);
+    }, [event.userResponse?.guestCount, event.userResponse?.status, event.id]);
+
+    const safeAttachments: ManagedEventAttachment[] = useMemo(() => {
+        if (!event || !event.attachments) return [];
+        if (Array.isArray(event.attachments)) return event.attachments;
+        if (typeof event.attachments === 'string') {
+            try {
+                return JSON.parse(event.attachments);
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    }, [event?.attachments]);
 
     const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
     const isAdmin = userRoles.some(role =>
@@ -40,6 +56,7 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
     const handleResponse = useCallback(async (status: 'coming' | 'not_coming' | 'seen' | 'understood', reason?: string, overrideGuestCount?: number) => {
         if (!userData) return;
         setIsSubmitting(true);
+        setLocalStatus(status);
         try {
             await submitEventResponse({
                 eventId: event.id,
@@ -53,12 +70,13 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
             onResponseUpdate();
         } catch (error: any) {
             console.error('Error submitting response:', error);
+            setLocalStatus(event.userResponse?.status);
             const message = error.message || 'Failed to submit response';
             toast.error(message);
         } finally {
             setIsSubmitting(false);
         }
-    }, [event.id, userData, onResponseUpdate, guestCount]);
+    }, [event.id, userData, onResponseUpdate, guestCount, event.userResponse?.status]);
 
     useEffect(() => {
         // Auto-record 'seen' status when opening an announcement
@@ -165,7 +183,7 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                         <div
                             className="prose prose-slate prose-sm max-w-full prose-p:font-medium prose-p:leading-relaxed prose-p:text-gray-950 prose-headings:text-gray-950 prose-strong:font-black prose-a:text-orange-600 prose-img:rounded-2xl prose-img:shadow-lg prose-img:my-6 prose-img:mx-auto text-gray-950 break-words [&_*]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:!overflow-x-hidden"
                             dangerouslySetInnerHTML={{ 
-                                __html: event.attachments.reduce((html, att) => {
+                                __html: safeAttachments.reduce((html, att) => {
                                     // Retroactively fix any expiring drive-storage URLs in the HTML body
                                     // by replacing them with the permanent format if we have the fileId.
                                     if (att.fileId && html.includes(att.url) && (att.url.includes('drive-storage') || att.url.includes('drive-viewer'))) {
@@ -179,13 +197,13 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                 )}
 
                 {/* Optimized Image Gallery */}
-                {event.attachments.filter(isImage).length > 0 && (
+                {safeAttachments.filter(isImage).length > 0 && (
                     <div className="space-y-4">
                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <ImageIcon className="h-3.5 w-3.5 text-orange-600" /> Photo Gallery
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {event.attachments.filter(isImage).map((item, idx) => (
+                            {safeAttachments.filter(isImage).map((item, idx) => (
                                 <a
                                     key={`img-${idx}`}
                                     href={item.url}
@@ -214,13 +232,13 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                 )}
 
                 {/* Non-Image Attachments */}
-                {event.attachments.filter(a => !isImage(a)).length > 0 && (
+                {safeAttachments.filter(a => !isImage(a)).length > 0 && (
                     <div className="space-y-4">
                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <Paperclip className="h-3.5 w-3.5 text-blue-600" /> Resources
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {event.attachments.filter(a => !isImage(a)).map((item, idx) => (
+                            {safeAttachments.filter(a => !isImage(a)).map((item, idx) => (
                                 <a
                                     key={`file-${idx}`}
                                     href={item.url}
@@ -267,14 +285,14 @@ export default function EventDetailView({ event, onResponseUpdate }: EventDetail
                         </div>
                         <button 
                             onClick={() => handleResponse('understood')}
-                            disabled={isSubmitting || event.userResponse?.status === 'understood'}
+                            disabled={isSubmitting || localStatus === 'understood' || event.userResponse?.status === 'understood'}
                             className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl ${
-                                event.userResponse?.status === 'understood'
+                                (localStatus === 'understood' || event.userResponse?.status === 'understood')
                                 ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-100 cursor-default shadow-none' 
                                 : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-95'
                             }`}
                         >
-                            {event.userResponse?.status === 'understood' ? (
+                            {(localStatus === 'understood' || event.userResponse?.status === 'understood') ? (
                                 <>
                                     <Check className="h-4 w-4 stroke-[3px]" />
                                     <span>Message Acknowledged</span>
