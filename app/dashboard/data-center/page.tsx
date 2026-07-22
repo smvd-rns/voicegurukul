@@ -337,14 +337,14 @@ export default function DataCenterPage() {
                 if (totalFiles <= 1000) {
                     const { data } = await sizeQuery;
                     if (data) {
-                        totalSize = (data as any[]).reduce((acc: number, f: any) => acc + (f.file_size || 0), 0);
+                        totalSize = (data as any[]).reduce((acc: number, f: any) => acc + (Number(f.file_size) || 0), 0);
                     }
                 } else {
                     let fetchedCount = 0;
                     while (fetchedCount < totalFiles) {
                         const { data } = await sizeQuery.range(fetchedCount, fetchedCount + 999);
                         if (!data || data.length === 0) break;
-                        totalSize += (data as any[]).reduce((acc: number, f: any) => acc + (f.file_size || 0), 0);
+                        totalSize += (data as any[]).reduce((acc: number, f: any) => acc + (Number(f.file_size) || 0), 0);
                         fetchedCount += data.length;
                         if (data.length < 1000) break;
                     }
@@ -1958,7 +1958,7 @@ export default function DataCenterPage() {
                                 <div className="inline-flex items-center gap-2.5 text-[9px] font-black text-indigo-700 bg-indigo-50/50 py-1.5 px-4 rounded-full border border-indigo-100 uppercase tracking-widest mb-4">
                                     <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" />{filesToDownload.length} Selected</span>
                                     <span className="w-1 h-1 bg-indigo-200 rounded-full" />
-                                    <span>{formatSize(filesToDownload.reduce((acc, f) => acc + f.file_size, 0))}</span>
+                                    <span>{formatSize(filesToDownload.reduce((acc, f) => acc + (Number(f.file_size) || 0), 0))}</span>
                                 </div>
                             </div>
 
