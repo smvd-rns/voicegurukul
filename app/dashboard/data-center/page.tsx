@@ -395,17 +395,28 @@ export default function DataCenterPage() {
             if (activeTab === 'global' && allFoldersData.length > 0) {
                 const uniqueUserIds = Array.from(new Set(allFoldersData.map(f => f.user_id)));
                 if (uniqueUserIds.length > 0) {
-                    const { data: userData, error: userError } = await (supabase as any)
-                        .from('users')
-                        .select('id, name, email')
-                        .in('id', uniqueUserIds);
+                    // Populate initial fallback mapping using user ID prefixes
+                    const mapping: Record<string, string> = {};
+                    uniqueUserIds.forEach(id => {
+                        mapping[id] = `User (${id.substring(0, 6)})`;
+                    });
+                    setUserMap(mapping);
 
-                    if (userData) {
-                        const mapping: Record<string, string> = {};
-                        userData.forEach((u: any) => {
-                            mapping[u.id] = u.name || u.email?.split('@')[0] || u.id.substring(0, 8);
-                        });
-                        setUserMap(mapping);
+                    try {
+                        const { data: userData, error: userError } = await (supabase as any)
+                            .from('users')
+                            .select('id, name, email')
+                            .in('id', uniqueUserIds);
+
+                        if (userData && userData.length > 0) {
+                            const updatedMapping = { ...mapping };
+                            userData.forEach((u: any) => {
+                                updatedMapping[u.id] = u.name || u.email?.split('@')[0] || `User (${u.id.substring(0, 6)})`;
+                            });
+                            setUserMap(updatedMapping);
+                        }
+                    } catch (fetchErr) {
+                        console.error('Failed to resolve usernames, using fallbacks:', fetchErr);
                     }
                 }
             }
