@@ -97,7 +97,7 @@ export async function findOrCreateFolder(accessToken, folderName, parentFolderId
             .replace(/"/g, '\\"');
 
         const query = `name='${escapedFolderName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&orderBy=createdTime asc`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&orderBy=createdTime asc&includeItemsFromAllDrives=true&supportsAllDrives=true`;
 
         const searchRes = await fetch(searchUrl, {
             headers: {
@@ -231,7 +231,7 @@ export async function scanFolderRecursively(folderId, accessToken, onProgress) {
         try {
             do {
                 const query = `'${currentFolderId}' in parents and trashed = false`;
-                const requestUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,mimeType,size,webViewLink,iconLink,thumbnailLink)&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
+                const requestUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,mimeType,size,webViewLink,iconLink,thumbnailLink)&pageSize=100&includeItemsFromAllDrives=true&supportsAllDrives=true${pageToken ? `&pageToken=${pageToken}` : ''}`;
 
                 const res = await fetch(requestUrl, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
