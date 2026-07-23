@@ -240,29 +240,85 @@ export default function PoliciesPage() {
         setUploadError('');
 
         try {
-            // 1. Upload file to Google Drive
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            formData.append('userName', userData?.name || 'Admin');
-            formData.append('folderId', '1b94q4-8wVGVU_pv4AUVpTFMrnfY9v2ng'); // The requested Drive Folder
+            // Helper for XMLHttpRequest based upload to track progress
+            const uploadFileWithProgress = (url: string, file: File): Promise<any> => {
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('PUT', url);
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                resolve(JSON.parse(xhr.responseText));
+                            } catch {
+                                resolve({ id: 'unknown' });
+                            }
+                        } else {
+                            reject(new Error(`Upload failed with status ${xhr.status}`));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Network error during upload'));
+                    xhr.send(file);
+                });
+            };
 
-            const uploadRes = await fetch('/api/upload/google-drive', {
+            // 1. Get token from backend
+            const tokenRes = await fetch('/api/upload-token', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileName: selectedFile.name,
+                    fileType: selectedFile.type || 'application/octet-stream',
+                    targetFolderId: '1b94q4-8wVGVU_pv4AUVpTFMrnfY9v2ng', // Drive Folder ID
+                    userId: userData?.id || 'admin'
+                })
             });
 
-            const uploadResult = await uploadRes.json();
-
-            if (!uploadResult.success) {
-                throw new Error(uploadResult.error || 'Failed to upload to Google Drive');
+            if (!tokenRes.ok) {
+                const errorData = await tokenRes.json();
+                throw new Error(errorData.error || 'Failed to initialize upload token');
             }
+            const tokenData = await tokenRes.json();
 
-            const { fileId, fileName, webViewLink, directImageUrl } = uploadResult.data;
+            // 2. Initialize Resumable Upload on Google Drive
+            const metadata = {
+                name: selectedFile.name,
+                mimeType: selectedFile.type || 'application/octet-stream',
+                parents: [tokenData.folderId]
+            };
+
+            const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${tokenData.accessToken}`,
+                    'Content-Type': 'application/json; charset=UTF-8',
+                    'X-Upload-Content-Type': selectedFile.type || 'application/octet-stream',
+                    'X-Upload-Content-Length': selectedFile.size.toString()
+                },
+                body: JSON.stringify(metadata)
+            });
+
+            if (!sessionRes.ok) throw new Error('Failed to initialize Google Drive resumable upload');
+            const location = sessionRes.headers.get('Location');
+            if (!location) throw new Error('No upload location received from Google Drive');
+
+            // 3. Perform direct browser-to-Drive upload
+            const driveData = await uploadFileWithProgress(location, selectedFile);
+
+            // Fetch extra info if links are missing
+            if (!driveData.webViewLink) {
+                const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
+                    headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+                });
+                if (extraRes.ok) {
+                    const extraData = await extraRes.json();
+                    Object.assign(driveData, extraData);
+                }
+            }
 
             const { data: { session } } = await supabase!.auth.getSession();
             const token = session?.access_token;
 
-            // 2. Save Policy to Database
+            // 4. Save Policy to Database
             const policyRes = await fetch('/api/policies', {
                 method: 'POST',
                 headers: {
@@ -273,9 +329,9 @@ export default function PoliciesPage() {
                     title,
                     description,
                     applicable_date: applicableDate,
-                    file_name: fileName,
-                    file_url: webViewLink || directImageUrl,
-                    file_id: fileId,
+                    file_name: selectedFile.name,
+                    file_url: driveData.webViewLink || `https://drive.google.com/file/d/${driveData.id}/view`,
+                    file_id: driveData.id,
                     file_type: selectedFile.type,
                     target_roles: selectedRoles
                 })

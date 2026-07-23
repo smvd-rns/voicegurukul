@@ -99,7 +99,24 @@ export async function POST(request: NextRequest) {
     let finalFolderId = '';
 
     // 1. Resolve parent folder from DB
-    if (targetFolderId && targetFolderId !== 'root') {
+    const STALE_POLICY_FOLDER_ID = '1b94q4-8wVGVU_pv4AUVpTFMrnfY9v2ng';
+    if (targetFolderId === STALE_POLICY_FOLDER_ID) {
+      if (process.env.POLICY_DRIVE_FOLDER_ID) {
+        finalFolderId = process.env.POLICY_DRIVE_FOLDER_ID;
+      } else {
+        try {
+          const mainFolderId = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
+          let policiesFolderId = await findFolder(drive, 'Policies', mainFolderId);
+          if (!policiesFolderId) {
+            policiesFolderId = await createFolder(drive, 'Policies', mainFolderId);
+          }
+          finalFolderId = policiesFolderId;
+        } catch (folderError: any) {
+          console.warn('Failed to resolve/create Policies folder in token route:', folderError.message);
+          finalFolderId = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
+        }
+      }
+    } else if (targetFolderId && targetFolderId !== 'root') {
       const sadhanaDbAdmin = getAdminSadhanaSupabase();
       if (sadhanaDbAdmin) {
         const { data: folderData } = await sadhanaDbAdmin
