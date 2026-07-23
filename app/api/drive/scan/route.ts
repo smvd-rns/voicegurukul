@@ -214,8 +214,7 @@ async function runScanWorker(params: {
                             id, google_drive_id, file_name, file_type, file_size, google_drive_url,
                             thumbnail_link, category, description, upload_method, user_id, folder_id,
                             points_awarded, created_at, updated_at, views, metadata
-                        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-                        ON CONFLICT (google_drive_id) DO NOTHING`,
+                        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
                         [
                             uuidv4(), file.id, file.name, file.mimeType || 'application/octet-stream',
                             file.size ? parseInt(file.size) : 0, driveUrl, file.thumbnailLink || null,
@@ -226,8 +225,12 @@ async function runScanWorker(params: {
                     );
                     filesProcessed++;
                 } catch (err: any) {
-                    if (err.code === '23505') filesSkipped++; // duplicate
-                    else console.error(`File insert error: ${file.name}:`, err.message);
+                    // code 23505 = unique_violation (duplicate)
+                    if (err.code === '23505') {
+                        filesSkipped++;
+                    } else {
+                        console.error(`[Scan ${scanId}] File insert error "${file.name}": [${err.code}] ${err.message}`);
+                    }
                 }
             }
 
