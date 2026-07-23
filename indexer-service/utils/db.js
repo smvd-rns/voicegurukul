@@ -139,8 +139,8 @@ class PgQueryBuilder {
 
                 // Auto-generate UUID if 'id' column is missing or null
                 rows = rows.map(r => ({
-                    id: r.id || crypto.randomUUID(),
-                    ...r
+                    ...r,
+                    id: r.id || crypto.randomUUID()
                 }));
 
                 const columns = Object.keys(rows[0]);
