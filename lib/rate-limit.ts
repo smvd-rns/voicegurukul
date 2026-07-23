@@ -1,13 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-// Initialize a Service Role client specifically for Rate Limiting to avoid RLS restrictions
-// and prevent users from manipulating their own limits.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Fallback to anon key if service key is missing (NOT RECOMMENDED for production security, but functional for simple setups)
-// In a real secure environment, SUPABASE_SERVICE_ROLE_KEY is mandatory for this.
-const rateLimitClient = createClient(supabaseUrl, supabaseServiceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+import { supabase as rateLimitClient } from '@/lib/supabase/config';
 
 interface RateLimitResult {
     blocked: boolean;

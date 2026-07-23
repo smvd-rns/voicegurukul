@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
 import { getBulkSadhanaReportsByRange } from '@/lib/supabase/sadhana';
 

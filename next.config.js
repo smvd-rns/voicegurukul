@@ -5,6 +5,14 @@ const nextConfig = {
     domains: ['firebasestorage.googleapis.com'],
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/indexer-api/:path*',
+        destination: 'http://localhost:4000/:path*',
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     // Exclude undici from client-side bundle
     if (!isServer) {
@@ -22,3 +30,4 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+

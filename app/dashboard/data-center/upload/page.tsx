@@ -44,7 +44,7 @@ export default function DataCenterUploadPage() {
     const [renderWorkerStatus, setRenderWorkerStatus] = useState<'waking' | 'awake' | 'error'>('waking');
     const [wakeUpTimer, setWakeUpTimer] = useState(90);
 
-    const RENDER_SERVICE_URL = process.env.NEXT_PUBLIC_RENDER_INDEXER_URL || 'https://sadhana-ndn8.onrender.com';
+    const RENDER_SERVICE_URL = process.env.NEXT_PUBLIC_RENDER_INDEXER_URL || '/indexer-api';
 
     // Wake up Render service when the page mounts
     useEffect(() => {

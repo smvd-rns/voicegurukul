@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { createClient } from '@supabase/supabase-js';
+import {  createClient  } from '@/lib/supabase/server-db';
 import { validateCenterInput, sanitizeInput } from '@/lib/utils/validation';
 
 export async function POST(request: Request) {

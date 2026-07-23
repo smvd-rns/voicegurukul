@@ -57,4 +57,11 @@ jobs:
             git pull origin main
             npm ci --production
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
+            
+            # Setup and restart the indexer microservice
+            cd /var/www/voicegurukul/indexer-service
+            npm install --production
+            pm2 restart voicegurukul-indexer || pm2 start server.js --name "voicegurukul-indexer"
+            
             pm2 save
+

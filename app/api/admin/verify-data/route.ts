@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as dbQuery } from '@/lib/db';
-import { createClient } from '@supabase/supabase-js';
+import {  createClient  } from '@/lib/supabase/server-db';
 import { revalidateTag } from 'next/cache';
 
 export async function POST(request: NextRequest) {

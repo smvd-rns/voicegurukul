@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import {  createClient  } from '@/lib/supabase/server-db';
 import { roleHierarchy, getRoleDisplayName } from '@/lib/utils/roles';
 
 export const dynamic = 'force-dynamic';

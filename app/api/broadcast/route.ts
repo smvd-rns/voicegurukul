@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import {  createClient  } from '@/lib/supabase/server-db';
 import { validateTextField, validateMessageField, createErrorResponse } from '@/lib/utils/api-validation';
 
 // Initialize Supabase client with service role key for privileged operations

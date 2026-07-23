@@ -12,74 +12,11 @@ const cleanEnvVar = (val: string | undefined) => {
 };
 
 const getSadhanaClient = () => {
-  // Try to use the specialized Sadhana DB credentials first
-  const specializedUrl = cleanEnvVar(process.env.NEXT_PUBLIC_SADHANA_DB_URL);
-  const url = specializedUrl || cleanEnvVar(process.env.NEXT_PUBLIC_SUPABASE_URL);
-
-  const isServer = typeof window === 'undefined';
-
-  // Use Anon Key as primary to ensure compatibility. 
-  // The Service Role Key provided for this project appears to be problematic, 
-  // so we will rely on the Anon Key and an inclusive RLS policy (Option B).
-  const key = cleanEnvVar(process.env.NEXT_PUBLIC_SADHANA_DB_ANON_KEY) ||
-    cleanEnvVar(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-  if (isServer && key) {
-    console.log(`[SadhanaClient] Server-side initialization for ${url?.substring(0, 30)}... using ANON key.`);
-  }
-
-  // If we already have a client with this URL and Key, reuse it
-  if (_sadhanaClient && (_sadhanaClient as any).supabaseUrl === url && (_sadhanaClient as any).supabaseKey === key) {
-    return _sadhanaClient;
-  }
-
-  const baseClient = supabase;
-  if (!url || !key) {
-    if (isServer) console.warn('[SadhanaClient] Missing URL or Key. Falling back to default client.');
-    return baseClient || null;
-  }
-
-  // Debug log (Safe: only first few chars)
-  if (isServer) {
-    console.log(`[SadhanaClient] Connecting to ${specializedUrl ? 'External' : 'Main'} DB. URL: ${url.substring(0, 30)}... Key starts with: ${key.substring(0, 10)}...`);
-  }
-
-  _sadhanaClient = createClient(url, key, {
-    auth: {
-      persistSession: !isServer,
-      autoRefreshToken: !isServer,
-    }
-  });
-
-  // Tag the client for easier debugging and reuse check
-  (_sadhanaClient as any).supabaseUrl = url;
-  (_sadhanaClient as any).supabaseKey = key;
-
-  return _sadhanaClient;
+  return supabase;
 };
 
-// Singleton service-role client for Sadhana DB (bypasses RLS for writes)
-let _sadhanaAdminClient: ReturnType<typeof createClient> | null = null;
-
 const getSadhanaAdminClient = () => {
-  const specializedUrl = cleanEnvVar(process.env.NEXT_PUBLIC_SADHANA_DB_URL);
-  const url = specializedUrl || cleanEnvVar(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serviceKey = cleanEnvVar(process.env.SADHANA_DB_SERVICE_ROLE_KEY);
-
-  const isServer = typeof window === 'undefined';
-
-  if (!url || !serviceKey) {
-    if (isServer) console.warn('[SadhanaAdminClient] Missing URL or Service Role Key, falling back to anon client');
-    return getSadhanaClient();
-  }
-
-  if (_sadhanaAdminClient) return _sadhanaAdminClient;
-
-  _sadhanaAdminClient = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
-
-  return _sadhanaAdminClient;
+  return supabase;
 };
 
 // Use a getter to ensure we always have the correctly initialized client

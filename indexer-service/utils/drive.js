@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from './db.js';
 
 export function extractFolderId(driveLink) {
     if (!driveLink) return null;

@@ -1,10 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createClient } from './utils/db.js';
 import { extractFolderId, processAndSaveFiles, getAccessToken, findOrCreateFolder, getFileCategory } from './utils/drive.js';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from the root folder's env files
+dotenv.config({ path: path.join(__dirname, '../.env.local') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config(); // fallback to current folder's .env
 
 const app = express();
 const PORT = process.env.PORT || 4000;

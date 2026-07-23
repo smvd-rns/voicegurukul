@@ -36,62 +36,76 @@ This guide explains how to set up Google Drive API integration for user photo up
    - Click **Create**
 5. Copy the **Client ID** and **Client Secret**
 
-## Step 4: Generate Refresh Token
+## Step 4: Generate a Fresh Refresh Token (Quick Guide)
 
-You need to generate a refresh token using the OAuth 2.0 flow. Here's a quick way:
+Your refresh token is what keeps the server authenticated to Google Drive. Follow these simplified steps to get a fresh refresh token in **2 minutes**:
 
-### Option A: Using OAuth 2.0 Playground (Easiest)
+### Method 1: Using Google OAuth 2.0 Playground (Fastest & Simplest)
 
-1. Go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
-2. Click the gear icon (⚙️) in the top right
-3. Check "Use your own OAuth credentials"
-4. Enter your **Client ID** and **Client Secret**
-5. In the left panel, find "Drive API v3"
-6. Select scope: `https://www.googleapis.com/auth/drive.file`
-7. Click "Authorize APIs"
-8. Sign in and grant permissions
-9. Click "Exchange authorization code for tokens"
-10. Copy the **Refresh token**
+1. Go to the [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground/).
+2. **Configure your credentials (Client ID & Secret):**
+   - Click the gear icon (⚙️) in the top-right corner to open Settings.
+   - Find and check the checkbox **"Use your own OAuth credentials"** (this will open the fields for Client ID and Client Secret).
+   - Paste your **Client ID** and **Client Secret** (from Step 3) into the corresponding input fields.
+   - Ensure the dropdown **"Access type"** is set to **"Offline"** (this is critical to receive a refresh token).
+   - Click the **Close** button.
+3. **Select the scopes:**
+   - In the left sidebar under "Step 1", scroll down or search for **Drive API v3**.
+   - Expand the Drive API v3 category and tick/check `https://www.googleapis.com/auth/drive` (Full access) or `https://www.googleapis.com/auth/drive.file` (Recommended).
+   - Click the blue **Authorize APIs** button.
+4. **Grant permissions:**
+   - Sign in with the Google account associated with the Drive folder.
+   - If a warning appears saying *"Google hasn't verified this app"*, click **Advanced** at the bottom, then click **Go to ISKCON Photo Upload (unsafe)** to bypass it.
+   - Click **Allow** on the next screen to grant the permissions.
+5. **Generate and Copy the Refresh Token:**
+   - You will be redirected back to the OAuth Playground (which will now show "Step 2" in the left panel).
+   - Click the blue **"Exchange authorization code for tokens"** button.
+   - Once clicked, look at the JSON response text on the right: find the `"refresh_token"` line and copy the token string next to it.
+   - Paste this new token into the `GOOGLE_REFRESH_TOKEN` variable in your `.env.local` file.
 
-### Option B: Using a Script
+---
 
-Create a temporary script to generate the refresh token:
+### Method 2: Running a Quick Local Command
 
-```javascript
-// generate-refresh-token.js
-const { google } = require('googleapis');
-const readline = require('readline');
+If you prefer to get a token directly from your terminal, we have a script ready for you.
 
-const oauth2Client = new google.auth.OAuth2(
-  'YOUR_CLIENT_ID',
-  'YOUR_CLIENT_SECRET',
-  'http://localhost:3000/oauth2callback'
-);
+1. Install `googleapis` if you haven't already:
+   ```bash
+   npm install googleapis
+   ```
+2. Create a temporary script file `get-token.js` in your workspace:
+   ```javascript
+   const { google } = require('googleapis');
+   const readline = require('readline');
 
-const scopes = ['https://www.googleapis.com/auth/drive.file'];
+   const oauth2Client = new google.auth.OAuth2(
+     'YOUR_GOOGLE_CLIENT_ID',
+     'YOUR_GOOGLE_CLIENT_SECRET',
+     'urn:ietf:wg:oauth:2.0:oob'
+   );
 
-const authUrl = oauth2Client.generateAuthUrl({
-  access_type: 'offline',
-  scope: scopes,
-});
+   const authUrl = oauth2Client.generateAuthUrl({
+     access_type: 'offline',
+     scope: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'],
+     prompt: 'consent' // Forces consent screen to ensure a refresh token is returned
+   });
 
-console.log('Authorize this app by visiting this url:', authUrl);
+   console.log('\n1. Open this URL in your browser to authorize:\n', authUrl);
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+   rl.question('\n2. Enter the authorization code from that page here: ', async (code) => {
+     rl.close();
+     try {
+       const { tokens } = await oauth2Client.getToken(code);
+       console.log('\nSUCCESS! Copy the refresh token below:');
+       console.log('GOOGLE_REFRESH_TOKEN =', tokens.refresh_token);
+     } catch (err) {
+       console.error('Error exchanging code:', err.message);
+     }
+   });
+   ```
+3. Run `node get-token.js` and follow the instructions in the terminal. Copy the printed token to your `.env.local` file.
 
-rl.question('Enter the code from that page here: ', (code) => {
-  rl.close();
-  oauth2Client.getToken(code, (err, token) => {
-    if (err) return console.error('Error retrieving access token', err);
-    console.log('Refresh Token:', token.refresh_token);
-  });
-});
-```
-
-Run: `node generate-refresh-token.js`
 
 ## Step 5: Add Environment Variables
 
