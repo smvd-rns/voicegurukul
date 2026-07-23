@@ -1,5 +1,6 @@
 import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,13 +16,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             auth: { autoRefreshToken: false, persistSession: false }
         });
 
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
-
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-        if (authError || !user) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+        const user = await getAuthUserFromRequest(request);
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         // Must be superadmin
         const { data: currentUser, error: userError } = await supabase.from('users').select('role').eq('id', user.id).single();
@@ -76,13 +72,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
             auth: { autoRefreshToken: false, persistSession: false }
         });
 
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
-
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-        if (authError || !user) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+        const user = await getAuthUserFromRequest(request);
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         // Must be superadmin
         const { data: currentUser, error: userError } = await supabase.from('users').select('role').eq('id', user.id).single();

@@ -193,7 +193,28 @@ export async function POST(request: Request) {
 
     const file = formData.get('file') as File;
     const userName = formData.get('userName') as string;
-    const targetFolderId = formData.get('folderId') as string || FOLDER_ID;
+    let targetFolderId = formData.get('folderId') as string || FOLDER_ID;
+
+    // Handle stale policy folder ID or dynamic policy folder fallback
+    const STALE_POLICY_FOLDER_ID = '1b94q4-8wVGVU_pv4AUVpTFMrnfY9v2ng';
+    if (targetFolderId === STALE_POLICY_FOLDER_ID) {
+      if (process.env.POLICY_DRIVE_FOLDER_ID) {
+        targetFolderId = process.env.POLICY_DRIVE_FOLDER_ID;
+      } else {
+        // Find or create 'Policies' folder under the main folder ID
+        try {
+          const mainFolderId = process.env.MAIN_DRIVE_FOLDER_ID || FOLDER_ID;
+          let policiesFolderId = await findFolder('Policies', mainFolderId);
+          if (!policiesFolderId) {
+            policiesFolderId = await createFolder('Policies', mainFolderId);
+          }
+          targetFolderId = policiesFolderId;
+        } catch (folderError: any) {
+          console.warn('Failed to resolve/create Policies folder, falling back to main folder:', folderError.message);
+          targetFolderId = FOLDER_ID;
+        }
+      }
+    }
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
