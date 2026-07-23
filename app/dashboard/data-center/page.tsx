@@ -665,12 +665,12 @@ export default function DataCenterPage() {
 
             // Sorting - Added stable ID sort as secondary
             switch (sortBy) {
-                case 'newest': query = query.order('created_at', { ascending: false }).order('id', { ascending: true }); break;
-                case 'oldest': query = query.order('created_at', { ascending: true }).order('id', { ascending: true }); break;
-                case 'name_asc': query = query.order('file_name', { ascending: true }).order('id', { ascending: true }); break;
-                case 'name_desc': query = query.order('file_name', { ascending: false }).order('id', { ascending: true }); break;
-                case 'views_desc': query = query.order('views', { ascending: false }).order('id', { ascending: true }); break;
-                default: query = query.order('created_at', { ascending: false }).order('id', { ascending: true });
+                case 'newest': query = query.order('created_at DESC, id', { ascending: true }); break;
+                case 'oldest': query = query.order('created_at ASC, id', { ascending: true }); break;
+                case 'name_asc': query = query.order('file_name ASC, id', { ascending: true }); break;
+                case 'name_desc': query = query.order('file_name DESC, id', { ascending: true }); break;
+                case 'views_desc': query = query.order('views DESC, id', { ascending: true }); break;
+                default: query = query.order('created_at DESC, id', { ascending: true });
             }
 
             query = query.range((currentPage - 1) * limit, currentPage * limit - 1);
