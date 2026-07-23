@@ -41,68 +41,13 @@ export default function DataCenterUploadPage() {
     const [recentScans, setRecentScans] = useState<any[]>([]);
     const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [scanError, setScanError] = useState('');
-    const [renderWorkerStatus, setRenderWorkerStatus] = useState<'waking' | 'awake' | 'error'>('waking');
-    const [wakeUpTimer, setWakeUpTimer] = useState(90);
+    // Always awake — using internal Next.js API route, no external server needed
+    const [renderWorkerStatus] = useState<'waking' | 'awake' | 'error'>('awake');
+    const [wakeUpTimer] = useState(0);
 
-    const RENDER_SERVICE_URL = process.env.NEXT_PUBLIC_RENDER_INDEXER_URL || '/indexer-api';
+    const SCAN_API_URL = '/api/drive/scan';
 
-    // Wake up Render service when the page mounts
-    useEffect(() => {
-        if (renderWorkerStatus === 'awake') return;
-        if (renderWorkerStatus === 'error') return; // Don't restart unless user clicks Retry
-
-        // 1. Initial health check immediately
-        const checkHealth = async () => {
-            try {
-                const res = await fetch(`${RENDER_SERVICE_URL}/health`, {
-                    method: 'GET',
-                    signal: AbortSignal.timeout(8000), // 8s per attempt
-                    cache: 'no-store'
-                });
-                if (res.ok) {
-                    setRenderWorkerStatus('awake');
-                    return true;
-                }
-            } catch (err) {
-                console.warn('Render cold-starting or offline...');
-            }
-            return false;
-        };
-
-        checkHealth();
-
-        // 2. Start 1-second countdown timer
-        const timerInterval = setInterval(() => {
-            setWakeUpTimer((prev) => {
-                if (prev <= 1) {
-                    // Timer expired — flip to error so user can retry
-                    setRenderWorkerStatus('error');
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        // 3. Poll for health every 5 seconds until awake
-        const pollInterval = setInterval(async () => {
-            const isAwake = await checkHealth();
-            if (isAwake) {
-                clearInterval(pollInterval);
-                clearInterval(timerInterval);
-            }
-        }, 5000);
-
-        return () => {
-            clearInterval(timerInterval);
-            clearInterval(pollInterval);
-        };
-    }, [RENDER_SERVICE_URL, renderWorkerStatus]);
-
-    // Retry handler: reset state to re-trigger the useEffect
-    const retryWakeUp = () => {
-        setWakeUpTimer(90);
-        setRenderWorkerStatus('waking');
-    };
+    const retryWakeUp = () => {}; // No-op: no external server to retry
 
     const fetchRecentScans = useCallback(async () => {
         if (!user || !sadhanaDb) return;
@@ -503,8 +448,8 @@ export default function DataCenterUploadPage() {
         setScanStatus('idle');
 
         try {
-            // Forward directly to the dedicated Render Microservice
-            const res = await fetch(`${RENDER_SERVICE_URL}/scan`, {
+            // Use internal Next.js API route — no external server needed
+            const res = await fetch(SCAN_API_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -520,7 +465,7 @@ export default function DataCenterUploadPage() {
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to start long-running scan on Render');
+            if (!res.ok) throw new Error(data.error || 'Failed to start scan');
 
             setScanStatus('success');
             fetchRecentScans();
