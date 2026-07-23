@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { validateCenterInput, sanitizeInput } from '@/lib/utils/validation';
 
 export async function POST(request: Request) {
@@ -35,19 +36,12 @@ export async function POST(request: Request) {
     // Rate Limiting
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-    const authHeader = request.headers.get('authorization');
-    const accessToken = authHeader?.replace('Bearer ', '');
-
-    // Create client to get user details
-    const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
-    let userId = null;
+    const user = await getAuthUserFromRequest(request);
+    const userId = user?.id || null;
     let isVerified = false;
 
-    if (accessToken) {
-      const { data: { user } } = await cleanClient.auth.getUser(accessToken);
-      userId = user?.id || null;
-
-      if (userId) {
+    if (userId) {
+        const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
         // Fetch user role to determine verification status and temple scoping for MD
         const { data: profile } = await cleanClient
           .from('users')
@@ -107,7 +101,6 @@ export async function POST(request: Request) {
           }
         }
       }
-    }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {

@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
   try {
     const { userId: bodyUserId } = await request.json();
     
-    // 1. Verify Authentication (Try Session First)
+    // 1. Verify Authentication
     console.log('--- CANCEL REQUEST INITIATED ---');
-    const supabase = createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthUserFromRequest(request);
 
     // Use session user if available, fallback to bodyUserId
     const targetUserId = user?.id || bodyUserId;

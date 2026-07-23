@@ -180,12 +180,9 @@ export default function AdminDonationsPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.id && accessToken) {
-      fetchData();
-      fetchUsersWithoutSlugs();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, accessToken]);
+    fetchData();
+    fetchUsersWithoutSlugs();
+  }, []);
 
   const checkUser = async () => {
     if (!supabase) return;

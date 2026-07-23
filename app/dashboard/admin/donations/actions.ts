@@ -1,8 +1,7 @@
 'use server';
 
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
-import { createClient as createServerClient } from '@/lib/supabase/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromCookies } from '@/lib/supabase/admin';
 
 /**
  * Fetches all donations from the secondary database.
@@ -10,16 +9,9 @@ import { getAdminClient } from '@/lib/supabase/admin';
  */
 export async function fetchAllDonations(accessToken?: string) {
   try {
-    const supabase = createServerClient();
-    
-    if (!accessToken) {
-      throw new Error('Unauthorized: Missing access token.');
-    }
-
-    // 1. Identify requesting user (by token)
-    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
-    if (userError || !user) {
-      throw new Error('Unauthorized: Invalid access token.');
+    const user = await getAuthUserFromCookies();
+    if (!user) {
+      throw new Error('Unauthorized');
     }
 
     const requesterId = user.id;

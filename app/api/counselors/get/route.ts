@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,16 +54,8 @@ export async function GET(request: Request) {
     });
 
     // Check if user is authenticated to decide whether to show sensitive details
-    // Note: In Next.js API routes, we can check the auth cookie or header
-    const authHeader = request.headers.get('authorization');
-    let isAuthenticated = false;
-
-    if (authHeader) {
-      const { data: { user }, error } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-      if (user && !error) {
-        isAuthenticated = true;
-      }
-    }
+    const user = await getAuthUserFromRequest(request);
+    const isAuthenticated = !!user;
 
     // Select fields based on auth status
     // Public: Hide PII (email, mobile)

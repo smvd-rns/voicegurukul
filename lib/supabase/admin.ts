@@ -30,3 +30,17 @@ export async function getAuthUserFromRequest(request: Request) {
         user_metadata: { name: decoded.name }
     };
 }
+
+export async function getAuthUserFromCookies() {
+    const token = cookies().get('session_token')?.value;
+    if (!token || token === 'undefined') return null;
+
+    const decoded = verifyToken(token);
+    if (!decoded || !decoded.userId) return null;
+
+    return {
+        id: decoded.userId,
+        email: decoded.email,
+        user_metadata: { name: decoded.name }
+    };
+}

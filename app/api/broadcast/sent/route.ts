@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,16 +9,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function GET(request: NextRequest) {
     try {
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-        if (authError || !user) {
+        const user = await getAuthUserFromRequest(request);
+        if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
   try {
@@ -25,17 +26,10 @@ export async function POST(request: Request) {
       }
     });
 
-    // Get the user's session token from the request headers
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
+    const user = await getAuthUserFromRequest(request);
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     // Check user role

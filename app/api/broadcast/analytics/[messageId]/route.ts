@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -9,16 +10,10 @@ export async function GET(
     { params }: { params: { messageId: string } }
 ) {
     try {
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        const user = await getAuthUserFromRequest(request);
 
-        if (authError || !user) {
+        if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

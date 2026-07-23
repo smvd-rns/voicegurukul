@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,14 +8,8 @@ export async function GET(request: Request) {
         const supabase = getAdminClient();
 
         // Auth check
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { data: { user: adminUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-
-        if (authError || !adminUser) {
+        const adminUser = await getAuthUserFromRequest(request);
+        if (!adminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -50,14 +44,21 @@ export async function GET(request: Request) {
         if (isCenterAdmin) {
             const { data: userCenters } = await supabase
                 .from('user_centers')
-                .select('center_id, centers(name, id)')
+                .select('*')
                 .eq('user_id', adminUser.id);
 
-            if (userCenters) {
-                userCenters.forEach((uc: any) => {
-                    if (uc.center_id) allocatedCenterIds.push(uc.center_id);
-                    if (uc.centers?.name) allocatedCenterNames.push(uc.centers.name);
-                });
+            if (userCenters && userCenters.length > 0) {
+                const cIds = userCenters.map((uc: any) => uc.center_id).filter(Boolean);
+                allocatedCenterIds = Array.from(new Set(cIds));
+                if (allocatedCenterIds.length > 0) {
+                    const { data: cData } = await supabase
+                        .from('centers')
+                        .select('id, name')
+                        .in('id', allocatedCenterIds);
+                    if (cData) {
+                        allocatedCenterNames = cData.map((c: any) => c.name).filter(Boolean);
+                    }
+                }
             }
         }
 

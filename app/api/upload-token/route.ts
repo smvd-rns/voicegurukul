@@ -116,6 +116,18 @@ export async function POST(request: NextRequest) {
           finalFolderId = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
         }
       }
+    } else if (targetFolderId === 'profile_uploads') {
+      try {
+        const mainFolderId = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
+        let profileFolderId = await findFolder(drive, 'Profile', mainFolderId);
+        if (!profileFolderId) {
+          profileFolderId = await createFolder(drive, 'Profile', mainFolderId);
+        }
+        finalFolderId = profileFolderId;
+      } catch (folderError: any) {
+        console.warn('Failed to resolve/create Profile folder in token route:', folderError.message);
+        finalFolderId = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
+      }
     } else if (targetFolderId && targetFolderId !== 'root') {
       const sadhanaDbAdmin = getAdminSadhanaSupabase();
       if (sadhanaDbAdmin) {

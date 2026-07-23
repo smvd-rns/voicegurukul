@@ -14,7 +14,7 @@ export async function GET() {
         // 2. Check Pending Profile Requests
         const { data: requests } = await supabase
             .from('profile_update_requests')
-            .select('*, user:users(email, name, counselor_id)')
+            .select('*')
             .eq('status', 'pending');
 
         return NextResponse.json({

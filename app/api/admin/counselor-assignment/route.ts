@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { normalizeRoleFromFirestore } from '@/lib/utils/roles';
 
 export async function POST(request: Request) {
@@ -13,18 +14,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
-        // Verify admin identity
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
+        const adminUser = await getAuthUserFromRequest(request);
+        if (!adminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createClient(supabaseUrl, serviceRoleKey);
-        const { data: { user: adminUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-
-        if (authError || !adminUser) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         // Check admin permissions (simplified check - enhance as needed)
         const { data: adminProfile } = await supabase

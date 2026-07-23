@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     // 1. Create Pending DB Record first
     const sadhanaDb = getSadhanaAdminClient();
     const { error: dbError } = await sadhanaDb.from('donations').insert([{
+      id: crypto.randomUUID(),
       donor_name: donorName,
       donor_email: donorEmail,
       donor_mobile: donorMobile,

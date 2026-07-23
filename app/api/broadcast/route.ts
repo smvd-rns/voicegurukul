@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { validateTextField, validateMessageField, createErrorResponse } from '@/lib/utils/api-validation';
 
 // Initialize Supabase client with service role key for privileged operations
@@ -8,21 +9,13 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function POST(request: NextRequest) {
     try {
-        // Get the authenticated user
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return createErrorResponse('Unauthorized - No authorization header', 401);
-        }
-
         // Create Supabase client with service role for user verification
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-        // Get user from auth header
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-        if (authError || !user) {
-            return createErrorResponse('Unauthorized - Invalid token', 401);
+        // Get user from request
+        const user = await getAuthUserFromRequest(request);
+        if (!user) {
+            return createErrorResponse('Unauthorized - Invalid session', 401);
         }
 
         // Get user data to check role and jurisdiction

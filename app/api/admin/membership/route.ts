@@ -1,5 +1,6 @@
 import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +15,8 @@ export async function GET(request: Request) {
 
         const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-        if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const user = await getAuthUserFromRequest(request);
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
@@ -38,13 +36,7 @@ export async function GET(request: Request) {
         // Fetch all membership IDs with user details and pagination
         const { data, error, count } = await supabaseAdmin
             .from('membership_ids')
-            .select(`
-                *,
-                users:user_id (
-                    name,
-                    email
-                )
-            `, { count: 'exact' })
+            .select('*')
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1);
 
@@ -53,7 +45,24 @@ export async function GET(request: Request) {
             throw error;
         }
 
-        console.log(`API Found ${count} membership records`);
+        // Manually attach user details since raw SQL proxy doesn't parse Supabase relational select syntax
+        if (data && data.length > 0) {
+            const userIds = Array.from(new Set(data.map((m: any) => m.user_id).filter(Boolean)));
+            if (userIds.length > 0) {
+                const { data: usersData } = await supabaseAdmin
+                    .from('users')
+                    .select('id, name, email')
+                    .in('id', userIds);
+
+                if (usersData) {
+                    const userMap = new Map((usersData as any[]).map((u: any) => [u.id, u]));
+                    data.forEach((m: any) => {
+                        const u = userMap.get(m.user_id);
+                        m.users = u ? { name: u.name, email: u.email } : null;
+                    });
+                }
+            }
+        }
 
         return NextResponse.json({ success: true, data, count });
 

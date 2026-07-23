@@ -98,7 +98,7 @@ export async function getAllApprovedUsersForMatching(scopeOrCondition?: string):
     while (hasMore) {
         let pageQuery = adminSupabase
             .from('users')
-            .select('*, user_profile_details(*)')
+            .select('*')
             .eq('verification_status', 'approved')
             .range(from, from + pageSize - 1);
 
@@ -172,7 +172,7 @@ async function triggerPushNotificationsForEvent(eventId: string, eventData: Omit
         while (hasMore) {
             const { data: batch, error: batchError } = await supabaseAdmin
                 .from('users')
-                .select('*, user_profile_details(*)')
+                .select('*')
                 .eq('verification_status', 'approved')
                 .not('push_tokens', 'is', null)
                 .neq('push_tokens', '{}')
@@ -751,7 +751,7 @@ export async function getEventTargetedUsers(eventId: string, filters?: { temple?
     while (hasMore) {
         const { data: batch, error: batchError } = await adminSupabase
             .from('users')
-            .select('*, user_profile_details(*)') // Join with profile details for camp info
+            .select('*') // Join with profile details for camp info
             .eq('verification_status', 'approved')
             .range(from, from + pageSize - 1);
 

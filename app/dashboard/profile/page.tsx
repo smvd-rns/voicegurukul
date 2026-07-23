@@ -811,37 +811,92 @@ export default function ProfilePage() {
     let finalProfileImageUrl = profileImage;
     let finalAadharCardUrl = aadharImage;
 
+    const uploadFileDirectlyToDrive = async (file: File, prefix: string, userName: string): Promise<string> => {
+      // Clean user name for filename
+      const cleanUserName = userName.trim().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const customFileName = `${prefix}_${cleanUserName}_${new Date().toISOString().split('T')[0]}.${ext}`;
+
+      // 1. Get token
+      const tokenRes = await fetch('/api/upload-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: customFileName,
+          fileType: file.type || 'application/octet-stream',
+          targetFolderId: 'profile_uploads',
+          userId: user.id
+        })
+      });
+
+      if (!tokenRes.ok) {
+        const errorData = await tokenRes.json();
+        throw new Error(errorData.error || 'Failed to get upload token');
+      }
+      const tokenData = await tokenRes.json();
+
+      // 2. Initialize Resumable Upload
+      const metadata = {
+        name: customFileName,
+        mimeType: file.type || 'application/octet-stream',
+        parents: [tokenData.folderId]
+      };
+
+      const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenData.accessToken}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': file.type || 'application/octet-stream',
+          'X-Upload-Content-Length': file.size.toString()
+        },
+        body: JSON.stringify(metadata)
+      });
+
+      if (!sessionRes.ok) throw new Error('Failed to initialize Google Drive resumable upload');
+      const location = sessionRes.headers.get('Location');
+      if (!location) throw new Error('No upload location received from Google Drive');
+
+      // 3. Upload file binary
+      const uploadRes = await fetch(location, {
+        method: 'PUT',
+        body: file
+      });
+
+      if (!uploadRes.ok) throw new Error('Google Drive upload failed');
+      const driveData = await uploadRes.json();
+
+      // Fetch extra info if links are missing
+      if (!driveData.webViewLink) {
+        const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
+          headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+        });
+        if (extraRes.ok) {
+          const extraData = await extraRes.json();
+          Object.assign(driveData, extraData);
+        }
+      }
+
+      // Check directImageUrl / webViewLink / id
+      const directImageUrl = `https://lh3.googleusercontent.com/d/${driveData.id}=s1600`;
+      return directImageUrl || driveData.webViewLink || driveData.id;
+    };
+
     // Parallel upload optimization
     const uploadPromises = [];
 
     if (selectedPhoto) {
-      const photoFormData = new FormData();
-      photoFormData.append('file', selectedPhoto);
-      photoFormData.append('userName', formData.name);
       uploadPromises.push(
-        fetch('/api/upload/google-drive', {
-          method: 'POST',
-          body: photoFormData,
-        }).then(async res => {
-          if (!res.ok) throw new Error('Profile photo upload failed');
-          const data = await res.json();
-          finalProfileImageUrl = data.data.directImageUrl || data.data.webViewLink || data.data.fileId;
+        uploadFileDirectlyToDrive(selectedPhoto, 'profile', formData.name).then(url => {
+          finalProfileImageUrl = url;
         })
       );
     }
 
     if (selectedAadharPhoto) {
-      const aadharFormData = new FormData();
-      aadharFormData.append('file', selectedAadharPhoto);
-      aadharFormData.append('userName', `${formData.name}_aadhar`);
       uploadPromises.push(
-        fetch('/api/upload/google-drive', {
-          method: 'POST',
-          body: aadharFormData,
-        }).then(async res => {
-          if (!res.ok) throw new Error('Aadhar card upload failed');
-          const data = await res.json();
-          finalAadharCardUrl = data.data.directImageUrl || data.data.webViewLink || data.data.fileId;
+        uploadFileDirectlyToDrive(selectedAadharPhoto, 'adhar', formData.name).then(url => {
+          finalAadharCardUrl = url;
         })
       );
     }
@@ -1099,9 +1154,7 @@ export default function ProfilePage() {
       }
 
       const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      if (!token) throw new Error('No active session token found');
+      const token = session.data.session?.access_token || '';
 
       // Construct the main updates object
       const updates: any = {

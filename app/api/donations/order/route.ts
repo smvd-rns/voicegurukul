@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
     // 2. Save pending donation to Supabase
     const sadhanaDb = getSadhanaAdminClient();
     const donationData = {
+      id: crypto.randomUUID(),
       donor_name: donorName,
       donor_email: donorEmail,
       donor_mobile: donorMobile,

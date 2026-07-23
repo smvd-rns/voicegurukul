@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { sanitizeInput, validateCounselorInput } from '@/lib/utils/validation';
 
 export async function POST(request: Request) {
@@ -22,17 +23,8 @@ export async function POST(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     // Create a temporary client to get the user ID from the token
-    const authHeader = request.headers.get('authorization');
-    const accessToken = authHeader?.replace('Bearer ', '');
-    let userId = null;
-
-    if (accessToken) {
-      const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false }
-      });
-      const { data: { user } } = await tempClient.auth.getUser(accessToken);
-      userId = user?.id || null;
-    }
+    const user = await getAuthUserFromRequest(request);
+    const userId = user?.id || null;
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {

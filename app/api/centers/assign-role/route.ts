@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
     try {
@@ -10,18 +11,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         // 1. Authenticate Requester
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
-        const { data: { user: requesterUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-
-        if (authError || !requesterUser) {
+        const requesterUser = await getAuthUserFromRequest(request);
+        if (!requesterUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
         // 2. Fetch Requester Profile & Permissions
         const { data: requesterProfile, error: profileError } = await supabase

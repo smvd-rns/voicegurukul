@@ -224,13 +224,23 @@ export const getUserData = async (userId: string): Promise<User | null> => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('*, user_profile_details(*)')
+      .select('*')
       .eq('id', userId)
       .maybeSingle(); // Use maybeSingle() instead of single() - returns null if no result
 
-    if (error) {
-      console.error('Error fetching user data:', error);
+    if (error || !data) {
+      if (error) console.error('Error fetching user data:', error);
       return null;
+    }
+
+    const { data: detailsData } = await supabase
+      .from('user_profile_details')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (detailsData) {
+      data.user_profile_details = [detailsData];
     }
 
     if (!data) {

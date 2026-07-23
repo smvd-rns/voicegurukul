@@ -1,5 +1,6 @@
 import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { sendApprovalNotification } from '@/lib/utils/email';
 import { generateMembershipIdForUser } from '@/lib/utils/membership';
 
@@ -31,18 +32,10 @@ export async function PATCH(
             auth: { autoRefreshToken: false, persistSession: false }
         });
 
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader) {
-            log('Missing authorization header');
-            return NextResponse.json({ error: 'Missing authorization header', debug: debugLogs }, { status: 401 });
-        }
-
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user: adminUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-        if (authError || !adminUser) {
-            log(`Auth error: ${authError?.message}`);
-            return NextResponse.json({ error: 'Invalid token', debug: debugLogs }, { status: 401 });
+        const adminUser = await getAuthUserFromRequest(request);
+        if (!adminUser) {
+            log('Auth error: User not found');
+            return NextResponse.json({ error: 'Unauthorized', debug: debugLogs }, { status: 401 });
         }
 
         // Verify admin role (Role 8 or 11)

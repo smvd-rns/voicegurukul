@@ -1,19 +1,17 @@
 'use server';
 
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { getAuthUserFromCookies } from '@/lib/supabase/admin';
 
 /**
  * Fetches donations for a specific user, bypassing RLS via service role.
  */
 export async function fetchUserDonations(userId: string, accessToken?: string) {
   try {
-    const supabase = createServerClient();
+    const user = await getAuthUserFromCookies();
     
-    // Verify the requesting user is who they say they are
-    if (!accessToken) throw new Error('Unauthorized: Missing access token.');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
-    if (userError || !user || user.id !== userId) {
+    // Verify the requesting user is authenticated and matches target userId
+    if (!user || user.id !== userId) {
       throw new Error('Unauthorized');
     }
 

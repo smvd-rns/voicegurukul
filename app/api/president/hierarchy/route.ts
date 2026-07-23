@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { roleHierarchy, getRoleDisplayName } from '@/lib/utils/roles';
 
 export const dynamic = 'force-dynamic';
@@ -10,21 +11,14 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.toLowerCase();
     const camp = searchParams.get('camp');
 
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-        return NextResponse.json({ error: 'No authorization header' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
+    const user = await getAuthUserFromRequest(request);
+    if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Verify permissions
     const { data: userData, error: userError } = await supabase

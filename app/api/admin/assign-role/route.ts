@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
     try {
@@ -12,17 +13,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
-        const authHeader = request.headers.get('authorization');
-        if (!authHeader) {
+        const adminUser = await getAuthUserFromRequest(request);
+        if (!adminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createClient(supabaseUrl, serviceRoleKey);
-        const { data: { user: adminUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-
-        if (authError || !adminUser) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         // Check admin permissions and hierarchy for scoping in ONE call
         const { data: adminProfile, error: profileError } = await supabase

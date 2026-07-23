@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
     try {
@@ -20,19 +22,12 @@ export async function POST(request: Request) {
         // Rate Limiting
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const authHeader = request.headers.get('authorization');
-        const accessToken = authHeader?.replace('Bearer ', '');
-
-        // Create client to get user details
-        const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
-        let userId = null;
+        const user = await getAuthUserFromRequest(request);
+        const userId = user?.id || null;
         let isVerified = false;
 
-        if (accessToken) {
-            const { data: { user } } = await cleanClient.auth.getUser(accessToken);
-            userId = user?.id || null;
-
-            if (userId) {
+        if (userId) {
+                const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
                 // Fetch user role to determine verification status
                 const { data: profile } = await cleanClient
                     .from('users')
@@ -51,7 +46,6 @@ export async function POST(request: Request) {
                     isVerified = true;
                 }
             }
-        }
 
         const { checkRateLimit } = await import('@/lib/rate-limit');
         const rateLimit = await checkRateLimit(request, userId, {
@@ -87,7 +81,8 @@ export async function POST(request: Request) {
                 fetchHeaders.set('apikey', serviceRoleKey);
                 fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
             } else {
-                if (accessToken) fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
+                const token = request.headers.get('authorization')?.replace('Bearer ', '');
+                if (token) fetchHeaders.set('Authorization', `Bearer ${token}`);
                 fetchHeaders.set('apikey', supabaseAnonKey);
             }
             fetchHeaders.set('Content-Type', 'application/json');
@@ -116,6 +111,7 @@ export async function POST(request: Request) {
         const { data: insertedData, error } = await authenticatedClient
             .from('temples')
             .insert({
+                id: crypto.randomUUID(),
                 name: trimmedName,
                 state: trimmedState,
                 city: trimmedCity,
@@ -130,6 +126,8 @@ export async function POST(request: Request) {
                 central_voice_manager_name: central_voice_manager_name || null,
                 yp_id: yp_id || null,
                 yp_name: yp_name || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .select('id')
             .single();

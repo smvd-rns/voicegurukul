@@ -4,6 +4,33 @@ import { roleToNumber } from '@/lib/utils/roles';
 import { transformUserProfile } from './user-transform';
 import { enrichHierarchyData } from './hierarchy-helpers';
 
+export const attachUserProfileDetails = async (users: any[]) => {
+  if (!users || users.length === 0 || !supabase) return users;
+  const userIds = Array.from(new Set(users.map((u: any) => u.id).filter(Boolean)));
+  if (userIds.length === 0) return users;
+
+  try {
+    const { data: detailsData } = await supabase
+      .from('user_profile_details')
+      .select('*')
+      .in('user_id', userIds);
+
+    if (detailsData && detailsData.length > 0) {
+      const detailsMap = new Map();
+      detailsData.forEach((d: any) => detailsMap.set(d.user_id, d));
+      users.forEach((u: any) => {
+        const details = detailsMap.get(u.id);
+        if (details) {
+          u.user_profile_details = [details];
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Error attaching user profile details:', e);
+  }
+  return users;
+};
+
 export const getUsersByRole = async (role: UserRole) => {
   if (!supabase) {
     console.error('Supabase is not initialized');
@@ -16,12 +43,16 @@ export const getUsersByRole = async (role: UserRole) => {
 
     const { data, error } = await (supabase
       .from('users')
-      .select('*, user_profile_details(*)') as any)
+      .select('*') as any)
       .contains('role', roleNumberArray);
 
     if (error) {
       console.error('Error fetching users by role:', error);
       return [];
+    }
+
+    if (data && data.length > 0) {
+      await attachUserProfileDetails(data);
     }
 
     return (data || []).map((user: any) => transformUserProfile(user));
@@ -38,7 +69,7 @@ export const getUsersByHierarchy = async (hierarchy: any) => {
   }
 
   try {
-    let query = supabase.from('users').select('*, user_profile_details(*)');
+    let query = supabase.from('users').select('*');
 
     if (hierarchy.state) query = query.eq('state', hierarchy.state);
     if (hierarchy.city) query = query.eq('city', hierarchy.city);
@@ -50,6 +81,10 @@ export const getUsersByHierarchy = async (hierarchy: any) => {
     if (error) {
       console.error('Error fetching users by hierarchy:', error);
       return [];
+    }
+
+    if (data && data.length > 0) {
+      await attachUserProfileDetails(data);
     }
 
     return (data || []).map((user: any) => transformUserProfile(user));
@@ -237,8 +272,9 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
 export const getUsersByCenterNames = async (centerNames: string[]) => {
   if (!supabase || !centerNames.length) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').in('center', centerNames);
+    const { data, error } = await supabase.from('users').select('*').in('center', centerNames);
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching users by center names:', error);
@@ -249,8 +285,9 @@ export const getUsersByCenterNames = async (centerNames: string[]) => {
 export const getUsersByCenterIds = async (centerIds: string[]) => {
   if (!supabase || !centerIds.length) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').in('center_id', centerIds);
+    const { data, error } = await supabase.from('users').select('*').in('center_id', centerIds);
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching users by center IDs:', error);
@@ -261,8 +298,9 @@ export const getUsersByCenterIds = async (centerIds: string[]) => {
 export const getUsersByZone = async (zone: string) => {
   if (!supabase || !zone) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').eq('assigned_zone', zone);
+    const { data, error } = await supabase.from('users').select('*').eq('assigned_zone', zone);
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching users by zone:', error);
@@ -273,8 +311,9 @@ export const getUsersByZone = async (zone: string) => {
 export const getUsersByState = async (state: string) => {
   if (!supabase || !state) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').eq('state', state);
+    const { data, error } = await supabase.from('users').select('*').eq('state', state);
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching users by state:', error);
@@ -285,8 +324,9 @@ export const getUsersByState = async (state: string) => {
 export const getUsersByCity = async (city: string) => {
   if (!supabase || !city) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').eq('city', city);
+    const { data, error } = await supabase.from('users').select('*').eq('city', city);
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching users by city:', error);
@@ -297,8 +337,9 @@ export const getUsersByCity = async (city: string) => {
 export const getPendingUsers = async () => {
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase.from('users').select('*, user_profile_details(*)').eq('verification_status', 'pending');
+    const { data, error } = await supabase.from('users').select('*').eq('verification_status', 'pending');
     if (error) throw error;
+    if (data && data.length > 0) await attachUserProfileDetails(data);
     return (data || []).map((user: any) => transformUserProfile(user));
   } catch (error) {
     console.error('Error fetching pending users:', error);
