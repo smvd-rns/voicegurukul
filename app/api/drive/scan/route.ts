@@ -45,8 +45,8 @@ async function scanFolderRecursively(folderId: string, accessToken: string): Pro
 
         do {
             const query = `'${currentFolderId}' in parents and trashed = false`;
-            const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,mimeType,size,webViewLink,iconLink,thumbnailLink)&pageSize=100&includeItemsFromAllDrives=true&supportsAllDrives=true${pageToken ? `&pageToken=${pageToken}` : ''}`;
-            const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+            const apiUrl: string = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,mimeType,size,webViewLink,iconLink,thumbnailLink)&pageSize=100&includeItemsFromAllDrives=true&supportsAllDrives=true${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
+            const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
             if (!res.ok) { const e = await res.json(); throw new Error(`Drive API error: ${e.error?.message}`); }
             const data = await res.json();
             for (const item of (data.files || [])) {
