@@ -1348,8 +1348,8 @@ export default function ProfilePage() {
       }
 
       const results = await Promise.all(promises);
-      if (results[0].error) throw new Error(results[0].error);
-      if (hasSpiritualChanges && results[1].error) throw new Error(results[1].error);
+      if (results[0]?.error) throw new Error(results[0].details || results[0].error);
+      if (hasSpiritualChanges && results[1]?.error) throw new Error(results[1].details || results[1].error);
 
       setSuccess(hasSpiritualChanges ? 'Profile updated! Spiritual changes pending approval.' : 'Profile updated successfully!');
       await refreshUserData();

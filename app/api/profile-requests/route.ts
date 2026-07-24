@@ -7,12 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost';
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'service-role-key';
 
         const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
             auth: { autoRefreshToken: false, persistSession: false }
@@ -45,8 +41,8 @@ export async function POST(request: Request) {
         const templeName = h.currentTemple?.name || (typeof h.currentTemple === 'string' ? h.currentTemple : null);
         const centerName = h.currentCenter?.name || (typeof h.currentCenter === 'string' ? h.currentCenter : null);
 
-        // Always create a new request to allow multiple pending updates
-        const result = await supabaseAdmin
+        // Try inserting with temple_name and center_name first
+        let result = await supabaseAdmin
             .from('profile_update_requests')
             .insert({
                 user_id: user.id,
@@ -59,9 +55,28 @@ export async function POST(request: Request) {
             .select()
             .single();
 
+        // Fallback: If table schema missing temple_name or center_name columns on self-hosted DB
+        if (result.error) {
+            console.warn('Retrying profile request insert without temple_name and center_name due to error:', result.error.message);
+            const fallbackResult = await supabaseAdmin
+                .from('profile_update_requests')
+                .insert({
+                    user_id: user.id,
+                    requested_changes: requestedChanges,
+                    current_values: currentValues,
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (!fallbackResult.error) {
+                result = fallbackResult;
+            }
+        }
+
         if (result.error) {
             console.error('Error saving profile request:', result.error);
-            return NextResponse.json({ error: 'Failed to save request' }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to save request', details: result.error.message || result.error }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, data: result.data });

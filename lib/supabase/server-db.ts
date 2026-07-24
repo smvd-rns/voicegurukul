@@ -228,7 +228,11 @@ class ServerPgQueryBuilder {
                 for (const row of rows) {
                     const rowVals = [];
                     for (const col of columns) {
-                        params.push(row[col]);
+                        let val = row[col];
+                        if (val !== null && typeof val === 'object') {
+                            val = JSON.stringify(val);
+                        }
+                        params.push(val);
                         rowVals.push(`$${paramIdx++}`);
                     }
                     valStrings.push(`(${rowVals.join(', ')})`);
