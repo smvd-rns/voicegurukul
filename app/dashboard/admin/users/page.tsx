@@ -271,7 +271,7 @@ export default function UsersPage() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
         }
       });
       

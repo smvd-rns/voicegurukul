@@ -289,7 +289,7 @@ export default function PoliciesPage() {
             const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${tokenData.accessToken}`,
+                    ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
                     'Content-Type': 'application/json; charset=UTF-8',
                     'X-Upload-Content-Type': selectedFile.type || 'application/octet-stream',
                     'X-Upload-Content-Length': selectedFile.size.toString()
@@ -307,7 +307,7 @@ export default function PoliciesPage() {
             // Fetch extra info if links are missing
             if (!driveData.webViewLink) {
                 const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
-                    headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+                    headers: tokenData.accessToken ? { ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}) } : undefined
                 });
                 if (extraRes.ok) {
                     const extraData = await extraRes.json();

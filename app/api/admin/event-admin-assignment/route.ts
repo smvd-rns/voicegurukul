@@ -5,19 +5,13 @@ import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 export async function POST(request: Request) {
     try {
         // 1. Auth Check (Super Admin only)
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
 
         const adminUser = await getAuthUserFromRequest(request);
         if (!adminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient();
 
         // Check if Super Admin
         const { data: adminProfile } = await supabase

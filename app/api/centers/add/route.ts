@@ -34,14 +34,12 @@ export async function POST(request: Request) {
     }
 
     // Rate Limiting
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     const user = await getAuthUserFromRequest(request);
     const userId = user?.id || null;
     let isVerified = false;
 
     if (userId) {
-        const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
+        const cleanClient = createClient();
         // Fetch user role to determine verification status and temple scoping for MD
         const { data: profile } = await cleanClient
           .from('users')
@@ -124,49 +122,7 @@ export async function POST(request: Request) {
     if (address) address = sanitizeInput(address);
     if (contact) contact = sanitizeInput(contact);
 
-
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase is not initialized. Please check your environment variables.');
-    }
-
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    // Use Service Role Key if available (Restricted RLS), otherwise fallback to Anon Key (Public RLS)
-    const keyToUse = serviceRoleKey || supabaseAnonKey;
-
-    const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      const fetchHeaders = new Headers(init?.headers);
-
-      if (serviceRoleKey) {
-        fetchHeaders.set('apikey', serviceRoleKey);
-        fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-      } else {
-        const authHeader = request.headers.get('authorization');
-        const accessToken = authHeader?.replace('Bearer ', '');
-        if (accessToken) {
-          fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
-        }
-        fetchHeaders.set('apikey', supabaseAnonKey);
-      }
-
-      fetchHeaders.set('Content-Type', 'application/json');
-
-      return fetch(input, {
-        ...init,
-        headers: fetchHeaders,
-      });
-    };
-
-    const authenticatedClient = createClient(supabaseUrl, keyToUse, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-      global: {
-        fetch: customFetch,
-      },
-    });
+    const authenticatedClient = createClient();
 
     const trimmedName = name.trim();
     const trimmedState = state.trim();
@@ -262,9 +218,6 @@ export async function POST(request: Request) {
 
       console.error('Supabase insert error:', error);
 
-      if (error.message?.includes('does not exist') || error.code === '42P01') {
-        throw new Error('Centers table does not exist. Please run the Supabase schema SQL file (supabase-schema.sql) in your Supabase SQL Editor first.');
-      }
       if (error.code === '42501' || error.message?.includes('permission denied')) {
         throw new Error('Permission denied. Please check your Supabase RLS policies or configure SUPABASE_SERVICE_ROLE_KEY.');
       }
@@ -275,11 +228,9 @@ export async function POST(request: Request) {
     const newCenterId = insertedData?.id;
 
     // 2. Sync Roles & Hierarchy for new assignees
-    if (newCenterId && serviceRoleKey) {
+    if (newCenterId) {
       // We use a separate admin client to ensure we can update other users' profiles
-      const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false, autoRefreshToken: false }
-      });
+      const adminClient = createClient();
 
       const updateUserRoleAndHierarchy = async (targetUserId: string, roleId: number, roleName: string) => {
         if (!targetUserId) return;
@@ -380,8 +331,6 @@ export async function POST(request: Request) {
       errorMessage = 'Permission denied. Unable to add center.';
     } else if (errorString.includes('not initialized')) {
       status = 500;
-    } else if (errorString.includes('relation') && errorString.includes('does not exist')) {
-      errorMessage = 'Centers table does not exist. Please run the Supabase schema SQL file.';
     }
 
     return NextResponse.json({

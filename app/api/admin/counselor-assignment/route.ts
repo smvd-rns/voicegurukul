@@ -6,20 +6,13 @@ import { normalizeRoleFromFirestore } from '@/lib/utils/roles';
 export async function POST(request: Request) {
     try {
         // 1. Auth Check (Super Admin only for now, or those with user management permissions)
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
 
         const adminUser = await getAuthUserFromRequest(request);
         if (!adminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient();
 
         // Check admin permissions (simplified check - enhance as needed)
         const { data: adminProfile } = await supabase

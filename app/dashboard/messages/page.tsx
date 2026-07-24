@@ -44,13 +44,13 @@ export default function MessagesPage() {
   const togglePin = async (messageId: string, currentlyPinned: boolean) => {
     try {
       const { data: { session } } = await supabase!.auth.getSession();
-      if (!session) return;
+      
 
       const response = await fetch('/api/messages/pin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          ...(session?.access_token ? { "Authorization": `Bearer ${session?.access_token}` } : {}),
         },
         body: JSON.stringify({
           messageId,

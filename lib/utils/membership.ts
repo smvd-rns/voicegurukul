@@ -1,10 +1,8 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-
 /**
  * Generates a membership ID for a user based on their profile data.
  * This is an atomic operation using the database RPC function.
  */
-export async function generateMembershipIdForUser(supabaseAdmin: SupabaseClient, userId: string) {
+export async function generateMembershipIdForUser(supabaseAdmin: any, userId: string) {
     try {
         // Fetch user data needed for ID generation
         const { data: userData, error: userError } = await supabaseAdmin

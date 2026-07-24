@@ -4,13 +4,11 @@ import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { validateTextField, validateMessageField, createErrorResponse } from '@/lib/utils/api-validation';
 
 // Initialize Supabase client with service role key for privileged operations
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function POST(request: NextRequest) {
     try {
         // Create Supabase client with service role for user verification
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        const supabaseAdmin = createClient();
 
         // Get user from request
         const user = await getAuthUserFromRequest(request);
@@ -187,7 +185,6 @@ export async function POST(request: NextRequest) {
         }
 
         let allUserIds = (users || []).map((u: any) => u.id);
-
 
         // Get the highest role number for the sender
         const senderRole = Math.max(...userRoles.filter((r: any) => typeof r === 'number'));

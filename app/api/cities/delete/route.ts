@@ -5,10 +5,6 @@ export async function POST(request: Request) {
   try {
     const { state, cityName } = await request.json();
     
-    if (!state || !cityName) {
-      return NextResponse.json({ error: 'State and city name are required' }, { status: 400 });
-    }
-    
     await deleteCityFromSupabase(state, cityName);
     
     return NextResponse.json({ success: true });

@@ -35,11 +35,11 @@ export default function SentMessagesPage() {
     const fetchSentMessages = useCallback(async () => {
         try {
             const { data: { session } } = await supabase!.auth.getSession();
-            if (!session) return;
+            
 
             const response = await fetch('/api/broadcast/sent', {
                 headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
+                    ...(session?.access_token ? { "Authorization": `Bearer ${session?.access_token}` } : {}),
                 },
             });
 
@@ -90,12 +90,12 @@ export default function SentMessagesPage() {
     const handleDelete = async (messageId: string) => {
         try {
             const { data: { session } } = await supabase!.auth.getSession();
-            if (!session) return;
+            
 
             const response = await fetch(`/api/broadcast/${messageId}/delete`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
+                    ...(session?.access_token ? { "Authorization": `Bearer ${session?.access_token}` } : {}),
                 },
             });
 

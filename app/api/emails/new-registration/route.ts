@@ -5,6 +5,7 @@ import crypto from 'crypto';
 
 export async function POST(request: Request) {
     try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -16,6 +17,16 @@ export async function POST(request: Request) {
 
         if (!newUser) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Ensure hierarchy is parsed if returned as a JSON string from DB
+        if (newUser.hierarchy && typeof newUser.hierarchy === 'string') {
+            try {
+                newUser.hierarchy = JSON.parse(newUser.hierarchy);
+            } catch (e) {
+                console.error('Failed to parse user hierarchy in new-registration email script', e);
+                newUser.hierarchy = {};
+            }
         }
 
         // Determine recipients based on hierarchy
@@ -82,8 +93,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true, emailsSent: 0, message: 'No recipients found for notification' });
         }
 
-
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
         
         // Simple secure token for 1-click approve
         const secret = process.env.EMAIL_APPROVAL_SECRET || 'fallback_secret_123';

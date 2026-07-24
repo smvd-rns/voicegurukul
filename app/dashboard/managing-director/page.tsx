@@ -430,8 +430,14 @@ export default function ManagingDirectorDashboard() {
 
         try {
             // Get session for API calls
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
+            }
+            
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
             // Run major count queries in parallel
             const [centersCount, devoteesCount, newRequestsStats] = await Promise.all([
@@ -455,21 +461,34 @@ export default function ManagingDirectorDashboard() {
                     }
 
                     const allPending = data || [];
+                    const assignedNames = assignedTemples.map(t => t.name.trim().toLowerCase());
+
+                    // Filter pending registrations to MD's assigned temples
+                    const managedPending = allPending.filter((u: any) => {
+                        const uH = u.hierarchy as any;
+                        const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
+                        return assignedNames.includes(uTemple.trim().toLowerCase());
+                    });
 
                     // Filter for current temple
-                    const countForCurrent = allPending.filter((u: any) => {
+                    const countForCurrent = managedPending.filter((u: any) => {
                         const uH = u.hierarchy as any;
                         const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
-                        return uTemple === tName;
+                        return (uTemple || '').trim().toLowerCase() === (tName || '').trim().toLowerCase();
                     }).length;
 
-                    // Breakdown for all temples
+                    // Breakdown for assigned temples
                     const countsMap: Record<string, number> = {};
-                    allPending.forEach((u: any) => {
+                    managedPending.forEach((u: any) => {
                         const uH = u.hierarchy as any;
                         const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
-                        if (uTemple) {
-                            countsMap[uTemple] = (countsMap[uTemple] || 0) + 1;
+                        
+                        // Try to find the properly cased name from assignedTemples to keep the UI looking nice
+                        const matchedTemple = assignedTemples.find(t => t.name.trim().toLowerCase() === (uTemple || '').trim().toLowerCase());
+                        const displayKey = matchedTemple ? matchedTemple.name : uTemple;
+                        
+                        if (displayKey) {
+                            countsMap[displayKey] = (countsMap[displayKey] || 0) + 1;
                         }
                     });
 
@@ -484,45 +503,60 @@ export default function ManagingDirectorDashboard() {
             const newRequestsCount = newRequestsStats.count;
             const regBreakdown = newRequestsStats.breakdown;
 
-            // Fetch ALL pending profile requests once to build the breakdown (Efficient for MDs)
+            // Fetch ALL pending profile requests once to build the breakdown (Filtered to MD's assigned temples)
             let pendingProfilesCount = 0;
             let breakdown: { name: string, count: number }[] = [];
 
-            if (token) {
-                try {
-                    // Fetch WITHOUT temple filter to get all managed requests
-                    const res = await fetch(`/api/profile-requests?status=pending&_t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
+            try {
+                // Fetch requests
+                const res = await fetch(`/api/profile-requests?status=pending&_t=${Date.now()}`, {
+                    headers
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const allPending = data.data || [];
+                    
+                    // Get MD's assigned temples names list
+                    const assignedNames = assignedTemples.map(t => t.name.trim().toLowerCase());
+
+                    // Filter pending requests to only those belonging to MD's assigned temples
+                    const managedPending = allPending.filter((req: any) => {
+                        // Primary: Use stored temple_name column
+                        const tFromCol = (req.temple_name || '').trim().toLowerCase();
+                        if (tFromCol) return assignedNames.includes(tFromCol);
+                        // Fallback: Use joined user hierarchy (for old rows)
+                        const h = req.user?.hierarchy;
+                        const reqTemple = h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '');
+                        return assignedNames.includes(reqTemple.trim().toLowerCase());
                     });
-                    const data = await res.json();
 
-                    if (data.success) {
-                        const allPending = data.data || [];
+                    // Calculate count for selected temple
+                    pendingProfilesCount = managedPending.filter((req: any) => {
+                        const tFromCol = (req.temple_name || '').trim().toLowerCase();
+                        if (tFromCol) return tFromCol === tName.trim().toLowerCase();
+                        const h = req.user?.hierarchy;
+                        const reqTemple = h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '');
+                        return reqTemple.trim().toLowerCase() === tName.trim().toLowerCase();
+                    }).length;
 
-                        // Calculate count for selected temple
-                        pendingProfilesCount = allPending.filter((req: any) => {
-                            const h = req.user?.hierarchy;
-                            const reqTemple = h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '');
-                            return reqTemple === tName;
-                        }).length;
+                    // Calculate breakdown for assigned temples
+                    const counts: Record<string, number> = {};
+                    managedPending.forEach((req: any) => {
+                        const tFromCol = (req.temple_name || '').trim().toLowerCase();
+                        const h = req.user?.hierarchy;
+                        const reqTemple = tFromCol || (h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '')).trim().toLowerCase();
+                        if (reqTemple) {
+                            counts[reqTemple] = (counts[reqTemple] || 0) + 1;
+                        }
+                    });
 
-                        // Calculate breakdown for all temples
-                        const counts: Record<string, number> = {};
-                        allPending.forEach((req: any) => {
-                            const h = req.user?.hierarchy;
-                            const reqTemple = h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '');
-                            if (reqTemple) {
-                                counts[reqTemple] = (counts[reqTemple] || 0) + 1;
-                            }
-                        });
-
-                        breakdown = Object.entries(counts)
-                            .map(([name, count]) => ({ name, count }))
-                            .sort((a, b) => b.count - a.count);
-                    }
-                } catch (err) {
-                    console.error('[Stats] Profile Requests Fetch Error:', err);
+                    breakdown = Object.entries(counts)
+                        .map(([name, count]) => ({ name, count }))
+                        .sort((a, b) => b.count - a.count);
                 }
+            } catch (err) {
+                console.error('[Stats] Profile Requests Fetch Error:', err);
             }
 
             setStats({
@@ -539,7 +573,7 @@ export default function ManagingDirectorDashboard() {
             console.error('Error loading stats:', error);
             setStats(prev => ({ ...prev, loading: false }));
         }
-    }, []);
+    }, [supabase, assignedTemples]);
 
     const loadCenters = useCallback(async () => {
         if (!supabase) return;
@@ -935,7 +969,10 @@ export default function ManagingDirectorDashboard() {
             !currentCenterIds.every((id: any) => pendingCenters.includes(id))
         );
 
-        const adminChanged = Number(currentAdminRole) !== Number(pendingAdminRole);
+        // Normalize: treat undefined and null both as "no role"
+        const normalizedCurrentAdmin = currentAdminRole != null ? Number(currentAdminRole) : null;
+        const normalizedPendingAdmin = pendingAdminRole != null ? Number(pendingAdminRole) : null;
+        const adminChanged = normalizedCurrentAdmin !== normalizedPendingAdmin;
         const spiritualChanged = (currentSpiritualRole ? Number(currentSpiritualRole) : 'none') !== pendingSpiritualRole;
 
         if (!adminChanged && !spiritualChanged && !centersChanged) {
@@ -956,7 +993,7 @@ export default function ManagingDirectorDashboard() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                        ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
                     },
                     body: JSON.stringify({
                         userId: selectedUser.id,
@@ -975,7 +1012,7 @@ export default function ManagingDirectorDashboard() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                        ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
                     },
                     body: JSON.stringify({
                         userId: selectedUser.id,
@@ -1006,7 +1043,7 @@ export default function ManagingDirectorDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     userId: counselorActionUser.id,
@@ -1070,7 +1107,7 @@ export default function ManagingDirectorDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -1105,7 +1142,7 @@ export default function ManagingDirectorDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -1139,7 +1176,7 @@ export default function ManagingDirectorDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
                 },
                 body: JSON.stringify({
                     userId,
@@ -1192,12 +1229,17 @@ export default function ManagingDirectorDashboard() {
         if (!supabase) return;
         setLoadingRequests(true);
         try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            if (!token) return;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
+            }
+            
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const response = await fetch(`/api/profile-requests?status=${approvalStatus}&temple=${encodeURIComponent(currentTemple)}&_t=${Date.now()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers
             });
             const data = await response.json();
 
@@ -1336,21 +1378,22 @@ export default function ManagingDirectorDashboard() {
     const handleApprovalAction = async (id: string, status: 'approved' | 'rejected', bulkIds?: string[]) => {
         if (!supabase) return;
         try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            if (!token) {
-                toast.error('Session expired. Please login again.');
-                return;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
             }
+            
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
             // Bulk Action logic
             if (bulkIds && bulkIds.length > 0) {
                 const response = await fetch('/api/profile-requests/batch', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         requestIds: bulkIds,
                         status,
@@ -1374,10 +1417,7 @@ export default function ManagingDirectorDashboard() {
             // Single Action logic
             const response = await fetch(`/api/profile-requests/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({
                     status: status,
                     feedback: feedback,
@@ -1492,6 +1532,10 @@ export default function ManagingDirectorDashboard() {
     };
 
     // Main Render
+    if (!userData || !isMD) {
+        return null;
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 pb-20 relative overflow-x-hidden">
             {/* Premium Mesh Gradient Background */}

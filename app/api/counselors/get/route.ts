@@ -10,48 +10,7 @@ export async function GET(request: Request) {
     const search = searchParams.get('search') || '';
     const ashram = searchParams.get('ashram') || '';
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase is not initialized. Please check your environment variables.');
-    }
-
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const keyToUse = serviceRoleKey || supabaseAnonKey;
-
-    const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      const fetchHeaders = new Headers(init?.headers);
-
-      if (serviceRoleKey) {
-        fetchHeaders.set('apikey', serviceRoleKey);
-        fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-      } else {
-        const authHeader = request.headers.get('authorization');
-        const accessToken = authHeader?.replace('Bearer ', '');
-        if (accessToken) {
-          fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
-        }
-        fetchHeaders.set('apikey', supabaseAnonKey);
-      }
-
-      fetchHeaders.set('Content-Type', 'application/json');
-
-      return fetch(input, {
-        ...init,
-        headers: fetchHeaders,
-      });
-    };
-
-    const supabase = createClient(supabaseUrl, keyToUse, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-      global: {
-        fetch: customFetch,
-      },
-    });
+    const supabase = createClient();
 
     // Check if user is authenticated to decide whether to show sensitive details
     const user = await getAuthUserFromRequest(request);

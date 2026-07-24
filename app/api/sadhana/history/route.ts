@@ -42,10 +42,6 @@ export async function GET(request: Request) {
                 .eq('id', targetUserId)
                 .single();
 
-            if (!requesterProfile || !targetProfile) {
-                return NextResponse.json({ error: 'User profiles not found' }, { status: 404 });
-            }
-
             // check permissions using role logic
             let isAuthorized = canAdminManageTarget(requesterProfile.role, targetProfile.role, requester.id, targetUserId);
 

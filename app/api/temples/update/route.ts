@@ -21,31 +21,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Name, State, and City are required' }, { status: 400 });
         }
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
         const authHeader = request.headers.get('authorization');
         const accessToken = authHeader?.replace('Bearer ', '');
 
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        const keyToUse = serviceRoleKey || supabaseAnonKey;
-
-        const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-            const fetchHeaders = new Headers(init?.headers);
-            if (serviceRoleKey) {
-                fetchHeaders.set('apikey', serviceRoleKey);
-                fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-            } else {
-                if (accessToken) fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
-                fetchHeaders.set('apikey', supabaseAnonKey);
-            }
-            fetchHeaders.set('Content-Type', 'application/json');
-            return fetch(input, { ...init, headers: fetchHeaders });
-        };
-
-        const authenticatedClient = createClient(supabaseUrl, keyToUse, {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: { fetch: customFetch },
-        });
+        const authenticatedClient = createClient();
 
         // 1. Fetch current temple state for role cleanup
         const { data: oldTemple } = await authenticatedClient
@@ -117,10 +96,11 @@ export async function POST(request: Request) {
 
                     if (user) {
                         let currentRoles = Array.isArray(user.role) ? user.role : [user.role];
-                        if (!currentRoles.includes(config.role)) {
+                        const roleNums = currentRoles.map(Number);
+                        if (!roleNums.includes(config.role)) {
                             await authenticatedClient
                                 .from('users')
-                                .update({ role: [...currentRoles, config.role] })
+                                .update({ role: [...roleNums, config.role], updated_at: new Date().toISOString() })
                                 .eq('id', config.newId);
                         }
                     }
@@ -132,14 +112,18 @@ export async function POST(request: Request) {
             // B. Revoke role from old assignee if they no longer hold it for any temple
             if (config.oldId && config.oldId !== config.newId) {
                 try {
-                    // Check if they hold this role for any OTHER temple
-                    const { count } = await authenticatedClient
-                        .from('temples')
-                        .select('id', { count: 'exact', head: true })
-                        .eq(config.column, config.oldId);
+                    // Use raw SQL COUNT since the custom query builder doesn't support { count: 'exact' }
+                    const { query: rawQuery } = await import('@/lib/db');
+                    const countRes = await rawQuery(
+                        `SELECT COUNT(*) FROM temples WHERE ${config.column} = $1`,
+                        [config.oldId]
+                    );
+                    const remainingCount = parseInt(countRes.rows[0]?.count ?? '0', 10);
 
-                    // If count is 0, they no longer hold this role for any temple
-                    if (count === 0) {
+                    console.log(`[Temple Update] ${config.column} old holder ${config.oldId} still in ${remainingCount} other temple(s)`);
+
+                    // If count is 0, they no longer hold this role for any temple → revoke
+                    if (remainingCount === 0) {
                         const { data: user } = await authenticatedClient
                             .from('users')
                             .select('role')
@@ -147,13 +131,15 @@ export async function POST(request: Request) {
                             .single();
 
                         if (user) {
-                            let currentRoles = Array.isArray(user.role) ? user.role : [user.role];
-                            if (currentRoles.includes(config.role)) {
-                                const newRoles = (currentRoles as any[]).filter((r: any) => r !== config.role);
+                            const currentRoles = Array.isArray(user.role) ? user.role : [user.role];
+                            const roleNums = currentRoles.map(Number);
+                            if (roleNums.includes(config.role)) {
+                                const newRoles = roleNums.filter((r: number) => r !== config.role);
                                 await authenticatedClient
                                     .from('users')
-                                    .update({ role: newRoles })
+                                    .update({ role: newRoles.length > 0 ? newRoles : [1], updated_at: new Date().toISOString() })
                                     .eq('id', config.oldId);
+                                console.log(`[Temple Update] ✅ Revoked role ${config.role} from user ${config.oldId} → new roles:`, newRoles.length > 0 ? newRoles : [1]);
                             }
                         }
                     }

@@ -120,16 +120,19 @@ class ServerPgQueryBuilder {
     }
 
     or(clause: string) {
+        const parseCol = (c: string) => c.replace(/->>([a-zA-Z0-9_]+)/g, "->>'$1'").replace(/->([a-zA-Z0-9_]+)/g, "->'$1'");
         const parts = clause.split(',');
         const orSqlParts: string[] = [];
         for (const part of parts) {
-            const match = part.trim().match(/^([a-zA-Z0-9_]+)\.([a-z]+)\.(.+)$/);
+            // Updated regex to support -> and ->> in column names
+            const match = part.trim().match(/^([a-zA-Z0-9_>-]+)\.([a-z]+)\.(.+)$/);
             if (match) {
                 const [, col, op, val] = match;
+                const parsedCol = parseCol(col);
                 if (op === 'eq') {
-                    orSqlParts.push(`${col} = '${val.replace(/'/g, "''")}'`);
+                    orSqlParts.push(`${parsedCol} = '${val.replace(/'/g, "''")}'`);
                 } else if (op === 'is') {
-                    orSqlParts.push(`${col} IS ${val}`);
+                    orSqlParts.push(`${parsedCol} IS ${val}`);
                 }
             }
         }
@@ -253,7 +256,14 @@ class ServerPgQueryBuilder {
             } else if (this.method === 'update') {
                 const setClauses = [];
                 for (const col of Object.keys(this.updateData)) {
-                    params.push(this.updateData[col]);
+                    let val = this.updateData[col];
+                    // Only JSON.stringify plain objects (not arrays).
+                    // Arrays are passed natively so pg can handle integer[] columns (like 'role').
+                    // jsonb columns that need JSON arrays should pass pre-stringified values.
+                    if (val !== null && val !== undefined && typeof val === 'object' && !Array.isArray(val)) {
+                        val = JSON.stringify(val);
+                    }
+                    params.push(val);
                     setClauses.push(`${col} = $${paramIdx++}`);
                 }
                 sql = `UPDATE ${this.table} SET ${setClauses.join(', ')}`;

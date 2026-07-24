@@ -1,15 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { supabase } from './config';
 import { SadhanaReport } from '@/types';
-
-// Singleton client for Sadhana DB
-let _sadhanaClient: ReturnType<typeof createClient> | null = null;
-
-const cleanEnvVar = (val: string | undefined) => {
-  if (!val) return undefined;
-  // Remove whitespace and surrounding quotes
-  return val.trim().replace(/^["']|["']$/g, '');
-};
 
 const getSadhanaClient = () => {
   return supabase;

@@ -8,10 +8,6 @@ export async function POST(request: Request) {
   try {
     const { nextGateway, userId } = await request.json();
 
-    if (!supabase || !userId) {
-      return NextResponse.json({ error: 'Initialization error' }, { status: 500 });
-    }
-
     // 1. Verify User Role 8
     const { data: user, error: userError } = await supabase
       .from('users')

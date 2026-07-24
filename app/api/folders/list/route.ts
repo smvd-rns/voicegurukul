@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
         let query = sadhanaDbAdmin.from('folders')
             .select('id, name, parent_id, user_id');
 
-
         if (parentId && parentId !== 'root') {
             query = query.eq('parent_id', parentId);
         } else {

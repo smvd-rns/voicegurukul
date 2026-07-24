@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 });
         }
 
-
         const sadhanaDbAdmin = getAdminSadhanaSupabase();
         if (!sadhanaDbAdmin) {
             console.error('[Folder Delete API] Failed to initialize Sadhana DB client');

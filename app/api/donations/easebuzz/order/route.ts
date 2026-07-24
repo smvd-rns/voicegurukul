@@ -4,6 +4,7 @@ import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
 
 export async function POST(req: Request) {
   try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
     const body = await req.json();
     const { amount, donorName, donorEmail, donorMobile, donorAddress, donorPan, targetUserId, slug, center, temple, ashram } = body;
 
@@ -18,7 +19,6 @@ export async function POST(req: Request) {
 
     const txnid = `EBD_${Date.now()}_${targetUserId.substring(0, 5)}`;
     const productInfo = `Donation via ${slug}`;
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const surl = `${baseUrl}/api/donations/easebuzz/verify?status=success&slug=${slug}`;
     const furl = `${baseUrl}/api/donations/easebuzz/verify?status=failed&slug=${slug}`;
 

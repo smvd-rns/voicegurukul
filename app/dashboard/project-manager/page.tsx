@@ -70,10 +70,15 @@ const MANAGEABLE_ROLES = [
     { label: 'Prerna Incharge', value: 33 },
 ];
 
-const CENTER_POST_OPTIONS = [
-    { label: 'Member / No Post', value: 1 },
-    ...MANAGEABLE_ROLES.filter(r => r.value !== 1 && r.value !== 'royal') as { label: string; value: number }[]
-];
+// Roles a Project Manager is allowed to assign at center level (matches Service Team roles)
+const PM_ASSIGNABLE_ROLE_IDS = [1, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+
+const CENTER_POST_OPTIONS = MANAGEABLE_ROLES.filter(r =>
+    PM_ASSIGNABLE_ROLE_IDS.includes(r.value as number)
+).map(r => r.value === 1
+    ? { label: 'Member / No Post', value: 1 }
+    : { label: r.label, value: r.value as number }
+);
 
 const CAMP_OPTIONS = [
     { label: 'DYS', value: 'campDys' },
@@ -404,6 +409,8 @@ export default function ProjectManagerDashboard() {
 
     const roleToColumnMap: Record<number, string> = {
         17: 'oc_id',
+        20: 'care_giver_id',
+        21: 'youth_preacher_id',
         22: 'internal_manager_id',
         23: 'preaching_coordinator_id',
         24: 'morning_program_in_charge_id',
@@ -412,6 +419,7 @@ export default function ProjectManagerDashboard() {
         27: 'accountant_id',
         28: 'kitchen_head_id',
         29: 'study_in_charge_id',
+        30: 'event_admin_id',
         31: 'grihstha_counselor_id',
         32: 'easy_incharge_id',
         33: 'prerna_incharge_id'
@@ -450,7 +458,7 @@ export default function ProjectManagerDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     centerId: currentCenterData.id,
@@ -487,7 +495,7 @@ export default function ProjectManagerDashboard() {
             const token = session.data.session?.access_token;
             const response = await fetch('/api/centers/structure', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json', ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
                 body: JSON.stringify({ centerId: currentCenterData.id, roleValue, userIds })
             });
             const result = await response.json();
@@ -571,79 +579,77 @@ export default function ProjectManagerDashboard() {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
 
-        if (token) {
-            try {
-                // Fetch ALL pending requests once via API to handle RLS/Roles correctly
-                const res = await fetch('/api/profile-requests?status=pending', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const json = await res.json();
-                if (json.success) {
-                    const allPending = json.data;
-                    console.log(`PM Dashboard: Fetched ${allPending.length} pending requests for count context.`);
+        try {
+            // Fetch ALL pending requests once via API to handle RLS/Roles correctly
+            const res = await fetch('/api/profile-requests?status=pending', {
+                headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
+            });
+            const json = await res.json();
+            if (json.success) {
+                const allPending = json.data;
+                console.log(`PM Dashboard: Fetched ${allPending.length} pending requests for count context.`);
 
-                    const pendingMap = new Map<string, number>();
+                const pendingMap = new Map<string, number>();
 
-                    // --- NEW: Pending Registration Counts ---
-                    // Group users by current_center where verification_status is 'pending'
-                    const { data: regStats, error: regError } = await supabase
-                        .from('users')
-                        .select('current_center, center, hierarchy')
-                        .eq('verification_status', 'pending');
+                // --- NEW: Pending Registration Counts ---
+                // Group users by current_center where verification_status is 'pending'
+                const { data: regStats, error: regError } = await supabase
+                    .from('users')
+                    .select('current_center, center, hierarchy')
+                    .eq('verification_status', 'pending');
 
-                    const centersWithRegCounts: { name: string, _count: number }[] = [];
-                    if (!regError && regStats) {
-                        const counts: Record<string, number> = {};
-                        (regStats as any[]).forEach((u: any) => {
-                            const uH = u.hierarchy as any;
-                            const cName = u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '';
-                            if (cName) {
-                                counts[cName] = (counts[cName] || 0) + 1;
-                            }
-                        });
-                        Object.entries(counts).forEach(([name, count]) => {
-                            centersWithRegCounts.push({ name, _count: count });
-                        });
-                    }
-
-                    (allPending || []).forEach((req: any) => {
-                        // Determine center for this request
-                        let cName = req.center_name;
-                        if (!cName) {
-                            const h = req.user?.hierarchy;
-                            cName = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
-                        }
+                const centersWithRegCounts: { name: string, _count: number }[] = [];
+                if (!regError && regStats) {
+                    const counts: Record<string, number> = {};
+                    (regStats as any[]).forEach((u: any) => {
+                        const uH = u.hierarchy as any;
+                        const cName = u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '';
                         if (cName) {
-                            // Normalize keys for map (trimmed, lowercase)
-                            const norm = cName.trim().toLowerCase();
-                            pendingMap.set(norm, (pendingMap.get(norm) || 0) + 1);
+                            counts[cName] = (counts[cName] || 0) + 1;
                         }
                     });
-
-                    const centersWithCounts = centersToMap.map(center => {
-                        // Normalize lookup key
-                        const lookup = center.name.trim().toLowerCase();
-
-                        // Calculate registration count for this center
-                        const regCount = centersWithRegCounts.find(dg =>
-                            dg.name.trim().toLowerCase() === lookup
-                        )?._count || 0;
-
-                        return {
-                            ...center,
-                            pendingCount: pendingMap.get(lookup) || 0,
-                            pendingRegCount: regCount
-                        };
+                    Object.entries(counts).forEach(([name, count]) => {
+                        centersWithRegCounts.push({ name, _count: count });
                     });
-
-                    setManagedCenters(centersWithCounts);
-                    localStorage.setItem('pm_managed_centers', JSON.stringify(centersWithCounts));
-                } else {
-                    console.warn('PM Dashboard: Failed to fetch pending counts from API', json.error);
                 }
-            } catch (err) {
-                console.error('PM Dashboard: Exception fetching pending counts', err);
+
+                (allPending || []).forEach((req: any) => {
+                    // Determine center for this request
+                    let cName = req.center_name;
+                    if (!cName) {
+                        const h = req.user?.hierarchy;
+                        cName = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
+                    }
+                    if (cName) {
+                        // Normalize keys for map (trimmed, lowercase)
+                        const norm = cName.trim().toLowerCase();
+                        pendingMap.set(norm, (pendingMap.get(norm) || 0) + 1);
+                    }
+                });
+
+                const centersWithCounts = centersToMap.map(center => {
+                    // Normalize lookup key
+                    const lookup = center.name.trim().toLowerCase();
+
+                    // Calculate registration count for this center
+                    const regCount = centersWithRegCounts.find(dg =>
+                        dg.name.trim().toLowerCase() === lookup
+                    )?._count || 0;
+
+                    return {
+                        ...center,
+                        pendingCount: pendingMap.get(lookup) || 0,
+                        pendingRegCount: regCount
+                    };
+                });
+
+                setManagedCenters(centersWithCounts);
+                localStorage.setItem('pm_managed_centers', JSON.stringify(centersWithCounts));
+            } else {
+                console.warn('PM Dashboard: Failed to fetch pending counts from API', json.error);
             }
+        } catch (err) {
+            console.error('PM Dashboard: Exception fetching pending counts', err);
         }
     }, []);
 
@@ -657,13 +663,12 @@ export default function ProjectManagerDashboard() {
 
         const fetchInitialData = async () => {
             if (!supabase) { setLoadingContext(false); return; }
-            const session = await supabase.auth.getSession();
-            if (!session.data.session) {
+            const adminId = userData?.id;
+            if (!adminId) {
                 setLoadingContext(false);
                 return;
             }
 
-            const adminId = session.data.session.user.id;
             // Only show full page loader if we don't have cached data
             setLoadingContext(prev => managedCenters.length === 0);
 
@@ -821,11 +826,20 @@ export default function ProjectManagerDashboard() {
             if (error) throw error;
             setPendingUsers((data || []).map((u: any) => ({
                 ...u,
-                hierarchy: u.hierarchy || {}
+                hierarchy: {
+                    ...(u.hierarchy || {}),
+                    currentTemple: u.current_temple || u.hierarchy?.currentTemple,
+                    currentCenter: u.current_center || u.hierarchy?.currentCenter,
+                    center: u.center || u.hierarchy?.center,
+                    counselor: u.counselor || u.hierarchy?.counselor,
+                    otherCenter: u.other_center || u.hierarchy?.otherCenter,
+                    otherTemple: u.other_temple || u.hierarchy?.otherTemple,
+                    ashram: u.ashram || u.hierarchy?.ashram,
+                }
             })));
-        } catch (error) {
-            console.error('Error loading pending users:', error);
-            toast.error('Failed to load pending users');
+        } catch (error: any) {
+            console.error('Error loading pending users:', error?.message || error);
+            toast.error(`Failed to load pending users: ${error?.message || ''}`);
         } finally {
             setLoadingPendingUsers(false);
         }
@@ -836,13 +850,13 @@ export default function ProjectManagerDashboard() {
         try {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
-            if (!token) throw new Error('No auth token');
+            
 
             const res = await fetch('/api/admin/verify-data', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -870,13 +884,13 @@ export default function ProjectManagerDashboard() {
         try {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
-            if (!token) throw new Error('No auth token');
+            
 
             const res = await fetch('/api/admin/verify-data', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -905,11 +919,11 @@ export default function ProjectManagerDashboard() {
         try {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
-            if (!token) return;
+            
 
             // API handles filtering by temple AND center now
             const response = await fetch(`/api/profile-requests?status=${approvalStatus}&temple=${encodeURIComponent(currentTemple)}&center=${encodeURIComponent(currentCenter)}&_t=${Date.now()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
             });
             const data = await response.json();
 
@@ -949,6 +963,16 @@ export default function ProjectManagerDashboard() {
 
                 return {
                     ...u,
+                    hierarchy: {
+                        ...(u.hierarchy || {}),
+                        currentTemple: u.current_temple || u.hierarchy?.currentTemple,
+                        currentCenter: u.current_center || u.hierarchy?.currentCenter,
+                        center: u.center || u.hierarchy?.center,
+                        counselor: u.counselor || u.hierarchy?.counselor,
+                        otherCenter: u.other_center || u.hierarchy?.otherCenter,
+                        otherTemple: u.other_temple || u.hierarchy?.otherTemple,
+                        ashram: u.ashram || u.hierarchy?.ashram,
+                    },
                     // Relative contact fields
                     relative1Name: u.relative_1_name,
                     relative1Relationship: u.relative_1_relationship,
@@ -1004,7 +1028,7 @@ export default function ProjectManagerDashboard() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        ...(token ? { "Authorization": `Bearer ${token}` } : {})
                     },
                     body: JSON.stringify({
                         requestIds: bulkIds,
@@ -1031,7 +1055,7 @@ export default function ProjectManagerDashboard() {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     status: action,
@@ -1158,7 +1182,7 @@ export default function ProjectManagerDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
                 },
                 body: JSON.stringify({
                     userId: user.id,
@@ -1191,7 +1215,7 @@ export default function ProjectManagerDashboard() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
                 },
                 body: JSON.stringify({
                     userId,
@@ -1308,7 +1332,10 @@ export default function ProjectManagerDashboard() {
                     </div>
                 </div>
                 <div
-                    onClick={() => handleTabChange('approvals')}
+                    onClick={() => {
+                        setApprovalStatus('pending');
+                        handleTabChange('approvals');
+                    }}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-start cursor-pointer hover:shadow-md transition-all group"
                 >
                     <div className="h-12 w-12 sm:h-14 sm:w-14 bg-orange-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 flex-shrink-0 group-hover:bg-orange-100 transition-colors">
@@ -1328,6 +1355,7 @@ export default function ProjectManagerDashboard() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleCenterChange(c.name);
+                                                setApprovalStatus('pending');
                                                 handleTabChange('approvals');
                                             }}
                                             className="flex justify-between items-center text-[11px] sm:text-sm p-1.5 rounded hover:bg-orange-100/50 cursor-pointer transition-colors group/item">
@@ -1749,8 +1777,14 @@ export default function ProjectManagerDashboard() {
                                                 <div className="space-y-1">
                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Center Info</p>
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] font-bold text-gray-700 truncate">{(user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}</span>
-                                                        <span className="text-[10px] font-bold text-teal-600 truncate">{(user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || 'N/A'}</span>
+                                                        <span className="text-[10px] font-bold text-gray-700 truncate">
+                                                            {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-teal-600 truncate">
+                                                            {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None' 
+                                                                ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None') 
+                                                                : (user.hierarchy?.currentCenter || 'N/A')}
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1 text-right">
@@ -1759,7 +1793,11 @@ export default function ProjectManagerDashboard() {
                                                         <span className="text-[10px] font-bold text-orange-600 truncate">
                                                             {(() => {
                                                                 const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
-                                                                return counselor === 'Other' ? `Other: ${user.hierarchy?.otherCounselor}` : (counselor || 'N/A');
+                                                                const isCounselorOther = counselor === 'Other';
+                                                                const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
+                                                                if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
+                                                                if (isCounselorNone) return 'None';
+                                                                return counselor || 'N/A';
                                                             })()}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-blue-600 truncate">{user.hierarchy?.ashram || 'N/A'}</span>
@@ -1847,11 +1885,17 @@ export default function ProjectManagerDashboard() {
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-1.5">
                                                                 <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                                                                <span className="text-[10px] font-black text-gray-500 tracking-tight">{(user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}</span>
+                                                                <span className="text-[10px] font-black text-gray-500 tracking-tight">
+                                                                    {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
+                                                                </span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
                                                                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                                                <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">{(user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || 'N/A'}</span>
+                                                                <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">
+                                                                    {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None' 
+                                                                        ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None') 
+                                                                        : (user.hierarchy?.currentCenter || 'N/A')}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </td>
@@ -1862,8 +1906,11 @@ export default function ProjectManagerDashboard() {
                                                                 <span className="text-[10px] font-black text-gray-500 tracking-tight">
                                                                     {(() => {
                                                                         const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
-                                                                        const other = user.hierarchy?.otherCounselor;
-                                                                        return counselor === 'Other' ? `Other: ${other}` : (counselor || 'N/A');
+                                                                        const isCounselorOther = counselor === 'Other';
+                                                                        const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
+                                                                        if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
+                                                                        if (isCounselorNone) return 'None';
+                                                                        return counselor || 'N/A';
                                                                     })()}
                                                                 </span>
                                                             </div>
@@ -2108,7 +2155,9 @@ export default function ProjectManagerDashboard() {
                                             <div className="mt-1 relative">
                                                 {(() => {
                                                     const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
-                                                    const isLocked = existingRoles.some((r: number) => !MANAGEABLE_ROLES.some(mr => mr.value === r));
+                                                    // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
+                                                    const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
+                                                    const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
 
                                                     // Find current center post (first matching manageable role)
                                                     // Prioritize higher roles 29->17->1
@@ -2249,7 +2298,9 @@ export default function ProjectManagerDashboard() {
                                                     <div className="relative w-48 text-left">
                                                         {(() => {
                                                             const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
-                                                            const isLocked = existingRoles.some((r: number) => !MANAGEABLE_ROLES.some(mr => mr.value === r));
+                                                            // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
+                                                            const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
+                                                            const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
 
                                                             // Find current center post
                                                             const currentPost = existingRoles
@@ -2362,9 +2413,10 @@ export default function ProjectManagerDashboard() {
                                         const isMultiUser = [23, 25, 26, 31, 32, 33].includes(role.value);
                                         const idsCol = roleToColumnMap[role.value]?.replace('_id', '_ids');
 
-                                        // Multi-user: read from _ids array
+                                        // Multi-user: read from _ids array (jsonb col — may be string or array)
+                                        const rawIds = isMultiUser ? (currentCenterData as any)?.[idsCol] : null;
                                         const currentIds: string[] = isMultiUser
-                                            ? ((currentCenterData as any)?.[idsCol] || [])
+                                            ? (Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds || '[]') : []))
                                             : [];
 
                                         // Single-user: read legacy single ID column

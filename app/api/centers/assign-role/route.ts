@@ -4,12 +4,6 @@ import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
 
         // 1. Authenticate Requester
         const requesterUser = await getAuthUserFromRequest(request);
@@ -17,7 +11,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient();
 
         // 2. Fetch Requester Profile & Permissions
         const { data: requesterProfile, error: profileError } = await supabase

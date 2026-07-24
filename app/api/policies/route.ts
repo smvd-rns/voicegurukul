@@ -6,16 +6,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
-
-        const supabase = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabase = createClient();
 
         const user = await getAuthUserFromRequest(request);
         if (!user) {
@@ -41,7 +33,6 @@ export async function GET(request: Request) {
         let query = supabase.from('policies')
             .select('id, title, description, applicable_date, file_name, file_url, file_id, file_type, target_roles')
             .order('applicable_date', { ascending: false });
-
 
         if (!seesAll) {
             if (numericRoles.length > 0) {
@@ -70,16 +61,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
-
-        const supabase = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabase = createClient();
 
         const user = await getAuthUserFromRequest(request);
         if (!user) {

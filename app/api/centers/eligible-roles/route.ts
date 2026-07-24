@@ -12,14 +12,6 @@ const isSuperAdmin = (roles: any[] | any): boolean => {
 
 export async function GET(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            console.error('Supabase credentials missing');
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
 
         // 1. Verify Authentication & Role
         const user = await getAuthUserFromRequest(request);
@@ -31,7 +23,7 @@ export async function GET(request: Request) {
         // We can use the service role client here to check the user's role if RLS blocks reading own role (unlikely but safe)
         // Or just use the authClient if RLS allows reading own profile.
         // Let's use service client to be sure we get the role.
-        const adminClient = createClient(supabaseUrl, serviceRoleKey);
+        const adminClient = createClient();
 
         const { data: userProfile, error: profileError } = await adminClient
             .from('users')

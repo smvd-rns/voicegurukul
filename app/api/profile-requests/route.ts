@@ -7,12 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'service-role-key';
 
-        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabaseAdmin = createClient();
 
         const user = await getAuthUserFromRequest(request);
         if (!user) {
@@ -38,8 +34,15 @@ export async function POST(request: Request) {
             .single();
 
         const h = userData?.hierarchy || {};
-        const templeName = h.currentTemple?.name || (typeof h.currentTemple === 'string' ? h.currentTemple : null);
-        const centerName = h.currentCenter?.name || (typeof h.currentCenter === 'string' ? h.currentCenter : null);
+        
+        // If the user is requesting to change their temple/center, route the request to the NEW temple/center's admins
+        const reqTemple = requestedChanges?.currentTemple;
+        const reqTempleName = reqTemple?.name || (typeof reqTemple === 'string' ? reqTemple : null);
+        const templeName = reqTempleName || h.currentTemple?.name || (typeof h.currentTemple === 'string' ? h.currentTemple : null);
+
+        const reqCenter = requestedChanges?.currentCenter;
+        const reqCenterName = reqCenter?.name || (typeof reqCenter === 'string' ? reqCenter : null);
+        const centerName = reqCenterName || h.currentCenter?.name || (typeof h.currentCenter === 'string' ? h.currentCenter : null);
 
         // Try inserting with temple_name and center_name first
         let result = await supabaseAdmin
@@ -99,17 +102,8 @@ export async function GET(request: Request) {
     };
 
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        if (!supabaseUrl || !serviceRoleKey) {
-            log('Server configuration error: Missing Supabase URL or Service Role Key');
-            return NextResponse.json({ error: 'Server configuration error', debug: debugLogs }, { status: 500 });
-        }
-
-        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabaseAdmin = createClient();
 
         const adminUser = await getAuthUserFromRequest(request);
         if (!adminUser) {
@@ -125,7 +119,7 @@ export async function GET(request: Request) {
             .single();
 
         const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
-        const isSuperAdmin = roles.some((r: any) => r === 8 || r === 'super_admin' || r === 'admin');
+        const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin' || String(r) === 'admin');
 
         const isGlobalAdmin = roles.some((r: any) =>
             [12, 13].includes(Number(r)) ||
@@ -161,28 +155,24 @@ export async function GET(request: Request) {
         // 1. Determine the target temple to filter by
         let targetTemple = '';
 
+        // Direct SQL for assigned temples lookup (for self-hosted PostgreSQL compatibility)
+        const { query: dbQuery } = await import('@/lib/db');
+
         if (!isSuperAdmin && (isTempleAdmin || isGlobalAdmin)) {
-            // Check assigned temples via DB
-            const { data: assignedTemples } = await supabaseAdmin
-                .from('temples')
-                .select('name')
-                .or(`managing_director_id.eq.${adminUser.id},director_id.eq.${adminUser.id},central_voice_manager_id.eq.${adminUser.id},yp_id.eq.${adminUser.id}`);
+            const { rows: assignedTemples } = await dbQuery(
+                `SELECT name FROM temples WHERE managing_director_id = $1 OR director_id = $1 OR central_voice_manager_id = $1 OR yp_id = $1`,
+                [adminUser.id]
+            );
 
-            const assignedNames = ((assignedTemples || []) as any[]).map((t: any) => t.name);
+            const assignedNames = (assignedTemples || []).map((t: any) => t.name);
 
-            if (templeFilter && assignedNames.includes(templeFilter)) {
+            if (templeFilter && (assignedNames.includes(templeFilter) || isSuperAdmin || isGlobalAdmin)) {
                 targetTemple = templeFilter;
             } else if (templeFilter) {
-                // If filter provided but not matches assigned, still use it (might be profile-wide)
                 targetTemple = templeFilter;
-            } else if (isProjectAdmin) {
-                // For Project Managers, don't default if no filter provided
-                // This allows seeing counts across all managed centers in many temples
-                targetTemple = '';
             } else if (assignedNames.length > 0) {
-                targetTemple = assignedNames[0]; // Default to first assignment if no filter
+                targetTemple = assignedNames[0];
             } else {
-                // Fallback to profile
                 const h = userData?.hierarchy;
                 targetTemple = (h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '')) || '';
             }
@@ -190,77 +180,25 @@ export async function GET(request: Request) {
             targetTemple = templeFilter;
         }
 
-        // OPTIMIZED QUERY: Filter by temple_name if available to avoid loading all rows
-        let query = supabaseAdmin
-            .from('profile_update_requests')
-            .select(`
-                *,
-                user:users!user_id!inner (
-                    id,
-                    name,
-                    email,
-                    hierarchy,
-                    counselor_id
-                )
-            `)
-            .eq('status', status)
-            .order('created_at', { ascending: false });
+        const { rows: rawRequests } = await dbQuery(
+            `SELECT * FROM profile_update_requests WHERE status = $1 ORDER BY created_at DESC`,
+            [status]
+        );
 
-        // If targetTemple is provided, try to filter by the new column at the DB level
-        // NOTE: This will only return rows where temple_name matches. 
-        // Rows with temple_name = NULL (old rows) will be excluded.
-        // We will keep the in-memory fallback for now or advise backfill.
-        // To be safe and show both, we could use an 'or' filter, but that's complex with joins.
-        // Let's stick to the user's request: "look for temple... simple logic".
-        if (targetTemple) {
-            // Include rows that match temple_name OR are NULL (to be handled by fallback filter)
-            query = query.or(`temple_name.eq.${targetTemple},temple_name.is.null`);
-        }
+        // Attach user info to each request manually
+        let joinedRequests: any[] = [];
+        if (rawRequests.length > 0) {
+            const userIds = Array.from(new Set(rawRequests.map((r: any) => r.user_id)));
+            const { rows: userRows } = await dbQuery(
+                `SELECT id, name, email, hierarchy, counselor_id FROM users WHERE id = ANY($1::uuid[])`,
+                [userIds]
+            );
+            const userMap = new Map(userRows.map((u: any) => [u.id, u]));
 
-        // Optimization: If we have a target temple, try to filter by the new column first
-        // We still fetch joined user to be safe/verified, but this reduces rows significantly
-        if (targetTemple) {
-            // We can check if the column exists or just assume it does after migration
-            // To be safe against "column does not exist" before migration, we might tread carefully,
-            // but since we are directing the user to run migration, we can use it.
-            // However, for backward compatibility with old rows that have null temple_name,
-            // we should ONLY use this if we are sure... 
-            // Actually, the user asked for this optimization. We should Implement it.
-            // But existing rows have NULL temple_name. They won't be returned!
-            // So we must ONLY use this filter for NEW rows or if backfill happened.
-            // For now, let's keep the join fetch but we can rely on the in-memory filter for old rows,
-            // OR better: we advise user to backfill.
-            // To support "easy to locate", we will modify the query to USE the filter.
-            // But what about old rows?
-            // Let's stick to the current logic for safety -> Fetch All + Join + Filter.
-            // BUT user explicitly asked "collect... so that for you it will easy to locate".
-            // This implies they want to USE it.
-            // Let's add the logic to filter by temple_name OR (temple_name is null).
-            // No, simpler: Just keep existing logic for now to resolve "Zero" issue safely, 
-            // but if we want performance, we use the column.
-            // Let's add the column filter to the query BUT explicitly handle the case where it might be null?
-            // No, that complicates it.
-            // Let's leave the GET route mostly as is (Robust Join) but adding the filtering logic 
-            // utilizing the new column IF populated would be complex to mix with old data.
-
-            // Wait, I will Implement the "Fallback" logic:
-            // If we rely purely on temple_name, old rows disappear.
-            // So I will NOT add `.eq('temple_name', ...)` to the DB query yet to prevent data loss functionality.
-            // I will leaving the GET route alone for now regarding *filtering*, 
-            // but I will ensure the dashboard *sends* the temple param (it does).
-
-            // Actually, looking at the previous turn (1847), the code uses:
-            // `filteredRequests = filteredRequests.filter(...)`
-            // I can update this to check `req.temple_name` FIRST.
-            // `const uTemple = req.temple_name || req.user?.hierarchy...`
-            // This makes filtering faster/simpler in code, though not DB level yet without backfill.
-        }
-
-        const { data: joinedRequests, error: fetchError } = await query;
-
-        if (fetchError) {
-            log(`DB Error: ${fetchError.message}`);
-            return NextResponse.json({ error: 'Failed to fetch requests', details: fetchError.message, debug: debugLogs }, { status: 500 });
+            joinedRequests = rawRequests.map((r: any) => ({
+                ...r,
+                user: userMap.get(r.user_id) || null
+            }));
         }
 
         let filteredRequests = joinedRequests || [];
@@ -273,7 +211,14 @@ export async function GET(request: Request) {
                 if (req.temple_name && req.temple_name.trim().toLowerCase() === normalizedTarget) {
                     return true;
                 }
-                // Fallback: Check joined user hierarchy
+                // Fallback 1: Check requested changes (e.g. for older pending records)
+                const rH = req.requested_changes;
+                const reqT = rH?.currentTemple;
+                const reqTName = reqT?.name || (typeof reqT === 'string' ? reqT : '');
+                if (reqTName && reqTName.trim().toLowerCase() === normalizedTarget) {
+                    return true;
+                }
+                // Fallback 2: Check joined user hierarchy
                 const uH = req.user?.hierarchy;
                 const uTemple = (uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '')) || '';
                 return uTemple.trim().toLowerCase() === normalizedTarget;
@@ -312,7 +257,14 @@ export async function GET(request: Request) {
                 if (req.center_name && allowedCenterNames.includes(req.center_name.trim().toLowerCase())) {
                     return true;
                 }
-                // Fallback
+                // Fallback 1: Check requested changes (e.g. for older pending records)
+                const rH = req.requested_changes;
+                const reqC = rH?.currentCenter;
+                const reqCName = reqC?.name || (typeof reqC === 'string' ? reqC : '');
+                if (reqCName && allowedCenterNames.includes(reqCName.trim().toLowerCase())) {
+                    return true;
+                }
+                // Fallback 2
                 const uH = req.user?.hierarchy;
                 const uCenter = (uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '')) || '';
                 return allowedCenterNames.includes(uCenter.trim().toLowerCase());

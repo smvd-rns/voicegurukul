@@ -22,15 +22,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No valid IDs provided' }, { status: 400 });
         }
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
-
         // Use Service Role Key to bypass RLS for admin actions
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient();
 
         // Verify the requester is an admin (Role 8)
         // Verify the requester using custom JWT session token or Bearer token
@@ -189,7 +182,6 @@ export async function POST(request: NextRequest) {
             const { sendApprovalNotification, sendRejectionNotification } = await import('@/lib/utils/email');
 
             if (action === 'approve') {
-                const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
                 const { generateMembershipIdForUser } = await import('@/lib/utils/membership');
 
                 for (const userId of targetIds) {
@@ -198,6 +190,7 @@ export async function POST(request: NextRequest) {
                         const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
+                            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
                             await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`);
                             try {
                                 await generateMembershipIdForUser(supabase, userId);

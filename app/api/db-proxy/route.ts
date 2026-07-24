@@ -147,40 +147,43 @@ export async function POST(req: NextRequest) {
 
     // 2. Append WHERE filters
     const whereClauses: string[] = [];
+    // Helper to format JSON accessors correctly (e.g. hierarchy->>name to hierarchy->>'name')
+    const parseCol = (c: string) => c.replace(/->>([a-zA-Z0-9_]+)/g, "->>'$1'").replace(/->([a-zA-Z0-9_]+)/g, "->'$1'");
 
     // AND filters (including comparison operators lt/gt/ilike/is/overlaps)
     if (filters && filters.length > 0) {
       filters.forEach((f: any) => {
+        const col = parseCol(f.col);
         if (f.type === 'eq') {
           params.push(f.val);
-          whereClauses.push(`${f.col} = $${paramCounter++}`);
+          whereClauses.push(`${col} = $${paramCounter++}`);
         } else if (f.type === 'in') {
           params.push(f.val);
-          whereClauses.push(`${f.col} = ANY($${paramCounter++})`);
+          whereClauses.push(`${col} = ANY($${paramCounter++})`);
         } else if (f.type === 'lt') {
           params.push(f.val);
-          whereClauses.push(`${f.col} < $${paramCounter++}`);
+          whereClauses.push(`${col} < $${paramCounter++}`);
         } else if (f.type === 'lte') {
           params.push(f.val);
-          whereClauses.push(`${f.col} <= $${paramCounter++}`);
+          whereClauses.push(`${col} <= $${paramCounter++}`);
         } else if (f.type === 'gt') {
           params.push(f.val);
-          whereClauses.push(`${f.col} > $${paramCounter++}`);
+          whereClauses.push(`${col} > $${paramCounter++}`);
         } else if (f.type === 'gte') {
           params.push(f.val);
-          whereClauses.push(`${f.col} >= $${paramCounter++}`);
+          whereClauses.push(`${col} >= $${paramCounter++}`);
         } else if (f.type === 'ilike') {
           params.push(f.val);
-          whereClauses.push(`${f.col} ILIKE $${paramCounter++}`);
+          whereClauses.push(`${col} ILIKE $${paramCounter++}`);
         } else if (f.type === 'is') {
           if (f.val === null || f.val === 'null') {
-            whereClauses.push(`${f.col} IS NULL`);
+            whereClauses.push(`${col} IS NULL`);
           } else {
-            whereClauses.push(`${f.col} IS ${String(f.val).toUpperCase()}`);
+            whereClauses.push(`${col} IS ${String(f.val).toUpperCase()}`);
           }
         } else if (f.type === 'overlaps') {
           params.push(f.val);
-          whereClauses.push(`${f.col} && $${paramCounter++}`);
+          whereClauses.push(`${col} && $${paramCounter++}`);
         }
       });
     }
@@ -188,11 +191,12 @@ export async function POST(req: NextRequest) {
     // NOT filters
     if (notFilters && notFilters.length > 0) {
       notFilters.forEach((f: any) => {
+        const col = parseCol(f.col);
         if (f.val === null || f.val === 'null') {
-          whereClauses.push(`${f.col} IS NOT NULL`);
+          whereClauses.push(`${col} IS NOT NULL`);
         } else {
           params.push(f.val);
-          whereClauses.push(`${f.col} != $${paramCounter++}`);
+          whereClauses.push(`${col} != $${paramCounter++}`);
         }
       });
     }
@@ -203,7 +207,7 @@ export async function POST(req: NextRequest) {
         const parts = clause.split(',');
         const partsClauses = parts.map(part => {
           const subParts = part.split('.');
-          const col = subParts[0];
+          const col = parseCol(subParts[0]);
           const op = subParts[1];
           const val = subParts.slice(2).join('.');
 

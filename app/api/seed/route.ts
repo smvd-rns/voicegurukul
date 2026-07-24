@@ -7,20 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Supabase URL or Service Role Key missing' }, { status: 500 });
-        }
-
-        const supabase = createClient(supabaseUrl, serviceRoleKey, {
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false,
-            }
-        });
+        const supabase = createClient();
 
         // Read all-cities.json
         const filePath = path.join(process.cwd(), 'public', 'all-cities.json');

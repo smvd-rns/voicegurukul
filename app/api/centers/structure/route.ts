@@ -7,12 +7,6 @@ const MULTI_USER_ROLES = [23, 25, 26, 31, 32, 33]; // 23 = Preaching Coordinator
 
 export async function POST(request: Request) {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-        }
 
         // 1. Authenticate Requester
         const requesterUser = await getAuthUserFromRequest(request);
@@ -20,7 +14,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient();
 
         // 2. Fetch Requester Profile & Permissions
         const { data: requesterProfile, error: profileError } = await supabase
@@ -47,10 +41,6 @@ export async function POST(request: Request) {
         // userId: string is used for single-user roles
         const { centerId, roleValue, userId, userIds } = body;
 
-        if (!centerId || !roleValue) {
-            return NextResponse.json({ error: 'Missing required fields: centerId, roleValue' }, { status: 400 });
-        }
-
         // 4. Verify Scope
         const isSuperAdmin = requesterRoles.some((r: any) => Number(r) === 8);
         if (!isSuperAdmin) {
@@ -75,6 +65,8 @@ export async function POST(request: Request) {
         // 5. Map Role to Column
         const roleToColumnMap: Record<number, string> = {
             17: 'oc_id',
+            20: 'care_giver_id',
+            21: 'youth_preacher_id',
             22: 'internal_manager_id',
             23: 'preaching_coordinator_id',
             24: 'morning_program_in_charge_id',
@@ -83,6 +75,7 @@ export async function POST(request: Request) {
             27: 'accountant_id',
             28: 'kitchen_head_id',
             29: 'study_in_charge_id',
+            30: 'event_admin_id',
             31: 'grihstha_counselor_id',
             32: 'easy_incharge_id',
             33: 'prerna_incharge_id'
@@ -110,12 +103,14 @@ export async function POST(request: Request) {
                 .eq('id', centerId)
                 .single() as { data: any, error: any };
 
-
-
             const idsCol = targetCol.replace('_id', '_ids'); // mentor_ids / frontliner_ids
             const namesCol = targetCol.replace('_id', '_names'); // mentor_names / frontliner_names
 
-            const currentIds: string[] = centerInfo?.[idsCol] || [];
+            // jsonb columns may be returned as a string or already-parsed array depending on pg driver
+            const rawIds = centerInfo?.[idsCol];
+            const currentIds: string[] = Array.isArray(rawIds)
+                ? rawIds
+                : (typeof rawIds === 'string' ? JSON.parse(rawIds || '[]') : []);
 
             // B. Users to ADD (in new list but not in current)
             const toAdd = newUserIds.filter(id => !currentIds.includes(id));
@@ -150,9 +145,10 @@ export async function POST(request: Request) {
             }
 
             // F. Update center table with arrays
+            // Note: _ids and _names columns are jsonb in the DB — must pass JSON strings, not native arrays
             const updates: any = {};
-            updates[idsCol] = newUserIds.length > 0 ? newUserIds : [];
-            updates[namesCol] = newUserNames.length > 0 ? newUserNames : [];
+            updates[idsCol] = JSON.stringify(newUserIds.length > 0 ? newUserIds : []);
+            updates[namesCol] = JSON.stringify(newUserNames.length > 0 ? newUserNames : []);
             // Also keep the legacy single-id column pointing at first user (backwards compat)
             updates[targetCol] = newUserIds[0] || null;
             updates[targetCol.replace('_id', '_name')] = newUserNames[0] || null;
@@ -176,7 +172,6 @@ export async function POST(request: Request) {
             .select(`id, name, ${targetCol}`)
             .eq('id', centerId)
             .single() as { data: any, error: any };
-
 
         const currentHolderId = centerInfo?.[targetCol];
 

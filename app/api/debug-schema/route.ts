@@ -5,9 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+const supabase = createClient();
 
         const { data, error } = await supabase
             .from('counselors')

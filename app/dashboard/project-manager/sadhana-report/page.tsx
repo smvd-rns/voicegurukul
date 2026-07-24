@@ -87,9 +87,8 @@ export default function SadhanaReportPage() {
 
         const fetchContext = async () => {
             if (!supabase) { setLoadingContext(false); return; }
-            const session = await supabase.auth.getSession();
-            if (!session.data.session) return;
-            const adminId = session.data.session.user.id;
+            const adminId = userData?.id;
+            if (!adminId) return;
 
             // Only show full page loader if we don't have cached data
             setLoadingContext(centers.length === 0);

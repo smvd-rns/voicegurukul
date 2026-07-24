@@ -20,14 +20,12 @@ export async function POST(request: Request) {
         }
 
         // Rate Limiting
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
         const user = await getAuthUserFromRequest(request);
         const userId = user?.id || null;
         let isVerified = false;
 
         if (userId) {
-                const cleanClient = createClient(supabaseUrl, supabaseAnonKey);
+                const cleanClient = createClient();
                 // Fetch user role to determine verification status
                 const { data: profile } = await cleanClient
                     .from('users')
@@ -68,31 +66,7 @@ export async function POST(request: Request) {
         const trimmedState = sanitize(state);
         const trimmedCity = sanitize(city);
 
-        if (!supabaseUrl || !supabaseAnonKey) {
-            throw new Error('Supabase configuration missing');
-        }
-
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        const keyToUse = serviceRoleKey || supabaseAnonKey;
-
-        const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-            const fetchHeaders = new Headers(init?.headers);
-            if (serviceRoleKey) {
-                fetchHeaders.set('apikey', serviceRoleKey);
-                fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-            } else {
-                const token = request.headers.get('authorization')?.replace('Bearer ', '');
-                if (token) fetchHeaders.set('Authorization', `Bearer ${token}`);
-                fetchHeaders.set('apikey', supabaseAnonKey);
-            }
-            fetchHeaders.set('Content-Type', 'application/json');
-            return fetch(input, { ...init, headers: fetchHeaders });
-        };
-
-        const authenticatedClient = createClient(supabaseUrl, keyToUse, {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: { fetch: customFetch },
-        });
+        const authenticatedClient = createClient();
 
         // Check existing
         const { data: existing } = await authenticatedClient

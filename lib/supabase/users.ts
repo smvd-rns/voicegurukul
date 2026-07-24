@@ -224,6 +224,10 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
       dbUpdates.role = roleToNumber(rolesArray);
     }
 
+    if (enrichedHierarchy !== undefined) {
+      dbUpdates.hierarchy = enrichedHierarchy;
+    }
+
     // OAuth and some edge cases create auth.users without a public.users row.
     // UPDATE with no matching row succeeds with 0 rows affected, so we must insert when missing.
     const { data: existingUser, error: checkError } = await supabase

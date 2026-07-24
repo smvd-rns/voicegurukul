@@ -43,10 +43,6 @@ export async function GET(request: Request) {
                 .eq('id', targetUserId)
                 .single();
 
-            if (!requesterProfile || !targetProfile) {
-                return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
-            }
-
             const isAuthorized = canAdminManageTarget(requesterProfile.role, targetProfile.role, requester.id, targetUserId);
 
             if (!isAuthorized) {

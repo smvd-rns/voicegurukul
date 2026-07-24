@@ -25,7 +25,7 @@ export async function GET() {
         // Test 1: Service Role
         if (service) {
             try {
-                const client = createClient(url, service);
+                const client = createClient();
                 const { error, data } = await client.from('sadhana_reports').select('id').limit(1);
                 results.tests.serviceRole = { success: !error, error };
             } catch (e: any) { results.tests.serviceRole = { fatal: e.message }; }
@@ -34,7 +34,7 @@ export async function GET() {
         // Test 2: Anon Key
         if (anon) {
             try {
-                const client = createClient(url, anon);
+                const client = createClient();
                 const { error } = await client.from('sadhana_reports').select('id').limit(1);
                 results.tests.anonKey = { success: !error, error };
             } catch (e: any) { results.tests.anonKey = { fatal: e.message }; }

@@ -39,7 +39,6 @@ async function getDriveClient() {
   return drive;
 }
 
-
 // Upload file to Google Drive
 async function uploadToDrive(fileBuffer: Buffer, fileName: string, mimeType: string, targetFolderId: string): Promise<string> {
   try {

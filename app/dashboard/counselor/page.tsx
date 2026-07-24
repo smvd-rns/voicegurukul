@@ -302,10 +302,10 @@ export default function CounselorPage() {
     try {
       const session = await supabase?.auth.getSession();
       const token = session?.data.session?.access_token;
-      if (!token) return;
+      
 
       const response = await fetch(`/api/profile-requests?status=${approvalStatus}&_t=${Date.now()}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined,
         cache: 'no-store'
       });
       const json = await response.json();
@@ -426,15 +426,17 @@ export default function CounselorPage() {
 
       // 2. Fetch pending profile requests count via API for perfect parity
       let spiritualCount = 0;
-      if (token) {
+      try {
         const profileReqsResponse = await fetch(`/api/profile-requests?status=pending&_t=${Date.now()}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined,
           cache: 'no-store'
         });
         const profileReqsJson = await profileReqsResponse.json();
         if (profileReqsJson.success) {
           spiritualCount = profileReqsJson.data.length;
         }
+      } catch (err) {
+        console.error('Error fetching profile requests stats:', err);
       }
 
       // 3. Get pending users count (Mirror loadPendingUsers logic)
@@ -501,7 +503,7 @@ export default function CounselorPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           status: action,
@@ -539,7 +541,7 @@ export default function CounselorPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           type: 'user',
@@ -576,7 +578,7 @@ export default function CounselorPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           requestIds: selectedRequestIds,
@@ -613,7 +615,7 @@ export default function CounselorPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           type: 'user',

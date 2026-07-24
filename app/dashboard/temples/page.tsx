@@ -593,192 +593,194 @@ export default function TemplesPage() {
                     </div>
                 )}
 
-                {/* Edit Temple Form */}
+                {/* Edit Temple Form - Modal Overlay */}
                 {editingTempleId && (
-                    <div className="bg-white rounded-3xl shadow-xl overflow-hidden border-2 border-primary-100 animate-in zoom-in-95 duration-500">
-                        <div className="h-2 w-full bg-gradient-to-r from-emerald-500 to-primary-600"></div>
-                        <div className="p-8">
-                            <div className="flex items-center justify-between mb-8">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-emerald-50 p-3 rounded-2xl">
-                                        <Edit2 className="h-8 w-8 text-emerald-600" />
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
+                        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border-2 border-primary-100 animate-in zoom-in-95 duration-300 max-w-5xl w-full my-8">
+                            <div className="h-2 w-full bg-gradient-to-r from-emerald-500 to-primary-600"></div>
+                            <div className="p-8 max-h-[85vh] overflow-y-auto">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-emerald-50 p-3 rounded-2xl">
+                                            <Edit2 className="h-8 w-8 text-emerald-600" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-gray-900">Edit Temple Details</h2>
+                                            <p className="text-gray-500">Update naming, location, or administrative roles.</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-gray-900">Edit Temple Details</h2>
-                                        <p className="text-gray-500">Update naming, location, or administrative roles.</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setEditingTempleId(null)}
-                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    <Plus className="h-6 w-6 text-gray-400 rotate-45" />
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleUpdateTemple} className="space-y-8">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            Temple Name <span className="text-primary-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editTempleData.name}
-                                            onChange={(e) => setEditTempleData({ ...editTempleData, name: e.target.value })}
-                                            required
-                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            State <span className="text-primary-500">*</span>
-                                        </label>
-                                        <select
-                                            value={editTempleData.state}
-                                            onChange={(e) => setEditTempleData({ ...editTempleData, state: e.target.value, city: '' })}
-                                            required
-                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white appearance-none"
-                                        >
-                                            <option value="">Select State</option>
-                                            {indianStates.map(state => (
-                                                <option key={state} value={state}>{state}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            City <span className="text-primary-500">*</span>
-                                        </label>
-                                        <select
-                                            value={editTempleData.city}
-                                            onChange={(e) => setEditTempleData({ ...editTempleData, city: e.target.value })}
-                                            required
-                                            disabled={!editTempleData.state || editAvailableCities.length === 0}
-                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white appearance-none disabled:opacity-50"
-                                        >
-                                            <option value="">Select City</option>
-                                            {editAvailableCities.map(city => (
-                                                <option key={city} value={city}>{city}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            Contact Information
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editTempleData.contact}
-                                            onChange={(e) => setEditTempleData({ ...editTempleData, contact: e.target.value })}
-                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            <ShieldCheck className="h-4 w-4 text-indigo-500" />
-                                            Managing Director
-                                        </label>
-                                        <SearchableSelect
-                                            options={userOptions}
-                                            value={editTempleData.managing_director_id || ''}
-                                            valueProperty="id"
-                                            onChange={(val) => setEditTempleData({
-                                                ...editTempleData,
-                                                managing_director_id: val,
-                                                managing_director_name: userOptions.find(u => u.id === val)?.name || ''
-                                            })}
-                                            placeholder="Assign Managing Director"
-                                            disabled={loadingUsers}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            <User className="h-4 w-4 text-emerald-500" />
-                                            Director
-                                        </label>
-                                        <SearchableSelect
-                                            options={userOptions}
-                                            value={editTempleData.director_id || ''}
-                                            valueProperty="id"
-                                            onChange={(val) => setEditTempleData({
-                                                ...editTempleData,
-                                                director_id: val,
-                                                director_name: userOptions.find(u => u.id === val)?.name || ''
-                                            })}
-                                            placeholder="Assign Director"
-                                            disabled={loadingUsers}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            <Building2 className="h-4 w-4 text-amber-500" />
-                                            Central VOICE Manager
-                                        </label>
-                                        <SearchableSelect
-                                            options={userOptions}
-                                            value={editTempleData.central_voice_manager_id || ''}
-                                            valueProperty="id"
-                                            onChange={(val) => setEditTempleData({
-                                                ...editTempleData,
-                                                central_voice_manager_id: val,
-                                                central_voice_manager_name: userOptions.find(u => u.id === val)?.name || ''
-                                            })}
-                                            placeholder="Assign VOICE Manager"
-                                            disabled={loadingUsers}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                            <User className="h-4 w-4 text-purple-500" />
-                                            Youth Preacher
-                                        </label>
-                                        <SearchableSelect
-                                            options={userOptions}
-                                            value={editTempleData.yp_id || ''}
-                                            valueProperty="id"
-                                            onChange={(val) => setEditTempleData({
-                                                ...editTempleData,
-                                                yp_id: val,
-                                                yp_name: userOptions.find(u => u.id === val)?.name || ''
-                                            })}
-                                            placeholder="Assign Youth Preacher"
-                                            disabled={loadingUsers}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
-                                        Full Address
-                                    </label>
-                                    <textarea
-                                        value={editTempleData.address}
-                                        onChange={(e) => setEditTempleData({ ...editTempleData, address: e.target.value })}
-                                        rows={3}
-                                        className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white resize-none"
-                                    />
-                                </div>
-
-                                <div className="flex justify-end items-center gap-4 pt-4 border-t border-gray-100">
                                     <button
-                                        type="button"
                                         onClick={() => setEditingTempleId(null)}
-                                        className="px-6 py-3 text-gray-500 font-bold hover:text-gray-700 transition-colors"
+                                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                                     >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-10 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                    >
-                                        Save Changes
+                                        <Plus className="h-6 w-6 text-gray-400 rotate-45" />
                                     </button>
                                 </div>
-                            </form>
+
+                                <form onSubmit={handleUpdateTemple} className="space-y-8">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                Temple Name <span className="text-primary-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={editTempleData.name}
+                                                onChange={(e) => setEditTempleData({ ...editTempleData, name: e.target.value })}
+                                                required
+                                                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                State <span className="text-primary-500">*</span>
+                                            </label>
+                                            <select
+                                                value={editTempleData.state}
+                                                onChange={(e) => setEditTempleData({ ...editTempleData, state: e.target.value, city: '' })}
+                                                required
+                                                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white appearance-none"
+                                            >
+                                                <option value="">Select State</option>
+                                                {indianStates.map(state => (
+                                                    <option key={state} value={state}>{state}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                City <span className="text-primary-500">*</span>
+                                            </label>
+                                            <select
+                                                value={editTempleData.city}
+                                                onChange={(e) => setEditTempleData({ ...editTempleData, city: e.target.value })}
+                                                required
+                                                disabled={!editTempleData.state || editAvailableCities.length === 0}
+                                                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white appearance-none disabled:opacity-50"
+                                            >
+                                                <option value="">Select City</option>
+                                                {editAvailableCities.map(city => (
+                                                    <option key={city} value={city}>{city}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                Contact Information
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={editTempleData.contact}
+                                                onChange={(e) => setEditTempleData({ ...editTempleData, contact: e.target.value })}
+                                                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                                                Managing Director
+                                            </label>
+                                            <SearchableSelect
+                                                options={userOptions}
+                                                value={editTempleData.managing_director_id || ''}
+                                                valueProperty="id"
+                                                onChange={(val) => setEditTempleData({
+                                                    ...editTempleData,
+                                                    managing_director_id: val,
+                                                    managing_director_name: userOptions.find(u => u.id === val)?.name || ''
+                                                })}
+                                                placeholder="Assign Managing Director"
+                                                disabled={loadingUsers}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                <User className="h-4 w-4 text-emerald-500" />
+                                                Director
+                                            </label>
+                                            <SearchableSelect
+                                                options={userOptions}
+                                                value={editTempleData.director_id || ''}
+                                                valueProperty="id"
+                                                onChange={(val) => setEditTempleData({
+                                                    ...editTempleData,
+                                                    director_id: val,
+                                                    director_name: userOptions.find(u => u.id === val)?.name || ''
+                                                })}
+                                                placeholder="Assign Director"
+                                                disabled={loadingUsers}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                <Building2 className="h-4 w-4 text-amber-500" />
+                                                Central VOICE Manager
+                                            </label>
+                                            <SearchableSelect
+                                                options={userOptions}
+                                                value={editTempleData.central_voice_manager_id || ''}
+                                                valueProperty="id"
+                                                onChange={(val) => setEditTempleData({
+                                                    ...editTempleData,
+                                                    central_voice_manager_id: val,
+                                                    central_voice_manager_name: userOptions.find(u => u.id === val)?.name || ''
+                                                })}
+                                                placeholder="Assign VOICE Manager"
+                                                disabled={loadingUsers}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                                <User className="h-4 w-4 text-purple-500" />
+                                                Youth Preacher
+                                            </label>
+                                            <SearchableSelect
+                                                options={userOptions}
+                                                value={editTempleData.yp_id || ''}
+                                                valueProperty="id"
+                                                onChange={(val) => setEditTempleData({
+                                                    ...editTempleData,
+                                                    yp_id: val,
+                                                    yp_name: userOptions.find(u => u.id === val)?.name || ''
+                                                })}
+                                                placeholder="Assign Youth Preacher"
+                                                disabled={loadingUsers}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider">
+                                            Full Address
+                                        </label>
+                                        <textarea
+                                            value={editTempleData.address}
+                                            onChange={(e) => setEditTempleData({ ...editTempleData, address: e.target.value })}
+                                            rows={3}
+                                            className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-gray-900 bg-gray-50 hover:bg-white resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end items-center gap-4 pt-4 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingTempleId(null)}
+                                            className="px-6 py-3 text-gray-500 font-bold hover:text-gray-700 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-10 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                        >
+                                            Save Changes
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 )}

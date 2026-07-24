@@ -72,7 +72,7 @@ export default function UserApprovalsPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',
@@ -120,7 +120,7 @@ export default function UserApprovalsPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({
                     type: 'user',

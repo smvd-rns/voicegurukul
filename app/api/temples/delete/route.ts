@@ -10,31 +10,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Temple ID is required' }, { status: 400 });
         }
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
         const authHeader = request.headers.get('authorization');
         const accessToken = authHeader?.replace('Bearer ', '');
 
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        const keyToUse = serviceRoleKey || supabaseAnonKey;
-
-        const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-            const fetchHeaders = new Headers(init?.headers);
-            if (serviceRoleKey) {
-                fetchHeaders.set('apikey', serviceRoleKey);
-                fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-            } else {
-                if (accessToken) fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
-                fetchHeaders.set('apikey', supabaseAnonKey);
-            }
-            fetchHeaders.set('Content-Type', 'application/json');
-            return fetch(input, { ...init, headers: fetchHeaders });
-        };
-
-        const authenticatedClient = createClient(supabaseUrl, keyToUse, {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: { fetch: customFetch },
-        });
+        const authenticatedClient = createClient();
 
         // 1. Fetch temple data to get assignees before deletion
         const { data: temple, error: fetchError } = await authenticatedClient

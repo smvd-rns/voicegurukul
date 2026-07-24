@@ -13,9 +13,15 @@ export async function GET(req: NextRequest) {
 
     // Construct the origin using the environment variable to guarantee a 100% exact match 
     // with the client-side redirect URI, bypassing any Nginx proxy header weirdness (like injected ports).
+    // In development, always use the actual request origin (localhost) so OAuth redirects
+    // stay on the local dev server. In production, prefer NEXT_PUBLIC_SITE_URL to ensure
+    // a stable canonical URL that matches the Google OAuth redirect_uri registration.
     const fallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const fallbackProto = req.headers.get('x-forwarded-proto') || 'http';
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || (fallbackHost ? `${fallbackProto}://${fallbackHost}` : req.nextUrl.origin);
+    const requestOrigin = fallbackHost ? `${fallbackProto}://${fallbackHost}` : req.nextUrl.origin;
+    const origin = process.env.NODE_ENV === 'development'
+      ? requestOrigin
+      : (process.env.NEXT_PUBLIC_SITE_URL || requestOrigin);
 
     if (!code) {
       return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
@@ -99,7 +105,12 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (error) {
     console.error('[Google OAuth Callback Exception]', error);
-    const fallbackOrigin = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
+    const errorFallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const errorFallbackProto = req.headers.get('x-forwarded-proto') || 'http';
+    const errorRequestOrigin = errorFallbackHost ? `${errorFallbackProto}://${errorFallbackHost}` : req.nextUrl.origin;
+    const fallbackOrigin = process.env.NODE_ENV === 'development'
+      ? errorRequestOrigin
+      : (process.env.NEXT_PUBLIC_SITE_URL || errorRequestOrigin);
     return NextResponse.redirect(new URL('/auth/login?error=auth_error', fallbackOrigin));
   }
 }

@@ -15,7 +15,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json(citiesData);
 
-
   } catch (error: any) {
     console.error('Error getting cities from Supabase:', error);
 

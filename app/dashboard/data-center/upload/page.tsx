@@ -180,7 +180,7 @@ export default function DataCenterUploadPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({
                     name: newFolderName.trim(),
@@ -350,7 +350,7 @@ export default function DataCenterUploadPage() {
                 const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${tokenData.accessToken}`,
+                        ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
                         'Content-Type': 'application/json; charset=UTF-8',
                         'X-Upload-Content-Type': file.type || 'application/octet-stream',
                         'X-Upload-Content-Length': file.size.toString()
@@ -372,7 +372,7 @@ export default function DataCenterUploadPage() {
                 if (!driveData.thumbnailLink || !driveData.webViewLink) {
                     const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
                         headers: {
-                            'Authorization': `Bearer ${tokenData.accessToken}`,
+                            ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
                         }
                     });
                     if (extraRes.ok) {
@@ -494,7 +494,7 @@ export default function DataCenterUploadPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({ scanId })
             });

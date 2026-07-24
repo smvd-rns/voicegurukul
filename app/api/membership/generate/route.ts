@@ -41,12 +41,6 @@ export async function POST(request: Request) {
         const introducedToKcIn = userData.introduced_to_kc_in;
         const parentTemple = userData.parent_temple;
 
-        if (!introducedToKcIn || !parentTemple) {
-            return NextResponse.json({ 
-                error: 'Missing required profile information. Please ensure "Introduced to KC on" and "Parent Temple" are filled in your profile.' 
-            }, { status: 400 });
-        }
-
         // 1. Extract year (expecting YYYY-MM-DD or similar)
         let year;
         try {

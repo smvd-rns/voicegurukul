@@ -8,12 +8,13 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
         const token = searchParams.get('token');
 
         if (!userId || !token) {
-            return new NextResponse('Missing parameters', { status: 400 });
+            return new NextResponse('Missing required parameters', { status: 400 });
         }
 
         const secret = process.env.EMAIL_APPROVAL_SECRET || 'fallback_secret_123';
@@ -31,8 +32,6 @@ export async function GET(request: Request) {
             .select('verification_status')
             .eq('id', userId)
             .single();
-
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
         if (fetchError || !user) {
             return new NextResponse('User not found', { status: 404 });

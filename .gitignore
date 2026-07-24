@@ -52,3 +52,4 @@ scratch/
 scripts/
 *.zip
 *.log
+deploy.py

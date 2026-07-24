@@ -50,11 +50,11 @@ export default function AnalyticsPage({ params }: { params: { messageId: string 
     const fetchAnalytics = useCallback(async () => {
         try {
             const { data: { session } } = await supabase!.auth.getSession();
-            if (!session) return;
+            
 
             const response = await fetch(`/api/broadcast/analytics/${params.messageId}`, {
                 headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
+                    ...(session?.access_token ? { "Authorization": `Bearer ${session?.access_token}` } : {}),
                 },
             });
 

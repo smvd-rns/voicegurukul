@@ -267,10 +267,6 @@ export async function POST(request: NextRequest) {
     try {
         const { driveLink, displayName, description, userId, userName } = await request.json();
 
-        if (!driveLink || !userId) {
-            return NextResponse.json({ error: 'Drive link and User ID are required' }, { status: 400 });
-        }
-
         const folderId = extractFolderId(driveLink.trim());
         if (!folderId) {
             return NextResponse.json({ error: 'Invalid Google Drive folder link' }, { status: 400 });

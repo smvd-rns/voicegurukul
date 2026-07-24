@@ -12,20 +12,8 @@ export async function POST(request: NextRequest) {
     };
 
     try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-        if (!supabaseUrl || !serviceRoleKey) {
-            log('Server configuration error');
-            return NextResponse.json({ error: 'Server configuration error', debug: debugLogs }, { status: 500 });
-        }
-
-        const supabase = createClient(supabaseUrl, serviceRoleKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
-            }
-        });
+        const supabase = createClient();
 
         const user = await getAuthUserFromRequest(request);
 
@@ -46,7 +34,7 @@ export async function POST(request: NextRequest) {
         }
 
         const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
-        const isSuperAdmin = roles.some((r: any) => r === 8 || r === 'super_admin' || r === 'admin');
+        const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin' || String(r) === 'admin');
 
         const isGlobalAdmin = roles.some((r: any) =>
             [12, 13].includes(Number(r)) ||
@@ -54,8 +42,13 @@ export async function POST(request: NextRequest) {
         );
 
         const isTempleAdmin = roles.some((r: any) =>
-            [11, 14, 15, 16, 17, 21].includes(Number(r)) ||
-            ['managing_director', 'project_advisor', 'project_manager', 'acting_manager', 'oc', 'youth_preacher'].includes(String(r))
+            [11, 17, 21].includes(Number(r)) ||
+            ['managing_director', 'oc', 'youth_preacher'].includes(String(r))
+        );
+
+        const isProjectAdmin = roles.some((r: any) =>
+            [14, 15, 16].includes(Number(r)) ||
+            ['project_manager', 'project_advisor', 'acting_manager'].includes(String(r))
         );
 
         const isCounselor = roles.some((r: any) =>
@@ -63,9 +56,9 @@ export async function POST(request: NextRequest) {
             ['counselor', 'care_giver'].includes(String(r))
         );
 
-        log(`Batch Batch Roles check: Super=${isSuperAdmin}, Global=${isGlobalAdmin}, Temple=${isTempleAdmin}, Counselor=${isCounselor}`);
+        log(`Batch Batch Roles check: Super=${isSuperAdmin}, Global=${isGlobalAdmin}, Temple=${isTempleAdmin}, Project=${isProjectAdmin}, Counselor=${isCounselor}`);
 
-        if (!isSuperAdmin && !isGlobalAdmin && !isTempleAdmin && !isCounselor) {
+        if (!isSuperAdmin && !isGlobalAdmin && !isTempleAdmin && !isProjectAdmin && !isCounselor) {
             return NextResponse.json({ error: 'Forbidden: Insufficient permissions', debug: debugLogs }, { status: 403 });
         }
 
@@ -76,19 +69,32 @@ export async function POST(request: NextRequest) {
         }
 
         // Temple Scoped Security for Temple Admin (Batch)
-        let adminTemple = '';
+        let allowedTempleNames: string[] = [];
+        let allowedCenterNames: string[] = [];
+        
         if (isTempleAdmin && !isSuperAdmin && !isGlobalAdmin) {
-            const { data: adminFullData } = await supabase
-                .from('users')
-                .select('hierarchy')
-                .eq('id', user.id)
-                .single();
+            const { data: managedTemples } = await supabase
+                .from('temples')
+                .select('name')
+                .or(`managing_director_id.eq.${user.id},director_id.eq.${user.id},central_voice_manager_id.eq.${user.id},yp_id.eq.${user.id}`);
+            
+            allowedTempleNames = (managedTemples as any[] || []).map((t: any) => t.name.trim().toLowerCase());
 
-            const adminT = adminFullData?.hierarchy?.currentTemple?.name || adminFullData?.hierarchy?.currentTemple;
-            adminTemple = (typeof adminT === 'string' ? adminT : adminT?.name || '').trim().toLowerCase();
+            if (allowedTempleNames.length === 0 && !isProjectAdmin) {
+                return NextResponse.json({ error: 'Forbidden: No temples assigned to Admin', debug: debugLogs }, { status: 403 });
+            }
+        }
+        
+        if (isProjectAdmin && !isSuperAdmin && !isGlobalAdmin) {
+            const { data: managedCenters } = await supabase
+                .from('centers')
+                .select('name')
+                .or(`project_manager_id.eq.${user.id},project_advisor_id.eq.${user.id},acting_manager_id.eq.${user.id}`);
+            
+            allowedCenterNames = (managedCenters as any[] || []).map((c: any) => c.name.trim().toLowerCase());
 
-            if (!adminTemple) {
-                return NextResponse.json({ error: 'Forbidden: No temple assigned to Admin', debug: debugLogs }, { status: 403 });
+            if (allowedCenterNames.length === 0 && !isTempleAdmin) {
+                return NextResponse.json({ error: 'Forbidden: No centers assigned to Admin', debug: debugLogs }, { status: 403 });
             }
         }
 
@@ -134,22 +140,40 @@ export async function POST(request: NextRequest) {
 
                     const uH = targetUser?.hierarchy || {};
 
-                    if (isTempleAdmin && adminTemple) {
+                    let isAuthorized = false;
+                    let errorMsg = 'Unauthorized: Scope mismatch';
+
+                    if (isTempleAdmin) {
                         const userT = uH.currentTemple?.name || uH.currentTemple;
                         const userTempleName = (typeof userT === 'string' ? userT : userT?.name || '').trim().toLowerCase();
+                        const reqTempleName = (requestData.temple_name || '').trim().toLowerCase();
 
-                        if (adminTemple !== userTempleName) {
-                            results.push({ id, success: false, error: 'Unauthorized: Temple mismatch' });
-                            failCount++;
-                            continue;
+                        if ((userTempleName && allowedTempleNames.includes(userTempleName)) || 
+                            (reqTempleName && allowedTempleNames.includes(reqTempleName))) {
+                            isAuthorized = true;
+                        } else {
+                            errorMsg = 'Unauthorized: Temple mismatch';
                         }
-                    } else if (isCounselor) {
+                    } 
+                    
+                    if (!isAuthorized && isProjectAdmin) {
+                        const userC = uH.center?.name || uH.center;
+                        const userCenterName = (typeof userC === 'string' ? userC : userC?.name || '').trim().toLowerCase();
+                        const reqCenterName = (requestData.center_name || '').trim().toLowerCase();
+
+                        if ((userCenterName && allowedCenterNames.includes(userCenterName)) || 
+                            (reqCenterName && allowedCenterNames.includes(reqCenterName))) {
+                            isAuthorized = true;
+                        } else {
+                            errorMsg = 'Unauthorized: Center mismatch';
+                        }
+                    } 
+                    
+                    if (!isAuthorized && isCounselor) {
                         const adminEmail = user.email;
                         if (!adminEmail) {
-                            results.push({ id, success: false, error: 'Unauthorized: Admin email missing' });
-                            failCount++;
-                            continue;
-                        }
+                            errorMsg = 'Unauthorized: Admin email missing';
+                        } else {
 
                         const normalizedAdminEmail = adminEmail.trim().toLowerCase();
 
@@ -194,15 +218,22 @@ export async function POST(request: NextRequest) {
                             rbN === counselorName || rgN === counselorName
                         );
 
-                        if (!matchesId && !matchesEmail && !matchesName) {
-                            results.push({ id, success: false, error: 'Unauthorized: Counselor mismatch' });
-                            failCount++;
-                            continue;
+                        if (matchesId || matchesEmail || matchesName) {
+                            isAuthorized = true;
+                        } else {
+                            errorMsg = 'Unauthorized: Counselor mismatch';
                         }
                     }
                 }
+                
+                if (!isAuthorized) {
+                    results.push({ id, success: false, error: errorMsg });
+                    failCount++;
+                    continue;
+                }
+            }
 
-                // 2. If approved, update the user profile
+            // 2. If approved, update the user profile
                 if (status === 'approved') {
                     const requestedChanges = requestData.requested_changes || {};
                     const dbUpdates: any = {

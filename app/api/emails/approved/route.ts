@@ -4,6 +4,7 @@ import { sendApprovalNotification } from '@/lib/utils/email';
 
 export async function POST(request: Request) {
     try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -21,7 +22,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'User not found or no email' }, { status: 404 });
         }
 
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
         const dashboardUrl = `${baseUrl}/dashboard`;
 
         await sendApprovalNotification(user.email, user.name || 'Devotee', dashboardUrl);

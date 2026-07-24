@@ -9,12 +9,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         const id = params.id;
         if (!id) return NextResponse.json({ error: 'Policy ID is required' }, { status: 400 });
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabase = createClient();
 
         const user = await getAuthUserFromRequest(request);
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -65,12 +60,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         const id = params.id;
         if (!id) return NextResponse.json({ error: 'Policy ID is required' }, { status: 400 });
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        const supabase = createClient();
 
         const user = await getAuthUserFromRequest(request);
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -33,21 +33,9 @@ export async function POST(request: Request) {
         }
 
         // Rate Limiting & Auth Setup
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            throw new Error('Supabase configuration missing (URL or Service Role Key).');
-        }
 
         // Use Service Role Key for Admin operations (Bypassing RLS for updates and user role changes)
-        const supabase = createClient(supabaseUrl, serviceRoleKey, {
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false,
-            }
-        });
+        const supabase = createClient();
 
         // Sanitize inputs
         name = sanitizeInput(name);
@@ -107,25 +95,25 @@ export async function POST(request: Request) {
                 morning_program_in_charge_name,
                 mentor_id,
                 mentor_name,
-                mentor_ids: Array.isArray(mentor_ids) ? mentor_ids : (mentor_id ? [mentor_id] : []),
-                mentor_names: Array.isArray(mentor_names) ? mentor_names : (mentor_name ? [mentor_name] : []),
+                mentor_ids: JSON.stringify(Array.isArray(mentor_ids) ? mentor_ids : (mentor_id ? [mentor_id] : [])),
+                mentor_names: JSON.stringify(Array.isArray(mentor_names) ? mentor_names : (mentor_name ? [mentor_name] : [])),
                 frontliner_id,
                 frontliner_name,
-                frontliner_ids: Array.isArray(frontliner_ids) ? frontliner_ids : (frontliner_id ? [frontliner_id] : []),
-                frontliner_names: Array.isArray(frontliner_names) ? frontliner_names : (frontliner_name ? [frontliner_name] : []),
+                frontliner_ids: JSON.stringify(Array.isArray(frontliner_ids) ? frontliner_ids : (frontliner_id ? [frontliner_id] : [])),
+                frontliner_names: JSON.stringify(Array.isArray(frontliner_names) ? frontliner_names : (frontliner_name ? [frontliner_name] : [])),
                 accountant_id,
                 accountant_name,
                 kitchen_head_id,
                 kitchen_head_name,
                 study_in_charge_name,
-                preaching_coordinator_ids: Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : []),
-                preaching_coordinator_names: Array.isArray(preaching_coordinator_names) ? preaching_coordinator_names : (preaching_coordinator_name ? [preaching_coordinator_name] : []),
-                grihstha_counselor_ids: Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : (body.grihstha_counselor_id ? [body.grihstha_counselor_id] : []),
-                grihstha_counselor_names: Array.isArray(grihstha_counselor_names) ? grihstha_counselor_names : (body.grihstha_counselor_name ? [body.grihstha_counselor_name] : []),
-                easy_incharge_ids: Array.isArray(easy_incharge_ids) ? easy_incharge_ids : (body.easy_incharge_id ? [body.easy_incharge_id] : []),
-                easy_incharge_names: Array.isArray(easy_incharge_names) ? easy_incharge_names : (body.easy_incharge_name ? [body.easy_incharge_name] : []),
-                prerna_incharge_ids: Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : (body.prerna_incharge_id ? [body.prerna_incharge_id] : []),
-                prerna_incharge_names: Array.isArray(prerna_incharge_names) ? prerna_incharge_names : (body.prerna_incharge_name ? [body.prerna_incharge_name] : []),
+                preaching_coordinator_ids: JSON.stringify(Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : [])),
+                preaching_coordinator_names: JSON.stringify(Array.isArray(preaching_coordinator_names) ? preaching_coordinator_names : (preaching_coordinator_name ? [preaching_coordinator_name] : [])),
+                grihstha_counselor_ids: JSON.stringify(Array.isArray(grihstha_counselor_ids) ? grihstha_counselor_ids : (body.grihstha_counselor_id ? [body.grihstha_counselor_id] : [])),
+                grihstha_counselor_names: JSON.stringify(Array.isArray(grihstha_counselor_names) ? grihstha_counselor_names : (body.grihstha_counselor_name ? [body.grihstha_counselor_name] : [])),
+                easy_incharge_ids: JSON.stringify(Array.isArray(easy_incharge_ids) ? easy_incharge_ids : (body.easy_incharge_id ? [body.easy_incharge_id] : [])),
+                easy_incharge_names: JSON.stringify(Array.isArray(easy_incharge_names) ? easy_incharge_names : (body.easy_incharge_name ? [body.easy_incharge_name] : [])),
+                prerna_incharge_ids: JSON.stringify(Array.isArray(prerna_incharge_ids) ? prerna_incharge_ids : (body.prerna_incharge_id ? [body.prerna_incharge_id] : [])),
+                prerna_incharge_names: JSON.stringify(Array.isArray(prerna_incharge_names) ? prerna_incharge_names : (body.prerna_incharge_name ? [body.prerna_incharge_name] : [])),
                 updated_at: new Date().toISOString()
             })
             .eq('id', id);
@@ -336,7 +324,6 @@ export async function POST(request: Request) {
         revalidateTag('centers');
 
         return NextResponse.json({ success: true });
-
 
     } catch (error: any) {
         console.error('Error updating center:', error);

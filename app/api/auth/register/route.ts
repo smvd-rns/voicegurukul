@@ -7,10 +7,6 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password, data } = await req.json();
 
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
-    }
-
     // 1. Check if user exists
     const checkUser = await query('SELECT * FROM users WHERE email = $1', [email]);
     if (checkUser.rows.length > 0) {

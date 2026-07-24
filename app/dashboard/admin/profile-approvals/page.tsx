@@ -44,21 +44,17 @@ export default function ProfileApprovalsPage() {
             setLoading(true);
             setDebugError(null);
             console.log('Fetching requests...'); // Debug log
-            if (!supabase) throw new Error('Supabase client not initialized');
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-
-            if (!token) {
-                console.log('No token found');
-                setRequests([]); // Ensure requests are cleared if no token
-                setDebugError('No authentication token found');
-                return;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
             }
 
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const response = await fetch(`/api/profile-requests?status=${selectedStatus}&_t=${new Date().getTime()}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 cache: 'no-store'
             });
             const data = await response.json();
@@ -85,11 +81,24 @@ export default function ProfileApprovalsPage() {
     }, [selectedStatus]);
 
     useEffect(() => {
-        if (userData && (
-            (Array.isArray(userData.role) && (userData.role.includes('super_admin') || userData.role.includes('center_admin') || userData.role.includes('counselor'))) ||
-            userData.role === 'super_admin' ||
-            userData.role === 8
-        )) {
+        if (!userData) return;
+        // userData.role comes from normalizeRoleFromFirestore which returns string/string[]
+        // e.g. role 8 → 'super_admin', role [11] → 'managing_director'
+        const roles = Array.isArray(userData.role) ? userData.role : [userData.role];
+        const roleNums = roles.map(Number); // only useful if stored as numbers
+        const roleStrs = roles.map(String); // used for string role names
+        const adminRoleStrings = [
+            'super_admin', 'admin', 'managing_director', 'director',
+            'central_voice_manager', 'youth_preacher', 'project_manager',
+            'project_advisor', 'acting_manager', 'center_admin', 'counselor',
+            'care_giver', 'oc', 'mentor'
+        ];
+        const adminRoleNumbers = [2, 8, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25];
+        const canView =
+            roleStrs.some(r => adminRoleStrings.includes(r)) ||
+            roleNums.some(n => adminRoleNumbers.includes(n));
+        console.log('[ProfileApprovals] userData.role:', userData.role, '→ canView:', canView);
+        if (canView) {
             fetchRequests();
         }
     }, [userData, selectedStatus, fetchRequests]);
@@ -99,18 +108,20 @@ export default function ProfileApprovalsPage() {
 
         try {
             setProcessingId('batch');
-            if (!supabase) throw new Error('Supabase client not initialized');
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
+            }
 
-            if (!token) throw new Error('No active session token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const response = await fetch('/api/profile-requests/batch', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({
                     requestIds: selectedRequestIds,
                     status,
@@ -153,18 +164,20 @@ export default function ProfileApprovalsPage() {
     const handleAction = async (id: string, status: 'approved' | 'rejected') => {
         try {
             setProcessingId(id);
-            if (!supabase) throw new Error('Supabase client not initialized');
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            let token = (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+            if (!token && supabase) {
+                const session = await supabase.auth.getSession();
+                token = session.data.session?.access_token || null;
+            }
 
-            if (!token) throw new Error('No active session token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const response = await fetch(`/api/profile-requests/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({
                     status,
                     feedback,
@@ -395,6 +408,25 @@ export default function ProfileApprovalsPage() {
                     </div>
                     <p className="text-gray-500 text-lg font-medium">No {selectedStatus} requests found.</p>
                     <p className="text-gray-400 text-sm mt-1">Excellent! All caught up with current profile updates.</p>
+                    {debugError && (
+                        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-xs font-mono max-w-md mx-auto">
+                            Error: {debugError}
+                        </div>
+                    )}
+                    {apiDebug.length > 0 && (
+                        <div className="mt-3 p-3 bg-gray-50 text-gray-600 rounded-xl text-xs font-mono max-w-md mx-auto text-left space-y-1">
+                            <span className="font-bold text-gray-700">API Debug Log:</span>
+                            {apiDebug.map((line, idx) => (
+                                <div key={idx}>- {line}</div>
+                            ))}
+                        </div>
+                    )}
+                    <button
+                        onClick={() => fetchRequests()}
+                        className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow hover:bg-amber-600 transition-colors"
+                    >
+                        Refresh Requests
+                    </button>
                 </div>
             ) : (
                 <div className="space-y-4">

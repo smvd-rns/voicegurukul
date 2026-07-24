@@ -761,7 +761,7 @@ export default function DataCenterPage() {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                         },
                         body: JSON.stringify({ ids: fileIds })
                     }).then(async res => {
@@ -779,7 +779,7 @@ export default function DataCenterPage() {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                         },
                         body: JSON.stringify({ id: folderId })
                     }).then(async res => {
@@ -829,7 +829,7 @@ export default function DataCenterPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({ id: folderToDelete.id })
             });
@@ -875,7 +875,7 @@ export default function DataCenterPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
                 },
                 body: JSON.stringify({
                     name: newFolderName,

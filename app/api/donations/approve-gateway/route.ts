@@ -28,10 +28,6 @@ export async function POST(request: Request) {
   try {
     const { token, userId } = await request.json();
 
-    if (!token || !userId) {
-      return NextResponse.json({ success: false, error: 'Missing token or user identity.' }, { status: 400 });
-    }
-
     const admin = getAdminClient();
 
     // 1. Verify User Role 8 (Super Admin)

@@ -15,8 +15,6 @@ export async function POST(request: Request) {
     }
 
     // Rate Limiting
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     // Create a temporary client to get the user ID from the token
     const user = await getAuthUserFromRequest(request);
     const userId = user?.id || null;
@@ -40,51 +38,10 @@ export async function POST(request: Request) {
     state = sanitizeInput(state);
     cityName = sanitizeInput(cityName);
 
-
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase is not initialized. Please check your environment variables.');
-    }
-
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
     // Use Service Role Key if available (Restricted RLS), otherwise fallback to Anon Key (Public RLS)
-    const keyToUse = serviceRoleKey || supabaseAnonKey;
 
     // Custom fetch
-    const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      const fetchHeaders = new Headers(init?.headers);
-
-      if (serviceRoleKey) {
-        fetchHeaders.set('apikey', serviceRoleKey);
-        fetchHeaders.set('Authorization', `Bearer ${serviceRoleKey}`);
-      } else {
-        // Pass the user's auth token if using Anon Key
-        const authHeader = request.headers.get('authorization');
-        const accessToken = authHeader?.replace('Bearer ', '');
-        if (accessToken) {
-          fetchHeaders.set('Authorization', `Bearer ${accessToken}`);
-        }
-        fetchHeaders.set('apikey', supabaseAnonKey);
-      }
-
-      fetchHeaders.set('Content-Type', 'application/json');
-
-      return fetch(input, {
-        ...init,
-        headers: fetchHeaders,
-      });
-    };
-
-    const authenticatedClient = createClient(supabaseUrl, keyToUse, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-      global: {
-        fetch: customFetch,
-      },
-    });
+    const authenticatedClient = createClient();
 
     const trimmedState = state.trim();
     const trimmedCityName = cityName.trim();
@@ -110,7 +67,6 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true });
     }
-
 
     // Insert new city
     const { error } = await authenticatedClient
