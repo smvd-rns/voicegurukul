@@ -1081,6 +1081,9 @@ export default function ProjectManagerDashboard() {
     };
 
     const renderFieldChange = (requestId: string, key: string, newValue: any, oldValue: any) => {
+        // Skip internal technical ID fields (show names instead)
+        if (key === 'counselorId' || key === 'counselor_id') return null;
+
         const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
         const displayOld = (oldValue === null || oldValue === undefined || oldValue === '') ? 'Not Set' : oldValue.toString();
         const displayNew = (newValue === null || newValue === undefined || newValue === '') ? 'Cleared' : newValue.toString();
@@ -2563,7 +2566,7 @@ export default function ProjectManagerDashboard() {
                                 </div>
                             </div>
                             <div className="p-8 bg-white space-y-4">
-                                {confirmation.type === 'rejected' && (
+                                {confirmation.type === 'rejected' && activeTab === 'registrations' && (
                                     <div className="space-y-2">
                                         <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Rejection Reason</label>
                                         <textarea
@@ -2589,7 +2592,7 @@ export default function ProjectManagerDashboard() {
                                                 confirmAction();
                                             }
                                         }}
-                                        disabled={confirmation.type === 'rejected' && !feedback.trim()}
+                                        disabled={confirmation.type === 'rejected' && activeTab === 'registrations' && !feedback.trim()}
                                         className={`w-full py-4 text-sm font-black text-white rounded-2xl shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale ${confirmation.type === 'approved'
                                             ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 shadow-emerald-200'
                                             : 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-red-200'

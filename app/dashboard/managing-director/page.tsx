@@ -1442,6 +1442,9 @@ export default function ManagingDirectorDashboard() {
     };
 
     const renderFieldChange = (requestId: string, key: string, newValue: any, oldValue: any) => {
+        // Skip internal technical ID fields (show names instead)
+        if (key === 'counselorId' || key === 'counselor_id') return null;
+
         const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 
         // Normalize values for display
@@ -1565,22 +1568,10 @@ export default function ManagingDirectorDashboard() {
                             </div>
                         </div>
                         <div className="p-8 bg-[#fffdfa] space-y-4">
-                            {confirmation.type === 'rejected' && (
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Rejection Reason</label>
-                                    <textarea
-                                        className="w-full px-4 py-3 text-sm bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-400 focus:bg-white outline-none transition-all resize-none"
-                                        rows={3}
-                                        placeholder="Please provide constructive feedback..."
-                                        value={feedback}
-                                        onChange={(e) => setFeedback(e.target.value)}
-                                    />
-                                </div>
-                            )}
                             <div className="flex flex-col gap-3 pt-2">
                                 <button
                                     onClick={confirmAction}
-                                    disabled={confirmation.type === 'rejected' && !feedback.trim()}
+                                    disabled={false}
                                     className={`w-full py-4 text-sm font-black text-white rounded-2xl shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale ${confirmation.type === 'approved'
                                         ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 shadow-emerald-200'
                                         : 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-red-200'

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import pool from '../db';
 
 // Initialize the Nodemailer transporter using environment variables
 const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
@@ -54,6 +55,18 @@ function getEmailWrapper(title: string, bodyContent: string, isAlert = false) {
     `;
 }
 
+async function getEmailTemplate(key: string) {
+    try {
+        const result = await pool.query('SELECT * FROM email_templates WHERE key = $1 LIMIT 1', [key]);
+        if (result.rows && result.rows.length > 0) {
+            return result.rows[0];
+        }
+    } catch (e) {
+        console.error('Failed to query email template from DB:', e);
+    }
+    return null;
+}
+
 /**
  * Sends a notification email to the managers for a new user registration.
  */
@@ -69,6 +82,12 @@ export async function sendRegistrationNotification(
         return true;
     }
 
+    const template = await getEmailTemplate('registration_notification');
+    if (template && !template.is_enabled) {
+        console.log(`[Email Skipped] Template 'registration_notification' is disabled.`);
+        return true;
+    }
+
     const detailRow = (label: string, value: string) => `
         <tr>
             <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px; font-weight: 500; width: 35%;">${label}</td>
@@ -76,42 +95,65 @@ export async function sendRegistrationNotification(
         </tr>
     `;
 
-    const htmlBody = `
-        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${managerName}</strong>,</p>
-        <p style="font-size: 16px; color: #334155; margin-bottom: 30px;">A new devotee has registered for the VOICE Gurukul and is currently awaiting your review and approval.</p>
-        
-        <div style="background-color: #fffaf8; border: 1px solid #ffedd5; border-radius: 12px; padding: 25px; margin-bottom: 30px;">
-            <h3 style="color: #ea580c; margin-top: 0; margin-bottom: 15px; font-size: 18px; font-weight: 700; border-bottom: 2px solid #ffedd5; padding-bottom: 8px;">Registration Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                ${detailRow('Name', newUser.name || 'N/A')}
-                ${detailRow('Email', newUser.email || 'N/A')}
-                ${detailRow('Phone', newUser.phone || 'N/A')}
-                ${detailRow('Counselor', newUser.hierarchy?.counselor === 'Other' ? (newUser.hierarchy?.otherCounselor || 'Other') : (newUser.hierarchy?.counselor || 'N/A'))}
-                ${detailRow('Role / Ashram', newUser.hierarchy?.ashram || 'N/A')}
-                ${detailRow('Temple', newUser.hierarchy?.currentTemple === 'Other' ? (newUser.hierarchy?.otherTemple || 'Other') : (newUser.hierarchy?.currentTemple || 'N/A'))}
-                ${detailRow('Center', newUser.hierarchy?.currentCenter === 'Other' ? (newUser.hierarchy?.otherCenter || 'Other') : (newUser.hierarchy?.currentCenter || 'N/A'))}
-            </table>
-        </div>
+    let subject = 'New User Registration Pending Approval';
+    let htmlContent = '';
 
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="${approveLink}" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.2), 0 2px 4px -1px rgba(22, 163, 74, 0.1);">Approve Devotee Now</a>
-        </div>
-        
-        <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-bottom: 0;">If you wish to reject or request profile corrections, please log in to the admin dashboard.</p>
-    `;
+    if (template) {
+        const uPhone = newUser.phone || 'N/A';
+        const cName = newUser.hierarchy?.counselor === 'Other' ? (newUser.hierarchy?.otherCounselor || 'Other') : (newUser.hierarchy?.counselor || 'N/A');
+        const aName = newUser.hierarchy?.ashram || 'N/A';
+        const tName = newUser.hierarchy?.currentTemple === 'Other' ? (newUser.hierarchy?.otherTemple || 'Other') : (newUser.hierarchy?.currentTemple || 'N/A');
+        const ctName = newUser.hierarchy?.currentCenter === 'Other' ? (newUser.hierarchy?.otherCenter || 'Other') : (newUser.hierarchy?.currentCenter || 'N/A');
 
-    const htmlContent = getEmailWrapper('New Registration Approval', htmlBody);
+        subject = template.subject
+            .replace(/{managerName}/g, managerName)
+            .replace(/{userName}/g, newUser.name);
+        const body = template.body
+            .replace(/{managerName}/g, managerName)
+            .replace(/{userName}/g, newUser.name)
+            .replace(/{userEmail}/g, newUser.email)
+            .replace(/{userPhone}/g, uPhone)
+            .replace(/{counselorName}/g, cName)
+            .replace(/{ashramName}/g, aName)
+            .replace(/{templeName}/g, tName)
+            .replace(/{centerName}/g, ctName)
+            .replace(/{approveLink}/g, approveLink);
+        htmlContent = getEmailWrapper(template.name || 'Registration Pending', body);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${managerName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">A new devotee has registered on the sadhana platform and is pending your approval.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin: 30px 0;">
+                <h4 style="margin: 0 0 15px 0; color: #475569; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Registration Details:</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                    ${detailRow('Full Name', newUser.name)}
+                    ${detailRow('Email Address', newUser.email)}
+                    ${newUser.phone ? detailRow('Phone Number', newUser.phone) : ''}
+                    ${newUser.whatsapp ? detailRow('WhatsApp Number', newUser.whatsapp) : ''}
+                    ${newUser.current_temple ? detailRow('Temple', newUser.current_temple) : ''}
+                </table>
+            </div>
+
+            <p style="font-size: 15px; color: #334155; margin-bottom: 30px;">Please click the button below to review, assign roles, and verify the registration details:</p>
+            
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="${approveLink}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Approve Registration</a>
+            </div>
+        `;
+        htmlContent = getEmailWrapper('New Registration', htmlBody);
+    }
 
     try {
         await transporter.sendMail({
             from: SENDER_EMAIL,
             to: managerEmail,
-            subject: `Action Required: New Registration - ${newUser.name || 'Devotee'}`,
+            subject: subject,
             html: htmlContent,
         });
         return true;
     } catch (error) {
-        console.error('Failed to send registration email:', error);
+        console.error('Failed to send registration notification email:', error);
         return false;
     }
 }
@@ -119,52 +161,66 @@ export async function sendRegistrationNotification(
 /**
  * Sends a welcome/approval notification to the newly approved user.
  */
-export async function sendApprovalNotification(userEmail: string, userName: string, dashboardUrl: string, userDetails?: any) {
+export async function sendApprovalNotification(userEmail: string, userName: string, dashboardUrl: string, membershipId?: string) {
     if (!process.env.SMTP_USER) {
         console.warn(`[Mock Email] Would send Approval Welcome Mail to ${userEmail} for user ${userName}`);
         return true;
     }
 
-    const detailRow = (label: string, value: string) => `
-        <tr>
-            <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px; font-weight: 500; width: 35%;">${label}</td>
-            <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 600;">${value}</td>
-        </tr>
-    `;
+    const template = await getEmailTemplate('welcome_approved');
+    if (template && !template.is_enabled) {
+        console.log(`[Email Skipped] Template 'welcome_approved' is disabled.`);
+        return true;
+    }
 
-    const htmlBody = `
-        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
-        <p style="font-size: 16px; color: #334155;">We are delighted to inform you that your registration for the <strong>VOICE Gurukul</strong> has been successfully reviewed and <strong>approved</strong>!</p>
-        <p style="font-size: 16px; color: #334155; margin-bottom: 30px;">You can now log in to the dashboard to begin tracking your sadhana, accessing study material, and staying updated with your local center events.</p>
+    let subject = 'Your VOICE Gurukul Account is Approved!';
+    let htmlContent = '';
 
-        ${userDetails ? `
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px;">
-            <h3 style="color: #ea580c; margin-top: 0; margin-bottom: 15px; font-size: 18px; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Your Registered Profile</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                ${detailRow('Email', userEmail)}
-                ${detailRow('Phone', userDetails.phone || 'N/A')}
-                ${detailRow('Counselor', userDetails.hierarchy?.counselor === 'Other' ? (userDetails.hierarchy?.otherCounselor || 'Other') : (userDetails.hierarchy?.counselor || 'N/A'))}
-                ${detailRow('Role / Ashram', userDetails.hierarchy?.ashram || 'N/A')}
-                ${detailRow('Temple', userDetails.hierarchy?.currentTemple === 'Other' ? (userDetails.hierarchy?.otherTemple || 'Other') : (userDetails.hierarchy?.currentTemple || 'N/A'))}
-                ${detailRow('Center', userDetails.hierarchy?.currentCenter === 'Other' ? (userDetails.hierarchy?.otherCenter || 'Other') : (userDetails.hierarchy?.currentCenter || 'N/A'))}
-            </table>
-        </div>
-        ` : ''}
+    if (template) {
+        subject = template.subject.replace(/{userName}/g, userName);
+        let body = template.body
+            .replace(/{userName}/g, userName)
+            .replace(/{dashboardUrl}/g, dashboardUrl);
+        if (membershipId) {
+            body += `
+                <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+                    <p style="margin: 0; color: #c2410c; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Your Membership ID</p>
+                    <p style="margin: 5px 0 0 0; color: #ea580c; font-size: 24px; font-weight: 800; letter-spacing: 1px;">${membershipId}</p>
+                </div>
+            `;
+        }
+        body += `
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">Go to Dashboard</a>
+            </div>
+        `;
+        htmlContent = getEmailWrapper(template.name || 'Account Approved!', body);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">Your registration with VOICE Gurukul has been approved by your counselor.</p>
+            
+            ${membershipId ? `
+            <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+                <p style="margin: 0; color: #c2410c; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Your Membership ID</p>
+                <p style="margin: 5px 0 0 0; color: #ea580c; font-size: 24px; font-weight: 800; letter-spacing: 1px;">${membershipId}</p>
+            </div>
+            ` : ''}
 
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Go to Dashboard</a>
-        </div>
-        
-        <p style="font-size: 15px; color: #334155;">Thank you for registering. We look forward to supporting your spiritual journey.</p>
-    `;
-
-    const htmlContent = getEmailWrapper('Account Approved!', htmlBody);
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Go to Dashboard</a>
+            </div>
+            
+            <p style="font-size: 15px; color: #334155;">Thank you for registering. We look forward to supporting your spiritual journey.</p>
+        `;
+        htmlContent = getEmailWrapper('Account Approved!', htmlBody);
+    }
 
     try {
         await transporter.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
-            subject: 'Your VOICE Gurukul Account is Approved!',
+            subject: subject,
             html: htmlContent,
         });
         return true;
@@ -262,37 +318,54 @@ export async function sendProfileUpdateApprovalNotification(userEmail: string, u
         return true;
     }
 
+    const template = await getEmailTemplate('profile_update_approval');
+    if (template && !template.is_enabled) {
+        console.log(`[Email Skipped] Template 'profile_update_approval' is disabled.`);
+        return true;
+    }
+
     // Format list of changes nicely
     const formatFieldLabel = (f: string) => f.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
     const changesList = changedFields.map(f => `<li style="margin-bottom: 6px; font-weight: 600;">${formatFieldLabel(f)}</li>`).join('');
 
-    const htmlBody = `
-        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
-        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Your requested spiritual profile update has been reviewed and <strong>approved</strong> by the authority.</p>
-        
-        ${changedFields.length > 0 ? `
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
-            <h4 style="color: #475569; margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Approved Changes:</h4>
-            <ul style="margin: 0; padding-left: 20px; color: #0f172a; font-size: 14px;">
-                ${changesList}
-            </ul>
-        </div>
-        ` : ''}
+    let subject = 'Spiritual Profile Update Approved - VOICE Gurukul';
+    let htmlContent = '';
 
-        <p style="font-size: 15px; color: #334155; margin-bottom: 30px;">The updated details are now live on your profile.</p>
+    if (template) {
+        subject = template.subject.replace(/{userName}/g, userName);
+        let body = template.body
+            .replace(/{userName}/g, userName)
+            .replace(/{dashboardUrl}/g, dashboardUrl)
+            .replace(/{fieldsList}/g, changesList);
+        htmlContent = getEmailWrapper(template.name || 'Profile Update Approved', body);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155; line-height: 1.6;">Your requested spiritual profile update has been reviewed and <strong>approved</strong> by the authority.</p>
+            
+            ${changedFields.length > 0 ? `
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                <h4 style="color: #475569; margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Approved Changes:</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #0f172a; font-size: 14px;">
+                    ${changesList}
+                </ul>
+            </div>
+            ` : ''}
 
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">View Profile</a>
-        </div>
-    `;
+            <p style="font-size: 15px; color: #334155; margin-bottom: 30px;">The updated details are now live on your profile.</p>
 
-    const htmlContent = getEmailWrapper('Profile Update Approved', htmlBody);
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">View Profile</a>
+            </div>
+        `;
+        htmlContent = getEmailWrapper('Profile Update Approved', htmlBody);
+    }
 
     try {
         await transporter.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
-            subject: 'Spiritual Profile Update Approved - VOICE Gurukul',
+            subject: subject,
             html: htmlContent,
         });
         return true;

@@ -142,6 +142,14 @@ export default function AdminDashboardPage() {
             bgColor: 'bg-rose-100',
         },
         {
+            title: 'Email Settings',
+            description: 'Manage email templates & triggers',
+            icon: Settings,
+            href: '/dashboard/admin/email-settings',
+            color: 'text-indigo-600',
+            bgColor: 'bg-indigo-100',
+        },
+        {
             title: 'Counselor Dashboard',
             description: 'My Assigned Students',
             icon: UserCircle,

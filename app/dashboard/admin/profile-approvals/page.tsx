@@ -202,6 +202,9 @@ export default function ProfileApprovalsPage() {
     };
 
     const renderFieldChange = (requestId: string, key: string, newValue: any, oldValue: any) => {
+        // Skip internal technical ID fields (show names instead)
+        if (key === 'counselorId' || key === 'counselor_id') return null;
+
         const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 
         // Normalize values for display
