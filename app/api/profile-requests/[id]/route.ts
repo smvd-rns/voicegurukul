@@ -1,7 +1,7 @@
 import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
 import { getAuthUserFromRequest } from '@/lib/supabase/admin';
-import { sendApprovalNotification } from '@/lib/utils/email';
+import { sendProfileUpdateApprovalNotification } from '@/lib/utils/email';
 import { generateMembershipIdForUser } from '@/lib/utils/membership';
 
 export const dynamic = 'force-dynamic';
@@ -298,9 +298,10 @@ export async function PATCH(
 
                 if (approvedUser?.email) {
                     
-                    // 1. Send Approval Email
-                    await sendApprovalNotification(approvedUser.email, approvedUser.name || 'Devotee', `${baseUrl}/dashboard`, approvedUser);
-                    log('Approval email sent');
+                    // 1. Send Profile Update Approval Email
+                    const changedFields = Object.keys(profileRequest.requested_changes || {});
+                    await sendProfileUpdateApprovalNotification(approvedUser.email, approvedUser.name || 'Devotee', `${baseUrl}/dashboard`, changedFields);
+                    log('Profile update approval email sent');
 
                     // 2. Generate Membership ID (if required fields are present and ID is missing)
                     try {

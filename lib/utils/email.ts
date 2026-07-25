@@ -253,4 +253,54 @@ export async function sendForgotPasswordEmail(userEmail: string, userName: strin
     }
 }
 
+/**
+ * Sends a notification to the user when their spiritual profile details update has been approved.
+ */
+export async function sendProfileUpdateApprovalNotification(userEmail: string, userName: string, dashboardUrl: string, changedFields: string[]) {
+    if (!process.env.SMTP_USER) {
+        console.warn(`[Mock Email] Would send Profile Update Approval Mail to ${userEmail} for user ${userName}`);
+        return true;
+    }
+
+    // Format list of changes nicely
+    const formatFieldLabel = (f: string) => f.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    const changesList = changedFields.map(f => `<li style="margin-bottom: 6px; font-weight: 600;">${formatFieldLabel(f)}</li>`).join('');
+
+    const htmlBody = `
+        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Your requested spiritual profile update has been reviewed and <strong>approved</strong> by the authority.</p>
+        
+        ${changedFields.length > 0 ? `
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
+            <h4 style="color: #475569; margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Approved Changes:</h4>
+            <ul style="margin: 0; padding-left: 20px; color: #0f172a; font-size: 14px;">
+                ${changesList}
+            </ul>
+        </div>
+        ` : ''}
+
+        <p style="font-size: 15px; color: #334155; margin-bottom: 30px;">The updated details are now live on your profile.</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">View Profile</a>
+        </div>
+    `;
+
+    const htmlContent = getEmailWrapper('Profile Update Approved', htmlBody);
+
+    try {
+        await transporter.sendMail({
+            from: SENDER_EMAIL,
+            to: userEmail,
+            subject: 'Spiritual Profile Update Approved - VOICE Gurukul',
+            html: htmlContent,
+        });
+        return true;
+    } catch (error) {
+        console.error('Failed to send profile update approval email:', error);
+        return false;
+    }
+}
+
+
 
