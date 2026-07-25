@@ -85,12 +85,12 @@ export async function GET(request: Request) {
         // Trigger the approval notification directly
         const { data: userData } = await supabase
             .from('users')
-            .select('email, name')
+            .select('email, name, phone, hierarchy, current_center, current_temple')
             .eq('id', userId)
             .single();
 
         if (userData?.email) {
-            await sendApprovalNotification(userData.email, userData.name || 'Devotee', `${baseUrl}/dashboard`);
+            await sendApprovalNotification(userData.email, userData.name || 'Devotee', `${baseUrl}/dashboard`, userData);
             
             // Also generate Membership ID if missing
             try {

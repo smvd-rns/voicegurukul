@@ -186,12 +186,12 @@ export async function POST(request: NextRequest) {
 
                 for (const userId of targetIds) {
                     try {
-                        const userRes = await dbQuery('SELECT email, name FROM users WHERE id = $1', [userId]);
+                        const userRes = await dbQuery('SELECT email, name, phone, hierarchy, current_center, current_temple FROM users WHERE id = $1', [userId]);
                         const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
                             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
-                            await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`);
+                            await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`, userDetails);
                             try {
                                 await generateMembershipIdForUser(supabase, userId);
                             } catch (genErr) {

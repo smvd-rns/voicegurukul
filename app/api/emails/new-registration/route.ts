@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         }
         
         // Fetch the new user directly from Droplet DB
-        const userRes = await dbQuery('SELECT id, name, email, phone, hierarchy FROM users WHERE id = $1', [userId]);
+        const userRes = await dbQuery('SELECT id, name, email, phone, hierarchy, current_center, current_temple FROM users WHERE id = $1', [userId]);
         const newUser = userRes.rows[0];
 
         if (!newUser) {
@@ -30,8 +30,8 @@ export async function POST(request: Request) {
         }
 
         // Determine recipients based on hierarchy
-        const userCenterName = newUser.hierarchy?.currentCenter;
-        const userTempleName = newUser.hierarchy?.currentTemple;
+        const userCenterName = newUser.current_center || newUser.hierarchy?.currentCenter;
+        const userTempleName = newUser.current_temple || newUser.hierarchy?.currentTemple;
         
         let managerIdsToNotify: string[] = [];
         let notifyByRole8 = false;

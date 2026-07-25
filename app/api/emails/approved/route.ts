@@ -14,7 +14,7 @@ export async function POST(request: Request) {
         
         const { data: user, error } = await supabase
             .from('users')
-            .select('email, name')
+            .select('email, name, phone, hierarchy, current_center, current_temple')
             .eq('id', userId)
             .single();
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
         const dashboardUrl = `${baseUrl}/dashboard`;
 
-        await sendApprovalNotification(user.email, user.name || 'Devotee', dashboardUrl);
+        await sendApprovalNotification(user.email, user.name || 'Devotee', dashboardUrl, user);
 
         return NextResponse.json({ success: true });
     } catch (error) {

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/config';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { AlertCircle, CheckCircle, Loader2, Lock, ArrowLeft } from 'lucide-react';
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState('');
@@ -12,91 +11,27 @@ function ResetPasswordForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(true);
   const router = useRouter();
-  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  
+  const token = searchParams.get('token');
 
-  useEffect(() => {
-    // Check if we have a valid recovery token for password reset
-    const checkRecoveryToken = async () => {
-      if (!supabase) {
-        setError('Supabase is not initialized');
-        setVerifying(false);
-        return;
-      }
-
-      try {
-        // Check URL hash for recovery token (Supabase puts it there)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
-        
-        // Check query parameters as well (some flows use query params)
-        const searchParams = new URLSearchParams(window.location.search);
-        const queryToken = searchParams.get('access_token');
-        const queryType = searchParams.get('type');
-
-        const token = accessToken || queryToken;
-        const tokenType = type || queryType;
-
-        // If we have a recovery token, set the session
-        if (token && tokenType === 'recovery') {
-          console.log('Recovery token found, setting session...');
-          
-          // Set the session with the recovery tokens
-          if (accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              console.error('Error setting recovery session:', sessionError);
-              setError('Invalid or expired reset link. Please request a new password reset.');
-              setVerifying(false);
-              return;
-            }
-          } else if (token) {
-            // Try to verify the token
-            const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-            if (userError || !user) {
-              setError('Invalid or expired reset link. Please request a new password reset.');
-              setVerifying(false);
-              return;
-            }
-            // Token is valid, we can proceed
-          }
-        }
-
-        // Check if we now have a valid session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-        }
-
-        if (!session && !token) {
-          setError('Invalid or expired reset link. Please request a new password reset.');
-          setVerifying(false);
-          return;
-        }
-
-        // Session exists or token is valid, allow password reset
-        console.log('Valid recovery session/token, allowing password reset');
-        setVerifying(false);
-      } catch (err: any) {
-        console.error('Error checking recovery token:', err);
-        setError('Failed to verify reset link. Please request a new password reset.');
-        setVerifying(false);
-      }
-    };
-
-    checkRecoveryToken();
-  }, []);
-
-  // Don't redirect if user is logged in - they might be here to reset password
-  // We'll sign them out after password reset anyway
+  if (!token) {
+    return (
+      <div className="text-center">
+        <div className="mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-xl shadow-md flex items-start space-x-2">
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-600" />
+          <p className="flex-1 font-semibold text-sm">
+            Invalid or missing password reset link. Please request a new link.
+          </p>
+        </div>
+        <Link href="/auth/forgot-password" className="inline-flex items-center text-sm font-semibold text-amber-700 hover:text-amber-800 hover:underline">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Request New Link
+        </Link>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,23 +51,18 @@ function ResetPasswordForm() {
     setLoading(true);
 
     try {
-      if (!supabase) {
-        throw new Error('Supabase is not initialized');
-      }
-
-      const { error } = await supabase.auth.updateUser({
-        password: password,
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
       });
 
-      if (error) {
-        throw new Error(error.message);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update password');
       }
 
-      // Sign out the user after password reset (for security)
-      // This ensures they need to log in again with the new password
-      await supabase.auth.signOut();
-
-      setSuccess('Password updated successfully! Please sign in with your new password.');
+      setSuccess('Password updated successfully! Redirecting to login...');
       setTimeout(() => {
         router.push('/auth/login');
       }, 2000);
@@ -143,46 +73,29 @@ function ResetPasswordForm() {
     }
   };
 
-  if (verifying) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Verifying reset link...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-center text-primary-700 mb-2">
-          Reset Password
-        </h1>
-        <p className="text-center text-gray-600 mb-8">
-          Enter your new password
-        </p>
+    <div>
+      {error && (
+        <div className="mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-xl shadow-md flex items-start space-x-2">
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-600" />
+          <p className="flex-1 font-semibold text-sm break-words">{error}</p>
+        </div>
+      )}
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
+      {success && (
+        <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-xl shadow-md flex items-start space-x-2">
+          <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-green-600" />
+          <p className="flex-1 font-semibold text-sm break-words">{success}</p>
+        </div>
+      )}
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
-            {success}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              New Password
-            </label>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label htmlFor="password" className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+            New Password
+          </label>
+          <div className="relative">
+            <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               id="password"
               type="password"
@@ -190,16 +103,20 @@ function ResetPasswordForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 bg-white"
+              disabled={loading}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm text-gray-800 bg-white"
               placeholder="••••••••"
             />
-            <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters</p>
           </div>
+          <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters</p>
+        </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
-            </label>
+        <div>
+          <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+            Confirm Password
+          </label>
+          <div className="relative">
+            <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               id="confirmPassword"
               type="password"
@@ -207,44 +124,68 @@ function ResetPasswordForm() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 bg-white"
+              disabled={loading}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm text-gray-800 bg-white"
               placeholder="••••••••"
             />
           </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Updating...' : 'Update Password'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Remember your password?{' '}
-          <Link href="/auth/login" className="text-primary-600 hover:text-primary-700 font-semibold">
-            Sign in
-          </Link>
-        </p>
-      </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full flex items-center justify-center bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold py-3 rounded-xl shadow-md hover:from-amber-700 hover:to-orange-700 transition-all text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              <span>Updating Password...</span>
+            </>
+          ) : (
+            'Update Password'
+          )}
+        </button>
+      </form>
     </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading...</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 px-4 py-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-amber-100 p-8 sm:p-10 mx-auto">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-500 via-orange-500 to-yellow-500 rounded-2xl shadow-lg mb-4">
+            <Lock className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold font-serif bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 bg-clip-text text-transparent mb-2">
+            Reset Password
+          </h1>
+          <p className="text-sm text-gray-600">
+            Enter your new password below.
+          </p>
+        </div>
+
+        <Suspense fallback={
+          <div className="text-center py-6">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading form...</p>
+          </div>
+        }>
+          <ResetPasswordForm />
+        </Suspense>
+
+        {/* Hare Krishna Mahamantra */}
+        <div className="mt-8 pt-6 border-t border-amber-200 text-center">
+          <p className="text-xs text-amber-700 mb-3 font-medium uppercase tracking-wide">Hare Krishna Mahamantra</p>
+          <div className="space-y-1 font-serif font-bold text-amber-700/90 text-sm">
+            <p>Hare Krishna Hare Krishna</p>
+            <p>Krishna Krishna Hare Hare</p>
+            <p>Hare Rama Hare Rama</p>
+            <p>Rama Rama Hare Hare</p>
           </div>
         </div>
       </div>
-    }>
-      <ResetPasswordForm />
-    </Suspense>
+    </div>
   );
 }

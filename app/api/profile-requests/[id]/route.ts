@@ -155,24 +155,25 @@ export async function PATCH(
                 // Lookup Counselor ID and Name
                 const { data: counselorData } = await supabaseAdmin
                     .from('counselors')
-                    .select('id, name')
-                    .eq('email', normalizedAdminEmail)
+                    .select('id, name, user_id')
+                    .ilike('email', normalizedAdminEmail)
                     .maybeSingle();
 
                 const counselorName = counselorData?.name ? counselorData.name.trim().toLowerCase() : null;
                 const adminCounselorId = counselorData?.id || null;
+                const adminCounselorUserId = counselorData?.user_id || null;
 
                 // Current Counselor Emails/Names
-                const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
+                const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || targetUser?.counselor_email || '').trim().toLowerCase();
                 const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-                const bN = (uH.brahmachariCounselor || '').trim().toLowerCase();
+                const bN = (uH.brahmachariCounselor || uH.counselor || targetUser?.counselor || '').trim().toLowerCase();
                 const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
 
                 // Requested Counselor Emails/Names/IDs
                 const rC = profileRequest.requested_changes || {};
-                const rbE = (rC.brahmachariCounselorEmail || '').trim().toLowerCase();
+                const rbE = (rC.brahmachariCounselorEmail || rC.counselorEmail || '').trim().toLowerCase();
                 const rgE = (rC.grihasthaCounselorEmail || '').trim().toLowerCase();
-                const rbN = (rC.brahmachariCounselor || '').trim().toLowerCase();
+                const rbN = (rC.brahmachariCounselor || rC.counselor || '').trim().toLowerCase();
                 const rgN = (rC.grihasthaCounselor || '').trim().toLowerCase();
                 const rcId = (rC.counselorId || rC.counselor_id || '').trim();
 
@@ -183,7 +184,9 @@ export async function PATCH(
                 log(`Counselor Check: AdminID=${adminUser.id}, AdminCounselorID=${adminCounselorId}, AdminEmail=${normalizedAdminEmail}, Name=${counselorName}, rbE=${rbE}, rgE=${rgE}, rbN=${rbN}, rgN=${rgN}, rcId=${rcId}, uId=${uId}, uTopId=${uTopId}`);
 
                 // 1. Matches by Stable ID (Preferred)
-                const matchesId = (adminCounselorId && (rcId === adminCounselorId || uTopId === adminCounselorId)) || adminUser.id === rcId || adminUser.id === uId || adminUser.id === uTopId;
+                const matchesId = (adminCounselorId && (rcId === adminCounselorId || uTopId === adminCounselorId)) || 
+                                  (adminCounselorUserId && (rcId === adminCounselorUserId || uTopId === adminCounselorUserId)) ||
+                                  adminUser.id === rcId || adminUser.id === uId || adminUser.id === uTopId;
 
                 // 2. Matches by Email (Legacy)
                 const matchesEmail = bE === normalizedAdminEmail || gE === normalizedAdminEmail ||
@@ -289,14 +292,14 @@ export async function PATCH(
                 // Fetch user data again to ensure we have the latest (including email for notification)
                 const { data: approvedUser } = await supabaseAdmin
                     .from('users')
-                    .select('email, name, verification_status')
+                    .select('email, name, verification_status, phone, hierarchy, current_center, current_temple')
                     .eq('id', userId)
                     .single();
 
                 if (approvedUser?.email) {
                     
                     // 1. Send Approval Email
-                    await sendApprovalNotification(approvedUser.email, approvedUser.name || 'Devotee', `${baseUrl}/dashboard`);
+                    await sendApprovalNotification(approvedUser.email, approvedUser.name || 'Devotee', `${baseUrl}/dashboard`, approvedUser);
                     log('Approval email sent');
 
                     // 2. Generate Membership ID (if required fields are present and ID is missing)

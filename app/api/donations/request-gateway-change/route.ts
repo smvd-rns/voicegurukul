@@ -39,14 +39,18 @@ export async function POST(request: Request) {
       throw updateError;
     }
 
+    const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
+    const smtpUser = (process.env.SMTP_USER || '').replace(/^"|"$/g, '');
+    const smtpHost = (process.env.SMTP_HOST || '').replace(/^"|"$/g, '');
+
     // 4. Send Email to smvd@voicepune.com
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host: smtpHost,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: smtpUser,
+        pass: smtpPass,
       },
     });
 

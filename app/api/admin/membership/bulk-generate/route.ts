@@ -59,7 +59,11 @@ export async function POST(request: Request) {
                     templeName = u.other_parent_temple || u.other_temple || u.hierarchy?.otherParentTemple || 'OTH';
                 }
                 
-                const templeCode = templeName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
+                let cleanTempleName = templeName.trim().replace(/^iskcon\s*/i, '');
+                if (!cleanTempleName) {
+                    cleanTempleName = templeName;
+                }
+                const templeCode = cleanTempleName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
 
                 const { data: membershipId, error: rpcError } = await supabaseAdmin.rpc('generate_membership_id', {
                     p_user_id: u.id,

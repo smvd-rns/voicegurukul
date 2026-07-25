@@ -539,6 +539,7 @@ export default function ProfilePage() {
         const { data, error } = await supabase
           .from('profile_update_requests')
           .select('*')
+          .eq('user_id', user.id)
           .in('status', ['pending', 'rejected', 'approved'])
           .order('created_at', { ascending: false })
           .limit(1)

@@ -18,7 +18,7 @@ export const getUsersByCounselorEmail = async (counselorEmail: string): Promise<
     const { data: counselorData } = await supabase
       .from('counselors')
       .select('name')
-      .eq('email', lowerEmail)
+      .ilike('email', lowerEmail)
       .maybeSingle();
 
     const counselorName = counselorData?.name;

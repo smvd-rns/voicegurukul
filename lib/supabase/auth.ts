@@ -257,10 +257,6 @@ export const getUserData = async (userId: string): Promise<User | null> => {
 
 // Reset password (forgot password)
 export const resetPassword = async (email: string) => {
-  if (!supabase) {
-    throw new Error('Supabase is not initialized');
-  }
-
   try {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -268,45 +264,15 @@ export const resetPassword = async (email: string) => {
       throw new Error('Please enter a valid email address');
     }
 
-    // Check if user exists in the users table first
-    try {
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        // Database error, but continue anyway
-        console.warn('Error checking user existence:', checkError);
-      } else if (!existingUser) {
-        // User doesn't exist in our database
-        throw new Error('No account found with this email address. Please check your email or register for a new account.');
-      }
-    } catch (checkError: any) {
-      // If it's our custom error about user not found, throw it
-      if (checkError.message?.includes('No account found')) {
-        throw checkError;
-      }
-      // Otherwise, re-throw the error
-      throw checkError;
-    }
-
-    const redirectUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/reset-password`
-      : undefined;
-
-    const { error } = await (supabase.auth as any).resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: redirectUrl,
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
     });
 
-    if (error) {
-      // Provide user-friendly error messages
-      if (error.message?.toLowerCase().includes('user not found') ||
-        error.message?.toLowerCase().includes('no user found')) {
-        throw new Error('No account found with this email address. Please check your email or register for a new account.');
-      }
-      throw new Error(error.message || 'Failed to send password reset email');
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to send password reset email');
     }
 
     return true;

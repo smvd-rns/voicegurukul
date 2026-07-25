@@ -280,12 +280,13 @@ export async function GET(request: Request) {
                 // Lookup Counselor ID and Name
                 const { data: counselorData } = await supabaseAdmin
                     .from('counselors')
-                    .select('id, name')
-                    .eq('email', normalizedCounselor)
+                    .select('id, name, user_id')
+                    .ilike('email', normalizedCounselor)
                     .maybeSingle();
 
                 const counselorName = counselorData?.name ? counselorData.name.trim().toLowerCase() : null;
                 const adminCounselorId = counselorData?.id || null;
+                const adminCounselorUserId = counselorData?.user_id || null;
 
                 log(`Counselor Lookup: Email=${normalizedCounselor} ID=${adminCounselorId || 'null'} Name=${counselorName || 'null'}`);
 
@@ -294,20 +295,21 @@ export async function GET(request: Request) {
 
                 filteredRequests = filteredRequests.filter((req: any) => {
                     // Authority via Stable ID (Preferred)
-                    const matchesId = adminCounselorId && req.user?.counselor_id === adminCounselorId;
+                    const matchesId = (adminCounselorId && req.user?.counselor_id === adminCounselorId) ||
+                                      (adminCounselorUserId && req.user?.counselor_id === adminCounselorUserId);
 
                     // Current Counselor (Legacy)
                     const uH = req.user?.hierarchy;
-                    const bE = (uH?.brahmachariCounselorEmail || '').trim().toLowerCase();
+                    const bE = (uH?.brahmachariCounselorEmail || uH?.counselorEmail || req.user?.counselor_email || '').trim().toLowerCase();
                     const gE = (uH?.grihasthaCounselorEmail || '').trim().toLowerCase();
-                    const bN = (uH?.brahmachariCounselor || '').trim().toLowerCase();
+                    const bN = (uH?.brahmachariCounselor || uH?.counselor || req.user?.counselor || '').trim().toLowerCase();
                     const gN = (uH?.grihasthaCounselor || '').trim().toLowerCase();
 
                     // Newly Requested Counselor
                     const rC = req.requested_changes || {};
-                    const rbE = (rC.brahmachariCounselorEmail || '').trim().toLowerCase();
+                    const rbE = (rC.brahmachariCounselorEmail || rC.counselorEmail || '').trim().toLowerCase();
                     const rgE = (rC.grihasthaCounselorEmail || '').trim().toLowerCase();
-                    const rbN = (rC.brahmachariCounselor || '').trim().toLowerCase();
+                    const rbN = (rC.brahmachariCounselor || rC.counselor || '').trim().toLowerCase();
                     const rgN = (rC.grihasthaCounselor || '').trim().toLowerCase();
                     const rcId = (rC.counselorId || rC.counselor_id || '').trim();
 
@@ -319,7 +321,8 @@ export async function GET(request: Request) {
                         rbN === counselorName || rgN === counselorName
                     );
 
-                    const matchesRequestedId = adminCounselorId && rcId === adminCounselorId;
+                    const matchesRequestedId = (adminCounselorId && rcId === adminCounselorId) ||
+                                               (adminCounselorUserId && rcId === adminCounselorUserId);
 
                     const isMatch = matchesId || matchesRequestedId || matchesEmail || matchesName;
                     if (!isMatch) {

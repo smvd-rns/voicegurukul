@@ -40,7 +40,11 @@ export async function generateMembershipIdForUser(supabaseAdmin: any, userId: st
              throw new Error('Invalid Parent Temple name');
         }
 
-        const templeCode = templeName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
+        let cleanTempleName = templeName.trim().replace(/^iskcon\s*/i, '');
+        if (!cleanTempleName) {
+            cleanTempleName = templeName;
+        }
+        const templeCode = cleanTempleName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
 
         // 3. Call the atomic RPC function
         const { data: membershipId, error: rpcError } = await supabaseAdmin.rpc('generate_membership_id', {

@@ -49,7 +49,7 @@ interface StudentWithProgress extends User {
 }
 
 export default function CounselorPage() {
-  const { user, userData } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const router = useRouter();
 
   // Data Mapping Loader (MD Parity)
@@ -153,13 +153,23 @@ export default function CounselorPage() {
   const [targetForRejection, setTargetForRejection] = useState<{ id: string, name: string } | null>(null);
 
   // Check if user has counselor role
-  const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
-  const hasCounselorRole = userRoles.includes('counselor') || userRoles.includes(2) ||
-    userRoles.includes('care_giver') || userRoles.includes(20) ||
-    userRoles.includes('senior_counselor') || userRoles.includes(3);
+  // userData.role may be string names (after normalization) or numeric IDs - handle both
+  const rawUserRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
+  const hasCounselorRole = rawUserRoles.some((r: any) => {
+    const numR = Number(r);
+    // Numeric: 2 = counselor, 3 = senior_counselor, 20 = care_giver
+    if (!isNaN(numR)) return numR === 2 || numR === 3 || numR === 20;
+    // String names
+    const roleStr = String(r).toLowerCase();
+    return roleStr === 'counselor' || roleStr === 'senior_counselor' || roleStr === 'care_giver';
+  });
 
   const loadStudents = useCallback(async () => {
-    if (!userData?.email || !supabase) return;
+    if (!userData?.email) {
+      setLoading(false);
+      return;
+    }
+    if (!supabase) return;
 
     setLoading(true);
     setIsAnalyzing(true);
@@ -169,12 +179,13 @@ export default function CounselorPage() {
       // 1. Resolve counselor ID
       const { data: counselorData } = await supabase
         .from('counselors')
-        .select('id, name')
-        .eq('email', adminEmail)
+        .select('id, name, user_id, current_temple, parent_temple')
+        .ilike('email', adminEmail)
         .maybeSingle();
 
       const counselorId = counselorData?.id;
       const counselorName = counselorData?.name?.trim().toLowerCase();
+      const counselorUserId = counselorData?.user_id;
 
       // 2. Fetch all users for this counselor (Dual Lookup)
       // Mirroring the robust registration logic
@@ -187,15 +198,23 @@ export default function CounselorPage() {
 
       const assignedStudents = (rawUsers || []).filter((u: any) => {
         const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
+        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
         const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || '').trim().toLowerCase();
+        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
         const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
 
-        const matchesId = counselorId && u.counselor_id === counselorId;
+        // Match by stable counselor_id (most reliable)
+        const matchesId = (counselorId && (u.counselor_id === counselorId || uH.counselorId === counselorId)) || 
+                          (counselorUserId && (u.counselor_id === counselorUserId || uH.counselorId === counselorUserId));
+        // Match by email or name (legacy/fallback)
         const matchesLegacy = bE === adminEmail || gE === adminEmail ||
-          (counselorName && (bN === counselorName || gN === counselorName));
+          (counselorName && (bN === counselorName || gN === counselorName ||
+          (u.counselor || '').trim().toLowerCase() === counselorName ||
+          (uH.counselor || '').trim().toLowerCase() === counselorName ||
+          (u.other_counselor || '').trim().toLowerCase() === counselorName ||
+          (uH.otherCounselor || '').trim().toLowerCase() === counselorName));
 
+        // Only show users who explicitly selected this counselor
         return matchesId || matchesLegacy;
       });
 
@@ -294,7 +313,7 @@ export default function CounselorPage() {
       setLoading(false);
       setIsAnalyzing(false);
     }
-  }, [userData?.email, dateRange]);
+  }, [userData, dateRange]);
 
   const loadProfileRequests = useCallback(async () => {
     if (!userData?.email || !hasCounselorRole) return;
@@ -321,7 +340,11 @@ export default function CounselorPage() {
   }, [userData?.email, hasCounselorRole, approvalStatus]);
 
   const loadPendingUsers = useCallback(async () => {
-    if (!userData?.email || !hasCounselorRole || !supabase) return;
+    if (!userData?.email || !hasCounselorRole) {
+      setLoadingPending(false);
+      return;
+    }
+    if (!supabase) return;
     setLoadingPending(true);
     try {
       const adminEmail = userData.email.trim().toLowerCase();
@@ -337,23 +360,25 @@ export default function CounselorPage() {
       // 1. Identification
       const { data: adminCounselor } = await supabase
         .from('counselors')
-        .select('id, name')
-        .eq('email', adminEmail)
+        .select('id, name, user_id, current_temple, parent_temple')
+        .ilike('email', adminEmail)
         .maybeSingle();
 
       const adminCounselorId = adminCounselor?.id;
       const adminCounselorName = adminCounselor?.name?.trim().toLowerCase();
+      const adminCounselorUserId = adminCounselor?.user_id;
 
-      // 2. Filter Logic (Dual Visibility)
+      // 2. Filter: Only users who explicitly selected this counselor
       const filtered = (users || []).filter((u: any) => {
         const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
+        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
         const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || '').trim().toLowerCase();
+        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
         const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
 
         // Authority via Stable ID
-        const matchesId = adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId);
+        const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
+                          (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
 
         // Authority via Legacy Match or Unified Name Match
         const matchesEmail = bE === adminEmail || gE === adminEmail;
@@ -366,6 +391,7 @@ export default function CounselorPage() {
           (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
         );
 
+        // Only show users who explicitly selected this counselor — no location fallback
         return matchesId || matchesEmail || matchesName;
       });
 
@@ -376,10 +402,13 @@ export default function CounselorPage() {
     } finally {
       setLoadingPending(false);
     }
-  }, [userData?.email, hasCounselorRole]);
+  }, [userData, hasCounselorRole]);
 
   const loadStats = useCallback(async () => {
-    if (!userData?.email || !hasCounselorRole || !supabase) return;
+    if (!userData?.email || !hasCounselorRole || !supabase) {
+      setStats(prev => ({ ...prev, loading: false }));
+      return;
+    }
     setStats(prev => ({ ...prev, loading: true }));
     try {
       const adminEmail = userData.email.trim().toLowerCase();
@@ -387,27 +416,29 @@ export default function CounselorPage() {
       // 1. Resolve counselor ID and Name
       const { data: counselorData } = await supabase
         .from('counselors')
-        .select('id, name')
-        .eq('email', adminEmail)
+        .select('id, name, user_id, current_temple, parent_temple')
+        .ilike('email', adminEmail)
         .maybeSingle();
 
       const adminCounselorId = counselorData?.id;
       const adminCounselorName = counselorData?.name?.trim().toLowerCase();
+      const adminCounselorUserId = counselorData?.user_id;
 
       // 2. Fetch ALL approved users to count devotees (Dual Lookup consistency)
       const { data: allUsers } = await supabase
         .from('users')
-        .select('counselor_id, hierarchy')
+        .select('counselor_id, hierarchy, current_center, current_temple')
         .eq('verification_status', 'approved');
 
       const studentsCount = (allUsers || []).filter((u: any) => {
         const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
+        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
         const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || '').trim().toLowerCase();
+        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
         const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
 
-        const matchesId = adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId);
+        const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
+                          (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
         const matchesLegacy = bE === adminEmail || gE === adminEmail ||
           (adminCounselorName && (
             bN === adminCounselorName ||
@@ -418,6 +449,7 @@ export default function CounselorPage() {
             (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
           ));
 
+        // Only count users who explicitly selected this counselor
         return matchesId || matchesLegacy;
       }).length;
 
@@ -443,21 +475,30 @@ export default function CounselorPage() {
       let regCount = 0;
       const { data: pendingUsersData } = await supabase
         .from('users')
-        .select('id, counselor_id, hierarchy')
+        .select('id, counselor_id, hierarchy, current_center, current_temple')
         .eq('verification_status', 'pending');
 
       if (pendingUsersData) {
         regCount = pendingUsersData.filter((u: any) => {
           const uH = u.hierarchy || {};
-          const bE = (uH.brahmachariCounselorEmail || '').trim().toLowerCase();
+          const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
           const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-          const bN = (uH.brahmachariCounselor || '').trim().toLowerCase();
+          const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
           const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
 
-          const matchesId = adminCounselorId && u.counselor_id === adminCounselorId;
+          const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
+                            (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
           const matchesEmail = bE === adminEmail || gE === adminEmail;
-          const matchesName = adminCounselorName && (bN === adminCounselorName || gN === adminCounselorName);
+          const matchesName = adminCounselorName && (
+            bN === adminCounselorName ||
+            gN === adminCounselorName ||
+            (u.counselor || '').trim().toLowerCase() === adminCounselorName ||
+            (uH.counselor || '').trim().toLowerCase() === adminCounselorName ||
+            (u.other_counselor || '').trim().toLowerCase() === adminCounselorName ||
+            (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
+          );
 
+          // Only count users who explicitly selected this counselor
           return matchesId || matchesEmail || matchesName;
         }).length;
       }
@@ -472,16 +513,18 @@ export default function CounselorPage() {
       console.error('Error loading stats:', err);
       setStats(prev => ({ ...prev, loading: false }));
     }
-  }, [userData?.email, hasCounselorRole]);
+  }, [userData, hasCounselorRole]);
 
   // LOAD BASE DATA (Stats) ONCE
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to finish loading before deciding
     if (userData && hasCounselorRole) {
       loadStats();
-    } else if (!loading && !hasCounselorRole) {
+    } else if (!authLoading && userData && !hasCounselorRole) {
+      // Only redirect if user is logged in but definitively has no counselor role
       router.replace('/dashboard');
     }
-  }, [userData, hasCounselorRole, loading, router, loadStats]);
+  }, [userData, hasCounselorRole, authLoading, router, loadStats]);
 
   // LOAD TAB-SPECIFIC DATA
   useEffect(() => {

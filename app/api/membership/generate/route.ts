@@ -68,7 +68,11 @@ export async function POST(request: Request) {
         }
 
         // Clean name (remove special characters, take first 3)
-        const templeCode = templeName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
+        let cleanTempleName = templeName.trim().replace(/^iskcon\s*/i, '');
+        if (!cleanTempleName) {
+            cleanTempleName = templeName;
+        }
+        const templeCode = cleanTempleName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
 
         // 3. Call the atomic PostgreSQL function directly
         let membershipId = '';

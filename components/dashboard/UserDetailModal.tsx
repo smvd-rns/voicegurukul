@@ -604,11 +604,16 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Japa:</span> <span className="font-bold text-gray-700">{week.japa}</span></div>
-                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Hear:</span> <span className="font-bold text-gray-700">{week.hearing}</span></div>
-                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Read:</span> <span className="font-bold text-gray-700">{week.reading}</span></div>
-                                                        <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Books:</span> <span className="font-bold text-gray-700 truncate">{week.bookNames || '-'}</span></div>
-                                                    </div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Japa:</span> <span className="font-bold text-gray-700">{week.japa}</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Hear:</span> <span className="font-bold text-gray-700">{week.hearing}</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Read:</span> <span className="font-bold text-gray-700">{week.reading}</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Books:</span> <span className="font-bold text-gray-700 truncate">{week.bookNames || '-'}</span></div>
+                                                         
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">To Bed:</span> <span className="font-bold text-violet-600">{Math.round(week.toBed / week.count)}m</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Wake Up:</span> <span className="font-bold text-sky-600">{Math.round(week.wakeUp / week.count)}m</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Filling:</span> <span className="font-bold text-blue-600">{Math.round(week.dailyFilling / week.count)}m</span></div>
+                                                         <div className="text-[10px]"><span className="text-gray-400 font-bold uppercase">Day Nap:</span> <span className="font-bold text-rose-600">{Math.round(week.daySleep / week.count)}m</span></div>
+                                                     </div>
                                                     {week.study > 0 && (
                                                         <div className="mt-2 p-3 bg-orange-50/50 rounded-xl border border-orange-100">
                                                             <p className="text-[10px] font-black text-orange-800 uppercase tracking-widest mb-1 flex items-center gap-1">
