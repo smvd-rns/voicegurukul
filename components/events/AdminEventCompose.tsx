@@ -385,30 +385,102 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                 folderId = createdFolderId;
             }
 
+            // Helper for direct browser-to-Drive resumable upload
+            const performDirectDriveUpload = async (file: File, folderId: string): Promise<any> => {
+                // 1. Get token and target folder from backend
+                const tokenRes = await fetch('/api/upload-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileType: file.type || 'application/octet-stream',
+                        targetFolderId: folderId,
+                        userName: userData?.name || 'Admin'
+                    })
+                });
+
+                if (!tokenRes.ok) {
+                    const err = await tokenRes.json();
+                    throw new Error(err.error || 'Failed to initialize upload token');
+                }
+                const tokenData = await tokenRes.json();
+
+                // 2. Initialize Resumable session with Google Drive
+                const metadata = {
+                    name: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    parents: [tokenData.folderId]
+                };
+
+                const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+                    method: 'POST',
+                    headers: {
+                        ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
+                        'Content-Type': 'application/json; charset=UTF-8',
+                        'X-Upload-Content-Type': file.type || 'application/octet-stream',
+                        'X-Upload-Content-Length': file.size.toString()
+                    },
+                    body: JSON.stringify(metadata)
+                });
+
+                if (!sessionRes.ok) throw new Error('Failed to initialize Google Drive resumable upload');
+                const locationUri = sessionRes.headers.get('Location');
+                if (!locationUri) throw new Error('No upload location received from Google Drive');
+
+                // 3. Upload file body directly to the Location URI
+                const driveData: any = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('PUT', locationUri);
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                resolve(JSON.parse(xhr.responseText));
+                            } catch {
+                                resolve({ id: 'unknown' });
+                            }
+                        } else {
+                            reject(new Error(`Upload failed with status ${xhr.status}`));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Network error during upload'));
+                    xhr.send(file);
+                });
+
+                // 4. Fetch extra fields (like webViewLink) from Google Drive
+                if (driveData.id && !driveData.webViewLink) {
+                    const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
+                        headers: tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : undefined
+                    });
+                    if (extraRes.ok) {
+                        const extraData = await extraRes.json();
+                        Object.assign(driveData, extraData);
+                    }
+                }
+
+                // Construct direct image URL
+                const directImageUrl = `https://lh3.googleusercontent.com/d/${driveData.id}=s1600`;
+
+                return {
+                    fileId: driveData.id,
+                    fileName: driveData.name || file.name,
+                    webViewLink: driveData.webViewLink || `https://drive.google.com/file/d/${driveData.id}/view`,
+                    directImageUrl
+                };
+            };
+
             // 2. Upload pending images from the editor
             let updatedMessage = message;
             const materials: ManagedEventAttachment[] = [];
-
+ 
             for (const [localUrl, file] of Array.from(pendingImages.entries())) {
                 // Only upload if it's still in the message
                 if (message.includes(localUrl)) {
-                    const imgFormData = new FormData();
-                    imgFormData.append('file', file);
-                    imgFormData.append('userName', userData?.name || 'Admin');
-                    imgFormData.append('folderId', folderId);
-
-                    const imgRes = await fetch('/api/upload/google-drive', {
-                        method: 'POST',
-                        body: imgFormData,
-                    });
-
-                    if (!imgRes.ok) throw new Error(`Failed to upload image: ${file.name}`);
-                    const { data } = await imgRes.json();
-
+                    const data = await performDirectDriveUpload(file, folderId);
+ 
                     const finalUrl = data.directImageUrl || data.webViewLink;
                     // Replace the local URL with the final Drive URL in the HTML
                     updatedMessage = updatedMessage.split(localUrl).join(finalUrl);
-
+ 
                     // Add to materials for DB tracking
                     materials.push({
                         type: 'image',
@@ -420,23 +492,12 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
                 }
                 URL.revokeObjectURL(localUrl);
             }
-
+ 
             // 3. Upload attachments
             for (const att of attachments) {
                 if (att.file) {
-                    const attFormData = new FormData();
-                    attFormData.append('file', att.file);
-                    attFormData.append('userName', userData?.name || 'Admin');
-                    attFormData.append('folderId', folderId);
-
-                    const attRes = await fetch('/api/upload/google-drive', {
-                        method: 'POST',
-                        body: attFormData,
-                    });
-
-                    if (!attRes.ok) throw new Error(`Failed to upload attachment: ${att.name}`);
-                    const { data } = await attRes.json();
-
+                    const data = await performDirectDriveUpload(att.file, folderId);
+ 
                     materials.push({
                         type: att.type,
                         name: att.name,

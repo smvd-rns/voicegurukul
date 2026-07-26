@@ -6,6 +6,10 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     try {
 
         const supabase = createClient();

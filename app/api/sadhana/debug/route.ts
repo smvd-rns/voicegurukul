@@ -6,6 +6,10 @@ export const dynamic = 'force-dynamic';
 const clean = (val: string | undefined) => val?.trim().replace(/^["']|["']$/g, '');
 
 export async function GET() {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const url = clean(process.env.NEXT_PUBLIC_SADHANA_DB_URL);
     const anon = clean(process.env.NEXT_PUBLIC_SADHANA_DB_ANON_KEY);
     const service = clean(process.env.SADHANA_DB_SERVICE_ROLE_KEY);

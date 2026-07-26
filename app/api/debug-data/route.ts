@@ -2,6 +2,10 @@ import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     try {
         const supabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -7,11 +7,15 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // Check custom JWT session cookie
-  const token = request.cookies.get('session_token')?.value;
+  // Check session tokens across supported cookie formats
+  const token = 
+    request.cookies.get('session_token')?.value ||
+    request.cookies.get('sb-access-token')?.value ||
+    request.cookies.get('supabase-auth-token')?.value;
+
   const path = request.nextUrl.pathname;
 
-  // If user is logged in with valid token and tries to access login or home page, auto-redirect to dashboard
+  // Auto-redirect logged-in users away from auth pages to dashboard
   if (token && (path === '/auth/login' || path === '/auth/register' || path === '/')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
@@ -30,3 +34,5 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
+
