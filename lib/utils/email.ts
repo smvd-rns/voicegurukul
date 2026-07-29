@@ -252,7 +252,7 @@ export async function sendRejectionNotification(userEmail: string, userName: str
         <p style="font-size: 16px; color: #334155; margin-bottom: 30px;">Do not worry! You can log back into your account, update any incorrect details, and resubmit your application for review.</p>
         
         <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.edulms.co.in'}/auth/login" style="background-color: #475569; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 15px;">Login and Re-submit</a>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com'}/auth/login" style="background-color: #475569; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 15px;">Login and Re-submit</a>
         </div>
     `;
 
