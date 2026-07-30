@@ -7,11 +7,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy and Build on Droplet
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Create .env file from Secret
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env.production
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Build Next.js Application (Cloud Runner)
+        run: npm run build
+
+      - name: Copy Build Artifacts to Droplet via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          source: ".next"
+          target: "/var/www/voicegurukul"
+
+      - name: Restart Server via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.DROPLET_HOST }}
@@ -20,10 +49,7 @@ jobs:
           script: |
             cd /var/www/voicegurukul
             git pull origin main
-            
-            # Install dependencies and build on the server using local .env
-            npm install
-            npm run build
+            npm ci --production
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
             
             # Setup and restart the indexer microservice
