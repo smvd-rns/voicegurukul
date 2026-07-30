@@ -4,58 +4,26 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Next.js Application (Cloud Runner)
-        run: npm run build
-        env:
-          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
-          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
-          NEXT_PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
-          NEXT_PUBLIC_RENDER_INDEXER_URL: ${{ secrets.NEXT_PUBLIC_RENDER_INDEXER_URL }}
-          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-          NEXT_PUBLIC_RAZORPAY_KEY_ID: ${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY_ID }}
-
-      - name: Copy Build Artifacts to Droplet via SCP
-        uses: appleboy/scp-action@master
-        with:
-          host: '168.144.188.213'
-          username: 'root'
-          password: ${{ secrets.DROPLET_PASSWORD }}
-          source: ".next"
-          target: "/var/www/voicegurukul"
-
-      - name: Restart Server via SSH
+      - name: Deploy and Build on Droplet
         uses: appleboy/ssh-action@master
         with:
-          host: '168.144.188.213'
-          username: 'root'
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
           password: ${{ secrets.DROPLET_PASSWORD }}
           script: |
             cd /var/www/voicegurukul
             git pull origin main
-            npm ci --production
+            
+            # Install dependencies and build on the server using local .env
+            npm install
+            npm run build
             pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
             
             # Setup and restart the indexer microservice
@@ -64,4 +32,3 @@ jobs:
             pm2 restart voicegurukul-indexer || pm2 start server.js --name "voicegurukul-indexer"
             
             pm2 save
-
