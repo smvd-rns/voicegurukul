@@ -19,9 +19,7 @@ export async function GET(req: NextRequest) {
     const fallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const fallbackProto = req.headers.get('x-forwarded-proto') || 'http';
     const requestOrigin = fallbackHost ? `${fallbackProto}://${fallbackHost}` : req.nextUrl.origin;
-    const origin = process.env.NODE_ENV === 'development'
-      ? requestOrigin
-      : (process.env.NEXT_PUBLIC_SITE_URL || requestOrigin);
+    const origin = requestOrigin;
 
     if (!code) {
       return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
@@ -108,9 +106,7 @@ export async function GET(req: NextRequest) {
     const errorFallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const errorFallbackProto = req.headers.get('x-forwarded-proto') || 'http';
     const errorRequestOrigin = errorFallbackHost ? `${errorFallbackProto}://${errorFallbackHost}` : req.nextUrl.origin;
-    const fallbackOrigin = process.env.NODE_ENV === 'development'
-      ? errorRequestOrigin
-      : (process.env.NEXT_PUBLIC_SITE_URL || errorRequestOrigin);
+    const fallbackOrigin = errorRequestOrigin;
     return NextResponse.redirect(new URL('/auth/login?error=auth_error', fallbackOrigin));
   }
 }
