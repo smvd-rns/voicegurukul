@@ -334,7 +334,7 @@ export default function CompleteRegistrationPage() {
                 parentTemple: formData.parentTemple || undefined,
                 parentCenter: formData.parentCenter || undefined,
 
-                verificationStatus: 'pending', // Set to pending for admin approval
+                verificationStatus: userData?.verificationStatus === 'unverified' ? 'approved' : 'pending', // Auto-approve imported users, others go to pending
                 rejectionReason: null as any, // Clear previous rejection reason
                 reviewedBy: null as any,
                 reviewedAt: null as any,
@@ -342,15 +342,17 @@ export default function CompleteRegistrationPage() {
                 hierarchy,
             });
 
-            // Trigger the email notification to project/acting managers silently
-            try {
-                await fetch('/api/emails/new-registration', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: user.id })
-                });
-            } catch (emailErr: any) {
-                console.error('Failed to trigger registration email:', emailErr);
+            // Trigger the email notification to project/acting managers silently for non-imported users
+            if (userData?.verificationStatus !== 'unverified') {
+                try {
+                    await fetch('/api/emails/new-registration', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: user.id })
+                    });
+                } catch (emailErr: any) {
+                    console.error('Failed to trigger registration email:', emailErr);
+                }
             }
 
             // Generate Membership ID immediately after joining
@@ -367,13 +369,17 @@ export default function CompleteRegistrationPage() {
                 // Don't block registration for ID generation failure
             }
 
-            setSuccess('Registration submitted! Redirecting...');
+            setSuccess('Registration completed! Redirecting...');
 
             // Refresh auth state in memory before redirect
             await refreshUserData();
 
-            // Redirect to pending approval page
-            window.location.href = '/auth/pending';
+            // Redirect to dashboard if auto-approved, otherwise to pending approval page
+            if (userData?.verificationStatus === 'unverified') {
+                window.location.href = '/dashboard';
+            } else {
+                window.location.href = '/auth/pending';
+            }
         } catch (err: any) {
             console.error('Registration error:', err);
             setError(err.message || 'Failed to complete registration');

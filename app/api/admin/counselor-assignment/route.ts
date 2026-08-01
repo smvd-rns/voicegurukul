@@ -127,7 +127,6 @@ export async function POST(request: Request) {
                 mobile: targetUser.phone || '',
                 city: targetUser.city || targetUser.hierarchy?.city || 'Unknown',
                 ashram: userAshram,
-                role: roleType,
                 is_verified: true,
                 user_id: targetUser.id, // Store the actual user UUID for stable linkage
                 current_temple: targetUser.current_temple || targetUser.hierarchy?.currentTemple?.name || targetUser.hierarchy?.currentTemple || '',

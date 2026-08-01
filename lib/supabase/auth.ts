@@ -28,7 +28,18 @@ export const signUp = async (
       throw new Error('Password must be at least 6 characters long');
     }
 
-    // Sign up with Supabase Auth
+    // Check if user already exists in DB BEFORE attempting signup (since registration API inserts on success)
+    const { data: dbUser, error: findError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+
+    if (dbUser) {
+      throw new Error('This email is already registered. Please sign in instead.');
+    }
+
+    // Sign up with Supabase Auth (simulated API)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
@@ -79,6 +90,8 @@ export const signUp = async (
     const city = hierarchyData?.city || null;
     const center = hierarchyData?.center || null;
     const centerId = hierarchyData?.centerId || null; // Center ID for accurate matching
+    const phone = hierarchyData?.phone || hierarchyData?.mobile || null;
+    const currentTemple = hierarchyData?.current_temple || hierarchyData?.temple || null;
 
     // Extract spiritual fields for separate columns
     const initiationStatus = hierarchyData?.initiationStatus || null;
@@ -94,13 +107,10 @@ export const signUp = async (
     const grihasthaCounselor = hierarchyData?.grihasthaCounselor || null;
     const grihasthaCounselorEmail = hierarchyData?.grihasthaCounselorEmail || null;
 
-    // Create user record in users table
-    const { data: insertedData, error: dbError } = await supabase
+    // Update user record in users table (since registration API has already inserted basic row)
+    const { data: updatedData, error: dbError } = await supabase
       .from('users')
-      .insert({
-        id: authData.user.id,
-        email: email.trim().toLowerCase(),
-        name: name.trim(),
+      .update({
         role: roleNumbers, // Save as array of numbers
         verification_status: 'unverified', // Default to unverified, allows access to complete-profile
         profile_image: profileImage || null, // Google Drive photo link
@@ -108,6 +118,8 @@ export const signUp = async (
         city: city,
         center: center,
         center_id: centerId, // Store center ID for accurate matching
+        phone: phone,
+        current_temple: currentTemple,
         // Spiritual information columns
         initiation_status: initiationStatus,
         initiated_name: initiatedName,
@@ -122,21 +134,58 @@ export const signUp = async (
         grihastha_counselor: grihasthaCounselor,
         grihastha_counselor_email: grihasthaCounselorEmail,
         hierarchy: hierarchyData, // Keep for backward compatibility
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
+      .eq('id', authData.user.id)
       .select('id, profile_image, state, city, center, initiation_status, ashram, brahmachari_counselor, grihastha_counselor');
 
-    console.log('User creation result:', { insertedData, dbError });
+    console.log('User update result:', { updatedData, dbError });
 
     if (dbError) {
-      console.error('Database insert error:', dbError);
-      // If user creation fails, the auth user will remain but without a profile
-      // You may want to clean this up manually or via a server-side function
-      if (dbError.code === '23505') {
-        throw new Error('User already exists. Please sign in instead.');
+      console.error('Database update error:', dbError);
+      throw new Error(dbError.message || 'Failed to update user profile');
+    }
+
+    // Automatically sync counselor record if user is counselor (2) or care_giver (20)
+    const roleNumbersArray = Array.isArray(roleNumbers) ? roleNumbers : [roleNumbers];
+    const isCounselor = roleNumbersArray.includes(2);
+    const isCareGiver = roleNumbersArray.includes(20);
+
+    if (isCounselor || isCareGiver) {
+      // NOTE: We do not include the non-existent 'role' column in counselors table
+      const counselorData = {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        mobile: phone || '',
+        city: city || 'Unknown',
+        ashram: ashram || 'Brahmachari', // default/fallback to satisfy constraint
+        is_verified: true,
+        user_id: authData.user.id,
+        current_temple: currentTemple || '',
+      };
+
+      const { data: existingCounselor } = await supabase
+        .from('counselors')
+        .select('id')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+
+      if (existingCounselor) {
+        const { error: counselorUpdateError } = await supabase
+          .from('counselors')
+          .update(counselorData)
+          .eq('id', existingCounselor.id);
+        if (counselorUpdateError) {
+          console.warn('Could not update counselor record during signup:', counselorUpdateError);
+        }
+      } else {
+        const { error: counselorInsertError } = await supabase
+          .from('counselors')
+          .insert(counselorData);
+        if (counselorInsertError) {
+          console.warn('Could not create counselor record during signup:', counselorInsertError);
+        }
       }
-      throw new Error(dbError.message || 'Failed to create user profile');
     }
 
     // Create empty user_profile_details record with user_name

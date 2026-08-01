@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { signUp } from '@/lib/supabase/auth';
 import { UserRole } from '@/types';
+import { supabase } from '@/lib/supabase/config';
 
 export default function ImportPage() {
   const { userData } = useAuth();
@@ -23,6 +24,83 @@ export default function ImportPage() {
     router.push('/dashboard');
     return null;
   }
+
+  const downloadSampleExcel = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      
+      // Fetch temples dynamically
+      let templeOptions: any[] = [];
+      if (supabase) {
+        const { data: temples } = await supabase
+          .from('temples')
+          .select('name')
+          .order('name');
+        if (temples) {
+          templeOptions = temples.map((t: any) => ({ "Temple Name": t.name }));
+        }
+      }
+      if (templeOptions.length === 0) {
+        templeOptions = [{ "Temple Name": "ISKCON Delhi" }, { "Temple Name": "ISKCON Mumbai" }];
+      }
+
+      // Ashram options list
+      const ashramOptions = [
+        { "Ashram Option": "Student and Not decided" },
+        { "Ashram Option": "Working and Not Decided" },
+        { "Ashram Option": "Gauranga Sabha" },
+        { "Ashram Option": "Nityananda Sabha" },
+        { "Ashram Option": "Brahmachari" },
+        { "Ashram Option": "Grihastha" },
+        { "Ashram Option": "Staying Single (Not planning to marry)" }
+      ];
+
+      // Simple sample user template data
+      const sampleData = [
+        {
+          name: "John Doe",
+          email: "john.doe@example.com",
+          mobile: "9876543210",
+          ashram: "Brahmachari",
+          current_temple: templeOptions[0]?.["Temple Name"] || "ISKCON Delhi"
+        },
+        {
+          name: "Jane Smith",
+          email: "jane.smith@example.com",
+          mobile: "9876543211",
+          ashram: "Grihastha",
+          current_temple: templeOptions[1]?.["Temple Name"] || "ISKCON Mumbai"
+        }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+
+      // Sheet 1: Users Template
+      const worksheet = XLSX.utils.json_to_sheet(sampleData);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Users Template");
+
+      // Sheet 2: Temples Reference list
+      const templeWorksheet = XLSX.utils.json_to_sheet(templeOptions);
+      XLSX.utils.book_append_sheet(workbook, templeWorksheet, "Temples Reference");
+
+      // Sheet 3: Ashrams Reference list
+      const ashramWorksheet = XLSX.utils.json_to_sheet(ashramOptions);
+      XLSX.utils.book_append_sheet(workbook, ashramWorksheet, "Ashrams Reference");
+      
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      const url = window.URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'voice_gurukul_users_import_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      setError(err.message || 'Failed to download sample file');
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -83,17 +161,68 @@ export default function ImportPage() {
 
       let processed = 0;
       let errors = 0;
+      const errorMessages: string[] = [];
+
+      // Fetch temples and centers for location resolution
+      let templesList: any[] = [];
+      let centersList: any[] = [];
+      if (supabase) {
+        const [templesRes, centersRes] = await Promise.all([
+          supabase.from('temples').select('name, state, city'),
+          supabase.from('centers').select('name, temple_name, state, city')
+        ]);
+        templesList = templesRes.data || [];
+        centersList = centersRes.data || [];
+      }
 
       // Process each row
       for (const row of data) {
         try {
-          // Expected columns: name, email, password, state, city, center, role (optional, can be comma-separated)
+          // Expected columns: name, email, password, state, city, center, role, ashram, temple, mobile
           const name = row.name || row.Name || '';
-          const email = row.email || row.Email || '';
+          const email = row.email || row.Email || row['email id'] || row['Email id'] || row['Email ID'] || '';
           const password = row.password || row.Password || `TempPass${Date.now()}`;
-          const state = row.state || row.State || '';
-          const city = row.city || row.City || '';
-          const center = row.center || row.Center || '';
+          
+          // Support variations like 'ashram status', 'Ashram Status', etc.
+          const rawAshram = (row.ashram || row.Ashram || row['ashram status'] || row['Ashram status'] || row['Ashram Status'] || '').toString().trim().toLowerCase();
+          
+          // Map ashram string safely to database constraint valid values
+          let ashram = 'Not decided';
+          if (rawAshram.includes('student') || rawAshram === 'not decided' || rawAshram.includes('student and not decided')) ashram = 'Student and Not decided';
+          else if (rawAshram.includes('working')) ashram = 'Working and Not Decided';
+          else if (rawAshram.includes('gauranga')) ashram = 'Gauranga Sabha';
+          else if (rawAshram.includes('nityananda')) ashram = 'Nityananda Sabha';
+          else if (rawAshram.includes('brahmachari')) ashram = 'Brahmachari';
+          else if (rawAshram.includes('grihastha') || rawAshram.includes('grahasta')) ashram = 'Grihastha';
+          else if (rawAshram.includes('single')) ashram = 'Staying Single (Not planning to marry)';
+          else if (rawAshram) ashram = 'Working and Not Decided'; // Default fallback if provided but unknown
+          
+          // Support variations like 'current temple', 'current temple location', 'Current Temple Location', etc.
+          const current_temple = (row.temple || row.Temple || row['current temple'] || row['Current temple'] || row['Current Temple'] || row['current temple location'] || row['Current temple location'] || row['Current Temple Location'] || row.current_temple || row.current_temple_location || row.currentTemple || '').toString().trim();
+          
+          // Auto-resolve location from temple
+          let state = (row.state || row.State || '').toString().trim();
+          let city = (row.city || row.City || '').toString().trim();
+          let center = (row.center || row.Center || '').toString().trim();
+
+          if (current_temple) {
+            const matchedTemple = templesList.find(t => t.name.toLowerCase() === current_temple.toLowerCase());
+            if (matchedTemple) {
+              if (!state) state = matchedTemple.state;
+              if (!city) city = matchedTemple.city;
+              
+              if (!center) {
+                const matchedCenter = centersList.find(c => c.temple_name?.toLowerCase() === matchedTemple.name.toLowerCase());
+                if (matchedCenter) {
+                  center = matchedCenter.name;
+                }
+              }
+            }
+          }
+          
+          // Support variations like 'mobile number', 'Mobile Number', etc.
+          const phone = row.mobile || row.Mobile || row.phone || row.Phone || row['mobile number'] || row['Mobile number'] || row['Mobile Number'] || row.mobile_number || row.mobileNumber || '';
+
           // Support multiple roles: comma-separated or single role
           const roleInput = (row.role || row.Role || 'student').toString().trim();
           const roles: UserRole[] = roleInput.includes(',')
@@ -115,6 +244,9 @@ export default function ImportPage() {
               state: state || undefined,
               city: city || undefined,
               center: center || undefined,
+              ashram: ashram || undefined,
+              current_temple: current_temple || undefined,
+              phone: phone || undefined,
             }
           );
 
@@ -124,10 +256,14 @@ export default function ImportPage() {
           console.error('Error importing user:', err);
           errors++;
           setProgress({ processed, total: data.length, errors });
+          errorMessages.push(`Row ${processed + errors} (${row.name || row.email || 'Unknown'}): ${err.message || 'Unknown error'}`);
         }
       }
 
       setSuccess(`Successfully imported ${processed} users. ${errors} errors.`);
+      if (errorMessages.length > 0) {
+        setError(errorMessages.join(' | '));
+      }
       setFile(null);
 
       // Reset file input
@@ -149,17 +285,26 @@ export default function ImportPage() {
 
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
         <div>
-          <h2 className="text-lg font-semibold mb-4">File Format</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">File Format</h2>
+            <button
+              onClick={downloadSampleExcel}
+              className="text-sm bg-primary-50 text-primary-700 px-3 py-1.5 rounded-lg font-medium hover:bg-primary-100 transition-colors flex items-center"
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Download Excel Template
+            </button>
+          </div>
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="text-sm text-gray-700 mb-2">Your Excel file should have the following columns:</p>
             <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
               <li><strong>name</strong> (required) - Full name of the user</li>
               <li><strong>email</strong> (required) - Email address</li>
+              <li><strong>mobile</strong> (optional) - Mobile/phone number</li>
+              <li><strong>ashram</strong> (optional) - Ashram status (e.g. &quot;Brahmachari&quot;, &quot;Grihastha&quot;). Check the &quot;Ashrams Reference&quot; sheet in the template.</li>
+              <li><strong>temple</strong> (optional) - Current temple location. Check the &quot;Temples Reference&quot; sheet in the template.</li>
+              <li><strong>role</strong> (optional) - User role(s) if other than counselor (defaults to &quot;counselor&quot;).</li>
               <li><strong>password</strong> (optional) - Password (if not provided, a temporary password will be generated)</li>
-              <li><strong>state</strong> (optional) - State name</li>
-              <li><strong>city</strong> (optional) - City name</li>
-              <li><strong>center</strong> (optional) - Center name</li>
-              <li><strong>role</strong> (optional) - User role(s), comma-separated for multiple roles (defaults to &quot;student&quot;). Example: &quot;center_admin,state_admin&quot;</li>
             </ul>
           </div>
         </div>

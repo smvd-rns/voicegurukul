@@ -31,7 +31,15 @@ export async function POST(req: NextRequest) {
       [userId, email, name, role, passwordHash]
     );
 
-    return NextResponse.json({ success: true, message: 'User registered successfully' });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'User registered successfully',
+      user: {
+        id: userId,
+        email,
+        user_metadata: { name }
+      }
+    });
   } catch (error: any) {
     console.error('[Register API Error]', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
