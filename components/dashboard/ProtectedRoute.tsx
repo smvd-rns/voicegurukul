@@ -22,18 +22,13 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         return;
       }
 
-      // 1. Existing verification status checks
-      if (userData?.verificationStatus === 'incomplete' || userData?.verificationStatus === 'unverified') {
-        router.push('/auth/complete-registration');
-        return;
-      } 
-      
+      // 1. Strict verification status checks
       if (userData?.verificationStatus === 'pending') {
         router.push('/auth/pending');
         return;
       } 
       
-      if (userData?.verificationStatus === 'rejected') {
+      if (userData?.verificationStatus !== 'approved') {
         router.push('/auth/complete-registration');
         return;
       }
@@ -113,18 +108,13 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <LoadingScreen message="Redirecting to registration..." />;
   }
 
-  // Block access if profile is incomplete - show loading while redirect happens
-  if (userData?.verificationStatus === 'incomplete') {
-    return <LoadingScreen message="Redirecting to registration..." />;
-  }
-
   // Block access if verification is pending - show loading while redirect happens
   if (userData?.verificationStatus === 'pending') {
     return <LoadingScreen message="Redirecting to pending status..." />;
   }
 
-  // Block access if rejected or unverified
-  if (userData?.verificationStatus === 'rejected' || userData?.verificationStatus === 'unverified') {
+  // Block access if not approved (incomplete, unverified, rejected, etc.)
+  if (userData?.verificationStatus !== 'approved') {
     return <LoadingScreen message="Redirecting to registration..." />;
   }
 

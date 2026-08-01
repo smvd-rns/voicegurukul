@@ -79,12 +79,12 @@ export async function GET(req: NextRequest) {
     let user;
 
     if (dbUserRes.rows.length === 0) {
-      // Create user if not exists
+      // Create new user with 'incomplete' status so they must complete their profile
       const newUserId = uuidv4();
       await query(
         `INSERT INTO users (id, email, name, role, profile_image, verification_status, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-        [newUserId, email, name, [1], profileImage, 'verified']
+        [newUserId, email, name, [1], profileImage, 'incomplete']
       );
       // Fetch the newly created user
       dbUserRes = await query('SELECT * FROM users WHERE id = $1', [newUserId]);
@@ -99,8 +99,18 @@ export async function GET(req: NextRequest) {
       name: user.name,
     });
 
-    // 5. Set Cookie and Redirect to app
-    const response = NextResponse.redirect(new URL(nextPath, origin));
+    // 5. Determine redirect target based on verification status
+    let redirectPath = nextPath;
+    if (user.verification_status === 'pending') {
+      redirectPath = '/auth/pending';
+    } else if (user.verification_status !== 'approved') {
+      redirectPath = '/auth/complete-registration';
+    } else if (!redirectPath || redirectPath === '/') {
+      redirectPath = '/dashboard';
+    }
+
+    // 6. Set Cookie and Redirect to app
+    const response = NextResponse.redirect(new URL(redirectPath, origin));
     setSessionCookie(response, sessionToken);
 
     return response;

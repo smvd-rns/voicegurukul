@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
     const name = data?.name || email.split('@')[0];
     const role = data?.role || [1]; // default 1 (student)
 
-    // 4. Insert user
+    // 4. Insert user with 'incomplete' status so they must fill the registration form
     await query(
-      `INSERT INTO users (id, email, name, role, password_hash) 
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, email, name, role, passwordHash]
+      `INSERT INTO users (id, email, name, role, password_hash, verification_status, created_at, updated_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+      [userId, email, name, role, passwordHash, 'incomplete']
     );
 
     return NextResponse.json({ 

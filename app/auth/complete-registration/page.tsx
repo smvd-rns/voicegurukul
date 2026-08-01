@@ -620,33 +620,26 @@ export default function CompleteRegistrationPage() {
                                     <label htmlFor="temple" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-emerald-600 transition-colors">
                                         Temple <span className="text-red-500">*</span>
                                     </label>
-                                    <div className="relative">
-                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                            <Building2 className="h-5 w-5 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
-                                        </div>
-                                        <select
-                                            id="temple"
-                                            value={formData.temple}
-                                            onChange={(e) => {
-                                                const selectedTemple = temples.find(t => t.name === e.target.value);
-                                                setFormData({
-                                                    ...formData,
-                                                    temple: e.target.value,
-                                                    templeId: selectedTemple?.id || '',
-                                                    center: '',
-                                                    otherTemple: e.target.value === 'Other' ? formData.otherTemple : ''
-                                                });
-                                            }}
-                                            className="block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6 transition-all"
-                                            disabled={loadingTemples}
-                                        >
-                                            <option value="">Select Temple</option>
-                                            {temples.map((t) => (
-                                                <option key={t.id} value={t.name}>{t.name}</option>
-                                            ))}
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
+                                    <SearchableSelect
+                                        options={[
+                                            ...temples.map((t) => ({ id: t.id, name: t.name })),
+                                            { id: 'Other', name: 'Other' }
+                                        ]}
+                                        value={formData.temple}
+                                        valueProperty="name"
+                                        disabled={loadingTemples}
+                                        placeholder={loadingTemples ? "Loading temples..." : "Search & Select Temple"}
+                                        onChange={(value) => {
+                                            const selectedTemple = temples.find(t => t.name === value || t.id === value);
+                                            setFormData({
+                                                ...formData,
+                                                temple: value,
+                                                templeId: selectedTemple?.id || '',
+                                                center: '',
+                                                otherTemple: value === 'Other' ? formData.otherTemple : ''
+                                            });
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Other Temple Input */}
@@ -672,25 +665,24 @@ export default function CompleteRegistrationPage() {
                                         <label htmlFor="center" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-emerald-600 transition-colors">
                                             Center <span className="text-red-500">*</span>
                                         </label>
-                                        <div className="relative">
-                                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                <Home className="h-5 w-5 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
-                                            </div>
-                                            <select
-                                                id="center"
-                                                value={formData.center}
-                                                onChange={(e) => setFormData({ ...formData, center: e.target.value })}
-                                                className="block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6 transition-all"
-                                                disabled={loadingCenters}
-                                            >
-                                                <option value="">Select Center</option>
-                                                {centers.map((c) => (
-                                                    <option key={c.id} value={c.name}>{c.name}</option>
-                                                ))}
-                                                <option value="None">None</option>
-                                                <option value="Other">Other</option>
-                                            </select>
-                                        </div>
+                                        <SearchableSelect
+                                            options={[
+                                                ...centers.map((c) => ({ id: c.id, name: c.name })),
+                                                { id: 'None', name: 'None' },
+                                                { id: 'Other', name: 'Other' }
+                                            ]}
+                                            value={formData.center}
+                                            valueProperty="name"
+                                            disabled={loadingCenters}
+                                            placeholder={loadingCenters ? "Loading centers..." : "Search & Select Center"}
+                                            onChange={(value) => {
+                                                setFormData({
+                                                    ...formData,
+                                                    center: value,
+                                                    otherCenter: value === 'Other' ? formData.otherCenter : ''
+                                                });
+                                            }}
+                                        />
                                     </div>
                                 )}
 
@@ -724,33 +716,26 @@ export default function CompleteRegistrationPage() {
                                     <label htmlFor="parentTemple" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
                                         Parent Temple <span className="text-red-500">*</span>
                                     </label>
-                                    <div className="relative">
-                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                            <Building2 className="h-5 w-5 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
-                                        </div>
-                                        <select
-                                            id="parentTemple"
-                                            value={formData.parentTemple}
-                                            disabled={loadingTemples || !!(userData?.hierarchy?.parentTemple || (userData as any)?.parentTemple)}
-                                            onChange={(e) => {
-                                                const selectedTemple = temples.find(t => t.name === e.target.value);
-                                                setFormData({
-                                                    ...formData,
-                                                    parentTemple: e.target.value,
-                                                    parentTempleId: selectedTemple?.id || '',
-                                                    parentCenter: '',
-                                                    otherParentTemple: e.target.value === 'Other' ? formData.otherParentTemple : ''
-                                                });
-                                            }}
-                                            className={`block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-sm sm:leading-6 transition-all ${(userData?.hierarchy?.parentTemple || (userData as any)?.parentTemple) ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                                        >
-                                            <option value="">Select Parent Temple</option>
-                                            {temples.map((t) => (
-                                                <option key={t.id} value={t.name}>{t.name}</option>
-                                            ))}
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
+                                    <SearchableSelect
+                                        options={[
+                                            ...temples.map((t) => ({ id: t.id, name: t.name })),
+                                            { id: 'Other', name: 'Other' }
+                                        ]}
+                                        value={formData.parentTemple}
+                                        valueProperty="name"
+                                        disabled={loadingTemples || !!(userData?.hierarchy?.parentTemple || (userData as any)?.parentTemple)}
+                                        placeholder={loadingTemples ? "Loading parent temples..." : "Search & Select Parent Temple"}
+                                        onChange={(value) => {
+                                            const selectedTemple = temples.find(t => t.name === value || t.id === value);
+                                            setFormData({
+                                                ...formData,
+                                                parentTemple: value,
+                                                parentTempleId: selectedTemple?.id || '',
+                                                parentCenter: '',
+                                                otherParentTemple: value === 'Other' ? formData.otherParentTemple : ''
+                                            });
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Other Parent Temple Input */}
@@ -777,25 +762,24 @@ export default function CompleteRegistrationPage() {
                                         <label htmlFor="parentCenter" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
                                             Parent Center <span className="text-red-500">*</span>
                                         </label>
-                                        <div className="relative">
-                                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                <Home className="h-5 w-5 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
-                                            </div>
-                                            <select
-                                                id="parentCenter"
-                                                value={formData.parentCenter}
-                                                disabled={loadingParentCenters || !!(userData?.hierarchy?.parentCenter || (userData as any)?.parentCenter)}
-                                                onChange={(e) => setFormData({ ...formData, parentCenter: e.target.value })}
-                                                className={`block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-sm sm:leading-6 transition-all ${(userData?.hierarchy?.parentCenter || (userData as any)?.parentCenter) ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                                            >
-                                                <option value="">Select Parent Center</option>
-                                                {parentCenters.map((c) => (
-                                                    <option key={c.id} value={c.name}>{c.name}</option>
-                                                ))}
-                                                <option value="None">None</option>
-                                                <option value="Other">Other</option>
-                                            </select>
-                                        </div>
+                                        <SearchableSelect
+                                            options={[
+                                                ...parentCenters.map((c) => ({ id: c.id, name: c.name })),
+                                                { id: 'None', name: 'None' },
+                                                { id: 'Other', name: 'Other' }
+                                            ]}
+                                            value={formData.parentCenter}
+                                            valueProperty="name"
+                                            disabled={loadingParentCenters || !!(userData?.hierarchy?.parentCenter || (userData as any)?.parentCenter)}
+                                            placeholder={loadingParentCenters ? "Loading parent centers..." : "Search & Select Parent Center"}
+                                            onChange={(value) => {
+                                                setFormData({
+                                                    ...formData,
+                                                    parentCenter: value,
+                                                    otherParentCenter: value === 'Other' ? formData.otherParentCenter : ''
+                                                });
+                                            }}
+                                        />
                                     </div>
                                 )}
 

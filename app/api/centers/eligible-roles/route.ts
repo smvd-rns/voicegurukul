@@ -54,9 +54,7 @@ export async function GET(request: Request) {
         // If it's a single number column: .eq('role', 14) (but schema says checking if array).
         // The `users` table usually has `role` as JSONB or similarly flexible column in this project.
 
-        console.log('API: Fetching eligible roles...');
-        // 2. Fetch Eligible Users (Roles 14, 15, 16)
-        // We will fetch all users and filter in memory.
+        // 2. Fetch All Users
         const { data: users, error: fetchError } = await adminClient
             .from('users')
             .select('id, name, role, email')
@@ -67,51 +65,8 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
         }
 
-        console.log(`API: Fetched ${users?.length} users. Filtering...`);
-
-        // Debug: Log all unique roles found to check for typos/mismatches
-        const uniqueRoles = new Set();
-        users?.forEach((u: any) => {
-            const roles = Array.isArray(u.role) ? u.role : [u.role];
-            roles.forEach((r: any) => uniqueRoles.add(r));
-        });
-        console.log('API: All unique roles in DB:', Array.from(uniqueRoles));
-
-        // 3. Filter in memory
-        // Include roles 8 (Super Admin) through 17 (OC), plus 21 (Youth Preacher)
-        // This covers: 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21
-        const targetRoles = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21];
-
-        // String mapping for these roles
-        const targetRoleStrings = [
-            'super_admin', 'vice_president', 'president', 'managing_director',
-            'director', 'central_voice_manager', 'project_advisor', 'project_manager',
-            'acting_manager', 'oc', 'youth_preacher',
-            'zonal_admin', 'state_admin', 'city_admin', 'center_admin', 'bc_voice_manager' // encompassing 4-7 as well just in case
-        ];
-
-        const eligibleUsers = (users || []).filter((u: any) => {
-            const uRoles = Array.isArray(u.role) ? u.role : [u.role];
-
-            return uRoles.some((r: any) => {
-                // Check numbers
-                const num = Number(r);
-                if (!isNaN(num) && targetRoles.includes(num)) return true;
-                // Also allow roles 4-7 (Admins) if they want "all admin"
-                if (!isNaN(num) && num >= 4 && num <= 17) return true;
-
-                // Check strings
-                if (typeof r === 'string') {
-                    const lowerR = r.toLowerCase();
-                    return targetRoleStrings.includes(lowerR) || targetRoleStrings.includes(r);
-                }
-
-                return false;
-            });
-        });
-
-        console.log(`API: Returning ${eligibleUsers.length} eligible users.`);
-        return NextResponse.json(eligibleUsers);
+        // Return all registered and imported users for Super Admin selection
+        return NextResponse.json(users || []);
 
     } catch (error: any) {
         console.error('API Error:', error);

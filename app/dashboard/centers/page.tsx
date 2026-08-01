@@ -149,6 +149,13 @@ export default function CentersPage() {
     }
   };
 
+  // Prepare searchable options for temples
+  const templeOptions = temples.map(temple => ({
+    id: temple.id,
+    name: `${temple.name}${temple.city ? ` (${temple.city})` : ''}`,
+    email: temple.state ? `State: ${temple.state}` : undefined
+  }));
+
   // Filter centers based on search
   const filteredCenters = centers.filter(center =>
     center.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -381,11 +388,14 @@ export default function CentersPage() {
 
 
   const handleEditClick = (center: any) => {
+    // Resolve temple ID if needed
+    const matchedTemple = temples.find(t => t.id === center.temple_id || (center.temple_name && t.name?.toLowerCase() === center.temple_name?.toLowerCase()));
+
     // Populate form with center data
     setNewCenter({
       id: center.id,
       name: center.name,
-      templeId: center.temple_id,
+      templeId: matchedTemple ? matchedTemple.id : (center.temple_id || ''),
       address: center.address || '',
       contact: center.contact || '',
       projectManagerId: center.project_manager_id || '',
@@ -766,17 +776,14 @@ export default function CentersPage() {
                       <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
                         Associated Temple <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        value={newCenter.templeId}
-                        onChange={(e) => setNewCenter({ ...newCenter, templeId: e.target.value })}
-                        required
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-gray-900 bg-white text-sm transition-all"
-                      >
-                        <option value="">Select Temple</option>
-                        {temples.map(temple => (
-                          <option key={temple.id} value={temple.id}>{temple.name} ({temple.city})</option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={templeOptions}
+                        value={newCenter.templeId || ''}
+                        onChange={(val) => setNewCenter({ ...newCenter, templeId: val })}
+                        placeholder="Search & Select Temple..."
+                        valueProperty="id"
+                        className="w-full"
+                      />
                       <p className="text-[10px] text-gray-400 mt-1 pl-1">
                         Location: {temples.find(t => t.id === newCenter.templeId)?.city || '-'}, {temples.find(t => t.id === newCenter.templeId)?.state || '-'}
                       </p>

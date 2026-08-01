@@ -28,11 +28,9 @@ function LoginContent() {
       }
 
       // Check verification status and redirect accordingly
-      if (userData.verificationStatus === 'incomplete' || userData.verificationStatus === 'unverified') {
-        router.push('/auth/complete-registration');
-      } else if (userData.verificationStatus === 'pending') {
+      if (userData.verificationStatus === 'pending') {
         router.push('/auth/pending');
-      } else if (userData.verificationStatus === 'rejected') {
+      } else if (userData.verificationStatus !== 'approved') {
         router.push('/auth/complete-registration');
       } else {
         const next = searchParams.get('next') || '/dashboard';

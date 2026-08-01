@@ -26,19 +26,15 @@ export async function POST(request: Request) {
         // Sanitize all updates to prevent injection attacks
         updates = sanitizeObject(updates);
 
-        // Security Check: Prevent assignment of Role 8 (Super Admin)
-        const SUPER_ADMIN_ROLE = 8;
-        if (updates?.role) {
-            const rolesToCheck = Array.isArray(updates.role) ? updates.role : [updates.role];
-            if (rolesToCheck.some((r: any) => Number(r) === SUPER_ADMIN_ROLE)) {
-                return NextResponse.json({ error: 'Role 8 (Super Admin) cannot be assigned via API' }, { status: 403 });
-            }
-        }
-
         // Security check: Ensure the authenticated user matches the userId being updated
         if (user.id !== userId) {
             return NextResponse.json({ error: 'Unauthorized to update this profile' }, { status: 403 });
         }
+
+        // Security check: Regular users cannot change their own roles or self-approve their verification_status
+        delete updates.verification_status;
+        delete updates.verificationStatus;
+        delete updates.role;
 
         // Fetch current user data to check for role and center changes
         const { data: currentUser, error: fetchError } = await supabaseAdmin
