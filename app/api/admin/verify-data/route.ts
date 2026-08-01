@@ -186,17 +186,20 @@ export async function POST(request: NextRequest) {
 
                 for (const userId of targetIds) {
                     try {
-                        const userRes = await dbQuery('SELECT email, name, phone, hierarchy, current_center, current_temple FROM users WHERE id = $1', [userId]);
+                        // Generate Membership ID first if not present
+                        let membershipId: string | undefined = undefined;
+                        try {
+                            membershipId = await generateMembershipIdForUser(supabase, userId);
+                        } catch (genErr) {
+                            console.error(`Failed to generate membership ID for ${userId} in verify-data:`, genErr);
+                        }
+
+                        const userRes = await dbQuery('SELECT email, name, phone, hierarchy, current_center, current_temple, membership_id FROM users WHERE id = $1', [userId]);
                         const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
                             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
-                            await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`, userDetails);
-                            try {
-                                await generateMembershipIdForUser(supabase, userId);
-                            } catch (genErr) {
-                                console.error(`Failed to generate membership ID for ${userId} in verify-data:`, genErr);
-                            }
+                            await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`);
                         }
                     } catch (sideEffectError) {
                         console.error(`Error in approval side effects for user ${userId}:`, sideEffectError);

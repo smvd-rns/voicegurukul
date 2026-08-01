@@ -161,7 +161,7 @@ export async function sendRegistrationNotification(
 /**
  * Sends a welcome/approval notification to the newly approved user.
  */
-export async function sendApprovalNotification(userEmail: string, userName: string, dashboardUrl: string, membershipId?: string) {
+export async function sendApprovalNotification(userEmail: string, userName: string, dashboardUrl: string) {
     if (!process.env.SMTP_USER) {
         console.warn(`[Mock Email] Would send Approval Welcome Mail to ${userEmail} for user ${userName}`);
         return true;
@@ -181,14 +181,6 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
         let body = template.body
             .replace(/{userName}/g, userName)
             .replace(/{dashboardUrl}/g, dashboardUrl);
-        if (membershipId) {
-            body += `
-                <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
-                    <p style="margin: 0; color: #c2410c; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Your Membership ID</p>
-                    <p style="margin: 5px 0 0 0; color: #ea580c; font-size: 24px; font-weight: 800; letter-spacing: 1px;">${membershipId}</p>
-                </div>
-            `;
-        }
         body += `
             <div style="text-align: center; margin: 35px 0;">
                 <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">Go to Dashboard</a>
@@ -198,15 +190,8 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
     } else {
         const htmlBody = `
             <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
-            <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">Your registration with VOICE Gurukul has been approved by your counselor.</p>
+            <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">Your registration with VOICE Gurukul has been approved.</p>
             
-            ${membershipId ? `
-            <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
-                <p style="margin: 0; color: #c2410c; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Your Membership ID</p>
-                <p style="margin: 5px 0 0 0; color: #ea580c; font-size: 24px; font-weight: 800; letter-spacing: 1px;">${membershipId}</p>
-            </div>
-            ` : ''}
-
             <div style="text-align: center; margin: 35px 0;">
                 <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Go to Dashboard</a>
             </div>

@@ -82,22 +82,23 @@ export async function GET(request: Request) {
             return new NextResponse('Failed to approve user', { status: 500 });
         }
 
+        // Generate Membership ID if missing
+        let memId: string | undefined = undefined;
+        try {
+            memId = await generateMembershipIdForUser(supabase, userId);
+        } catch (genErr) {
+            console.error('Failed to generate membership ID during email approval:', genErr);
+        }
+
         // Trigger the approval notification directly
         const { data: userData } = await supabase
             .from('users')
-            .select('email, name, phone, hierarchy, current_center, current_temple')
+            .select('email, name, phone, hierarchy, current_center, current_temple, membership_id')
             .eq('id', userId)
             .single();
 
         if (userData?.email) {
-            await sendApprovalNotification(userData.email, userData.name || 'Devotee', `${baseUrl}/dashboard`, userData);
-            
-            // Also generate Membership ID if missing
-            try {
-                await generateMembershipIdForUser(supabase, userId);
-            } catch (genErr) {
-                console.error('Failed to generate membership ID during email approval:', genErr);
-            }
+            await sendApprovalNotification(userData.email, userData.name || 'Devotee', `${baseUrl}/dashboard`);
         }
 
         const html = `

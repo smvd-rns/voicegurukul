@@ -88,11 +88,7 @@ export default function CentersPage() {
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
-      const response = await fetch('/api/centers/eligible-roles', {
-        headers: {
-          'Authorization': `Bearer ${(await supabase?.auth.getSession())?.data.session?.access_token}`
-        }
-      });
+      const response = await fetch('/api/centers/eligible-roles');
 
       if (!response.ok) {
         throw new Error('Failed to fetch users');
