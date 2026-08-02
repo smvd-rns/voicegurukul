@@ -14,6 +14,8 @@ export default function CounselorAssignmentPage() {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [roleFilter, setRoleFilter] = useState<string>('all');
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -233,23 +235,48 @@ export default function CounselorAssignmentPage() {
         }
     }, [userData, router]);
 
-    const filteredUsers = users.filter(user => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
+    const filteredUsers = users
+        .filter(user => {
+            // Search query filter
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const matchesSearch = (
+                    user.name?.toLowerCase().includes(query) ||
+                    user.email?.toLowerCase().includes(query) ||
+                    user.phone?.toLowerCase().includes(query) ||
+                    user.hierarchy?.city?.toLowerCase().includes(query)
+                );
+                if (!matchesSearch) return false;
+            }
 
-        // Search by name, email, phone, city
-        return (
-            user.name?.toLowerCase().includes(query) ||
-            user.email?.toLowerCase().includes(query) ||
-            user.phone?.toLowerCase().includes(query) ||
-            user.hierarchy?.city?.toLowerCase().includes(query)
-        );
-    });
+            // Role filter
+            if (roleFilter !== 'all') {
+                const userRoles = Array.isArray(user.role) ? user.role : [user.role];
+                if (roleFilter === 'counselor') {
+                    return userRoles.some(r => r === 'counselor' || r === 2);
+                } else if (roleFilter === 'care_giver') {
+                    return userRoles.some(r => r === 'care_giver' || r === 20);
+                } else if (roleFilter === 'student') {
+                    return userRoles.some(r => r === 'student' || r === 1);
+                }
+            }
+
+            return true;
+        })
+        .sort((a, b) => {
+            const nameA = a.name?.toLowerCase() || '';
+            const nameB = b.name?.toLowerCase() || '';
+            if (sortOrder === 'asc') {
+                return nameA.localeCompare(nameB);
+            } else {
+                return nameB.localeCompare(nameA);
+            }
+        });
 
     // Pagination Logic
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, itemsPerPage]);
+    }, [searchQuery, itemsPerPage, roleFilter]);
 
     const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
     const paginatedUsers = filteredUsers.slice(
@@ -290,18 +317,47 @@ export default function CounselorAssignmentPage() {
                     </div>
                 </div>
 
-                {/* Search */}
-                <div className="relative max-w-2xl">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400" />
+                {/* Filters, Search & Sort */}
+                <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+                    {/* Search */}
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search by name, email, or city..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/80 backdrop-blur text-sm"
+                        />
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Search by name, email, or city..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/80 backdrop-blur"
-                    />
+                    
+                    {/* Role Filter */}
+                    <div className="w-full lg:w-48">
+                        <select
+                            value={roleFilter}
+                            onChange={(e) => setRoleFilter(e.target.value)}
+                            className="block w-full px-3 py-3 border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/80 backdrop-blur text-gray-700 font-medium cursor-pointer text-sm"
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="counselor">Counselors</option>
+                            <option value="care_giver">Care Givers</option>
+                            <option value="student">Students</option>
+                        </select>
+                    </div>
+
+                    {/* Sort Order */}
+                    <div className="w-full lg:w-48">
+                        <select
+                            value={sortOrder}
+                            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                            className="block w-full px-3 py-3 border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/80 backdrop-blur text-gray-700 font-medium cursor-pointer text-sm"
+                        >
+                            <option value="asc">Name: A to Z</option>
+                            <option value="desc">Name: Z to A</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Bulk Actions Bar */}
