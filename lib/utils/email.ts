@@ -1,5 +1,11 @@
 import nodemailer from 'nodemailer';
 import pool from '../db';
+import dns from 'dns';
+
+// Force Node to prefer IPv4 DNS resolution (avoids broken IPv6 routing on hosting droplets)
+if (dns && typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 // Initialize the Nodemailer transporter using environment variables
 const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
