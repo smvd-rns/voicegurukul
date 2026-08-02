@@ -4,7 +4,7 @@ import { sendApprovalNotification } from '@/lib/utils/email';
 
 export async function POST(request: Request) {
     try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });

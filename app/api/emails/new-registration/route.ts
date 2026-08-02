@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query as dbQuery } from '@/lib/db';
-import { sendRegistrationNotification } from '@/lib/utils/email';
+import { sendRegistrationNotification, sendDevoteeRegistrationConfirmation } from '@/lib/utils/email';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
     try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -89,12 +89,22 @@ export async function POST(request: Request) {
             }
         }
 
+        // If still no managers found for this center/temple, fallback to Super Admin email
         if (notifyManagers.length === 0) {
-            return NextResponse.json({ success: true, emailsSent: 0, message: 'No recipients found for notification' });
+            notifyManagers.push({ id: 'superadmin', name: 'Super Admin', email: 'smvd@voicepune.com' });
         }
 
         
-        // Simple secure token for 1-click approve
+        // 1. Send receipt/acknowledgement email to the newly registered devotee
+        if (newUser.email) {
+            try {
+                await sendDevoteeRegistrationConfirmation(newUser.email, newUser.name || 'Devotee');
+            } catch (devoteeErr) {
+                console.error('Failed to send confirmation email to new devotee:', devoteeErr);
+            }
+        }
+
+        // 2. Send 1-click approval notification to managers / admins
         const secret = process.env.EMAIL_APPROVAL_SECRET || 'fallback_secret_123';
         const token = crypto.createHmac('sha256', secret).update(userId).digest('hex');
         const approveLink = `${baseUrl}/api/emails/approve?userId=${userId}&token=${token}`;
@@ -107,7 +117,7 @@ export async function POST(request: Request) {
              }
         }
 
-        return NextResponse.json({ success: true, emailsSent });
+        return NextResponse.json({ success: true, emailsSent, devoteeNotified: !!newUser.email });
     } catch (error) {
         console.error('API /emails/new-registration error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

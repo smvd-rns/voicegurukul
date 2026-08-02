@@ -40,6 +40,15 @@ jobs:
           source: ".next"
           target: "/var/www/voicegurukul"
 
+      - name: Copy .env file to Droplet
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          source: ".env"
+          target: "/var/www/voicegurukul"
+
       - name: Restart Server via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -50,7 +59,8 @@ jobs:
             cd /var/www/voicegurukul
             git pull origin main
             npm ci --production
-            pm2 restart voicegurukul || pm2 start npm --name "voicegurukul" -- start
+            # Use --update-env so PM2 picks up the freshly deployed .env file
+            pm2 restart voicegurukul --update-env || pm2 start npm --name "voicegurukul" -- start
             
             # Setup and restart the indexer microservice
             cd /var/www/voicegurukul/indexer-service
@@ -58,3 +68,4 @@ jobs:
             pm2 restart voicegurukul-indexer || pm2 start server.js --name "voicegurukul-indexer"
             
             pm2 save
+

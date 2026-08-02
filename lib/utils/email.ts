@@ -8,51 +8,101 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 
 // Initialize the Nodemailer transporter using environment variables
-const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
-const smtpUser = (process.env.SMTP_USER || '').replace(/^"|"$/g, '');
-const smtpHost = (process.env.SMTP_HOST || 'smtp.ethereal.email').replace(/^"|"$/g, '');
+const smtpPass = (process.env.SMTP_PASS || 'dzrd tuat vemy yrdq').replace(/^"|"$/g, '');
+const smtpUser = (process.env.SMTP_USER || 'sri.murali.vadan.rns@iskcon.net').replace(/^"|"$/g, '');
+const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').replace(/^"|"$/g, '');
 
-// We create a cached transporter. On first use we resolve the SMTP hostname
-// to an IPv4 address so the connection never attempts IPv6 (which is broken on
-// many DigitalOcean droplets).
+// We create a cached transporter.
 let _transporterCache: Transporter | null = null;
 
 async function getTransporter(): Promise<Transporter> {
     if (_transporterCache) return _transporterCache;
 
-    // Resolve the SMTP host to an explicit IPv4 address to bypass broken IPv6 routing
-    let resolvedHost = smtpHost;
-    try {
-        const addresses = await dns.resolve4(smtpHost);
-        if (addresses && addresses.length > 0) {
-            resolvedHost = addresses[0];
-            console.log(`[Email] Resolved ${smtpHost} to IPv4: ${resolvedHost}`);
-        }
-    } catch (err) {
-        console.warn(`[Email] Could not resolve ${smtpHost} to IPv4, using hostname directly:`, err);
-    }
+    const isGmail = smtpHost.includes('gmail') || smtpUser.includes('gmail') || smtpUser.includes('voicepune') || smtpUser.includes('iskcon');
 
-    _transporterCache = nodemailer.createTransport({
-        host: resolvedHost,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-            user: smtpUser,
-            pass: smtpPass,
-        },
-        // When host is an IP, TLS validation needs the original hostname
-        tls: {
-            servername: smtpHost,
-        },
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 15000,
-    });
+    if (isGmail) {
+        _transporterCache = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: smtpUser,
+                pass: smtpPass,
+            },
+        });
+    } else {
+        _transporterCache = nodemailer.createTransport({
+            host: smtpHost,
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: smtpUser,
+                pass: smtpPass,
+            },
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 15000,
+        });
+    }
 
     return _transporterCache;
 }
 
-const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <noreply@iskconsadhana.org>').replace(/^"|"$/g, '');
+const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <sri.murali.vadan.rns@iskcon.net>').replace(/^"|"$/g, '');
+
+export interface EmailDispatchOptions {
+    to: string | string[];
+    subject: string;
+    html: string;
+    text?: string;
+    from?: string;
+}
+
+/**
+ * Universal email dispatcher: Sends via direct droplet SMTP using ISKCON credentials.
+ */
+export async function dispatchEmail(options: EmailDispatchOptions): Promise<boolean> {
+    try {
+        const t = await getTransporter();
+        const info = await t.sendMail({
+            from: options.from || SENDER_EMAIL,
+            to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+        });
+        console.log(`[Email Dispatcher] Successfully delivered via SMTP to ${Array.isArray(options.to) ? options.to.join(', ') : options.to}:`, info.messageId);
+        return true;
+    } catch (smtpErr) {
+        console.error('[Email Dispatcher] Failed to send email via SMTP:', smtpErr);
+        
+        // Fallback to Vercel microservice if configured
+        const serviceUrl = process.env.VERCEL_EMAIL_SERVICE_URL;
+        if (serviceUrl) {
+            try {
+                const apiKey = process.env.EMAIL_API_KEY || 'voicegurukul_mail_secret_key_108';
+                console.log(`[Email Dispatcher] Fallback sending via Vercel service...`);
+                const res = await fetch(serviceUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                    body: JSON.stringify({
+                        to: options.to,
+                        subject: options.subject,
+                        html: options.html,
+                        text: options.text,
+                        from: options.from || SENDER_EMAIL,
+                    }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`[Email Dispatcher] Delivered via Vercel fallback:`, data.messageId || data);
+                    return true;
+                }
+            } catch (vErr) {
+                console.error('[Email Dispatcher] Vercel fallback also failed:', vErr);
+            }
+        }
+        return false;
+    }
+}
 
 // A shared premium email header and footer styling helper to ensure visual consistency
 function getEmailWrapper(title: string, bodyContent: string, isAlert = false) {
@@ -91,11 +141,17 @@ function getEmailWrapper(title: string, bodyContent: string, isAlert = false) {
     `;
 }
 
-async function getEmailTemplate(key: string) {
+async function getEmailTemplate(key: string, aliasKey?: string) {
     try {
-        const result = await pool.query('SELECT * FROM email_templates WHERE key = $1 LIMIT 1', [key]);
+        let result = await pool.query('SELECT * FROM email_templates WHERE key = $1 LIMIT 1', [key]);
         if (result.rows && result.rows.length > 0) {
             return result.rows[0];
+        }
+        if (aliasKey) {
+            result = await pool.query('SELECT * FROM email_templates WHERE key = $1 LIMIT 1', [aliasKey]);
+            if (result.rows && result.rows.length > 0) {
+                return result.rows[0];
+            }
         }
     } catch (e) {
         console.error('Failed to query email template from DB:', e);
@@ -118,7 +174,7 @@ export async function sendRegistrationNotification(
         return true;
     }
 
-    const template = await getEmailTemplate('registration_notification');
+    const template = await getEmailTemplate('user_registered_admin_notification', 'registration_notification');
     if (template && !template.is_enabled) {
         console.log(`[Email Skipped] Template 'registration_notification' is disabled.`);
         return true;
@@ -144,7 +200,8 @@ export async function sendRegistrationNotification(
         subject = template.subject
             .replace(/{managerName}/g, managerName)
             .replace(/{userName}/g, newUser.name);
-        const body = template.body
+        const templateBody = template.body_html || template.body || '';
+        const body = templateBody
             .replace(/{managerName}/g, managerName)
             .replace(/{userName}/g, newUser.name)
             .replace(/{userEmail}/g, newUser.email)
@@ -180,19 +237,48 @@ export async function sendRegistrationNotification(
         htmlContent = getEmailWrapper('New Registration', htmlBody);
     }
 
-    try {
-        const t = await getTransporter();
-        await t.sendMail({
-            from: SENDER_EMAIL,
-            to: managerEmail,
-            subject: subject,
-            html: htmlContent,
-        });
-        return true;
-    } catch (error) {
-        console.error('Failed to send registration notification email:', error);
-        return false;
+    return await dispatchEmail({
+        to: managerEmail,
+        subject: subject,
+        html: htmlContent,
+    });
+}
+
+/**
+ * Sends a registration receipt / acknowledgement email to the newly registered devotee.
+ */
+export async function sendDevoteeRegistrationConfirmation(userEmail: string, userName: string) {
+    const template = await getEmailTemplate('user_registration_confirmation', 'registration_confirmation');
+    let subject = `Welcome to VOICE Gurukul - Registration Received (${userName})`;
+    let htmlContent = '';
+
+    if (template && template.is_enabled) {
+        subject = template.subject.replace(/{userName}/g, userName);
+        const templateBody = template.body_html || template.body || '';
+        const body = templateBody
+            .replace(/{userName}/g, userName)
+            .replace(/{userEmail}/g, userEmail);
+        htmlContent = getEmailWrapper(template.name || 'Registration Received', body);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155; line-height: 1.6;">Thank you for registering on <strong>VOICE Gurukul</strong>! Your application details have been successfully submitted and are currently under review by the authority.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                <p style="margin: 0; color: #475569; font-size: 14px;"><strong>Status:</strong> <span style="color: #ea580c; font-weight: 700;">Pending Verification</span></p>
+                <p style="margin: 8px 0 0 0; color: #64748b; font-size: 13px;">You will receive an approval email as soon as your account is activated.</p>
+            </div>
+
+            <p style="font-size: 14px; color: #64748b;">If you have any questions, feel free to contact your center coordinator.</p>
+        `;
+        htmlContent = getEmailWrapper('Registration Received', htmlBody);
     }
+
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
 }
 
 /**
@@ -204,7 +290,7 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
         return true;
     }
 
-    const template = await getEmailTemplate('welcome_approved');
+    const template = await getEmailTemplate('user_approved_notification', 'welcome_approved');
     if (template && !template.is_enabled) {
         console.log(`[Email Skipped] Template 'welcome_approved' is disabled.`);
         return true;
@@ -215,7 +301,8 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
 
     if (template) {
         subject = template.subject.replace(/{userName}/g, userName);
-        let body = template.body
+        const templateBody = template.body_html || template.body || '';
+        let body = templateBody
             .replace(/{userName}/g, userName)
             .replace(/{dashboardUrl}/g, dashboardUrl);
         body += `
@@ -238,19 +325,11 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
         htmlContent = getEmailWrapper('Account Approved!', htmlBody);
     }
 
-    try {
-        const t = await getTransporter();
-        await t.sendMail({
-            from: SENDER_EMAIL,
-            to: userEmail,
-            subject: subject,
-            html: htmlContent,
-        });
-        return true;
-    } catch (error) {
-        console.error('Failed to send approval email:', error);
-        return false;
-    }
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
 }
 
 /**
@@ -263,37 +342,48 @@ export async function sendRejectionNotification(userEmail: string, userName: str
         return true;
     }
 
-    const htmlBody = `
-        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
-        <p style="font-size: 16px; color: #334155;">Thank you for your application to VOICE Gurukul. After reviewing your registration details, we are unable to approve your application at this time.</p>
-        
-        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 30px 0;">
-            <h4 style="margin: 0 0 8px 0; color: #991b1b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Reason for Rejection:</h4>
-            <p style="margin: 0; color: #7f1d1d; font-size: 15px; font-style: italic; line-height: 1.5;">&ldquo;${rejectionReason}&rdquo;</p>
-        </div>
-
-        <p style="font-size: 16px; color: #334155; margin-bottom: 30px;">Do not worry! You can log back into your account, update any incorrect details, and resubmit your application for review.</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com'}/auth/login" style="background-color: #475569; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 15px;">Login and Re-submit</a>
-        </div>
-    `;
-
-    const htmlContent = getEmailWrapper('Application Update', htmlBody, true);
-
-    try {
-        const t = await getTransporter();
-        await t.sendMail({
-            from: SENDER_EMAIL,
-            to: userEmail,
-            subject: 'Update Regarding Your VOICE Gurukul Registration',
-            html: htmlContent,
-        });
+    const template = await getEmailTemplate('user_rejected_notification', 'welcome_rejected');
+    if (template && !template.is_enabled) {
+        console.log(`[Email Skipped] Template 'user_rejected_notification' is disabled.`);
         return true;
-    } catch (error) {
-        console.error('Failed to send rejection email:', error);
-        return false;
     }
+
+    let subject = 'Update Regarding Your VOICE Gurukul Registration';
+    let htmlContent = '';
+
+    if (template) {
+        subject = template.subject.replace(/{userName}/g, userName);
+        const templateBody = template.body_html || template.body || '';
+        const body = templateBody
+            .replace(/{userName}/g, userName)
+            .replace(/{userEmail}/g, userEmail)
+            .replace(/{rejectionReason}/g, rejectionReason)
+            .replace(/{loginLink}/g, `${process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com'}/auth/login`);
+        htmlContent = getEmailWrapper(template.name || 'Application Update', body, true);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155;">Thank you for your application to VOICE Gurukul. After reviewing your registration details, we are unable to approve your application at this time.</p>
+            
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 30px 0;">
+                <h4 style="margin: 0 0 8px 0; color: #991b1b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Reason for Rejection:</h4>
+                <p style="margin: 0; color: #7f1d1d; font-size: 15px; font-style: italic; line-height: 1.5;">&ldquo;${rejectionReason}&rdquo;</p>
+            </div>
+
+            <p style="font-size: 16px; color: #334155; margin-bottom: 30px;">Do not worry! You can log back into your account, update any incorrect details, and resubmit your application for review.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com'}/auth/login" style="background-color: #475569; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 15px;">Login and Re-submit</a>
+            </div>
+        `;
+        htmlContent = getEmailWrapper('Application Update', htmlBody, true);
+    }
+
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
 }
 
 /**
@@ -306,32 +396,42 @@ export async function sendForgotPasswordEmail(userEmail: string, userName: strin
         return true;
     }
 
-    const htmlBody = `
-        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
-        <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">You requested to reset your password for your VOICE Gurukul account. Click the button below to set a new password:</p>
-        
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="${resetLink}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Reset Password</a>
-        </div>
-        
-        <p style="font-size: 14px; color: #64748b;">This reset link is valid for 1 hour. If you did not request this, you can safely ignore this email; your password will remain unchanged.</p>
-    `;
-
-    const htmlContent = getEmailWrapper('Reset Password Request', htmlBody);
-
-    try {
-        const t = await getTransporter();
-        await t.sendMail({
-            from: SENDER_EMAIL,
-            to: userEmail,
-            subject: 'Reset Your VOICE Gurukul Password',
-            html: htmlContent,
-        });
+    const template = await getEmailTemplate('password_reset_otp', 'forgot_password');
+    if (template && !template.is_enabled) {
+        console.log(`[Email Skipped] Template 'password_reset_otp' is disabled.`);
         return true;
-    } catch (error) {
-        console.error('Failed to send password reset email:', error);
-        return false;
     }
+
+    let subject = 'Reset Your VOICE Gurukul Password';
+    let htmlContent = '';
+
+    if (template) {
+        subject = template.subject.replace(/{userName}/g, userName);
+        const templateBody = template.body_html || template.body || '';
+        const body = templateBody
+            .replace(/{userName}/g, userName)
+            .replace(/{userEmail}/g, userEmail)
+            .replace(/{resetLink}/g, resetLink);
+        htmlContent = getEmailWrapper(template.name || 'Reset Password Request', body);
+    } else {
+        const htmlBody = `
+            <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+            <p style="font-size: 16px; color: #334155; margin-bottom: 25px;">You requested to reset your password for your VOICE Gurukul account. Click the button below to set a new password:</p>
+            
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="${resetLink}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1);">Reset Password</a>
+            </div>
+            
+            <p style="font-size: 14px; color: #64748b;">This reset link is valid for 1 hour. If you did not request this, you can safely ignore this email; your password will remain unchanged.</p>
+        `;
+        htmlContent = getEmailWrapper('Reset Password Request', htmlBody);
+    }
+
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
 }
 
 /**
@@ -343,7 +443,7 @@ export async function sendProfileUpdateApprovalNotification(userEmail: string, u
         return true;
     }
 
-    const template = await getEmailTemplate('profile_update_approval');
+    const template = await getEmailTemplate('profile_update_approved', 'profile_update_approval');
     if (template && !template.is_enabled) {
         console.log(`[Email Skipped] Template 'profile_update_approval' is disabled.`);
         return true;
@@ -386,19 +486,11 @@ export async function sendProfileUpdateApprovalNotification(userEmail: string, u
         htmlContent = getEmailWrapper('Profile Update Approved', htmlBody);
     }
 
-    try {
-        const t = await getTransporter();
-        await t.sendMail({
-            from: SENDER_EMAIL,
-            to: userEmail,
-            subject: subject,
-            html: htmlContent,
-        });
-        return true;
-    } catch (error) {
-        console.error('Failed to send profile update approval email:', error);
-        return false;
-    }
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
 }
 
 

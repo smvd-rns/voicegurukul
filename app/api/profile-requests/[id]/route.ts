@@ -17,7 +17,7 @@ export async function PATCH(
     };
 
     try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { id } = params;
         log(`Processing PATCH for ID: ${id}`);
 

@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
                         const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
-                            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+                            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
                             await sendApprovalNotification(userDetails.email, userDetails.name || 'Devotee', `${baseUrl}/dashboard`);
                         }
                     } catch (sideEffectError) {
