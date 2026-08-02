@@ -17,7 +17,7 @@ export default function CounselorAssignmentPage() {
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     // Bulk Selection State
     const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -249,7 +249,7 @@ export default function CounselorAssignmentPage() {
     // Pagination Logic
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, [searchQuery, itemsPerPage]);
 
     const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
     const paginatedUsers = filteredUsers.slice(
@@ -413,25 +413,42 @@ export default function CounselorAssignmentPage() {
                 </div>
 
                 {/* Pagination Controls */}
-                {totalPages > 1 && (
-                    <div className="flex justify-center items-center space-x-4 mt-6 bg-white/80 backdrop-blur-sm p-3 rounded-xl border border-orange-100 shadow-sm animate-fade-in">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-4 py-2 bg-white text-orange-700 rounded-lg border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-50 transition-all shadow-sm font-medium flex items-center gap-2"
-                        >
-                            Previous
-                        </button>
-                        <span className="text-gray-700 font-medium bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">
-                            Page <span className="text-orange-600 font-bold">{currentPage}</span> of {totalPages}
-                        </span>
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                            className="px-4 py-2 bg-white text-orange-700 rounded-lg border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-50 transition-all shadow-sm font-medium flex items-center gap-2"
-                        >
-                            Next
-                        </button>
+                {filteredUsers.length > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-orange-100 shadow-sm animate-fade-in">
+                        <div className="flex items-center space-x-2 text-sm text-gray-700 font-medium">
+                            <span>Show</span>
+                            <select
+                                value={itemsPerPage}
+                                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-700 font-semibold shadow-sm cursor-pointer"
+                            >
+                                <option value={10}>10</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                            <span>entries</span>
+                        </div>
+                        {totalPages > 1 && (
+                            <div className="flex items-center space-x-3">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 bg-white text-orange-700 rounded-lg border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-50 transition-all shadow-sm font-medium flex items-center gap-2"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-gray-700 font-medium bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">
+                                    Page <span className="text-orange-600 font-bold">{currentPage}</span> of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 bg-white text-orange-700 rounded-lg border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-50 transition-all shadow-sm font-medium flex items-center gap-2"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 
