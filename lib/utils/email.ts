@@ -1,26 +1,56 @@
 import nodemailer from 'nodemailer';
+import { Transporter } from 'nodemailer';
 import pool from '../db';
-import dns from 'dns';
+import dns from 'dns/promises';
 
 // Force Node to prefer IPv4 DNS resolution (avoids broken IPv6 routing on hosting droplets)
-if (dns && typeof dns.setDefaultResultOrder === 'function') {
-    dns.setDefaultResultOrder('ipv4first');
-}
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
 
 // Initialize the Nodemailer transporter using environment variables
 const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
 const smtpUser = (process.env.SMTP_USER || '').replace(/^"|"$/g, '');
 const smtpHost = (process.env.SMTP_HOST || 'smtp.ethereal.email').replace(/^"|"$/g, '');
 
-const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-    auth: {
-        user: smtpUser,
-        pass: smtpPass,
-    },
-});
+// We create a cached transporter. On first use we resolve the SMTP hostname
+// to an IPv4 address so the connection never attempts IPv6 (which is broken on
+// many DigitalOcean droplets).
+let _transporterCache: Transporter | null = null;
+
+async function getTransporter(): Promise<Transporter> {
+    if (_transporterCache) return _transporterCache;
+
+    // Resolve the SMTP host to an explicit IPv4 address to bypass broken IPv6 routing
+    let resolvedHost = smtpHost;
+    try {
+        const addresses = await dns.resolve4(smtpHost);
+        if (addresses && addresses.length > 0) {
+            resolvedHost = addresses[0];
+            console.log(`[Email] Resolved ${smtpHost} to IPv4: ${resolvedHost}`);
+        }
+    } catch (err) {
+        console.warn(`[Email] Could not resolve ${smtpHost} to IPv4, using hostname directly:`, err);
+    }
+
+    _transporterCache = nodemailer.createTransport({
+        host: resolvedHost,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+            user: smtpUser,
+            pass: smtpPass,
+        },
+        // When host is an IP, TLS validation needs the original hostname
+        tls: {
+            servername: smtpHost,
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
+    });
+
+    return _transporterCache;
+}
 
 const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <noreply@iskconsadhana.org>').replace(/^"|"$/g, '');
 
@@ -151,7 +181,8 @@ export async function sendRegistrationNotification(
     }
 
     try {
-        await transporter.sendMail({
+        const t = await getTransporter();
+        await t.sendMail({
             from: SENDER_EMAIL,
             to: managerEmail,
             subject: subject,
@@ -208,7 +239,8 @@ export async function sendApprovalNotification(userEmail: string, userName: stri
     }
 
     try {
-        await transporter.sendMail({
+        const t = await getTransporter();
+        await t.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
             subject: subject,
@@ -250,7 +282,8 @@ export async function sendRejectionNotification(userEmail: string, userName: str
     const htmlContent = getEmailWrapper('Application Update', htmlBody, true);
 
     try {
-        await transporter.sendMail({
+        const t = await getTransporter();
+        await t.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
             subject: 'Update Regarding Your VOICE Gurukul Registration',
@@ -287,7 +320,8 @@ export async function sendForgotPasswordEmail(userEmail: string, userName: strin
     const htmlContent = getEmailWrapper('Reset Password Request', htmlBody);
 
     try {
-        await transporter.sendMail({
+        const t = await getTransporter();
+        await t.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
             subject: 'Reset Your VOICE Gurukul Password',
@@ -353,7 +387,8 @@ export async function sendProfileUpdateApprovalNotification(userEmail: string, u
     }
 
     try {
-        await transporter.sendMail({
+        const t = await getTransporter();
+        await t.sendMail({
             from: SENDER_EMAIL,
             to: userEmail,
             subject: subject,
