@@ -65,7 +65,7 @@ export async function dispatchEmail(options: EmailDispatchOptions): Promise<bool
     // 1. Prioritize Vercel microservice to avoid 15+ second SMTP timeouts on Droplets
     if (serviceUrl) {
         try {
-            const apiKey = process.env.EMAIL_API_KEY;
+            const apiKey = process.env.EMAIL_API_KEY || '';
             if (!apiKey) {
                 console.warn("[Email Dispatcher] WARNING: process.env.EMAIL_API_KEY is not defined!");
             }
