@@ -29,6 +29,12 @@ export default function CentersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
+  // Sorting & Filtering States
+  const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'temple-asc' | 'temple-desc' | 'city-asc' | 'city-desc'>('name-asc');
+  const [selectedCity, setSelectedCity] = useState<string>('All');
+  const [selectedState, setSelectedState] = useState<string>('All');
+  const [selectedTemple, setSelectedTemple] = useState<string>('All');
+
   // Add Center Form State
   const [newCenter, setNewCenter] = useState<{
     id?: string;
@@ -152,17 +158,47 @@ export default function CentersPage() {
     email: temple.state ? `State: ${temple.state}` : undefined
   }));
 
-  // Filter centers based on search
-  const filteredCenters = centers.filter(center =>
-    center.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    center.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    center.state.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Get unique states, cities, and temples for the filter dropdowns
+  const uniqueStates = Array.from(new Set(centers.map(c => c.state).filter(Boolean))).sort();
+  const uniqueCities = Array.from(new Set(centers.map(c => c.city).filter(Boolean))).sort();
+  const uniqueTemples = Array.from(new Set(centers.map(c => c.temple_name || c.templeName).filter(Boolean))).sort();
+
+  // Filter & Sort centers based on search, state, city, temple, and sort order
+  const filteredCenters = centers
+    .filter(center => {
+      const matchesSearch = 
+        center.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        center.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        center.state.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (center.temple_name || center.templeName || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesState = selectedState === 'All' || center.state === selectedState;
+      const matchesCity = selectedCity === 'All' || center.city === selectedCity;
+      const matchesTemple = selectedTemple === 'All' || (center.temple_name || center.templeName) === selectedTemple;
+      
+      return matchesSearch && matchesState && matchesCity && matchesTemple;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name-asc') {
+        return a.name.localeCompare(b.name);
+      } else if (sortBy === 'name-desc') {
+        return b.name.localeCompare(a.name);
+      } else if (sortBy === 'temple-asc') {
+        return (a.temple_name || a.templeName || '').localeCompare(b.temple_name || b.templeName || '');
+      } else if (sortBy === 'temple-desc') {
+        return (b.temple_name || b.templeName || '').localeCompare(a.temple_name || a.templeName || '');
+      } else if (sortBy === 'city-asc') {
+        return a.city.localeCompare(b.city);
+      } else if (sortBy === 'city-desc') {
+        return b.city.localeCompare(a.city);
+      }
+      return 0;
+    });
 
   // Pagination Logic
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedState, selectedCity, selectedTemple]);
 
   const totalPages = Math.ceil(filteredCenters.length / ITEMS_PER_PAGE);
   const paginatedCenters = filteredCenters.slice(
@@ -532,17 +568,76 @@ export default function CentersPage() {
       )}
 
       {/* Search and Filter */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search centers by name, city or state..."
+              placeholder="Search centers by name, city, state, or temple..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 placeholder-gray-400 bg-gray-50/50 hover:bg-white transition-colors"
             />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Sort By:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm bg-gray-50/50 text-gray-700 hover:bg-white cursor-pointer transition-colors"
+            >
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="temple-asc">Temple (A-Z)</option>
+              <option value="temple-desc">Temple (Z-A)</option>
+              <option value="city-asc">City (A-Z)</option>
+              <option value="city-desc">City (Z-A)</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Filter State</label>
+            <select
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm bg-gray-50/50 text-gray-700 hover:bg-white cursor-pointer transition-colors"
+            >
+              <option value="All">All States</option>
+              {uniqueStates.map(state => (
+                <option key={state} value={state}>{state}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Filter City</label>
+            <select
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm bg-gray-50/50 text-gray-700 hover:bg-white cursor-pointer transition-colors"
+            >
+              <option value="All">All Cities</option>
+              {uniqueCities.map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Filter Temple</label>
+            <select
+              value={selectedTemple}
+              onChange={(e) => setSelectedTemple(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm bg-gray-50/50 text-gray-700 hover:bg-white cursor-pointer transition-colors"
+            >
+              <option value="All">All Temples</option>
+              {uniqueTemples.map(temple => (
+                <option key={temple} value={temple}>{temple}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
