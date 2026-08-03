@@ -161,7 +161,7 @@ export default function CentersPage() {
   // Get unique states, cities, and temples for the filter dropdowns
   const uniqueStates = Array.from(new Set(centers.map(c => c.state).filter(Boolean))).sort();
   const uniqueCities = Array.from(new Set(centers.map(c => c.city).filter(Boolean))).sort();
-  const uniqueTemples = Array.from(new Set(centers.map(c => c.temple_name || c.templeName).filter(Boolean))).sort();
+  const uniqueTemples = Array.from(new Set(centers.map(c => c.temple_name).filter(Boolean))).sort();
 
   // Filter & Sort centers based on search, state, city, temple, and sort order
   const filteredCenters = centers
@@ -170,11 +170,11 @@ export default function CentersPage() {
         center.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         center.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
         center.state.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (center.temple_name || center.templeName || '').toLowerCase().includes(searchTerm.toLowerCase());
+        (center.temple_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesState = selectedState === 'All' || center.state === selectedState;
       const matchesCity = selectedCity === 'All' || center.city === selectedCity;
-      const matchesTemple = selectedTemple === 'All' || (center.temple_name || center.templeName) === selectedTemple;
+      const matchesTemple = selectedTemple === 'All' || center.temple_name === selectedTemple;
       
       return matchesSearch && matchesState && matchesCity && matchesTemple;
     })
@@ -184,9 +184,9 @@ export default function CentersPage() {
       } else if (sortBy === 'name-desc') {
         return b.name.localeCompare(a.name);
       } else if (sortBy === 'temple-asc') {
-        return (a.temple_name || a.templeName || '').localeCompare(b.temple_name || b.templeName || '');
+        return (a.temple_name || '').localeCompare(b.temple_name || '');
       } else if (sortBy === 'temple-desc') {
-        return (b.temple_name || b.templeName || '').localeCompare(a.temple_name || a.templeName || '');
+        return (b.temple_name || '').localeCompare(a.temple_name || '');
       } else if (sortBy === 'city-asc') {
         return a.city.localeCompare(b.city);
       } else if (sortBy === 'city-desc') {
