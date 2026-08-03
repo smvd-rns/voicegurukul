@@ -8,8 +8,8 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 
 // Initialize the Nodemailer transporter using environment variables
-const smtpPass = (process.env.SMTP_PASS || 'dzrd tuat vemy yrdq').replace(/^"|"$/g, '');
-const smtpUser = (process.env.SMTP_USER || 'sri.murali.vadan.rns@iskcon.net').replace(/^"|"$/g, '');
+const smtpPass = (process.env.SMTP_PASS || '').replace(/^"|"$/g, '');
+const smtpUser = (process.env.SMTP_USER || '').replace(/^"|"$/g, '');
 const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').replace(/^"|"$/g, '');
 
 // We create a cached transporter.
@@ -46,7 +46,7 @@ async function getTransporter(): Promise<Transporter> {
     return _transporterCache;
 }
 
-const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <sri.murali.vadan.rns@iskcon.net>').replace(/^"|"$/g, '');
+const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <noreply@voicegurukul.com>').replace(/^"|"$/g, '');
 
 export interface EmailDispatchOptions {
     to: string | string[];
@@ -60,7 +60,41 @@ export interface EmailDispatchOptions {
  * Universal email dispatcher: Sends via direct droplet SMTP using ISKCON credentials.
  */
 export async function dispatchEmail(options: EmailDispatchOptions): Promise<boolean> {
+    const serviceUrl = process.env.VERCEL_EMAIL_SERVICE_URL;
+    
+    // 1. Prioritize Vercel microservice to avoid 15+ second SMTP timeouts on Droplets
+    if (serviceUrl) {
+        try {
+            const apiKey = process.env.EMAIL_API_KEY;
+            if (!apiKey) {
+                console.warn("[Email Dispatcher] WARNING: process.env.EMAIL_API_KEY is not defined!");
+            }
+            console.log(`[Email Dispatcher] Sending via Vercel service...`);
+            const res = await fetch(serviceUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                body: JSON.stringify({
+                    to: options.to,
+                    subject: options.subject,
+                    html: options.html,
+                    text: options.text,
+                    from: options.from || SENDER_EMAIL,
+                }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`[Email Dispatcher] Delivered successfully via Vercel:`, data.messageId || data);
+                return true;
+            }
+            console.warn(`[Email Dispatcher] Vercel service returned error status ${res.status}, trying SMTP fallback...`);
+        } catch (vErr) {
+            console.error('[Email Dispatcher] Vercel service failed, trying SMTP fallback:', vErr);
+        }
+    }
+
+    // 2. Direct SMTP (works locally, or if DigitalOcean port blocks are removed)
     try {
+        console.log(`[Email Dispatcher] Attempting delivery via direct SMTP...`);
         const t = await getTransporter();
         const info = await t.sendMail({
             from: options.from || SENDER_EMAIL,
@@ -72,34 +106,7 @@ export async function dispatchEmail(options: EmailDispatchOptions): Promise<bool
         console.log(`[Email Dispatcher] Successfully delivered via SMTP to ${Array.isArray(options.to) ? options.to.join(', ') : options.to}:`, info.messageId);
         return true;
     } catch (smtpErr) {
-        console.error('[Email Dispatcher] Failed to send email via SMTP:', smtpErr);
-        
-        // Fallback to Vercel microservice if configured
-        const serviceUrl = process.env.VERCEL_EMAIL_SERVICE_URL;
-        if (serviceUrl) {
-            try {
-                const apiKey = process.env.EMAIL_API_KEY || 'voicegurukul_mail_secret_key_108';
-                console.log(`[Email Dispatcher] Fallback sending via Vercel service...`);
-                const res = await fetch(serviceUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                    body: JSON.stringify({
-                        to: options.to,
-                        subject: options.subject,
-                        html: options.html,
-                        text: options.text,
-                        from: options.from || SENDER_EMAIL,
-                    }),
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    console.log(`[Email Dispatcher] Delivered via Vercel fallback:`, data.messageId || data);
-                    return true;
-                }
-            } catch (vErr) {
-                console.error('[Email Dispatcher] Vercel fallback also failed:', vErr);
-            }
-        }
+        console.error('[Email Dispatcher] SMTP delivery failed:', smtpErr);
         return false;
     }
 }
