@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
                             console.error(`Failed to generate membership ID for ${userId} in verify-data:`, genErr);
                         }
 
-                        const userRes = await dbQuery('SELECT email, name, phone, hierarchy, current_center, current_temple, membership_id FROM users WHERE id = $1', [userId]);
+                        const userRes = await dbQuery('SELECT email, name, phone, hierarchy, current_center, current_temple, donation_slug AS membership_id FROM users WHERE id = $1', [userId]);
                         const userDetails = userRes.rows[0];
 
                         if (userDetails?.email) {
