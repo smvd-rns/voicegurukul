@@ -19,6 +19,9 @@ const merriweather = Merriweather({
 export const metadata: Metadata = {
   title: 'VOICE Gurukul',
   description: 'Daily spiritual practice tracking and mentorship communication platform',
+  icons: {
+    icon: '/logo.jpg',
+  },
 };
 
 import { DeepLinkHandler } from '@/components/providers/DeepLinkHandler';
