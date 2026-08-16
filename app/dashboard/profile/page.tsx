@@ -25,6 +25,8 @@ export default function ProfilePage() {
   const [loadingCenters, setLoadingCenters] = useState(false);
   const [parentCenters, setParentCenters] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingParentCenters, setLoadingParentCenters] = useState(false);
+  const [spiritualMasters, setSpiritualMasters] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingSpiritualMasters, setLoadingSpiritualMasters] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -462,6 +464,27 @@ export default function ProfilePage() {
       }
     };
     fetchTemples();
+  }, []);
+
+  // Load spiritual masters dynamically
+  useEffect(() => {
+    const fetchSpiritualMasters = async () => {
+      try {
+        const res = await fetch('/api/spiritual-masters');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setSpiritualMasters(json.data);
+        } else {
+          setSpiritualMasters(SPIRITUAL_MASTERS.map((name, idx) => ({ id: `fallback-${idx}`, name })));
+        }
+      } catch (error) {
+        console.error('Error in fetchSpiritualMasters:', error);
+        setSpiritualMasters(SPIRITUAL_MASTERS.map((name, idx) => ({ id: `fallback-${idx}`, name })));
+      } finally {
+        setLoadingSpiritualMasters(false);
+      }
+    };
+    fetchSpiritualMasters();
   }, []);
 
   // Load centers based on selected temple
@@ -2024,7 +2047,7 @@ export default function ProfilePage() {
                           Spiritual Master Name
                         </label>
                         <SearchableSelect
-                          options={SPIRITUAL_MASTERS.map(name => ({ id: name, name }))}
+                          options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
                           value={formData.spiritualMasterName}
                           onChange={(value) => {
                             setFormData({ ...formData, spiritualMasterName: value });
@@ -2056,7 +2079,7 @@ export default function ProfilePage() {
                         Aspiring Spiritual Master Name
                       </label>
                       <SearchableSelect
-                        options={SPIRITUAL_MASTERS.map(name => ({ id: name, name }))}
+                        options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
                         value={formData.aspiringSpiritualMasterName}
                         onChange={(value) => {
                           setFormData({ ...formData, aspiringSpiritualMasterName: value });

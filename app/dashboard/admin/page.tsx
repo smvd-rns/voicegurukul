@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, FileText, Activity, Shield, Settings, UserPlus, Database, AlertCircle, Briefcase, BarChart, UserCircle, Building2, MapPin, UserCheck, CheckCircle2, Upload, Radio, MessageSquare, ChevronRight, CreditCard } from 'lucide-react';
+import { Users, FileText, Activity, Shield, Settings, UserPlus, Database, AlertCircle, Briefcase, BarChart, UserCircle, Building2, MapPin, UserCheck, CheckCircle2, Upload, Radio, MessageSquare, ChevronRight, CreditCard, GraduationCap } from 'lucide-react';
 
 export default function AdminDashboardPage() {
     const adminSections = [
@@ -12,6 +12,14 @@ export default function AdminDashboardPage() {
             href: '/dashboard/admin/users',
             color: 'text-amber-600',
             bgColor: 'bg-amber-100',
+        },
+        {
+            title: 'Spiritual Masters',
+            description: 'Manage spiritual master names list',
+            icon: GraduationCap,
+            href: '/dashboard/admin/spiritual-masters',
+            color: 'text-emerald-600',
+            bgColor: 'bg-emerald-100',
         },
         {
             title: 'Cities',
