@@ -86,15 +86,15 @@ export default function Home() {
       <div className="relative w-full max-w-md bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/40 p-10 transform transition-all duration-500 hover:shadow-2xl">
         {/* Header Section */}
         <div className="text-center mb-10">
-          <div className="inline-block p-2.5 rounded-2xl bg-gradient-to-br from-orange-100 to-yellow-50 mb-6 shadow-sm border border-orange-100/50">
-            <Image
-              src="/logo.jpg"
-              alt="VOICE Gurukul Logo"
-              width={64}
-              height={64}
-              className="w-16 h-16 object-contain"
-              priority
-            />
+          <div className="inline-block p-4 rounded-full bg-gradient-to-br from-orange-100 to-yellow-50 mb-6 shadow-sm border border-orange-100/50">
+            <svg
+              className="w-12 h-12 text-orange-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
           </div>
 
           <h1 className="text-4xl font-display font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-orange-700 to-amber-600 tracking-tight">

@@ -293,18 +293,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]">
-            <div className="flex items-center space-x-2">
-              <Image
-                src="/logo.jpg"
-                alt="VOICE Gurukul Logo"
-                width={28}
-                height={28}
-                className="w-7 h-7 object-contain rounded"
-                priority
-              />
-              <span className="text-sm font-extrabold text-white font-display tracking-wider uppercase">
-                VOICE Gurukul
-              </span>
+            <div className="flex items-center space-x-3">
+              <h1 className="text-lg font-extrabold text-white font-display tracking-wider uppercase">
+                Menu
+              </h1>
             </div>
              <button
                onClick={() => {
@@ -413,14 +405,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-16 flex items-center px-4 lg:px-8 flex-shrink-0 border-b border-gray-200/60 justify-between">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/logo.jpg"
-              alt="VOICE Gurukul Logo"
-              width={28}
-              height={28}
-              className="lg:hidden w-7 h-7 object-contain rounded"
-            />
+          <div className="flex items-center gap-3">
             <span className="lg:hidden font-display font-bold text-lg t-text-accent transition-colors duration-500">
               VOICE Gurukul
             </span>

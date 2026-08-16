@@ -77,15 +77,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       <div className="absolute inset-0 opacity-10 mix-blend-overlay"></div>
 
       <div className="relative z-10 p-8 bg-white/10 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 max-w-sm w-full mx-4 text-center transform transition-all animate-in fade-in zoom-in duration-300">
-        <div className="bg-white/20 p-2.5 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center backdrop-blur-sm shadow-inner">
-          <Image
-            src="/logo.jpg"
-            alt="VOICE Gurukul Logo"
-            width={48}
-            height={48}
-            className="w-12 h-12 object-contain"
-            priority
-          />
+        <div className="bg-white/20 p-3 rounded-full w-16 h-16 mx-auto mb-6 flex items-center justify-center backdrop-blur-sm shadow-inner">
+          <Flower className="w-8 h-8 text-white animate-spin-slow" />
         </div>
 
         <h2 className="text-2xl font-serif font-bold text-white mb-2">VOICE Gurukul</h2>
