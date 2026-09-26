@@ -36,10 +36,11 @@ export async function POST(req: NextRequest) {
       { expiresIn: '1h' }
     );
 
-    // 3. Construct reset link using configured app URL or default production URL
+    // 3. Construct reset link using configured app URL or default production URL (ensuring non-www)
     const isDev = process.env.NODE_ENV === 'development';
     const defaultOrigin = isDev ? req.nextUrl.origin : 'https://voicegurukul.com';
-    const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || defaultOrigin;
+    let rawOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || defaultOrigin;
+    const origin = rawOrigin.replace('://www.voicegurukul.com', '://voicegurukul.com');
     const resetLink = `${origin}/auth/reset-password?token=${token}`;
 
     // 4. Send email
