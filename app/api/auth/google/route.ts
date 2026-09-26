@@ -25,6 +25,10 @@ export async function GET(req: NextRequest) {
     const origin = requestOrigin;
 
     if (!code) {
+      const googleError = searchParams.get('error');
+      if (googleError) {
+        return NextResponse.redirect(new URL(`/auth/login?error=oauth_error&details=${encodeURIComponent(googleError)}`, origin));
+      }
       return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
     }
 
@@ -114,7 +118,7 @@ export async function GET(req: NextRequest) {
     setSessionCookie(response, sessionToken);
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Google OAuth Callback Exception]', error);
     const errorFallbackHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     let errorFallbackProto = req.headers.get('x-forwarded-proto') || 'http';
@@ -123,6 +127,7 @@ export async function GET(req: NextRequest) {
     }
     const errorRequestOrigin = errorFallbackHost ? `${errorFallbackProto}://${errorFallbackHost}` : req.nextUrl.origin;
     const fallbackOrigin = errorRequestOrigin;
-    return NextResponse.redirect(new URL('/auth/login?error=auth_error', fallbackOrigin));
+    const details = encodeURIComponent(error?.message || 'Unknown server exception');
+    return NextResponse.redirect(new URL(`/auth/login?error=auth_error&details=${details}`, fallbackOrigin));
   }
 }

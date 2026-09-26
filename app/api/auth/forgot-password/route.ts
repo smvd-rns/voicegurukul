@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
       { expiresIn: '1h' }
     );
 
-    // 3. Construct reset link
-    const origin = req.nextUrl.origin;
+    // 3. Construct reset link using the configured app URL (falls back to request origin)
+    const origin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
     const resetLink = `${origin}/auth/reset-password?token=${token}`;
 
     // 4. Send email
