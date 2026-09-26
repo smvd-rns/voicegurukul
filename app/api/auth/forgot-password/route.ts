@@ -36,8 +36,10 @@ export async function POST(req: NextRequest) {
       { expiresIn: '1h' }
     );
 
-    // 3. Construct reset link using the configured app URL (falls back to request origin)
-    const origin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+    // 3. Construct reset link using configured app URL or default production URL
+    const isDev = process.env.NODE_ENV === 'development';
+    const defaultOrigin = isDev ? req.nextUrl.origin : 'https://voicegurukul.com';
+    const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || defaultOrigin;
     const resetLink = `${origin}/auth/reset-password?token=${token}`;
 
     // 4. Send email
