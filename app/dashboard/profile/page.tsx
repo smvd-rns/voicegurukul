@@ -224,11 +224,18 @@ export default function ProfilePage() {
         return String(val).trim();
       };
 
+      const normalizeDate = (val: any) => {
+        if (!val) return '';
+        const str = String(val).trim();
+        const datePart = str.split('T')[0].split(' ')[0];
+        return datePart;
+      };
+
       // 1. Compare basic fields
       if (normalize(formData.name) !== normalize(userData.name)) return true;
       if (normalize(formData.email) !== normalize(userData.email)) return true;
       if (normalize(formData.phone) !== normalize(userData.phone)) return true;
-      if (normalize(formData.birthDate) !== normalize(userData.birthDate)) return true;
+      if (normalizeDate(formData.birthDate) !== normalizeDate(userData.birthDate)) return true;
 
       // 2. Compare hierarchy/location fields
       if (normalize(formData.state) !== normalize(userData.hierarchy?.state)) return true;
@@ -594,7 +601,7 @@ export default function ProfilePage() {
         name: userData.name || '',
         email: userData.email || '',
         phone: userData.phone || '',
-        birthDate: userData.birthDate || '',
+        birthDate: userData.birthDate ? String(userData.birthDate).trim().split('T')[0].split(' ')[0] : '',
         state: baseHierarchy.state || '',
         city: baseHierarchy.city || '',
         center: (baseHierarchy.center === 'Other' && baseHierarchy.otherCenter)
@@ -1082,6 +1089,11 @@ export default function ProfilePage() {
     try {
       // Build hierarchy object for backward compatibility (using sanitized values)
       const hierarchy: any = {};
+      if (formData.birthDate) {
+        const cleanDOB = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
+        hierarchy.birthDate = cleanDOB;
+        hierarchy.birth_date = cleanDOB;
+      }
       if (formData.state) hierarchy.state = sanitizeTextInput(formData.state.trim());
       if (formData.city) hierarchy.city = sanitizeTextInput(formData.city.trim());
       if (formData.center) {
@@ -1184,7 +1196,7 @@ export default function ProfilePage() {
       const updates: any = {
         name: sanitizedName,
         phone: sanitizedPhone,
-        birth_date: formData.birthDate || null,
+        birth_date: formData.birthDate ? String(formData.birthDate).trim().split('T')[0].split(' ')[0] : null,
         profile_image: finalProfileImageUrl || null,
         aadhar_card_image: finalAadharCardUrl || null,
         state: hierarchy.state || null,
@@ -1327,11 +1339,15 @@ export default function ProfilePage() {
         hierarchy: {
           ...hierarchy,
           ...Object.keys(userData?.hierarchy || {}).reduce((acc: any, key) => {
-            if (!spiritualFields.map(snakeToCamel).includes(key)) {
+            if (!spiritualFields.map(snakeToCamel).includes(key) && key !== 'birthDate' && key !== 'birth_date') {
               acc[key] = userData?.hierarchy?.[key];
             }
             return acc;
-          }, {})
+          }, {}),
+          ...(formData.birthDate ? {
+            birthDate: String(formData.birthDate).trim().split('T')[0].split(' ')[0],
+            birth_date: String(formData.birthDate).trim().split('T')[0].split(' ')[0]
+          } : {})
         }
       };
 

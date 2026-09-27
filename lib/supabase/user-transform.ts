@@ -49,6 +49,41 @@ export const transformUserProfile = (data: any): User => {
     assignedCity: data.assigned_city || data.hierarchy?.assignedCity,
   };
 
+  const rawBirthDate = data.birth_date || data.birthDate || details?.birth_date || details?.birthDate || data.hierarchy?.birthDate || data.hierarchy?.birth_date;
+  const formattedBirthDate = (() => {
+    if (!rawBirthDate) return undefined;
+    if (typeof rawBirthDate === 'string') {
+      const trimmed = rawBirthDate.trim();
+      // Plain date string like "1996-03-15" — use directly
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      // ISO timestamp from pg DATE column (e.g. "1996-03-14T18:30:00.000Z")
+      // Must parse and use LOCAL date parts (not UTC) because pg creates the Date
+      // at local midnight, which shifts to previous UTC day on UTC+ servers like IST.
+      if (trimmed.includes('T')) {
+        const d = new Date(trimmed);
+        if (!isNaN(d.getTime())) {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
+      // Fallback: extract date part before T
+      const datePart = trimmed.split('T')[0].split(' ')[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+    }
+    try {
+      const d = new Date(rawBirthDate);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch {}
+    return String(rawBirthDate);
+  })();
+
   return {
     id: data.id,
     email: data.email,
@@ -61,7 +96,7 @@ export const transformUserProfile = (data: any): User => {
     phone: data.phone,
     profileImage: data.profile_image,
     aadharCardImage: data.aadhar_card_image,
-    birthDate: data.birth_date,
+    birthDate: formattedBirthDate,
     hierarchy: hierarchy,
     // Relative contact fields
     relative1Name: data.relative_1_name,

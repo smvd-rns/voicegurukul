@@ -111,7 +111,9 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
         name: userAny.name || '',
         phone: userAny.phone || '',
         email: userAny.email || user?.email || '',
-        birthDate: userAny.birth_date || userAny.birthDate || '',
+        birthDate: (userAny.birth_date || userAny.birthDate || userAny.hierarchy?.birthDate || userAny.hierarchy?.birth_date)
+          ? String(userAny.birth_date || userAny.birthDate || userAny.hierarchy?.birthDate || userAny.hierarchy?.birth_date).trim().split('T')[0].split(' ')[0]
+          : '',
         ashram: userAny.ashram || '',
         parentTemple: userAny.parent_temple || userAny.parentTemple || '',
         parentCenter: userAny.parent_center || userAny.parentCenter || '',
@@ -198,7 +200,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
           name: formData.name,
           phone: formData.phone || null,
           email: formData.email,
-          birth_date: formData.birthDate,
+          birth_date: formData.birthDate ? String(formData.birthDate).trim().split('T')[0].split(' ')[0] : null,
           ashram: formData.ashram,
           parent_temple: formData.parentTemple,
           parent_center: formData.parentCenter,

@@ -322,7 +322,7 @@ export default function CompleteRegistrationPage() {
                 email: formData.email, // Required for new user creation
                 name: formData.name.trim(),
                 phone: formData.phone.trim(),
-                birthDate: formData.birthDate,
+                birthDate: formData.birthDate ? String(formData.birthDate).trim().split('T')[0].split(' ')[0] : undefined,
                 otherCounselor: formData.counselor === 'Other' ? formData.otherCounselor : undefined,
                 currentTemple: formData.temple || undefined,
                 otherTemple: formData.temple === 'Other' ? formData.otherTemple : undefined,

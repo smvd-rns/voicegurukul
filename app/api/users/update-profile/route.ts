@@ -99,6 +99,19 @@ export async function POST(request: Request) {
             }
         });
 
+        // Sync birth_date to top-level column and hierarchy JSON
+        if (updates.birth_date || updates.birthDate) {
+            const cleanDob = (updates.birth_date || updates.birthDate).toString().trim().split('T')[0].split(' ')[0];
+            userUpdates.birth_date = cleanDob;
+            if (userUpdates.hierarchy && typeof userUpdates.hierarchy === 'object') {
+                userUpdates.hierarchy.birthDate = cleanDob;
+                userUpdates.hierarchy.birth_date = cleanDob;
+            }
+        }
+
+        console.log('[update-profile] birth_date being saved:', userUpdates.birth_date);
+        console.log('[update-profile] userUpdates keys:', Object.keys(userUpdates));
+
         // 1. Update main users table
         const { data: updatedData, error: updateError } = await supabaseAdmin
             .from('users')
@@ -106,6 +119,8 @@ export async function POST(request: Request) {
             .eq('id', userId)
             .select()
             .single();
+
+        console.log('[update-profile] DB update result - error:', updateError, '| birth_date in result:', (updatedData as any)?.birth_date);
 
         if (updateError) {
             console.error('Error updating profile:', updateError);

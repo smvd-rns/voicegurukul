@@ -126,7 +126,7 @@ export const updateUser = async (userId: string, updates: Partial<User>) => {
     if (updates.verificationStatus !== undefined) dbUpdates.verification_status = updates.verificationStatus;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
     if (updates.profileImage !== undefined) dbUpdates.profile_image = updates.profileImage;
-    if (updates.birthDate !== undefined) dbUpdates.birth_date = updates.birthDate;
+    if (updates.birthDate !== undefined) dbUpdates.birth_date = updates.birthDate ? String(updates.birthDate).trim().split('T')[0].split(' ')[0] : null;
     if (updates.pushTokens !== undefined) dbUpdates.push_tokens = updates.pushTokens;
 
     // Map education array to flat columns
