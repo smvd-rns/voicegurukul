@@ -125,6 +125,8 @@ export default function CorporateSection() {
                   src={`https://lh3.googleusercontent.com/d/${logoId}=s400`}
                   alt={`Corporate Partner Logo ${index + 1}`}
                   loading="lazy"
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   className="max-h-full max-w-full object-contain filter contrast-105"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;

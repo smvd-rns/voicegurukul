@@ -68,8 +68,9 @@ function CollegeLogoImage({ logo }: { logo: CollegeLogo }) {
 
   const sources = [
     `https://lh3.googleusercontent.com/d/${logo.driveId}=s200`,
+    `https://lh3.googleusercontent.com/d/${logo.driveId}=w200`,
+    `https://lh3.googleusercontent.com/d/${logo.driveId}`,
     `https://drive.google.com/thumbnail?id=${logo.driveId}&sz=w200`,
-    `https://drive.google.com/uc?export=view&id=${logo.driveId}`,
   ];
 
   const currentSrc = sources[Math.min(attempt, sources.length - 1)];
@@ -79,6 +80,8 @@ function CollegeLogoImage({ logo }: { logo: CollegeLogo }) {
       src={currentSrc}
       alt={logo.name}
       loading="lazy"
+      referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
       onLoad={() => setLoaded(true)}
       onError={() => {
         if (attempt < sources.length - 1) {

@@ -523,6 +523,8 @@ export default function CollaboratePage() {
                         <img
                           src="https://lh3.googleusercontent.com/d/1g4GixfRz0K1-PPGpRR13V9j6jrZWMD98"
                           alt="Join Student Programmes"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
                           className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-500"
                         />
                       </div>
@@ -570,6 +572,8 @@ export default function CollaboratePage() {
                         <img
                           src="https://lh3.googleusercontent.com/d/1y53-Zkh280l729m_TFrkqw-8dLlzNxmj"
                           alt="Volunteer Your Skills"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
                           className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-500"
                         />
                       </div>
@@ -606,6 +610,8 @@ export default function CollaboratePage() {
                         <img
                           src="https://lh3.googleusercontent.com/d/1gsrinbCCKwYioUcpjzvrwvmDySrQeoU5"
                           alt="Sponsor Meals & Scholarships"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
                           className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-500"
                         />
                       </div>

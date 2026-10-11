@@ -68,6 +68,8 @@ export default function PhotoLightboxModal({
           <img
             src={`https://lh3.googleusercontent.com/d/${photo.driveId}=s1600`}
             alt={photo.title}
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
             className="max-h-[70vh] w-auto max-w-full object-contain mx-auto"
           />
 
