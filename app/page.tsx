@@ -335,7 +335,8 @@ export default function Home() {
                     <DriveImage
                       driveId="1lnPr9Z48ajIUK70bXHZcBhOlp7DOyDlK"
                       alt="Campus Seminars"
-                      size={600}
+                      size={500}
+                      priority={true}
                       className="w-full h-full"
                       imgClassName="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500"
                       showZoomIcon={false}
@@ -354,7 +355,8 @@ export default function Home() {
                     <DriveImage
                       driveId="1jtl9cOQkarP8NLB0zcb-1VUTK3UsKq-z"
                       alt="VOICE Lifestyle"
-                      size={600}
+                      size={500}
+                      priority={true}
                       className="w-full h-full"
                       imgClassName="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500"
                       showZoomIcon={false}
@@ -373,7 +375,8 @@ export default function Home() {
                     <DriveImage
                       driveId="1XFEvqnESYO3x_86TJkDv6Hco-Kc08dRX"
                       alt="Mantra Meditation"
-                      size={600}
+                      size={500}
+                      priority={true}
                       className="w-full h-full"
                       imgClassName="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500"
                       showZoomIcon={false}
@@ -392,7 +395,8 @@ export default function Home() {
                     <DriveImage
                       driveId="1jBJYtq06L2CkRIJl7863yxLmKMWL5E4U"
                       alt="Prasadam"
-                      size={600}
+                      size={500}
+                      priority={true}
                       className="w-full h-full"
                       imgClassName="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500"
                       showZoomIcon={false}

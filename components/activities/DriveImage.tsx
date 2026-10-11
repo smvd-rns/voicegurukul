@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Loader2, Maximize2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Maximize2 } from 'lucide-react';
 
 interface DriveImageProps {
   driveId: string;
@@ -11,30 +11,40 @@ interface DriveImageProps {
   imgClassName?: string;
   onClick?: () => void;
   showZoomIcon?: boolean;
+  priority?: boolean;
 }
 
 export default function DriveImage({
   driveId,
   alt,
-  size = 800,
+  size = 600,
   className = '',
   imgClassName = '',
   onClick,
   showZoomIcon = true,
+  priority = false,
 }: DriveImageProps) {
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     setLoading(true);
     setAttempt(0);
   }, [driveId]);
 
-  // Directly use lh3 CDN as primary as requested by user
+  useEffect(() => {
+    if (imgRef.current && imgRef.current.complete) {
+      setLoading(false);
+    }
+  }, [attempt, driveId]);
+
+  // Fast direct Google CDN (lh3) as primary with no-referrer
   const sources = [
     `https://lh3.googleusercontent.com/d/${driveId}=s${size}`,
+    `https://lh3.googleusercontent.com/d/${driveId}=w${size}`,
+    `https://lh3.googleusercontent.com/d/${driveId}`,
     `https://drive.google.com/thumbnail?id=${driveId}&sz=w${size}`,
-    `https://drive.google.com/uc?export=view&id=${driveId}`,
   ];
 
   const currentSrc = sources[Math.min(attempt, sources.length - 1)];
@@ -42,19 +52,22 @@ export default function DriveImage({
   return (
     <div
       onClick={onClick}
-      className={`relative overflow-hidden group select-none bg-slate-50 ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`relative overflow-hidden group select-none bg-slate-100 ${onClick ? 'cursor-pointer' : ''} ${className}`}
     >
+      {/* Subtle background shimmer placeholder instead of heavy spinning loader */}
       {loading && (
-        <div className="absolute inset-0 bg-slate-100/80 flex items-center justify-center z-10">
-          <Loader2 className="w-5 h-5 text-indigo-500 animate-spin opacity-60" />
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 animate-pulse z-0 pointer-events-none" />
       )}
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={imgRef}
         src={currentSrc}
         alt={alt}
-        loading="lazy"
+        loading={priority ? 'eager' : 'lazy'}
+        decoding={priority ? 'sync' : 'async'}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
         onLoad={() => setLoading(false)}
         onError={() => {
           if (attempt < sources.length - 1) {
@@ -63,8 +76,9 @@ export default function DriveImage({
             setLoading(false);
           }
         }}
-        className={`w-full h-full object-cover transition-transform duration-500 ${loading ? 'opacity-0' : 'opacity-100 group-hover:scale-105'
-          } ${imgClassName}`}
+        className={`w-full h-full object-cover transition-all duration-300 relative z-10 ${
+          loading ? 'opacity-40 filter blur-xs' : 'opacity-100'
+        } ${imgClassName}`}
       />
 
       {showZoomIcon && onClick && (
