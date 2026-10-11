@@ -53,3 +53,4 @@ scripts/
 *.zip
 *.log
 deploy.py
+test_student.png

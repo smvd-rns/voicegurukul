@@ -11,6 +11,7 @@ import {
 import { getHighestRole, getRoleDisplayName } from '@/lib/utils/roles';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import LegalPoliciesView, { PolicyTab } from '@/components/policies/LegalPoliciesView';
 
 // List of all applicable roles 1 to 30 based on the db
 const ROLE_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1).map(roleId => ({
@@ -23,6 +24,16 @@ export default function PoliciesPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [policies, setPolicies] = useState<any[]>([]);
+    
+    // Tab switcher: 'official' (Uploaded docs) vs 'legal' (Terms, Privacy, Refund)
+    const tabParam = searchParams.get('tab');
+    const typeParam = searchParams.get('type') as PolicyTab | null;
+    const [mainTab, setMainTab] = useState<'legal' | 'official'>(
+        tabParam === 'legal' || typeParam ? 'legal' : 'official'
+    );
+    const [initialLegalTab, setInitialLegalTab] = useState<PolicyTab>(
+        typeParam && ['terms', 'privacy', 'refund'].includes(typeParam) ? typeParam : 'terms'
+    );
     const [isLoading, setIsLoading] = useState(true);
 
     // Search and Sort states
@@ -397,39 +408,86 @@ export default function PoliciesPage() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10">
-            {/* Header Section */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
-                <div className="w-full sm:w-auto">
+            {/* Header with Category Switcher */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/80 backdrop-blur-md p-5 rounded-[2rem] border border-white shadow-sm">
+                <div>
                     <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-                        <BookOpen className="h-7 w-7 sm:h-8 sm:w-8 text-amber-500" />
-                        Official Policies
+                        <BookOpen className="h-7 w-7 sm:h-8 sm:w-8 text-orange-500" />
+                        Policies &amp; Legal Terms
                     </h1>
-                    <p className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-widest mt-2 ml-1">
-                        View active documents and guidelines
+                    <p className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">
+                        Platform policies, terms, refund rules, &amp; official guidelines
                     </p>
                 </div>
 
-                {isSuperAdmin && (
+                <div className="flex bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200/80 shadow-inner w-full md:w-auto">
                     <button
-                        onClick={() => {
-                            setIsEditing(false);
-                            setEditingId(null);
-                            setTitle('');
-                            setDescription('');
-                            setApplicableDate(new Date().toISOString().split('T')[0]);
-                            setSelectedRoles([]);
-                            setSelectedFile(null);
-                            setShowUploadModal(true);
-                        }}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-3.5 sm:py-3 rounded-2xl font-black shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-[10px] sm:text-xs"
+                        onClick={() => setMainTab('official')}
+                        className={`flex-1 md:flex-initial py-2.5 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                            mainTab === 'official'
+                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                                : 'text-gray-600 hover:text-gray-900'
+                        }`}
                     >
-                        <Plus className="h-4 w-4 stroke-[3px]" /> Upload Policy
+                        Official Circulars
                     </button>
-                )}
+                    <button
+                        onClick={() => setMainTab('legal')}
+                        className={`flex-1 md:flex-initial py-2.5 px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                            mainTab === 'legal'
+                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                                : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                        App &amp; Legal Policies
+                    </button>
+                </div>
             </div>
 
-            {/* Controls Bar: Search & Sort */}
-            <div className="flex flex-col md:flex-row gap-4 bg-white/60 backdrop-blur-md p-4 sm:p-5 rounded-[2rem] border border-white shadow-sm">
+            {mainTab === 'legal' ? (
+                <LegalPoliciesView
+                    initialTab={initialLegalTab}
+                    isPublic={false}
+                    onTabChange={(tab) => {
+                        setInitialLegalTab(tab);
+                        router.push(`/dashboard/policies?tab=legal&type=${tab}`, { scroll: false });
+                    }}
+                />
+            ) : (
+                <>
+                    {/* Header Section */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
+                        <div className="w-full sm:w-auto">
+                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+                                <BookOpen className="h-7 w-7 sm:h-8 sm:w-8 text-amber-500" />
+                                Official Policies
+                            </h1>
+                            <p className="text-[10px] sm:text-sm font-bold text-gray-400 uppercase tracking-widest mt-2 ml-1">
+                                View active documents and guidelines
+                            </p>
+                        </div>
+
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => {
+                                    setIsEditing(false);
+                                    setEditingId(null);
+                                    setTitle('');
+                                    setDescription('');
+                                    setApplicableDate(new Date().toISOString().split('T')[0]);
+                                    setSelectedRoles([]);
+                                    setSelectedFile(null);
+                                    setShowUploadModal(true);
+                                }}
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-3.5 sm:py-3 rounded-2xl font-black shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-[10px] sm:text-xs"
+                            >
+                                <Plus className="h-4 w-4 stroke-[3px]" /> Upload Policy
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Controls Bar: Search & Sort */}
+                    <div className="flex flex-col md:flex-row gap-4 bg-white/60 backdrop-blur-md p-4 sm:p-5 rounded-[2rem] border border-white shadow-sm">
                 <div className="relative flex-1 group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
                     <input
@@ -607,6 +665,8 @@ export default function PoliciesPage() {
                         </div>
                     ))}
                 </div>
+            )}
+            </>
             )}
 
             {/* Modal Layer */}

@@ -293,11 +293,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]">
-            <div className="flex items-center space-x-3">
-              <h1 className="text-lg font-extrabold text-white font-display tracking-wider uppercase">
-                Menu
+            <Link 
+              href="/" 
+              className="flex items-center space-x-3 group hover:opacity-90 transition-opacity"
+              title="Go to Home Page"
+            >
+              <h1 className="text-lg font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors">
+                VOICE Gurukul
               </h1>
-            </div>
+            </Link>
              <button
                onClick={() => {
                  if (window.location.hash === '#menu') {
@@ -406,9 +410,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-16 flex items-center px-4 lg:px-8 flex-shrink-0 border-b border-gray-200/60 justify-between">
           <div className="flex items-center gap-3">
-            <span className="lg:hidden font-display font-bold text-lg t-text-accent transition-colors duration-500">
+            <Link href="/" className="lg:hidden font-display font-bold text-lg t-text-accent transition-colors duration-500 hover:opacity-80">
               VOICE Gurukul
-            </span>
+            </Link>
           </div>
 
           <div className="flex-1 lg:block hidden" />

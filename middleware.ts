@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Auto-redirect logged-in users away from auth pages to dashboard
-  if (token && (path === '/auth/login' || path === '/auth/register' || path === '/')) {
+  if (token && (path === '/auth/login' || path === '/auth/register')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

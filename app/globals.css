@@ -3,26 +3,114 @@
 @tailwind utilities;
 
 html {
-  font-size: 14px;
+  font-size: 15px;
+  scroll-behavior: smooth;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   html {
-    font-size: 13.5px;
+    font-size: 15.5px;
   }
 }
 
 @media (min-width: 1024px) {
   html {
-    font-size: 13px;
+    font-size: 16px;
   }
 }
 
-@media (min-width: 1440px) {
-  html {
-    font-size: 13.5px;
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.animate-float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+@keyframes logoScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes logoScrollReverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-logo-scroll {
+  animation: logoScroll 95s linear infinite;
+}
+
+.animate-logo-scroll-reverse {
+  animation: logoScrollReverse 95s linear infinite;
+}
+
+.animate-corporate-scroll {
+  animation: logoScroll 55s linear infinite;
+}
+
+.animate-photo-slider {
+  animation: logoScroll 65s linear infinite;
+}
+
+.animate-photo-slider-reverse {
+  animation: logoScrollReverse 65s linear infinite;
+}
+
+@keyframes tiltFloatRight {
+  0%, 100% {
+    transform: perspective(1200px) rotateY(-4deg) rotateX(2deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(1200px) rotateY(-7deg) rotateX(-2deg) translateY(-6px);
   }
 }
+
+@keyframes tiltFloatLeft {
+  0%, 100% {
+    transform: perspective(1200px) rotateY(4deg) rotateX(2deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(1200px) rotateY(7deg) rotateX(-2deg) translateY(-6px);
+  }
+}
+
+.animate-3d-float-right {
+  animation: tiltFloatRight 7s ease-in-out infinite;
+}
+
+.animate-3d-float-left {
+  animation: tiltFloatLeft 7s ease-in-out infinite;
+}
+
+/* Scroll reveal classes */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-100 { transition-delay: 100ms; }
+.reveal-delay-200 { transition-delay: 200ms; }
+.reveal-delay-300 { transition-delay: 300ms; }
+.reveal-delay-400 { transition-delay: 400ms; }
+.reveal-delay-500 { transition-delay: 500ms; }
 
 :root {
   --foreground-rgb: 0, 0, 0;
@@ -473,3 +561,15 @@ textarea::placeholder {
   transform: scale(1.2);
   background-color: #7e22ce;
 }
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
