@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -10,7 +10,9 @@ import Voicegurukul3DWorld from '@/components/home/Voicegurukul3DWorld';
 import VoicegurukulHorizontalPillars from '@/components/home/VoicegurukulHorizontalPillars';
 import VoicegurukulCourseCards from '@/components/home/VoicegurukulCourseCards';
 import CurvedSectionConnector from '@/components/home/CurvedSectionConnector';
+import LusionExpandingReelSection from '@/components/home/LusionExpandingReelSection';
 import DriveImage from '@/components/activities/DriveImage';
+import AnimatedCounter from '@/components/ui/AnimatedCounter';
 import { 
   Heart, 
   BookOpen, 
@@ -64,32 +66,6 @@ export default function Home() {
     setMosaicRotY(0);
   };
 
-  // Animated Counter Component
-  const Counter = ({ target, suffix = "" }: { target: number; suffix?: string }) => {
-    const [count, setCount] = useState(0);
-
-    useEffect(() => {
-      let start = 0;
-      const end = target;
-      const duration = 1800;
-      const increment = Math.ceil(end / (duration / 20));
-
-      const timer = setInterval(() => {
-        start += increment;
-        if (start >= end) {
-          setCount(end);
-          clearInterval(timer);
-        } else {
-          setCount(start);
-        }
-      }, 20);
-
-      return () => clearInterval(timer);
-    }, [target]);
-
-    return <span>{count.toLocaleString()}{suffix}</span>;
-  };
-
   // Donation Sponsorship Packages
   const donationTiers = [
     {
@@ -101,8 +77,8 @@ export default function Home() {
     },
     {
       amount: 5000,
-      title: 'Sponsor Scholar Ashram & Meals',
-      impact: 'Sponsors nutritious Sattvic meals, library study desk & clean ashram facilities for 1 college student for 1 month.',
+      title: 'Sponsor Scholar Centre & Meals',
+      impact: 'Sponsors nutritious Sattvic meals, library study desk & clean centre facilities for 1 college student for 1 month.',
       popular: true,
       badge: 'Most Impactful'
     },
@@ -115,12 +91,59 @@ export default function Home() {
     },
     {
       amount: 50000,
-      title: 'Youth Gurukul Ashram Patron',
-      impact: 'Supports ashram library upgrades, digital course infrastructure & subsidized stay for 10 scholars.',
+      title: 'Youth Gurukul Centre Patron',
+      impact: 'Supports centre library upgrades, digital course infrastructure & subsidized stay for 10 scholars.',
       popular: false,
       badge: 'Gurukul Patron'
     }
   ];
+
+  // Mobile Donation Carousel Auto-Scroll State
+  const [mobileDonationIndex, setMobileDonationIndex] = useState<number>(1);
+  const mobileDonationScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll mobile donation tiers horizontally every 4.5 seconds
+  useEffect(() => {
+    const container = mobileDonationScrollRef.current;
+    if (!container) return;
+
+    const timer = setInterval(() => {
+      setMobileDonationIndex((prev) => {
+        const next = (prev + 1) % donationTiers.length;
+        if (container) {
+          const cardWidth = container.offsetWidth * 0.82 + 16;
+          container.scrollTo({
+            left: next * cardWidth,
+            behavior: 'smooth',
+          });
+        }
+        return next;
+      });
+    }, 4500);
+
+    return () => clearInterval(timer);
+  }, [donationTiers.length]);
+
+  const scrollToMobileDonationTier = (idx: number) => {
+    setMobileDonationIndex(idx);
+    const container = mobileDonationScrollRef.current;
+    if (!container) return;
+    const cardWidth = container.offsetWidth * 0.82 + 16;
+    container.scrollTo({
+      left: idx * cardWidth,
+      behavior: 'smooth',
+    });
+  };
+
+  const handleMobileDonationScroll = () => {
+    const container = mobileDonationScrollRef.current;
+    if (!container) return;
+    const cardWidth = container.offsetWidth * 0.82 + 16;
+    const index = Math.round(container.scrollLeft / cardWidth);
+    if (index >= 0 && index < donationTiers.length && index !== mobileDonationIndex) {
+      setMobileDonationIndex(index);
+    }
+  };
 
   // Photo Gallery Items (Loaded directly via Google Drive CDN)
   const galleryItems = [
@@ -199,6 +222,53 @@ export default function Home() {
       driveId: '12FOi1FSPyAcmY7yICA9G_Siruvlt1FI8'
     }
   ];
+
+  // Mobile Alumni Carousel Auto-Scroll State
+  const [mobileAlumniIndex, setMobileAlumniIndex] = useState<number>(0);
+  const mobileAlumniScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll mobile alumni testimonials horizontally every 5 seconds
+  useEffect(() => {
+    const container = mobileAlumniScrollRef.current;
+    if (!container) return;
+
+    const timer = setInterval(() => {
+      setMobileAlumniIndex((prev) => {
+        const next = (prev + 1) % alumniList.length;
+        if (container) {
+          const cardWidth = container.offsetWidth * 0.86 + 16;
+          container.scrollTo({
+            left: next * cardWidth,
+            behavior: 'smooth',
+          });
+        }
+        return next;
+      });
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [alumniList.length]);
+
+  const scrollToMobileAlumnus = (idx: number) => {
+    setMobileAlumniIndex(idx);
+    const container = mobileAlumniScrollRef.current;
+    if (!container) return;
+    const cardWidth = container.offsetWidth * 0.86 + 16;
+    container.scrollTo({
+      left: idx * cardWidth,
+      behavior: 'smooth',
+    });
+  };
+
+  const handleMobileAlumniScroll = () => {
+    const container = mobileAlumniScrollRef.current;
+    if (!container) return;
+    const cardWidth = container.offsetWidth * 0.86 + 16;
+    const index = Math.round(container.scrollLeft / cardWidth);
+    if (index >= 0 && index < alumniList.length && index !== mobileAlumniIndex) {
+      setMobileAlumniIndex(index);
+    }
+  };
 
   const currentDonationAmount = customAmount ? parseInt(customAmount) || 0 : selectedDonationTier;
 
@@ -411,10 +481,10 @@ export default function Home() {
                     animate={{ y: [0, -6, 0] }}
                     transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
                     style={{ transform: 'translateZ(75px)' }}
-                    className="absolute -top-4 -left-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-amber-100 flex items-center space-x-2 z-20"
+                    className="absolute -top-3 left-1 sm:-top-4 sm:-left-4 bg-white/95 backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl shadow-xl border border-amber-100 flex items-center space-x-1.5 sm:space-x-2 z-20"
                   >
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span className="text-xs font-bold text-slate-800">26,500+ Youths Mentored</span>
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span className="text-[11px] sm:text-xs font-bold text-slate-800">26,500+ Youths Mentored</span>
                   </motion.div>
 
                   {/* Floating Micro Badge 2 (translateZ: 80px) */}
@@ -422,10 +492,10 @@ export default function Home() {
                     animate={{ y: [0, 6, 0] }}
                     transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
                     style={{ transform: 'translateZ(80px)' }}
-                    className="absolute -bottom-4 -right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3.5 py-2 rounded-2xl shadow-xl flex items-center space-x-2 z-20"
+                    className="absolute -bottom-3 right-1 sm:-bottom-4 sm:-right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl shadow-xl flex items-center space-x-1.5 sm:space-x-2 z-20"
                   >
-                    <Star className="w-3.5 h-3.5 fill-white" />
-                    <span className="text-xs font-bold">100+ Youth Ashrams</span>
+                    <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-white" />
+                    <span className="text-[11px] sm:text-xs font-bold">100+ Youth Centres</span>
                   </motion.div>
 
                 </motion.div>
@@ -440,48 +510,48 @@ export default function Home() {
       {/* =========================================================================
           LIVE ANIMATED IMPACT RIBBON (Credibility & Donor Social Proof)
           ========================================================================= */}
-      <section className="py-8 bg-white border-y border-slate-100 relative z-10">
+      <section className="py-6 sm:py-8 bg-white border-y border-slate-100 relative z-10">
         <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
             
             <motion.div 
               whileHover={{ y: -4 }}
-              className="p-5 rounded-3xl bg-gradient-to-br from-amber-50/80 to-orange-50/40 border border-amber-200/60 shadow-sm text-center"
+              className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-50/80 to-orange-50/40 border border-amber-200/60 shadow-sm text-center"
             >
-              <p className="text-3xl sm:text-4xl font-black text-amber-600 font-mono">
-                <Counter target={26594} suffix="+" />
+              <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-amber-600 font-mono">
+                <AnimatedCounter to={26594} suffix="+" once={true} />
               </p>
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mt-1">Scholars Mentored</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider mt-0.5 sm:mt-1">Scholars Mentored</p>
             </motion.div>
 
             <motion.div 
               whileHover={{ y: -4 }}
-              className="p-5 rounded-3xl bg-gradient-to-br from-sky-50/80 to-indigo-50/40 border border-sky-200/60 shadow-sm text-center"
+              className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-sky-50/80 to-indigo-50/40 border border-sky-200/60 shadow-sm text-center"
             >
-              <p className="text-3xl sm:text-4xl font-black text-sky-600 font-mono">
-                <Counter target={100} suffix="+" />
+              <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-sky-600 font-mono">
+                <AnimatedCounter to={100} suffix="+" once={true} />
               </p>
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mt-1">Youth Ashrams</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider mt-0.5 sm:mt-1">Youth Centres</p>
             </motion.div>
 
             <motion.div 
               whileHover={{ y: -4 }}
-              className="p-5 rounded-3xl bg-gradient-to-br from-purple-50/80 to-pink-50/40 border border-purple-200/60 shadow-sm text-center"
+              className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-purple-50/80 to-pink-50/40 border border-purple-200/60 shadow-sm text-center"
             >
-              <p className="text-3xl sm:text-4xl font-black text-purple-600 font-mono">
-                <Counter target={5000} suffix="+" />
+              <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-purple-600 font-mono">
+                <AnimatedCounter to={5000} suffix="+" once={true} />
               </p>
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mt-1">Campus Seminars</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider mt-0.5 sm:mt-1">Campus Seminars</p>
             </motion.div>
 
             <motion.div 
               whileHover={{ y: -4 }}
-              className="p-5 rounded-3xl bg-gradient-to-br from-emerald-50/80 to-teal-50/40 border border-emerald-200/60 shadow-sm text-center"
+              className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-emerald-50/80 to-teal-50/40 border border-emerald-200/60 shadow-sm text-center"
             >
-              <p className="text-3xl sm:text-4xl font-black text-emerald-600 font-mono">
-                <Counter target={30} suffix="+ Yrs" />
+              <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-emerald-600 font-mono">
+                <AnimatedCounter to={30} suffix="+ Yrs" once={true} />
               </p>
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mt-1">Proven Heritage</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider mt-0.5 sm:mt-1">Proven Heritage</p>
             </motion.div>
 
           </div>
@@ -494,8 +564,8 @@ export default function Home() {
           ========================================================================= */}
       <VoicegurukulHorizontalPillars />
 
-      {/* 3D Flowing Curved Connecting Path between Pillars and Courses */}
-      <CurvedSectionConnector />
+      {/* Lusion-Style Scroll-Driven Expanding Reel & Showcase Reveal */}
+      <LusionExpandingReelSection />
 
       {/* =========================================================================
           FLAGSHIP COURSES: 3D HORIZONTAL SCROLL JOURNEY (DYS, Stress to Strength, Vedic Leadership)
@@ -525,7 +595,7 @@ export default function Home() {
             </div>
 
             {/* Filter Pills */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {[
                 { id: 'all', label: 'All Photos' },
                 { id: 'workshops', label: 'Seminars' },
@@ -537,7 +607,7 @@ export default function Home() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveGalleryTab(tab.id)}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold transition-all ${
                     activeGalleryTab === tab.id
                       ? 'bg-slate-900 text-white shadow-sm'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -550,7 +620,7 @@ export default function Home() {
           </div>
 
           {/* Photo Grid */}
-          <motion.div layout className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <AnimatePresence>
               {filteredGallery.map((item, idx) => (
                 <motion.div
@@ -558,10 +628,10 @@ export default function Home() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ y: -8, scale: 1.02 }}
+                  whileHover={{ y: -6, scale: 1.02 }}
                   transition={{ duration: 0.3 }}
                   key={idx}
-                  className="rounded-3xl overflow-hidden bg-slate-100 border border-slate-200/90 shadow-lg hover:shadow-2xl hover:border-amber-400/60 transition-all group relative h-72 [perspective:1000px]"
+                  className="rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-100 border border-slate-200/90 shadow-md hover:shadow-2xl hover:border-amber-400/60 transition-all group relative h-64 sm:h-72 [perspective:1000px]"
                 >
                   <DriveImage
                     driveId={item.driveId}
@@ -571,11 +641,11 @@ export default function Home() {
                     imgClassName="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700"
                     showZoomIcon={false}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent flex flex-col justify-end p-6 pointer-events-none z-10">
-                    <span className="self-start px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider mb-2">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent flex flex-col justify-end p-4 sm:p-6 pointer-events-none z-10">
+                    <span className="self-start px-2.5 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider mb-1.5 sm:mb-2">
                       {item.tag}
                     </span>
-                    <h4 className="text-lg font-bold text-white drop-shadow-md">
+                    <h4 className="text-base sm:text-lg font-bold text-white drop-shadow-md">
                       {item.title}
                     </h4>
                     <p className="text-xs text-slate-200 mt-1 line-clamp-2">
@@ -593,50 +663,145 @@ export default function Home() {
       {/* =========================================================================
           VOICES OF TRANSFORMATION (Authentic Alumni & Student Impact)
           ========================================================================= */}
-      <section className="py-20 lg:py-28 bg-[#fafcff] border-y border-slate-100 relative z-10">
+      <section className="py-14 sm:py-20 lg:py-28 bg-[#fafcff] border-y border-slate-100 relative z-10">
         <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10">
           
-          <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
+          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-14 space-y-2 sm:space-y-3">
             <span className="px-3.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
               Real Impact
             </span>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
               Where Are VOICE Alumni Today?
             </h2>
-            <p className="text-slate-600 text-base sm:text-lg font-normal">
+            <p className="text-slate-600 text-sm sm:text-base lg:text-lg font-normal">
               Scholars who combined high academic competence with spiritual character now contributing worldwide.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* =========================================================================
+              1. MOBILE ONLY: Horizontal Auto-Scrolling Alumni Carousel (< 768px)
+             ========================================================================= */}
+          <div className="block md:hidden">
+            {/* Horizontal Snap Scroll Track */}
+            <div
+              ref={mobileAlumniScrollRef}
+              onScroll={handleMobileAlumniScroll}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-3.5 px-1 pb-3 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {alumniList.map((alumnus, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => scrollToMobileAlumnus(idx)}
+                  className="shrink-0 w-[86vw] max-w-[340px] snap-center bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200/90 shadow-md hover:shadow-xl transition-all flex flex-col justify-between space-y-3 relative cursor-pointer"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center space-x-3">
+                      <DriveImage 
+                        driveId={alumnus.driveId} 
+                        alt={alumnus.name}
+                        size={300}
+                        showZoomIcon={false}
+                        className="w-11 h-11 rounded-full overflow-hidden border-2 border-amber-400 shadow-sm shrink-0"
+                        imgClassName="w-full h-full object-cover"
+                      />
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm leading-snug">{alumnus.name}</h4>
+                        <p className="text-xs text-sky-700 font-semibold">{alumnus.college}</p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full inline-block">
+                      {alumnus.exam}
+                    </p>
+
+                    <p className="text-xs text-slate-600 italic leading-relaxed">
+                      “{alumnus.quote}”
+                    </p>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-100 text-[11px] font-medium text-slate-500">
+                    Current Placement: <strong className="text-slate-800">{alumnus.role}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Mobile Carousel Controls: Prev / Next + Auto-scroll Dots */}
+            <div className="flex items-center justify-between px-2 pt-2">
+              <button
+                onClick={() =>
+                  scrollToMobileAlumnus(
+                    mobileAlumniIndex > 0 ? mobileAlumniIndex - 1 : alumniList.length - 1
+                  )
+                }
+                className="px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                aria-label="Previous Alumnus"
+              >
+                ← Prev
+              </button>
+
+              {/* Indicator Dots */}
+              <div className="flex items-center space-x-1.5">
+                {alumniList.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => scrollToMobileAlumnus(idx)}
+                    className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                      mobileAlumniIndex === idx
+                        ? 'w-6 bg-indigo-600'
+                        : 'w-2 bg-slate-300 hover:bg-slate-400'
+                    }`}
+                    aria-label={`Go to alumnus ${idx + 1}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                onClick={() =>
+                  scrollToMobileAlumnus(
+                    mobileAlumniIndex < alumniList.length - 1 ? mobileAlumniIndex + 1 : 0
+                  )
+                }
+                className="px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                aria-label="Next Alumnus"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              2. DESKTOP & TABLET: Standard 3-Column Grid (Visible on >= 768px)
+             ========================================================================= */}
+          <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {alumniList.map((alumnus, idx) => (
               <motion.div
                 key={idx}
-                whileHover={{ y: -8, scale: 1.02 }}
+                whileHover={{ y: -6, scale: 1.02 }}
                 transition={{ duration: 0.3 }}
-                className="bg-white/95 backdrop-blur-sm rounded-3xl p-7 border border-slate-200/90 shadow-md hover:shadow-2xl hover:border-amber-300 transition-all flex flex-col justify-between space-y-4"
+                className="bg-white/95 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-md hover:shadow-2xl hover:border-amber-300 transition-all flex flex-col justify-between space-y-4"
               >
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3.5">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="flex items-center space-x-3 sm:space-x-3.5">
                     <DriveImage 
                       driveId={alumnus.driveId} 
                       alt={alumnus.name}
                       size={300}
                       showZoomIcon={false}
-                      className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-400 shadow-sm shrink-0"
+                      className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 border-amber-400 shadow-sm shrink-0"
                       imgClassName="w-full h-full object-cover"
                     />
                     <div>
-                      <h4 className="font-bold text-slate-900 text-base">{alumnus.name}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm sm:text-base">{alumnus.name}</h4>
                       <p className="text-xs text-sky-700 font-semibold">{alumnus.college}</p>
                     </div>
                   </div>
 
-                  <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full inline-block">
+                  <p className="text-[11px] sm:text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-0.5 sm:py-1 rounded-full inline-block">
                     {alumnus.exam}
                   </p>
 
-                  <p className="text-sm text-slate-600 italic leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-600 italic leading-relaxed">
                     “{alumnus.quote}”
                   </p>
                 </div>
@@ -648,10 +813,10 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="text-center mt-10">
+          <div className="text-center mt-8 sm:mt-10">
             <Link
               href="/stories"
-              className="inline-flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-bold text-sm"
+              className="inline-flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-bold text-xs sm:text-sm"
             >
               <span>Read more student transformation stories</span>
               <ArrowRight className="w-4 h-4" />
@@ -664,7 +829,7 @@ export default function Home() {
       {/* =========================================================================
           THE CORE DONATION & PATRON ENGINE (80G Tax-Exempt Contributions)
           ========================================================================= */}
-      <section id="donate" className="py-20 lg:py-28 bg-gradient-to-b from-[#181d24] via-[#12161c] to-[#0f1217] text-white relative overflow-hidden z-10">
+      <section id="donate" className="py-14 sm:py-20 lg:py-28 bg-gradient-to-b from-[#181d24] via-[#12161c] to-[#0f1217] text-white relative overflow-hidden z-10">
         
         {/* Glow ambient lights */}
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
@@ -673,36 +838,150 @@ export default function Home() {
         <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10">
           
           {/* Section Header */}
-          <div className="text-center max-w-3xl mx-auto mb-14 space-y-3">
-            <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold uppercase tracking-wider">
+          <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-14 space-y-2 sm:space-y-3">
+            <div className="inline-flex items-center space-x-2 px-3.5 sm:px-4 py-1 sm:py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold uppercase tracking-wider">
               <Heart className="w-3.5 h-3.5 fill-amber-300" />
               <span>Sponsor a Student • Shape a Generation</span>
             </div>
             
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
               Invest in Youth. Transform the World.
             </h2>
             
-            <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed font-light">
-              Every contribution enables us to provide value education, clean ashram hostels, and wholesome nutritious meals to deserving university scholars.
+            <p className="text-slate-300 text-xs sm:text-base lg:text-lg max-w-2xl mx-auto leading-relaxed font-light">
+              Every contribution enables us to provide value education, clean youth centre hostels, and wholesome nutritious meals to deserving university scholars.
             </p>
           </div>
 
-          {/* Interactive Sponsorship Tiers Grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {/* =========================================================================
+              1. MOBILE ONLY: Horizontal Auto-Scrolling Sponsorship Carousel (< 640px)
+             ========================================================================= */}
+          <div className="block sm:hidden mb-8">
+            {/* Horizontal Snap Scroll Track */}
+            <div
+              ref={mobileDonationScrollRef}
+              onScroll={handleMobileDonationScroll}
+              className="flex overflow-x-auto snap-x snap-mandatory gap-3.5 px-1 pb-3 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {donationTiers.map((tier, idx) => {
+                const isSelected = selectedDonationTier === tier.amount && !customAmount;
+                return (
+                  <div
+                    key={tier.amount}
+                    onClick={() => {
+                      setSelectedDonationTier(tier.amount);
+                      setCustomAmount('');
+                      scrollToMobileDonationTier(idx);
+                    }}
+                    className={`shrink-0 w-[84vw] max-w-[320px] snap-center cursor-pointer rounded-2xl p-5 transition-all duration-300 flex flex-col justify-between relative border ${
+                      isSelected
+                        ? 'bg-gradient-to-b from-amber-500/25 via-orange-500/15 to-transparent border-amber-400 shadow-xl shadow-amber-500/20 scale-[1.01]'
+                        : 'bg-white/5 border-white/10 hover:border-amber-400/40 hover:bg-white/10'
+                    }`}
+                  >
+                    {tier.popular && (
+                      <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full shadow-md">
+                        {tier.badge}
+                      </span>
+                    )}
+
+                    <div className="space-y-2 pt-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 block">
+                        {tier.badge}
+                      </span>
+
+                      <div className="flex items-baseline space-x-1">
+                        <span className="text-2xl font-black text-white font-mono">
+                          ₹{tier.amount.toLocaleString()}
+                        </span>
+                        <span className="text-xs text-slate-400 font-medium">/ package</span>
+                      </div>
+
+                      <h4 className="font-bold text-white text-sm">
+                        {tier.title}
+                      </h4>
+
+                      <p className="text-xs text-slate-300 leading-relaxed font-light">
+                        {tier.impact}
+                      </p>
+                    </div>
+
+                    <div className="pt-3 mt-3 border-t border-white/10 flex items-center justify-between">
+                      <span className={`text-xs font-bold ${isSelected ? 'text-amber-400' : 'text-slate-400'}`}>
+                        {isSelected ? '✓ Selected' : 'Select Package'}
+                      </span>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                        isSelected ? 'bg-amber-400 border-amber-400 text-slate-950' : 'border-white/30 text-transparent'
+                      }`}>
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Mobile Carousel Controls: Prev / Next + Auto-scroll Dots */}
+            <div className="flex items-center justify-between px-2 pt-1">
+              <button
+                onClick={() =>
+                  scrollToMobileDonationTier(
+                    mobileDonationIndex > 0 ? mobileDonationIndex - 1 : donationTiers.length - 1
+                  )
+                }
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                aria-label="Previous Package"
+              >
+                ← Prev
+              </button>
+
+              {/* Indicator Dots */}
+              <div className="flex items-center space-x-1.5">
+                {donationTiers.map((t, idx) => (
+                  <button
+                    key={t.amount}
+                    onClick={() => scrollToMobileDonationTier(idx)}
+                    className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                      mobileDonationIndex === idx
+                        ? 'w-6 bg-amber-400'
+                        : 'w-2 bg-white/30 hover:bg-white/50'
+                    }`}
+                    aria-label={`Go to tier ${t.amount}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                onClick={() =>
+                  scrollToMobileDonationTier(
+                    mobileDonationIndex < donationTiers.length - 1 ? mobileDonationIndex + 1 : 0
+                  )
+                }
+                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                aria-label="Next Package"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              2. DESKTOP & TABLET: Standard 4-Column Grid (Visible on >= 640px)
+             ========================================================================= */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-10">
             {donationTiers.map((tier) => {
               const isSelected = selectedDonationTier === tier.amount && !customAmount;
               return (
                 <motion.div
                   key={tier.amount}
-                  whileHover={{ y: -6 }}
+                  whileHover={{ y: -4 }}
                   onClick={() => {
                     setSelectedDonationTier(tier.amount);
                     setCustomAmount('');
                   }}
-                  className={`cursor-pointer rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between relative border ${
+                  className={`cursor-pointer rounded-2xl sm:rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col justify-between relative border ${
                     isSelected
-                      ? 'bg-gradient-to-b from-amber-500/25 via-orange-500/15 to-transparent border-amber-400 shadow-xl shadow-amber-500/20 scale-105'
+                      ? 'bg-gradient-to-b from-amber-500/25 via-orange-500/15 to-transparent border-amber-400 shadow-xl shadow-amber-500/20 scale-[1.02] sm:scale-105'
                       : 'bg-white/5 border-white/10 hover:border-amber-400/40 hover:bg-white/10'
                   }`}
                 >
@@ -712,19 +991,19 @@ export default function Home() {
                     </span>
                   )}
 
-                  <div className="space-y-3 pt-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 block">
+                  <div className="space-y-2 sm:space-y-3 pt-1 sm:pt-2">
+                    <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-400 block">
                       {tier.badge}
                     </span>
                     
                     <div className="flex items-baseline space-x-1">
-                      <span className="text-3xl sm:text-4xl font-black text-white font-mono">
+                      <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-white font-mono">
                         ₹{tier.amount.toLocaleString()}
                       </span>
                       <span className="text-xs text-slate-400 font-medium">/ package</span>
                     </div>
 
-                    <h4 className="font-bold text-white text-base">
+                    <h4 className="font-bold text-white text-sm sm:text-base">
                       {tier.title}
                     </h4>
 
@@ -733,14 +1012,14 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between">
+                  <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-white/10 flex items-center justify-between">
                     <span className={`text-xs font-bold ${isSelected ? 'text-amber-400' : 'text-slate-400'}`}>
                       {isSelected ? '✓ Selected' : 'Select Package'}
                     </span>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${
+                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border ${
                       isSelected ? 'bg-amber-400 border-amber-400 text-slate-950' : 'border-white/30 text-transparent'
                     }`}>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3]" />
                     </div>
                   </div>
                 </motion.div>
@@ -749,12 +1028,12 @@ export default function Home() {
           </div>
 
           {/* Custom Amount & Checkout Action Bar */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 max-w-3xl mx-auto shadow-2xl">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-white/10">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto shadow-2xl">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 pb-5 sm:pb-6 border-b border-white/10">
               
               <div className="text-center sm:text-left">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Custom Contribution</span>
-                <p className="text-sm text-slate-300">Enter any custom amount you wish to contribute:</p>
+                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-400">Custom Contribution</span>
+                <p className="text-xs sm:text-sm text-slate-300">Enter any custom amount you wish to contribute:</p>
               </div>
 
               {/* Custom Input */}
@@ -765,25 +1044,25 @@ export default function Home() {
                   placeholder="e.g. 2500"
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/20 rounded-2xl pl-9 pr-4 py-3 text-white placeholder-slate-500 font-bold focus:outline-none focus:border-amber-400 text-sm font-mono"
+                  className="w-full bg-slate-900/80 border border-white/20 rounded-xl sm:rounded-2xl pl-9 pr-4 py-2.5 sm:py-3 text-white placeholder-slate-500 font-bold focus:outline-none focus:border-amber-400 text-sm font-mono"
                 />
               </div>
 
             </div>
 
             {/* Donation Action Row */}
-            <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
+            <div className="pt-5 sm:pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
                 <span className="text-xs text-slate-400">Total Selected Contribution:</span>
-                <p className="text-2xl font-black text-amber-400 font-mono">
+                <p className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
                   ₹{currentDonationAmount.toLocaleString()}
                 </p>
               </div>
 
-              <div className="flex items-center space-x-3 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
                 <Link
                   href={`/collaborate#community`}
-                  className="w-full sm:w-auto px-8 py-4 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 transition-all text-center flex items-center justify-center space-x-2"
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 transition-all text-center flex items-center justify-center space-x-2"
                 >
                   <Gift className="w-4 h-4" />
                   <span>Proceed to Donate</span>
@@ -791,7 +1070,7 @@ export default function Home() {
 
                 <button
                   onClick={() => setShowDonationModal(true)}
-                  className="px-5 py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/20 transition-all shrink-0"
+                  className="w-full sm:w-auto px-5 py-3 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/20 transition-all shrink-0 text-center"
                 >
                   Direct Bank / UPI
                 </button>
@@ -837,23 +1116,23 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             
             {/* Page 1: Centres */}
             <Link href="/centres" className="group">
               <motion.div 
-                whileHover={{ y: -8 }}
-                className="rounded-3xl p-6 bg-gradient-to-br from-indigo-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
+                whileHover={{ y: -6 }}
+                className="rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-indigo-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center border border-indigo-400/30">
-                    <MapPin className="w-6 h-6" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center border border-indigo-400/30">
+                    <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
-                  <h3 className="text-xl font-bold font-display group-hover:text-indigo-300 transition-colors">
+                  <h3 className="text-lg sm:text-xl font-bold font-display group-hover:text-indigo-300 transition-colors">
                     Find 100+ Centres
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed font-light">
-                    Locate student ashrams and study centres across Pune, Mumbai, Delhi, Bengaluru, and beyond.
+                    Locate student youth centres and study spaces across Pune, Mumbai, Delhi, Bengaluru, and beyond.
                   </p>
                 </div>
                 <div className="flex items-center text-xs font-bold text-indigo-400 group-hover:translate-x-1 transition-transform">
@@ -866,14 +1145,14 @@ export default function Home() {
             {/* Page 2: Programmes */}
             <Link href="/programmes" className="group">
               <motion.div 
-                whileHover={{ y: -8 }}
-                className="rounded-3xl p-6 bg-gradient-to-br from-sky-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
+                whileHover={{ y: -6 }}
+                className="rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-sky-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-500/20 text-sky-300 flex items-center justify-center border border-sky-400/30">
-                    <BookOpen className="w-6 h-6" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-sky-500/20 text-sky-300 flex items-center justify-center border border-sky-400/30">
+                    <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
-                  <h3 className="text-xl font-bold font-display group-hover:text-sky-300 transition-colors">
+                  <h3 className="text-lg sm:text-xl font-bold font-display group-hover:text-sky-300 transition-colors">
                     All Programmes
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed font-light">
@@ -890,14 +1169,14 @@ export default function Home() {
             {/* Page 3: Testimonials */}
             <Link href="/stories" className="group">
               <motion.div 
-                whileHover={{ y: -8 }}
-                className="rounded-3xl p-6 bg-gradient-to-br from-amber-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
+                whileHover={{ y: -6 }}
+                className="rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-amber-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center border border-amber-400/30">
-                    <Star className="w-6 h-6" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center border border-amber-400/30">
+                    <Star className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
-                  <h3 className="text-xl font-bold font-display group-hover:text-amber-300 transition-colors">
+                  <h3 className="text-lg sm:text-xl font-bold font-display group-hover:text-amber-300 transition-colors">
                     Transformation Stories
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed font-light">
@@ -914,14 +1193,14 @@ export default function Home() {
             {/* Page 4: Collaborate & Partner */}
             <Link href="/collaborate" className="group">
               <motion.div 
-                whileHover={{ y: -8 }}
-                className="rounded-3xl p-6 bg-gradient-to-br from-purple-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
+                whileHover={{ y: -6 }}
+                className="rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-purple-900 to-slate-900 text-white shadow-lg h-full flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-400/30">
-                    <HeartHandshake className="w-6 h-6" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-400/30">
+                    <HeartHandshake className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
-                  <h3 className="text-xl font-bold font-display group-hover:text-purple-300 transition-colors">
+                  <h3 className="text-lg sm:text-xl font-bold font-display group-hover:text-purple-300 transition-colors">
                     Collaborate &amp; Partner
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed font-light">

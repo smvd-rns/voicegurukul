@@ -21,10 +21,10 @@ export default function PublicFooter() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-4 sm:gap-6 md:gap-10">
           
           {/* Brand column */}
-          <div className="space-y-4 md:col-span-1">
+          <div className="col-span-2 md:col-span-1 space-y-4">
             <Link href="/" className="group inline-block">
               <span className="text-xl font-black text-white font-display tracking-tight">VOICE Gurukul</span>
             </Link>
@@ -39,7 +39,7 @@ export default function PublicFooter() {
           </div>
 
           {/* Quick Links with 7-page sequence */}
-          <div>
+          <div className="col-span-1">
             <h4 className="text-xs font-black uppercase text-sky-400 tracking-wider mb-4">Website Pages</h4>
             <ul className="space-y-2 text-xs font-medium">
               {navItems.map((item) => (
@@ -54,7 +54,7 @@ export default function PublicFooter() {
           </div>
 
           {/* Legal Policies */}
-          <div>
+          <div className="col-span-1">
             <h4 className="text-xs font-black uppercase text-purple-400 tracking-wider mb-4">Compliance & Policies</h4>
             <ul className="space-y-2 text-xs font-medium">
               <li>
@@ -68,7 +68,7 @@ export default function PublicFooter() {
               </li>
               <li className="pt-2">
                 <Link href="/dashboard/donations" className="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center space-x-1">
-                  <Heart className="w-3.5 h-3.5 fill-amber-400" />
+                  <Heart className="w-3.5 h-3.5 fill-amber-400 shrink-0" />
                   <span>Sponsor Yuva Meals (80G Tax-exempt)</span>
                 </Link>
               </li>
@@ -76,7 +76,7 @@ export default function PublicFooter() {
           </div>
 
           {/* Contact Us */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <h4 className="text-xs font-black uppercase text-indigo-400 tracking-wider mb-4">Contact & Support</h4>
             <div className="space-y-3 text-xs">
               <div className="flex items-center space-x-2">

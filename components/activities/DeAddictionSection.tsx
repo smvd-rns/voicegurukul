@@ -14,12 +14,12 @@ export default function DeAddictionSection() {
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 space-y-4 sm:space-y-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-mono font-black tracking-widest text-rose-400 uppercase">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-[11px] sm:text-xs font-mono font-black tracking-widest text-rose-400 uppercase">
               03 // NATIONAL EMERGENCY
             </span>
-            <span className="text-slate-500">•</span>
-            <span className="px-3 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/30 text-rose-300 text-xs font-bold uppercase tracking-wider">
+            <span className="hidden sm:inline text-slate-500">•</span>
+            <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/30 text-rose-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap">
               Vice &amp; Drug Abuse Prevention
             </span>
           </div>

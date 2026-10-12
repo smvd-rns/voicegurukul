@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
 import DriveImage from '@/components/activities/DriveImage';
 import PhotoLightboxModal from '@/components/activities/PhotoLightboxModal';
 import Scroll3DReveal from '@/components/stories/Scroll3DReveal';
+import MobileAutoScrollCarousel from '@/components/stories/MobileAutoScrollCarousel';
 import AnimatedCounter from '@/components/ui/AnimatedCounter';
 import {
   LEADER_FEEDBACK_DATA,
@@ -101,6 +102,432 @@ export default function StoriesPage() {
     ALUMNI_NETWORK_DATA.length +
     INITIAL_STUDENT_STORIES.length;
 
+  const renderLeaderCard = (leader: LeaderFeedback, isMobile = false) => (
+    <div className={`bg-white/95 backdrop-blur-xl rounded-3xl ${isMobile ? 'p-5' : 'p-6 sm:p-8'} border border-slate-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-1.5 hover:border-indigo-300 transition-all duration-300 flex flex-col justify-between h-full group relative overflow-hidden`}>
+      <span className="absolute top-4 left-4 text-slate-300 font-mono text-xs select-none">+</span>
+      <span className="absolute top-4 right-4 text-slate-300 font-mono text-xs select-none">+</span>
+      <span className="absolute bottom-4 left-4 text-slate-300 font-mono text-xs select-none">+</span>
+      <span className="absolute bottom-4 right-4 text-slate-300 font-mono text-xs select-none">+</span>
+
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 opacity-60 group-hover:opacity-100 transition-opacity" />
+
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-md bg-slate-100 shrink-0">
+              <DriveImage
+                driveId={leader.driveId}
+                alt={leader.name}
+                size={400}
+                className="w-full h-full object-cover"
+                showZoomIcon={false}
+              />
+            </div>
+
+            <div className="space-y-0.5 sm:space-y-1">
+              <h3 className="text-sm sm:text-lg font-black text-slate-900 font-display leading-snug">
+                {leader.name}
+              </h3>
+              <p className="text-xs sm:text-sm font-semibold text-indigo-900 leading-tight">
+                {leader.designation}
+              </p>
+              <p className="text-[11px] sm:text-xs text-slate-500 leading-tight">
+                {leader.institution}, {leader.location}
+              </p>
+            </div>
+          </div>
+
+          <span className="self-start sm:self-auto px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 shrink-0 whitespace-nowrap">
+            {leader.tag}
+          </span>
+        </div>
+
+        <div className="p-4 sm:p-6 rounded-2xl bg-gradient-to-b from-slate-50/80 to-white border border-slate-100/90 shadow-inner space-y-2">
+          <Quote className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
+          <p className="text-slate-700 italic text-xs sm:text-sm leading-relaxed font-normal">
+            &ldquo;{leader.quote}&rdquo;
+          </p>
+        </div>
+
+        {leader.keyPoints && (
+          <div className="p-3 sm:p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100/80 space-y-1.5 sm:space-y-2">
+            <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-indigo-600 block">
+              KEY TAKEAWAYS
+            </span>
+            <div className="space-y-1 sm:space-y-1.5">
+              {leader.keyPoints.map((point, pIdx) => (
+                <div key={pIdx} className="flex items-start gap-2 text-xs text-slate-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                  <span className="leading-snug">{point}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {leader.profileUrl && (
+        <div className="pt-3 sm:pt-4 mt-4 sm:mt-6 border-t border-slate-100 flex items-center justify-end text-xs">
+          <a
+            href={leader.profileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 hover:text-sky-900 font-bold transition-all shadow-sm text-xs group/btn"
+            title={`View verified profile on ${leader.profileLabel || 'Web'}`}
+          >
+            <span>{leader.profileLabel || 'Profile'}</span>
+            <ExternalLink className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderLetterCard = (letter: FormalLetter, isMobile = false) => (
+    <div className={`bg-white/95 backdrop-blur-xl rounded-3xl ${isMobile ? 'p-5' : 'p-6 sm:p-8'} border border-slate-200/90 hover:border-emerald-400 shadow-[0_15px_35px_rgba(0,0,0,0.04)] hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between h-full space-y-5 sm:space-y-6 relative overflow-hidden group`}>
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+
+      <div className="space-y-4 sm:space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <span className="inline-flex px-3 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] sm:text-[11px] font-bold text-emerald-700 w-fit">
+            {letter.tag}
+          </span>
+          {letter.refDate && (
+            <span className="text-[10px] sm:text-[11px] font-mono font-medium text-slate-400">
+              {letter.refDate}
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-0.5 sm:space-y-1">
+          <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-slate-400">
+            SUBJECT OF ENDORSEMENT
+          </span>
+          <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+            {letter.subject}
+          </h4>
+        </div>
+
+        <div className="grid sm:grid-cols-12 gap-4 sm:gap-5 items-center">
+          <div
+            onClick={() =>
+              setSelectedPhoto({
+                driveId: letter.driveId,
+                title: letter.title,
+                caption: `${letter.signatory} • ${letter.designation}, ${letter.institution}`,
+              })
+            }
+            className="sm:col-span-5 relative aspect-[3/4] max-w-[200px] sm:max-w-none mx-auto sm:mx-0 w-full rounded-2xl overflow-hidden border-2 border-slate-200/90 shadow-xl bg-slate-100 cursor-pointer group/letter transform-gpu transition-all duration-500 hover:scale-[1.03]"
+            title="Click to view full letterhead in high resolution"
+          >
+            <DriveImage
+              driveId={letter.driveId}
+              alt={letter.title}
+              size={800}
+              className="w-full h-full object-cover"
+              showZoomIcon={false}
+            />
+            <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover/letter:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white p-3 text-center">
+              <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
+              <span className="text-xs font-bold tracking-wide">
+                Enlarge Letter
+              </span>
+            </div>
+            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-950/80 backdrop-blur-md border border-emerald-400/50 text-[9px] font-mono font-bold text-emerald-300">
+              Verified Letterhead
+            </div>
+          </div>
+
+          <div className="sm:col-span-7 space-y-3">
+            <div>
+              <h3 className="text-sm sm:text-lg font-black text-slate-900 font-display leading-snug">
+                {letter.institution}
+              </h3>
+              <p className="text-xs font-semibold text-emerald-800 mt-0.5">
+                {letter.signatory} ({letter.designation})
+              </p>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-700 leading-relaxed italic shadow-inner">
+              &ldquo;{letter.summary}&rdquo;
+            </div>
+
+            <div className="space-y-1 pt-0.5">
+              <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-slate-400 block">
+                ENDORSED HIGHLIGHTS
+              </span>
+              {letter.keyHighlights.map((hl, hlIdx) => (
+                <div key={hlIdx} className="flex items-start gap-1.5 text-[11px] text-slate-600">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                  <span className="leading-snug">{hl}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
+        <button
+          onClick={() =>
+            setSelectedPhoto({
+              driveId: letter.driveId,
+              title: letter.title,
+              caption: `${letter.signatory} • ${letter.designation}, ${letter.institution}`,
+            })
+          }
+          className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-900 font-bold transition-colors cursor-pointer"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+          <span>View High-Res Letter</span>
+        </button>
+
+        <a
+          href={letter.driveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 font-semibold transition-colors text-[11px]"
+        >
+          <span>Official Drive File</span>
+          <ExternalLink className="w-3 h-3 text-slate-400" />
+        </a>
+      </div>
+    </div>
+  );
+
+  const renderStudentCard = (s: StudentStory, isMobile = false) => (
+    <div className={`bg-white/95 backdrop-blur-xl border border-purple-100/90 rounded-3xl ${isMobile ? 'p-5' : 'p-6 sm:p-8'} shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-1.5 hover:border-purple-300 transition-all duration-300 flex flex-col justify-between h-full space-y-4 sm:space-y-6 relative overflow-hidden group`}>
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 opacity-60 group-hover:opacity-100 transition-opacity" />
+
+      <div className="space-y-4 sm:space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <div className="flex text-amber-400 gap-0.5">
+              {[...Array(5)].map((_, idx) => (
+                <Star key={idx} className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-amber-400 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)]" />
+              ))}
+            </div>
+            {s.badges && s.badges.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {s.badges.map((b, bIdx) => (
+                  <span
+                    key={bIdx}
+                    className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200/80 text-[10px] font-bold text-purple-700 shadow-2xs"
+                  >
+                    {b}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <Quote className="w-6 h-6 sm:w-8 sm:h-8 text-purple-200 shrink-0" />
+        </div>
+
+        <div className="text-slate-700 italic text-xs sm:text-sm leading-relaxed space-y-2">
+          {s.quote.split('\n\n').map((paragraph, pIdx) => (
+            <p key={pIdx}>&ldquo;{paragraph}&rdquo;</p>
+          ))}
+        </div>
+
+        <div className="p-3 bg-gradient-to-r from-sky-50/90 via-indigo-50/90 to-purple-50/90 rounded-2xl text-xs text-sky-950 font-semibold border border-sky-200/80 flex items-start gap-2.5 shadow-2xs">
+          <Award className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+          <span className="leading-snug">
+            <strong>Milestone:</strong> {s.impact}
+          </span>
+        </div>
+      </div>
+
+      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center space-x-3 sm:space-x-4">
+          {s.driveId ? (
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-md bg-slate-50 shrink-0">
+              <DriveImage
+                driveId={s.driveId}
+                alt={s.name}
+                size={400}
+                className="w-full h-full object-cover"
+                showZoomIcon={false}
+              />
+            </div>
+          ) : (
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center font-bold text-indigo-700 text-sm sm:text-lg shrink-0 shadow-md">
+              {s.name
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)}
+            </div>
+          )}
+          <div className="space-y-0.5">
+            <h4 className="font-bold text-slate-900 text-sm sm:text-lg font-display leading-snug">
+              {s.name}
+            </h4>
+            <p className="text-xs sm:text-sm font-semibold text-indigo-900 leading-tight">{s.role}</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 leading-tight">{s.college}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+          {s.profileUrl && (
+            <a
+              href={s.profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
+              title={`View verified profile (${s.profileLabel || 'Web'})`}
+            >
+              <span>{s.profileLabel || 'Profile'}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+          {s.linkedIn && (
+            <a
+              href={s.linkedIn}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
+              title="View LinkedIn Profile"
+            >
+              <span>LinkedIn</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAlumnusCard = (alumnus: AlumniProfile, isMobile = false) => (
+    <div className={`group bg-white/90 backdrop-blur-md rounded-2xl ${isMobile ? 'p-4' : 'p-5'} border border-slate-200/80 hover:border-amber-400 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-full space-y-3.5 relative overflow-hidden`}>
+      <span className="absolute top-2 left-2 text-slate-200 font-mono text-[9px] select-none">+</span>
+      <span className="absolute top-2 right-2 text-slate-200 font-mono text-[9px] select-none">+</span>
+
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-0.5">
+            <h3 className="font-bold text-slate-900 text-sm font-display group-hover:text-amber-700 transition-colors">
+              {alumnus.name}
+            </h3>
+            {alumnus.education && (
+              <p className="text-[11px] font-medium text-slate-500 leading-tight">
+                {alumnus.education}
+              </p>
+            )}
+          </div>
+
+          {alumnus.badge && (
+            <span className="px-2 py-0.5 rounded-md bg-amber-100/80 border border-amber-200 text-[10px] font-bold text-amber-900 shrink-0 whitespace-nowrap">
+              {alumnus.badge}
+            </span>
+          )}
+        </div>
+
+        <div className="pt-2 border-t border-slate-100 space-y-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+            <Briefcase className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="truncate">{alumnus.role}</span>
+          </div>
+          <p className="text-[11px] text-slate-600 font-medium pl-5 truncate">
+            {alumnus.companyOrOrg}
+          </p>
+        </div>
+      </div>
+
+      {alumnus.location && (
+        <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium pt-1 border-t border-slate-50">
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span>{alumnus.location}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  const [activeNavSection, setActiveNavSection] = useState<'all' | 'leaders' | 'letters' | 'students' | 'alumni'>('all');
+  const currentNavRef = useRef<'all' | 'leaders' | 'letters' | 'students' | 'alumni'>('all');
+  const navContainerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScrollRef = useRef(false);
+
+  const scrollNavTabIntoView = (navKey: string) => {
+    const tabEl = document.getElementById(`nav-tab-${navKey}`);
+    const container = navContainerRef.current;
+    if (tabEl && container) {
+      const tabLeft = tabEl.offsetLeft;
+      const tabWidth = tabEl.offsetWidth;
+      const containerWidth = container.offsetWidth;
+      const targetScroll = tabLeft - (containerWidth / 2) + (tabWidth / 2);
+      container.scrollTo({
+        left: Math.max(0, targetScroll),
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  useEffect(() => {
+    const sections = [
+      { id: 'alumni-network', key: 'alumni' as const },
+      { id: 'student-stories', key: 'students' as const },
+      { id: 'formal-letters', key: 'letters' as const },
+      { id: 'leaders-appreciation', key: 'leaders' as const },
+    ];
+
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
+
+      if (window.scrollY < 380) {
+        if (currentNavRef.current !== 'all') {
+          currentNavRef.current = 'all';
+          setActiveNavSection('all');
+          scrollNavTabIntoView('all');
+        }
+        return;
+      }
+
+      const scrollPosition = window.scrollY + 280;
+
+      for (const sec of sections) {
+        const el = document.getElementById(sec.id);
+        if (el) {
+          const top = el.offsetTop;
+          if (scrollPosition >= top) {
+            if (currentNavRef.current !== sec.key) {
+              currentNavRef.current = sec.key;
+              setActiveNavSection(sec.key);
+              scrollNavTabIntoView(sec.key);
+            }
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const jumpToSection = (sectionId: string, navKey: 'all' | 'leaders' | 'letters' | 'students' | 'alumni') => {
+    isProgrammaticScrollRef.current = true;
+    currentNavRef.current = navKey;
+    setActiveNavSection(navKey);
+    setFilter('all');
+    scrollNavTabIntoView(navKey);
+
+    if (navKey === 'all') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 700);
+      return;
+    }
+
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 700);
+  };
+
   return (
     <div className="relative min-h-screen flex flex-col bg-[#f8fafc] text-slate-800 font-sans selection:bg-indigo-500 selection:text-white overflow-x-clip">
       {/* Ambient Chromatic Glow Orbs */}
@@ -119,7 +546,7 @@ export default function StoriesPage() {
         {/* =========================================================
             HERO SECTION: Atmospheric Header & Scroll-Revealed Stats
         ========================================================= */}
-        <section className="relative pt-16 pb-16 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28 overflow-hidden border-b border-slate-200/60">
+        <section id="hero-section" className="relative pt-16 pb-16 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28 overflow-hidden border-b border-slate-200/60">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 text-center">
             {/* Top Eyebrow */}
             <Scroll3DReveal yOffset={20} rotateX={4}>
@@ -259,79 +686,97 @@ export default function StoriesPage() {
                 </div>
               </div>
             </Scroll3DReveal>
-
-            {/* Filter Switcher Bar */}
-            <div className="pt-6 max-w-4xl mx-auto">
-              <div className="inline-flex flex-wrap items-center justify-center p-1.5 rounded-full bg-white/90 backdrop-blur-xl border border-slate-200/90 shadow-xl gap-1.5 sm:gap-2">
-                <button
-                  onClick={() => setFilter('all')}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm ${
-                    filter === 'all'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  All Endorsements ({totalCount})
-                </button>
-                <button
-                  onClick={() => setFilter('leaders')}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                    filter === 'leaders'
-                      ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>Eminent Leaders ({LEADER_FEEDBACK_DATA.length})</span>
-                </button>
-                <button
-                  onClick={() => setFilter('letters')}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                    filter === 'letters'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Official Letterheads ({FORMAL_LETTERS_DATA.length})</span>
-                </button>
-                <button
-                  onClick={() => setFilter('students')}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                    filter === 'students'
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>Student Transformations ({INITIAL_STUDENT_STORIES.length})</span>
-                </button>
-                <button
-                  onClick={() => setFilter('alumni')}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                    filter === 'alumni'
-                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Distinguished Alumni ({ALUMNI_NETWORK_DATA.length}+)</span>
-                </button>
-              </div>
-            </div>
           </div>
         </section>
+
+        {/* =========================================================
+            STICKY FILTER & JUMP NAVIGATION BAR (MOBILE & DESKTOP)
+            Remains intact at the top while scrolling for instant jumps
+        ========================================================= */}
+        <div className="sticky top-20 z-40 bg-[#f8fafc]/95 backdrop-blur-xl border-y border-slate-200/80 shadow-xs py-2 sm:py-3 px-3 sm:px-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-start sm:justify-center">
+            <div
+              ref={navContainerRef}
+              className="flex overflow-x-auto no-scrollbar scrollbar-none items-center gap-1.5 sm:gap-2 max-w-full py-0.5 px-0.5 scroll-smooth"
+            >
+              <button
+                id="nav-tab-all"
+                type="button"
+                onClick={() => jumpToSection('hero-section', 'all')}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all shadow-xs shrink-0 whitespace-nowrap cursor-pointer ${
+                  activeNavSection === 'all'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80'
+                }`}
+              >
+                All Endorsements ({totalCount})
+              </button>
+              <button
+                id="nav-tab-leaders"
+                type="button"
+                onClick={() => jumpToSection('leaders-appreciation', 'leaders')}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                  activeNavSection === 'leaders'
+                    ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white shadow-md'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>Eminent Leaders ({LEADER_FEEDBACK_DATA.length})</span>
+              </button>
+              <button
+                id="nav-tab-letters"
+                type="button"
+                onClick={() => jumpToSection('formal-letters', 'letters')}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                  activeNavSection === 'letters'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Official Letterheads ({FORMAL_LETTERS_DATA.length})</span>
+              </button>
+              <button
+                id="nav-tab-students"
+                type="button"
+                onClick={() => jumpToSection('student-stories', 'students')}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                  activeNavSection === 'students'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80'
+                }`}
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Student Transformations ({INITIAL_STUDENT_STORIES.length})</span>
+              </button>
+              <button
+                id="nav-tab-alumni"
+                type="button"
+                onClick={() => jumpToSection('alumni-network', 'alumni')}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs sm:text-sm font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                  activeNavSection === 'alumni'
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md'
+                    : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Distinguished Alumni ({ALUMNI_NETWORK_DATA.length}+)</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* =========================================================
             SECTION 1: VALUABLE FEEDBACK & APPRECIATION (LEADERS)
         ========================================================= */}
         {(filter === 'all' || filter === 'leaders') && (
-          <section id="leaders-appreciation" className="scroll-mt-24 sm:scroll-mt-28 py-16 sm:py-24 relative overflow-hidden border-b border-slate-200/60">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <section id="leaders-appreciation" className="scroll-mt-36 sm:scroll-mt-40 py-12 sm:py-24 relative overflow-hidden border-b border-slate-200/60">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-12">
               {/* Header */}
               <Scroll3DReveal yOffset={30} rotateX={6}>
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-                  <div className="space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
+                  <div className="space-y-2 sm:space-y-2.5">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/80 text-xs font-bold uppercase tracking-wider text-indigo-700 shadow-sm">
                       <Award className="w-3.5 h-3.5" />
                       Academic &amp; Corporate Leadership
@@ -339,16 +784,16 @@ export default function StoriesPage() {
                     <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight font-display">
                       Valuable Feedback &amp; Appreciation
                     </h2>
-                    <p className="text-sm sm:text-base text-slate-600 max-w-2xl leading-relaxed">
+                    <p className="text-xs sm:text-base text-slate-600 max-w-2xl leading-relaxed">
                       Words of encouragement and appraisal from university directors, corporate HR managers, and managing directors.
                     </p>
                   </div>
 
                   {/* Subfilter Pills */}
-                  <div className="flex items-center gap-1.5 p-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-sm shrink-0 self-start sm:self-auto">
+                  <div className="flex overflow-x-auto no-scrollbar scrollbar-none items-center gap-1.5 p-1 rounded-xl sm:rounded-full bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-sm max-w-full shrink-0 self-start sm:self-auto">
                     <button
                       onClick={() => setLeaderSubfilter('all')}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg sm:rounded-full text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                         leaderSubfilter === 'all'
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'text-slate-600 hover:text-slate-900'
@@ -358,7 +803,7 @@ export default function StoriesPage() {
                     </button>
                     <button
                       onClick={() => setLeaderSubfilter('academic')}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg sm:rounded-full text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                         leaderSubfilter === 'academic'
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'text-slate-600 hover:text-slate-900'
@@ -368,7 +813,7 @@ export default function StoriesPage() {
                     </button>
                     <button
                       onClick={() => setLeaderSubfilter('corporate')}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg sm:rounded-full text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                         leaderSubfilter === 'corporate'
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'text-slate-600 hover:text-slate-900'
@@ -380,96 +825,24 @@ export default function StoriesPage() {
                 </div>
               </Scroll3DReveal>
 
-              {/* Cards Grid with Scroll Reveal */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 perspective-[1200px]">
+              {/* Desktop Cards Grid with 3D Scroll Reveal */}
+              <div className="hidden lg:grid grid-cols-2 gap-8 perspective-[1200px]">
                 {filteredLeaders.map((leader, lIdx) => (
                   <Scroll3DReveal key={leader.id} delay={(lIdx % 2) * 0.12} yOffset={45} rotateX={8}>
-                    <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-1.5 hover:border-indigo-300 transition-all duration-300 flex flex-col justify-between h-full group relative overflow-hidden">
-                      {/* Corner Futuristic Crosshairs */}
-                      <span className="absolute top-4 left-4 text-slate-300 font-mono text-xs select-none">+</span>
-                      <span className="absolute top-4 right-4 text-slate-300 font-mono text-xs select-none">+</span>
-                      <span className="absolute bottom-4 left-4 text-slate-300 font-mono text-xs select-none">+</span>
-                      <span className="absolute bottom-4 right-4 text-slate-300 font-mono text-xs select-none">+</span>
-
-                      {/* Top Gradient Shimmer Line */}
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 opacity-60 group-hover:opacity-100 transition-opacity" />
-
-                      <div className="space-y-6">
-                        {/* Profile Header Row */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                          <div className="flex items-center gap-4">
-                            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-md bg-slate-100 shrink-0">
-                              <DriveImage
-                                driveId={leader.driveId}
-                                alt={leader.name}
-                                size={400}
-                                className="w-full h-full object-cover"
-                                showZoomIcon={false}
-                              />
-                            </div>
-
-                            <div className="space-y-1">
-                              <h3 className="text-base sm:text-lg font-black text-slate-900 font-display leading-snug">
-                                {leader.name}
-                              </h3>
-                              <p className="text-xs sm:text-sm font-semibold text-indigo-900 leading-tight">
-                                {leader.designation}
-                              </p>
-                              <p className="text-xs text-slate-500 leading-tight">
-                                {leader.institution}, {leader.location}
-                              </p>
-                            </div>
-                          </div>
-
-                          <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700 shrink-0 whitespace-nowrap">
-                            {leader.tag}
-                          </span>
-                        </div>
-
-                        {/* Quote Body inside Embossed Vessel */}
-                        <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-slate-50/80 to-white border border-slate-100/90 shadow-inner space-y-2.5">
-                          <Quote className="w-6 h-6 text-indigo-400 shrink-0" />
-                          <p className="text-slate-700 italic text-xs sm:text-sm leading-relaxed font-normal">
-                            &ldquo;{leader.quote}&rdquo;
-                          </p>
-                        </div>
-
-                        {/* Key Takeaways */}
-                        {leader.keyPoints && (
-                          <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100/80 space-y-2">
-                            <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-indigo-600 block">
-                              KEY TAKEAWAYS
-                            </span>
-                            <div className="space-y-1.5">
-                              {leader.keyPoints.map((point, pIdx) => (
-                                <div key={pIdx} className="flex items-start gap-2 text-xs text-slate-700">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                                  <span>{point}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Footer Row: Verified Profile Link */}
-                      {leader.profileUrl && (
-                        <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-end text-xs">
-                          <a
-                            href={leader.profileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 hover:text-sky-900 font-bold transition-all shadow-sm text-xs group/btn"
-                            title={`View verified profile on ${leader.profileLabel || 'Web'}`}
-                          >
-                            <span>{leader.profileLabel || 'Profile'}</span>
-                            <ExternalLink className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
+                    {renderLeaderCard(leader, false)}
                   </Scroll3DReveal>
                 ))}
+              </div>
+
+              {/* Mobile Auto-Scrolling Carousel */}
+              <div className="block lg:hidden">
+                <MobileAutoScrollCarousel activeColorClass="bg-indigo-600" autoScrollInterval={5000}>
+                  {filteredLeaders.map((leader) => (
+                    <div key={leader.id} className="h-full">
+                      {renderLeaderCard(leader, true)}
+                    </div>
+                  ))}
+                </MobileAutoScrollCarousel>
               </div>
             </div>
           </section>
@@ -479,7 +852,7 @@ export default function StoriesPage() {
             SECTION 2: FORMAL INSTITUTIONAL ENDORSEMENT LETTERS
         ========================================================= */}
         {(filter === 'all' || filter === 'letters') && (
-          <section id="formal-letters" className="scroll-mt-24 sm:scroll-mt-28 py-16 sm:py-24 relative overflow-hidden bg-gradient-to-b from-white via-slate-50/70 to-white border-b border-slate-200/60">
+          <section id="formal-letters" className="scroll-mt-36 sm:scroll-mt-40 py-16 sm:py-24 relative overflow-hidden bg-gradient-to-b from-white via-slate-50/70 to-white border-b border-slate-200/60">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
               {/* Header */}
               <Scroll3DReveal yOffset={30} rotateX={6}>
@@ -497,127 +870,24 @@ export default function StoriesPage() {
                 </div>
               </Scroll3DReveal>
 
-              {/* Grid of Formal Letters with Scroll Reveal */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 perspective-[1200px]">
+              {/* Desktop Cards Grid with 3D Scroll Reveal */}
+              <div className="hidden lg:grid grid-cols-2 gap-8 perspective-[1200px]">
                 {FORMAL_LETTERS_DATA.map((letter, ltIdx) => (
                   <Scroll3DReveal key={letter.id} delay={ltIdx * 0.15} yOffset={45} rotateX={8}>
-                    <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-slate-200/90 hover:border-emerald-400 shadow-[0_15px_35px_rgba(0,0,0,0.04)] hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between h-full space-y-6 relative overflow-hidden group">
-                      {/* Top Emerald Gradient Line */}
-                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 opacity-80 group-hover:opacity-100 transition-opacity" />
-
-                      <div className="space-y-5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
-                          <span className="inline-flex px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-[11px] font-bold text-emerald-700 w-fit">
-                            {letter.tag}
-                          </span>
-                          {letter.refDate && (
-                            <span className="text-[11px] font-mono font-medium text-slate-400">
-                              {letter.refDate}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Letter Subject */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-slate-400">
-                            SUBJECT OF ENDORSEMENT
-                          </span>
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                            {letter.subject}
-                          </h4>
-                        </div>
-
-                        {/* Document Stage */}
-                        <div className="grid sm:grid-cols-12 gap-5 items-center">
-                          <div
-                            onClick={() =>
-                              setSelectedPhoto({
-                                driveId: letter.driveId,
-                                title: letter.title,
-                                caption: `${letter.signatory} • ${letter.designation}, ${letter.institution}`,
-                              })
-                            }
-                            className="sm:col-span-5 relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-slate-200/90 shadow-xl bg-slate-100 cursor-pointer group/letter transform-gpu transition-all duration-500 hover:scale-[1.03]"
-                            title="Click to view full letterhead in high resolution"
-                          >
-                            <DriveImage
-                              driveId={letter.driveId}
-                              alt={letter.title}
-                              size={800}
-                              className="w-full h-full object-cover"
-                              showZoomIcon={false}
-                            />
-                            {/* Hover Overlay with Enlarge Prompt */}
-                            <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover/letter:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white p-3 text-center">
-                              <Maximize2 className="w-6 h-6 animate-pulse" />
-                              <span className="text-xs font-bold tracking-wide">
-                                Enlarge Letter
-                              </span>
-                            </div>
-                            {/* Verified Badge */}
-                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-950/80 backdrop-blur-md border border-emerald-400/50 text-[9px] font-mono font-bold text-emerald-300">
-                              Verified Letterhead
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-7 space-y-3.5">
-                            <div>
-                              <h3 className="text-base sm:text-lg font-black text-slate-900 font-display leading-snug">
-                                {letter.institution}
-                              </h3>
-                              <p className="text-xs font-semibold text-emerald-800 mt-0.5">
-                                {letter.signatory} ({letter.designation})
-                              </p>
-                            </div>
-
-                            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-700 leading-relaxed italic shadow-inner">
-                              &ldquo;{letter.summary}&rdquo;
-                            </div>
-
-                            <div className="space-y-1.5 pt-1">
-                              <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-slate-400 block">
-                                ENDORSED HIGHLIGHTS
-                              </span>
-                              {letter.keyHighlights.map((hl, hlIdx) => (
-                                <div key={hlIdx} className="flex items-start gap-1.5 text-[11px] text-slate-600">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                                  <span>{hl}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Bar */}
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
-                        <button
-                          onClick={() =>
-                            setSelectedPhoto({
-                              driveId: letter.driveId,
-                              title: letter.title,
-                              caption: `${letter.signatory} • ${letter.designation}, ${letter.institution}`,
-                            })
-                          }
-                          className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-900 font-bold transition-colors"
-                        >
-                          <Maximize2 className="w-3.5 h-3.5" />
-                          <span>View High-Res Letter</span>
-                        </button>
-
-                        <a
-                          href={letter.driveUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 font-semibold transition-colors text-[11px]"
-                        >
-                          <span>Official Drive File</span>
-                          <ExternalLink className="w-3 h-3 text-slate-400" />
-                        </a>
-                      </div>
-                    </div>
+                    {renderLetterCard(letter, false)}
                   </Scroll3DReveal>
                 ))}
+              </div>
+
+              {/* Mobile Auto-Scrolling Carousel */}
+              <div className="block lg:hidden">
+                <MobileAutoScrollCarousel activeColorClass="bg-emerald-600" autoScrollInterval={6000}>
+                  {FORMAL_LETTERS_DATA.map((letter) => (
+                    <div key={letter.id} className="h-full">
+                      {renderLetterCard(letter, true)}
+                    </div>
+                  ))}
+                </MobileAutoScrollCarousel>
               </div>
             </div>
           </section>
@@ -627,7 +897,7 @@ export default function StoriesPage() {
             SECTION 3: STUDENT TESTIMONIALS & TRANSFORMATIONS
         ========================================================= */}
         {(filter === 'all' || filter === 'students') && (
-          <section id="student-stories" className="scroll-mt-24 sm:scroll-mt-28 py-16 sm:py-24 relative overflow-hidden border-b border-slate-200/60">
+          <section id="student-stories" className="scroll-mt-36 sm:scroll-mt-40 py-16 sm:py-24 relative overflow-hidden border-b border-slate-200/60">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
               {/* Header */}
               <Scroll3DReveal yOffset={30} rotateX={6}>
@@ -651,117 +921,24 @@ export default function StoriesPage() {
                 </div>
               </Scroll3DReveal>
 
-              {/* Student Stories Grid with Scroll Reveal */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 perspective-[1200px]">
+              {/* Desktop Cards Grid with 3D Scroll Reveal */}
+              <div className="hidden md:grid grid-cols-2 gap-8 perspective-[1200px]">
                 {INITIAL_STUDENT_STORIES.map((s, sIdx) => (
                   <Scroll3DReveal key={s.id} delay={(sIdx % 2) * 0.12} yOffset={45} rotateX={8}>
-                    <div className="bg-white/95 backdrop-blur-xl border border-purple-100/90 rounded-3xl p-6 sm:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-1.5 hover:border-purple-300 transition-all duration-300 flex flex-col justify-between h-full space-y-6 relative overflow-hidden group">
-                      {/* Top Gradient Shimmer */}
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 opacity-60 group-hover:opacity-100 transition-opacity" />
-
-                      <div className="space-y-5">
-                        {/* Top Stars & Badges Row */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-2">
-                            <div className="flex text-amber-400 gap-0.5">
-                              {[...Array(5)].map((_, idx) => (
-                                <Star key={idx} className="w-4 h-4 fill-amber-400 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)]" />
-                              ))}
-                            </div>
-                            {s.badges && s.badges.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {s.badges.map((b, bIdx) => (
-                                  <span
-                                    key={bIdx}
-                                    className="px-2.5 py-0.5 rounded-full bg-purple-50 border border-purple-200/80 text-[10px] font-bold text-purple-700 shadow-sm"
-                                  >
-                                    {b}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <Quote className="w-8 h-8 text-purple-200 shrink-0" />
-                        </div>
-
-                        {/* Multi-paragraph Quote */}
-                        <div className="text-slate-700 italic text-xs sm:text-sm leading-relaxed space-y-2.5">
-                          {s.quote.split('\n\n').map((paragraph, pIdx) => (
-                            <p key={pIdx}>&ldquo;{paragraph}&rdquo;</p>
-                          ))}
-                        </div>
-
-                        {/* Milestone Callout */}
-                        <div className="p-3.5 bg-gradient-to-r from-sky-50/90 via-indigo-50/90 to-purple-50/90 rounded-2xl text-xs text-sky-950 font-semibold border border-sky-200/80 flex items-start gap-3 shadow-sm">
-                          <Award className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                          <span>
-                            <strong>Milestone:</strong> {s.impact}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Footer Row: Enlarged Photo + Name + Links */}
-                      <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center space-x-4">
-                          {s.driveId ? (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-md bg-slate-50 shrink-0">
-                              <DriveImage
-                                driveId={s.driveId}
-                                alt={s.name}
-                                size={400}
-                                className="w-full h-full object-cover"
-                                showZoomIcon={false}
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center font-bold text-indigo-700 text-base sm:text-lg shrink-0 shadow-md">
-                              {s.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .slice(0, 2)}
-                            </div>
-                          )}
-                          <div className="space-y-0.5">
-                            <h4 className="font-bold text-slate-900 text-base sm:text-lg font-display leading-snug">
-                              {s.name}
-                            </h4>
-                            <p className="text-xs sm:text-sm font-semibold text-indigo-900 leading-tight">{s.role}</p>
-                            <p className="text-[11px] sm:text-xs text-slate-500 leading-tight">{s.college}</p>
-                          </div>
-                        </div>
-
-                        {/* Action Links */}
-                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                          {s.profileUrl && (
-                            <a
-                              href={s.profileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-bold transition-all shadow-sm flex items-center gap-1"
-                              title={`View verified profile (${s.profileLabel || 'Web'})`}
-                            >
-                              <span>{s.profileLabel || 'Profile'}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                          {s.linkedIn && (
-                            <a
-                              href={s.linkedIn}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-[11px] font-bold transition-all shadow-sm flex items-center gap-1"
-                              title="View LinkedIn Profile"
-                            >
-                              <span>LinkedIn</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    {renderStudentCard(s, false)}
                   </Scroll3DReveal>
                 ))}
+              </div>
+
+              {/* Mobile Auto-Scrolling Carousel */}
+              <div className="block md:hidden">
+                <MobileAutoScrollCarousel activeColorClass="bg-purple-600" autoScrollInterval={5000}>
+                  {INITIAL_STUDENT_STORIES.map((s) => (
+                    <div key={s.id} className="h-full">
+                      {renderStudentCard(s, true)}
+                    </div>
+                  ))}
+                </MobileAutoScrollCarousel>
               </div>
             </div>
           </section>
@@ -771,7 +948,7 @@ export default function StoriesPage() {
             SECTION 4: DISTINGUISHED ALUMNI NETWORK
         ========================================================= */}
         {(filter === 'all' || filter === 'alumni') && (
-          <section id="alumni-network" className="scroll-mt-24 sm:scroll-mt-28 py-16 sm:py-24 relative overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-50/60 border-b border-slate-200/60">
+          <section id="alumni-network" className="scroll-mt-36 sm:scroll-mt-40 py-16 sm:py-24 relative overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-50/60 border-b border-slate-200/60">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
               {/* Header & Search */}
               <Scroll3DReveal yOffset={30} rotateX={6}>
@@ -811,8 +988,8 @@ export default function StoriesPage() {
                 </div>
               </Scroll3DReveal>
 
-              {/* Subcategory Filter Tabs */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Subcategory Filter Tabs: Smooth scroll on mobile */}
+              <div className="flex overflow-x-auto no-scrollbar scrollbar-none items-center gap-1.5 sm:gap-2 pb-1 max-w-full">
                 {[
                   { id: 'all', label: `All Alumni (${ALUMNI_NETWORK_DATA.length})` },
                   { id: 'premier-tech', label: 'IITs, NITs & IIMs' },
@@ -823,7 +1000,7 @@ export default function StoriesPage() {
                   <button
                     key={cat.id}
                     onClick={() => setAlumniCategory(cat.id as typeof alumniCategory)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm ${
+                    className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full text-xs font-bold transition-all shadow-sm shrink-0 whitespace-nowrap ${
                       alumniCategory === cat.id
                         ? 'bg-amber-600 text-white shadow-md'
                         : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
@@ -834,55 +1011,28 @@ export default function StoriesPage() {
                 ))}
               </div>
 
-              {/* Alumni Cards Grid with Scroll Reveal */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 perspective-[1200px]">
+              {/* Desktop Cards Grid with 3D Scroll Reveal */}
+              <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 perspective-[1200px]">
                 {filteredAlumni.map((alumnus, aIdx) => (
                   <Scroll3DReveal key={alumnus.id} delay={(aIdx % 4) * 0.05} yOffset={30} rotateX={6}>
-                    <div className="group bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-slate-200/80 hover:border-amber-400 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-full space-y-3.5 relative overflow-hidden">
-                      {/* Corner subtle crosshairs */}
-                      <span className="absolute top-2 left-2 text-slate-200 font-mono text-[9px] select-none">+</span>
-                      <span className="absolute top-2 right-2 text-slate-200 font-mono text-[9px] select-none">+</span>
-
-                      <div className="space-y-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-0.5">
-                            <h3 className="font-bold text-slate-900 text-sm font-display group-hover:text-amber-700 transition-colors">
-                              {alumnus.name}
-                            </h3>
-                            {alumnus.education && (
-                              <p className="text-[11px] font-medium text-slate-500 leading-tight">
-                                {alumnus.education}
-                              </p>
-                            )}
-                          </div>
-
-                          {alumnus.badge && (
-                            <span className="px-2 py-0.5 rounded-md bg-amber-100/80 border border-amber-200 text-[10px] font-bold text-amber-900 shrink-0 whitespace-nowrap">
-                              {alumnus.badge}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-100 space-y-1">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                            <Briefcase className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span className="truncate">{alumnus.role}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-600 font-medium pl-5 truncate">
-                            {alumnus.companyOrOrg}
-                          </p>
-                        </div>
-                      </div>
-
-                      {alumnus.location && (
-                        <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium pt-1 border-t border-slate-50">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span>{alumnus.location}</span>
-                        </div>
-                      )}
-                    </div>
+                    {renderAlumnusCard(alumnus, false)}
                   </Scroll3DReveal>
                 ))}
+              </div>
+
+              {/* Mobile Auto-Scrolling Carousel */}
+              <div className="block sm:hidden">
+                <MobileAutoScrollCarousel
+                  activeColorClass="bg-amber-600"
+                  cardWidthClass="w-[78vw] max-w-[300px]"
+                  autoScrollInterval={4500}
+                >
+                  {filteredAlumni.map((alumnus) => (
+                    <div key={alumnus.id} className="h-full">
+                      {renderAlumnusCard(alumnus, true)}
+                    </div>
+                  ))}
+                </MobileAutoScrollCarousel>
               </div>
 
               {filteredAlumni.length === 0 && (

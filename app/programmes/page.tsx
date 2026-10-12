@@ -35,23 +35,25 @@ export default function ActivitiesPage() {
 
         {/* Clean Activity Sections with Horizontal Image Sliders (No tilt, No next-up buttons) */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 space-y-12 sm:space-y-14">
-          {/* 1. Value Based Seminars */}
+          {/* 1. Value Based Seminars (Moves Left) */}
           {valueBasedSeminars && (
             <ActivitySectionCard
               activity={valueBasedSeminars}
               index={0}
+              reverse={false}
             />
           )}
 
-          {/* 2. Software Training Workshop */}
+          {/* 2. Software Training Workshop (Moves Right) */}
           {softwareTraining && (
             <ActivitySectionCard
               activity={softwareTraining}
               index={1}
+              reverse={true}
             />
           )}
 
-          {/* 3. De-Addiction Workshops & Live NCRB Graph */}
+          {/* 3. De-Addiction Workshops & Live NCRB Graph (Moves Left) */}
           <DeAddictionSection />
 
           {/* 4. Corporate Activities, Counters & Logo Slider */}
@@ -59,35 +61,39 @@ export default function ActivitiesPage() {
             <CorporateSection />
           </div>
 
-          {/* 5. Teachers Program */}
+          {/* 5. Teachers Program (Moves Right) */}
           {teachersProgram && (
             <ActivitySectionCard
               activity={teachersProgram}
               index={2}
+              reverse={true}
             />
           )}
 
-          {/* 6. Cultural Festivals */}
+          {/* 6. Cultural Festivals (Moves Left) */}
           {festivals && (
             <ActivitySectionCard
               activity={festivals}
               index={3}
+              reverse={false}
             />
           )}
 
-          {/* 7. Music and Art */}
+          {/* 7. Music and Art (Moves Right) */}
           {musicAndArt && (
             <ActivitySectionCard
               activity={musicAndArt}
               index={4}
+              reverse={true}
             />
           )}
 
-          {/* 8. Public Presentation & Group Discussion */}
+          {/* 8. Public Presentation & Group Discussion (Moves Left) */}
           {publicPresentation && (
             <ActivitySectionCard
               activity={publicPresentation}
               index={5}
+              reverse={false}
             />
           )}
         </div>

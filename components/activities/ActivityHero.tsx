@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { motion, useScroll, useTransform, MotionValue } from 'framer-motion';
+import { useRef, useState, useEffect } from 'react';
+import { motion, useScroll, useTransform, MotionValue, AnimatePresence } from 'framer-motion';
 import {
   Award,
   ShieldCheck,
@@ -10,12 +10,15 @@ import {
   Sparkles,
   GraduationCap,
   Building2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import DriveImage from './DriveImage';
 
 const PILLARS_DATA = [
   {
     id: '01',
+    tabLabel: 'Since 1996',
     tag: 'Since 1996 • 100+ Colleges',
     title: 'Two Decades of Youth Social Welfare',
     desc: 'Voluntary youth forum conducting self-help and motivational seminars for university youth across India.',
@@ -33,6 +36,7 @@ const PILLARS_DATA = [
   },
   {
     id: '02',
+    tabLabel: 'Youth Crisis',
     tag: 'Modern Youth Crisis',
     title: 'Why Standard Education Alone is Not Enough',
     desc: 'Addressing the large-scale erosion of values, ethics, and emotional balance among college students.',
@@ -50,6 +54,7 @@ const PILLARS_DATA = [
   },
   {
     id: '03',
+    tabLabel: 'Methodology',
     tag: 'Core Methodology',
     title: 'Root Cause Treatment & Mentorship',
     desc: 'Empowering students with personalized attention from high-character exemplary mentors.',
@@ -67,6 +72,7 @@ const PILLARS_DATA = [
   },
   {
     id: '04',
+    tabLabel: 'Wellness',
     tag: 'Societal Wellness Model',
     title: 'Proactive Vice Prevention & Skill Training',
     desc: 'Enlightening students and corporates before they fall prey to destructive habits.',
@@ -287,18 +293,267 @@ export default function ActivityHero() {
     window.scrollTo({ top: targetScroll, behavior: 'smooth' });
   };
 
+  // Mobile Slider State (1-card at a time, zero overlap, true 3D slider feel)
+  const [mobileIndex, setMobileIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Auto-scroll every 5 seconds on mobile
+  useEffect(() => {
+    if (isPaused) return;
+    const timer = setInterval(() => {
+      setDirection(1);
+      setMobileIndex((prev) => (prev + 1) % PILLARS_DATA.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [mobileIndex, isPaused]);
+
+  const paginateMobile = (newDirection: number) => {
+    setDirection(newDirection);
+    setMobileIndex((prev) => (prev + newDirection + PILLARS_DATA.length) % PILLARS_DATA.length);
+  };
+
+  const goToMobilePillar = (idx: number) => {
+    setDirection(idx > mobileIndex ? 1 : -1);
+    setMobileIndex(idx);
+  };
+
+  const activeMobilePillar = PILLARS_DATA[mobileIndex];
+  const MobilePillarIcon = activeMobilePillar.icon;
+
+  const mobile3DVariants = {
+    enter: (dir: number) => ({
+      x: dir > 0 ? 70 : -70,
+      rotateY: dir > 0 ? 22 : -22,
+      opacity: 0,
+      scale: 0.94,
+    }),
+    center: {
+      x: 0,
+      rotateY: 0,
+      opacity: 1,
+      scale: 1,
+      transition: {
+        x: { type: 'spring' as const, stiffness: 280, damping: 28 },
+        rotateY: { duration: 0.35, ease: 'easeOut' as const },
+        opacity: { duration: 0.25 },
+        scale: { duration: 0.25 },
+      },
+    },
+    exit: (dir: number) => ({
+      x: dir < 0 ? 70 : -70,
+      rotateY: dir < 0 ? 22 : -22,
+      opacity: 0,
+      scale: 0.94,
+      transition: {
+        x: { type: 'spring' as const, stiffness: 280, damping: 28 },
+        rotateY: { duration: 0.25, ease: 'easeIn' as const },
+        opacity: { duration: 0.2 },
+        scale: { duration: 0.2 },
+      },
+    }),
+  };
+
   return (
     <div className="relative">
       {/* 
-        CRITICAL PINNED SECTION WITH 3D CURVE TRANSITIONS:
-        Pinned container locked directly below the 80px navbar at sticky top-20 h-[calc(100vh-5rem)].
-        While the user scrolls down, the cards transition along a continuous 3D horizontal curve:
-        entering curved inwards from the right, flattening at center, and curving back to the left!
+        =========================================================================
+        1. DEDICATED MOBILE & TABLET 3D SLIDER CARDS (< 1024px)
+        - ZERO OVERLAP: Renders exactly 1 active card at a time with 3D perspective!
+        - ZERO SCROLL-TRAP: Natural height, no 380vh scroll trap on phone screens.
+        - Swipeable & Auto-scrolling (5s timer per slide with countdown line).
+        - 4 Quick-select tabs, Prev / Next controls, and visual dot indicators.
+        =========================================================================
+      */}
+      <section
+        id="welfare-pillars-mobile"
+        className="block lg:hidden w-full py-6 px-3 sm:px-6 bg-gradient-to-b from-sky-50/70 via-indigo-50/20 to-[#fafcff]"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
+      >
+        <div className="max-w-md sm:max-w-xl mx-auto space-y-4">
+          
+          {/* Header */}
+          <div className="text-center space-y-1.5">
+            <div className="inline-flex items-center space-x-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-amber-500/15 border border-sky-300/80 text-sky-950 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-2xs">
+              <Sparkles className="w-3 h-3 text-sky-600" />
+              <span>VOICE Core Initiatives • Youth Social Welfare</span>
+              <Sparkles className="w-3 h-3 text-amber-500" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+              Activities &amp; Core Welfare Pillars
+            </h2>
+          </div>
+
+          {/* 4 Interactive Quick Tabs with Auto-Scroll Countdown Bar */}
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-2xs">
+            {PILLARS_DATA.map((p, idx) => {
+              const isSelected = mobileIndex === idx;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => goToMobilePillar(idx)}
+                  className={`relative py-1.5 px-1 rounded-xl text-center transition-all duration-200 cursor-pointer overflow-hidden ${
+                    isSelected
+                      ? 'bg-white text-slate-900 font-black shadow-sm border border-slate-200 scale-[1.02]'
+                      : 'text-slate-500 hover:text-slate-900 font-bold hover:bg-white/50'
+                  }`}
+                >
+                  {isSelected && (
+                    <motion.div
+                      key={`mob-pillar-timer-${idx}-${mobileIndex}`}
+                      initial={{ width: '0%' }}
+                      animate={{ width: '100%' }}
+                      transition={{ duration: 5, ease: 'linear' }}
+                      className="absolute bottom-0 left-0 h-[2px] bg-amber-500 rounded-full"
+                    />
+                  )}
+                  <div className="text-[10px] font-mono text-amber-600 font-black">{p.id}</div>
+                  <div className="text-[10px] sm:text-xs truncate leading-tight">{p.tabLabel}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 3D Perspective Card Container (Only 1 card mounted, 0% overlap) */}
+          <div className="relative w-full [perspective:1000px] overflow-hidden py-1">
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={activeMobilePillar.id}
+                custom={direction}
+                variants={mobile3DVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(_e, { offset, velocity }) => {
+                  const swipe = Math.abs(offset.x) * velocity.x;
+                  if (offset.x < -40 || swipe < -400) {
+                    paginateMobile(1);
+                  } else if (offset.x > 40 || swipe > 400) {
+                    paginateMobile(-1);
+                  }
+                }}
+                className="w-full rounded-3xl bg-white border border-slate-200/90 shadow-xl p-5 sm:p-6 flex flex-col space-y-3.5 select-none touch-pan-y"
+              >
+                {/* Card Top Strip */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="text-2xl font-black text-slate-900 font-mono tracking-tighter">
+                      {activeMobilePillar.id}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs ${activeMobilePillar.badgeBg}`}
+                    >
+                      {activeMobilePillar.tag}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 font-mono">
+                    PILLAR {activeMobilePillar.id} / 04
+                  </span>
+                </div>
+
+                {/* Pillar Icon & Title */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-2xs shrink-0">
+                      <MobilePillarIcon className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
+                      {activeMobilePillar.title}
+                    </h3>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                    {activeMobilePillar.desc}
+                  </p>
+                </div>
+
+                {/* 4 Concise Highlights with Emerald Dots */}
+                <div className="space-y-1.5 bg-slate-50/90 p-2.5 sm:p-3 rounded-2xl border border-slate-100">
+                  {activeMobilePillar.highlights.map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start space-x-2 text-xs text-slate-700 font-medium"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1" />
+                      <span className="leading-snug">{h}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Responsive Image Showcase */}
+                <div className="w-full aspect-[16/10] sm:aspect-[16/9] rounded-2xl overflow-hidden bg-slate-100 shadow-md border border-slate-200/90 relative">
+                  <DriveImage
+                    driveId={activeMobilePillar.driveId}
+                    alt={activeMobilePillar.title}
+                    size={800}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Card Bottom Tagline */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                  <span className="truncate">{activeMobilePillar.footerTag}</span>
+                  <span className="text-amber-600 font-bold shrink-0 ml-2">Swipe ↔</span>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Navigation Controls: Prev / Indicators / Next */}
+          <div className="flex items-center justify-between pt-1 px-1">
+            <button
+              onClick={() => paginateMobile(-1)}
+              className="p-2 rounded-xl bg-white border border-slate-200 shadow-xs text-slate-700 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+              aria-label="Previous Pillar"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {/* 4 Interactive Dots */}
+            <div className="flex items-center space-x-2">
+              {PILLARS_DATA.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => goToMobilePillar(idx)}
+                  className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                    mobileIndex === idx
+                      ? 'w-7 bg-amber-500 shadow-xs'
+                      : 'w-2 bg-slate-300 hover:bg-slate-400'
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => paginateMobile(1)}
+              className="p-2 rounded-xl bg-white border border-slate-200 shadow-xs text-slate-700 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+              aria-label="Next Pillar"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* 
+        =========================================================================
+        2. DESKTOP 3D CURVED CYLINDRICAL STAGE (Visible on >= 1024px)
+        - Locked at sticky top-20 h-[calc(100vh-5rem)] over 380vh of scroll.
+        - Cards glide smoothly along curved horizontal 3D cylindrical trajectory.
+        =========================================================================
       */}
       <section
         id="welfare-pillars"
         ref={containerRef}
-        className="relative h-[380vh] bg-gradient-to-b from-sky-50/70 via-indigo-50/20 to-[#fafcff]"
+        className="hidden lg:block relative h-[380vh] bg-gradient-to-b from-sky-50/70 via-indigo-50/20 to-[#fafcff]"
       >
         <div className="sticky top-20 h-[calc(100vh-5rem)] w-full overflow-hidden flex flex-col justify-between pt-3 pb-4 z-20">
           

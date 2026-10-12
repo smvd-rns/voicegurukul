@@ -673,28 +673,43 @@ export default function AboutPage() {
         {/* =========================================================================
             SECTION 5: ACTION & NEXT DESTINATION CARDS
             ========================================================================= */}
-        <section className="py-20 bg-white border-t border-slate-100">
+        <section className="py-10 sm:py-16 lg:py-20 bg-gradient-to-b from-[#fafcff] to-slate-100/60 border-t border-slate-200/80 relative z-10">
           <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10">
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-8 sm:p-12 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="space-y-2 text-center sm:text-left">
-                <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Ready to begin your journey?</span>
-                <h3 className="text-2xl sm:text-3xl font-black text-white">Join VOICE Programmes</h3>
-                <p className="text-xs sm:text-sm text-slate-300">Discover our structured courses or locate a centre near you.</p>
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-10 lg:p-12 shadow-2xl border border-indigo-500/25 flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8">
+              
+              {/* Subtle Ambient Radial Glows */}
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="space-y-2 text-center lg:text-left relative z-10">
+                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[11px] font-bold uppercase tracking-wider">
+                  <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                  <span>Ready to begin your journey?</span>
+                </span>
+                <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
+                  Join VOICE Programmes
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 max-w-lg leading-relaxed font-light">
+                  Discover our structured courses or locate a centre near you to start your transformation.
+                </p>
               </div>
-              <div className="flex flex-wrap gap-4">
+
+              <div className="flex flex-col sm:flex-row items-center w-full lg:w-auto gap-3 sm:gap-4 shrink-0 relative z-10">
                 <Link
                   href="/programmes"
-                  className="px-8 py-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg transition-all"
+                  className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 active:scale-95 transition-all flex items-center justify-center space-x-2 text-center"
                 >
-                  Explore Programmes →
+                  <span>Explore Programmes</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
                 <Link
                   href="/centres"
-                  className="px-8 py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/20 transition-all"
+                  className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/25 hover:border-white/40 active:scale-95 transition-all flex items-center justify-center text-center"
                 >
                   Locate Centres
                 </Link>
               </div>
+
             </div>
           </div>
         </section>

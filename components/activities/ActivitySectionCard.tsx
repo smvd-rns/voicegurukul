@@ -6,6 +6,7 @@ import ActivityPhotoGallery3D from './ActivityPhotoGallery3D';
 interface ActivitySectionCardProps {
   activity: ActivitySectionItem;
   index: number;
+  reverse?: boolean;
 }
 
 const SECTION_THEMES = [
@@ -62,14 +63,16 @@ const SECTION_THEMES = [
 export default function ActivitySectionCard({
   activity,
   index,
+  reverse,
 }: ActivitySectionCardProps) {
   const theme = SECTION_THEMES[index % SECTION_THEMES.length];
   const sectionNum = String(index + 1).padStart(2, '0');
+  const isReverse = reverse !== undefined ? reverse : index % 2 !== 0;
 
   return (
     <section
       id={activity.id}
-      className={`scroll-mt-28 relative rounded-3xl p-6 sm:p-8 lg:p-10 bg-white border ${theme.border} shadow-xl shadow-slate-900/5 overflow-hidden transition-all space-y-6`}
+      className={`scroll-mt-28 relative rounded-3xl p-5 sm:p-8 lg:p-10 bg-white border ${theme.border} shadow-xl shadow-slate-900/5 overflow-hidden transition-all space-y-5 sm:space-y-6`}
     >
       {/* Background soft tint */}
       <div
@@ -77,15 +80,15 @@ export default function ActivitySectionCard({
       />
 
       <div className="relative z-10 space-y-5">
-        {/* Clean Header: No "Interactive 3D Showcase" */}
+        {/* Clean Header: No overflowing text on mobile */}
         <div className="space-y-2 pb-2 border-b border-slate-100">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-mono font-black tracking-widest text-slate-400 uppercase">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-[11px] sm:text-xs font-mono font-black tracking-widest text-slate-400 uppercase">
               {sectionNum} / {activity.category}
             </span>
-            <span className="text-slate-300">•</span>
+            <span className="hidden sm:inline text-slate-300">•</span>
             <span
-              className={`px-3 py-0.5 rounded-full ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder} text-[11px] font-black uppercase tracking-wider`}
+              className={`px-3 py-1 rounded-full ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder} text-[10px] sm:text-[11px] font-black uppercase tracking-wider whitespace-nowrap shadow-2xs`}
             >
               {activity.badge}
             </span>
@@ -103,7 +106,7 @@ export default function ActivitySectionCard({
         {/* Auto-Rotating Image Slider (Alternating direction) */}
         <ActivityPhotoGallery3D
           photos={activity.photos}
-          reverse={index % 2 !== 0}
+          reverse={isReverse}
         />
       </div>
     </section>
