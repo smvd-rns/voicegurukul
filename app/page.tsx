@@ -13,6 +13,7 @@ import CurvedSectionConnector from '@/components/home/CurvedSectionConnector';
 import LusionExpandingReelSection from '@/components/home/LusionExpandingReelSection';
 import DriveImage from '@/components/activities/DriveImage';
 import AnimatedCounter from '@/components/ui/AnimatedCounter';
+import CollegeLogoSlider from '@/components/centres/CollegeLogoSlider';
 import { 
   Heart, 
   BookOpen, 
@@ -557,6 +558,11 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* =========================================================================
+          PREMIER UNIVERSITY NETWORK: Slow Infinite Marquee Slider
+          ========================================================================= */}
+      <CollegeLogoSlider />
 
       {/* =========================================================================
           THE CORE 4 PILLARS: 3D HORIZONTAL SCROLL JOURNEY (Lusion-style fly-through)

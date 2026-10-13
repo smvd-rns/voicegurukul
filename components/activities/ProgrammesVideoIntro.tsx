@@ -12,8 +12,8 @@ import {
   Sparkles 
 } from 'lucide-react';
 
-// Direct Archive.org video stream (No YouTube dependency)
-const VIDEO_URL = 'https://ia601006.us.archive.org/5/items/current-youth-challenges_20261012/Current%20Youth%20Challenges.mp4';
+// Direct Archive.org 7.2MB faststart video stream (No YouTube dependency)
+const VIDEO_URL = 'https://ia903108.us.archive.org/15/items/current-youth-challenges_20261013/Current%20Youth%20Challenges.mp4';
 
 export default function ProgrammesVideoIntro() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
