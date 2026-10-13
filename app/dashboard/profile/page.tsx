@@ -596,6 +596,22 @@ export default function ProfilePage() {
     if (userData) {
       const baseHierarchy = userData.hierarchy || {};
       
+      let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || '';
+      let initialOtherCenter = baseHierarchy.otherCenter || '';
+      if (initialOtherCenter && (initialCurrentCenter === 'Other' || !initialCurrentCenter)) {
+        initialCurrentCenter = 'Other';
+      } else if (!initialCurrentCenter) {
+        initialCurrentCenter = baseHierarchy.parentCenter === 'None' ? 'None' : (baseHierarchy.parentCenter || 'None');
+      }
+
+      let initialParentCenter = baseHierarchy.parentCenter || '';
+      let initialOtherParentCenter = baseHierarchy.otherParentCenter || '';
+      if (initialOtherParentCenter && (initialParentCenter === 'Other' || !initialParentCenter)) {
+        initialParentCenter = 'Other';
+      } else if (!initialParentCenter) {
+        initialParentCenter = 'None';
+      }
+
       // Basic fields from userData
       const baseData: any = {
         name: userData.name || '',
@@ -604,9 +620,7 @@ export default function ProfilePage() {
         birthDate: userData.birthDate ? String(userData.birthDate).trim().split('T')[0].split(' ')[0] : '',
         state: baseHierarchy.state || '',
         city: baseHierarchy.city || '',
-        center: (baseHierarchy.center === 'Other' && baseHierarchy.otherCenter)
-          ? baseHierarchy.otherCenter
-          : (baseHierarchy.center || ''),
+        center: initialCurrentCenter === 'Other' ? (initialOtherCenter || 'Other') : (initialCurrentCenter || ''),
         centerId: baseHierarchy.centerId || '',
         
         // Spiritual fields
@@ -618,15 +632,15 @@ export default function ProfilePage() {
         rounds: baseHierarchy.rounds ? baseHierarchy.rounds.toString() : '',
         parentTemple: baseHierarchy.parentTemple || '',
         otherParentTemple: baseHierarchy.otherParentTemple || '',
-        parentCenter: baseHierarchy.parentCenter || '',
+        parentCenter: initialParentCenter,
         currentTemple: baseHierarchy.currentTemple || '',
-        currentCenter: baseHierarchy.currentCenter || baseHierarchy.center || '',
+        currentCenter: initialCurrentCenter,
         counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || '',
         counselorId: baseHierarchy.counselorId || '',
         otherCounselor: baseHierarchy.otherCounselor || '',
         ashram: baseHierarchy.ashram || '',
-        otherCenter: baseHierarchy.otherCenter || '',
-        otherParentCenter: baseHierarchy.otherParentCenter || '',
+        otherCenter: initialOtherCenter,
+        otherParentCenter: initialOtherParentCenter,
 
         // Relative contact info
         relative1Name: userData.relative1Name || '',
@@ -1109,18 +1123,34 @@ export default function ProfilePage() {
       if (formData.ashram) hierarchy.ashram = formData.ashram;
       if (formData.introducedToKcIn) hierarchy.introducedToKcIn = sanitizeTextInput(formData.introducedToKcIn.trim());
       if (formData.rounds) hierarchy.rounds = parseInt(formData.rounds) || 0;
+      const cleanOtherCenter = formData.otherCenter ? sanitizeTextInput(formData.otherCenter.trim()) : null;
+      const cleanOtherParentCenter = formData.otherParentCenter ? sanitizeTextInput(formData.otherParentCenter.trim()) : null;
+
       if (formData.parentTemple) hierarchy.parentTemple = sanitizeTextInput(formData.parentTemple.trim());
       if (formData.otherParentTemple) hierarchy.otherParentTemple = sanitizeTextInput(formData.otherParentTemple.trim());
-      if (formData.parentCenter) hierarchy.parentCenter = sanitizeTextInput(formData.parentCenter.trim());
-      if (formData.otherParentCenter) hierarchy.otherParentCenter = sanitizeTextInput(formData.otherParentCenter.trim());
+      if (formData.parentCenter === 'Other') {
+        hierarchy.parentCenter = 'Other';
+        hierarchy.otherParentCenter = cleanOtherParentCenter;
+      } else if (formData.parentCenter) {
+        hierarchy.parentCenter = sanitizeTextInput(formData.parentCenter.trim());
+        hierarchy.otherParentCenter = null;
+      }
+
       if (formData.currentTemple) hierarchy.currentTemple = sanitizeTextInput(formData.currentTemple.trim());
-      if (formData.currentCenter) hierarchy.currentCenter = sanitizeTextInput(formData.currentCenter.trim());
+      if (formData.currentCenter === 'Other') {
+        hierarchy.currentCenter = 'Other';
+        hierarchy.otherCenter = cleanOtherCenter;
+        hierarchy.center = cleanOtherCenter || 'Other';
+      } else if (formData.currentCenter) {
+        hierarchy.currentCenter = sanitizeTextInput(formData.currentCenter.trim());
+        hierarchy.center = hierarchy.currentCenter;
+        hierarchy.otherCenter = null;
+      }
       if (formData.counselor) {
         hierarchy.counselor = sanitizeTextInput(formData.counselor.trim());
         if (formData.counselorId) hierarchy.counselorId = formData.counselorId;
       }
       if (formData.otherCounselor) hierarchy.otherCounselor = sanitizeTextInput(formData.otherCounselor.trim());
-      if (formData.otherCenter) hierarchy.otherCenter = sanitizeTextInput(formData.otherCenter.trim());
 
       // Build expanded update objects (education, work, etc.)
       const educationUpdate: any = {};
@@ -1213,14 +1243,14 @@ export default function ProfilePage() {
         rounds: formData.rounds ? parseInt(formData.rounds) : null,
         parent_temple: formData.parentTemple ? sanitizeTextInput(formData.parentTemple.trim()) : null,
         other_parent_temple: formData.parentTemple === 'Other' ? (formData.otherParentTemple ? sanitizeTextInput(formData.otherParentTemple.trim()) : null) : null,
-        parent_center: formData.parentCenter ? sanitizeTextInput(formData.parentCenter.trim()) : null,
-        other_parent_center: formData.parentCenter === 'Other' ? (formData.otherParentCenter ? sanitizeTextInput(formData.otherParentCenter.trim()) : null) : null,
+        parent_center: formData.parentCenter === 'Other' ? 'Other' : (formData.parentCenter ? sanitizeTextInput(formData.parentCenter.trim()) : null),
+        other_parent_center: formData.parentCenter === 'Other' ? cleanOtherParentCenter : null,
         current_temple: formData.currentTemple ? sanitizeTextInput(formData.currentTemple.trim()) : null,
-        current_center: formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null,
+        current_center: formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null),
         counselor: formData.counselor ? sanitizeTextInput(formData.counselor.trim()) : null,
         counselor_id: formData.counselorId || null,
         other_counselor: formData.counselor === 'Other' ? (formData.otherCounselor ? sanitizeTextInput(formData.otherCounselor.trim()) : null) : null,
-        other_center: formData.currentCenter === 'Other' || formData.center === 'Other' ? (formData.otherCenter ? sanitizeTextInput(formData.otherCenter.trim()) : null) : null,
+        other_center: formData.currentCenter === 'Other' ? cleanOtherCenter : null,
         // Relative contact info
         relative_1_name: formData.relative1Name ? sanitizeTextInput(formData.relative1Name.trim()) : null,
         relative_1_relationship: formData.relative1Relationship || null,
@@ -1300,7 +1330,7 @@ export default function ProfilePage() {
         'aspiring_spiritual_master_name', 'rounds', 'introduced_to_kc_in',
         'parent_temple', 'other_parent_temple', 'parent_center', 'other_parent_center',
         'current_temple', 'current_center', 'counselor', 'counselor_id',
-        'other_counselor', 'other_center', 'ashram'
+        'other_counselor', 'other_center', 'ashram', 'center'
       ];
 
       const spiritualUpdates: any = {};
@@ -2331,40 +2361,46 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
-                    <>
-                      <div>
-                        <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                          Current Center
-                        </label>
-                        <SearchableSelect
-                          options={[
-                            ...centers.map(c => ({ id: c.name, name: c.name })),
-                            { id: 'Other', name: 'Other' }
-                          ]}
-                          value={formData.currentCenter}
-                          onChange={(value) => setFormData({ ...formData, currentCenter: value, center: value })}
-                          placeholder="Select Current Center"
-                          disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None'}
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
+                      Current Center
+                    </label>
+                    <SearchableSelect
+                      options={[
+                        { id: 'None', name: 'None' },
+                        ...centers.map(c => ({ id: c.name, name: c.name })),
+                        { id: 'Other', name: formData.otherCenter ? `Other (${formData.otherCenter})` : 'Other' },
+                        ...(formData.currentCenter && formData.currentCenter !== 'None' && formData.currentCenter !== 'Other' && !centers.some(c => c.name === formData.currentCenter)
+                          ? [{ id: formData.currentCenter, name: formData.currentCenter }]
+                          : [])
+                      ]}
+                      value={formData.currentCenter}
+                      onChange={(value) => {
+                        if (value === 'Other') {
+                          setFormData({ ...formData, currentCenter: value, center: formData.otherCenter || 'Other' });
+                        } else {
+                          setFormData({ ...formData, currentCenter: value, center: value });
+                        }
+                      }}
+                      placeholder="Select Current Center"
+                      disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None'}
+                    />
+                  </div>
 
-                      {formData.currentCenter === 'Other' && (
-                        <div className="animate-fadeIn">
-                          <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                            Other Center Name
-                          </label>
-                          <input
-                            id="otherCenter"
-                            type="text"
-                            value={formData.otherCenter}
-                            onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border"
-                            placeholder="Type center name"
-                          />
-                        </div>
-                      )}
-                    </>
+                  {formData.currentCenter === 'Other' && (
+                    <div className="animate-fadeIn">
+                      <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
+                        Other Center Name
+                      </label>
+                      <input
+                        id="otherCenter"
+                        type="text"
+                        value={formData.otherCenter}
+                        onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border"
+                        placeholder="Type center name"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -2383,7 +2419,7 @@ export default function ProfilePage() {
                     <SearchableSelect
                       options={[
                         ...temples.map(t => ({ id: t.name, name: t.name })),
-                        { id: 'Other', name: 'Other' }
+                        { id: 'Other', name: formData.otherParentTemple ? `Other (${formData.otherParentTemple})` : 'Other' }
                       ]}
                       value={formData.parentTemple}
                       onChange={(value) => setFormData({ ...formData, parentTemple: value })}
@@ -2427,11 +2463,21 @@ export default function ProfilePage() {
                     </label>
                     <SearchableSelect
                       options={[
+                        { id: 'None', name: 'None' },
                         ...parentCenters.map(c => ({ id: c.name, name: c.name })),
-                        { id: 'Other', name: 'Other' }
+                        { id: 'Other', name: formData.otherParentCenter ? `Other (${formData.otherParentCenter})` : 'Other' },
+                        ...(formData.parentCenter && formData.parentCenter !== 'None' && formData.parentCenter !== 'Other' && !parentCenters.some(c => c.name === formData.parentCenter)
+                          ? [{ id: formData.parentCenter, name: formData.parentCenter }]
+                          : [])
                       ]}
                       value={formData.parentCenter}
-                      onChange={(value) => setFormData({ ...formData, parentCenter: value })}
+                      onChange={(value) => {
+                        if (value === 'Other') {
+                          setFormData({ ...formData, parentCenter: value });
+                        } else {
+                          setFormData({ ...formData, parentCenter: value, otherParentCenter: '' });
+                        }
+                      }}
                       placeholder="Select Parent Center"
                       disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter}
                     />

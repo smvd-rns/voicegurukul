@@ -205,8 +205,8 @@ export default function SearchableSelect({
                 onClick={() => !disabled && setIsOpen(!isOpen)}
             >
                 <div className="flex flex-col truncate">
-                    <span className={`block truncate ${!selectedOption ? 'text-gray-400' : 'text-gray-900'}`}>
-                        {selectedOption ? selectedOption.name : placeholder}
+                    <span className={`block truncate ${(!selectedOption && !value) ? 'text-gray-400' : 'text-gray-900'}`}>
+                        {selectedOption ? selectedOption.name : (value || placeholder)}
                     </span>
                     {selectedOption?.email && (
                         <span className="block truncate text-xs text-gray-400 font-normal">

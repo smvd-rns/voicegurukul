@@ -253,12 +253,21 @@ export async function PATCH(
             if (requestedChanges.otherParentTemple !== undefined) dbUpdates.other_parent_temple = requestedChanges.otherParentTemple;
             if (requestedChanges.parentCenter !== undefined) dbUpdates.parent_center = requestedChanges.parentCenter;
             if (requestedChanges.currentTemple !== undefined) dbUpdates.current_temple = requestedChanges.currentTemple;
-            if (requestedChanges.currentCenter !== undefined) dbUpdates.current_center = requestedChanges.currentCenter;
+            if (requestedChanges.currentCenter === 'Other') {
+                dbUpdates.current_center = 'Other';
+                if (requestedChanges.otherCenter !== undefined) {
+                    dbUpdates.other_center = requestedChanges.otherCenter;
+                    dbUpdates.center = requestedChanges.otherCenter;
+                }
+            } else if (requestedChanges.currentCenter !== undefined) {
+                dbUpdates.current_center = requestedChanges.currentCenter;
+                dbUpdates.center = requestedChanges.currentCenter;
+            }
             if (requestedChanges.counselor !== undefined) dbUpdates.counselor = requestedChanges.counselor;
             if (requestedChanges.counselorId !== undefined) dbUpdates.counselor_id = requestedChanges.counselorId;
             if (requestedChanges.counselor_id !== undefined) dbUpdates.counselor_id = requestedChanges.counselor_id;
             if (requestedChanges.otherCounselor !== undefined) dbUpdates.other_counselor = requestedChanges.otherCounselor;
-            if (requestedChanges.otherCenter !== undefined) dbUpdates.other_center = requestedChanges.otherCenter;
+            if (requestedChanges.otherCenter !== undefined && requestedChanges.currentCenter !== 'Other') dbUpdates.other_center = requestedChanges.otherCenter;
             if (requestedChanges.otherParentCenter !== undefined) dbUpdates.other_parent_center = requestedChanges.otherParentCenter;
 
             // Fetch current user to get existing hierarchy for merger
