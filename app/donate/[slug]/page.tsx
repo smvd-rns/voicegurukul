@@ -91,8 +91,11 @@ export default function DonationPage() {
         if (fetchError || !data) {
           setError('This donation link is invalid or has expired.');
         } else {
-          // Resolve Center name (priority: current_center -> center)
+          // Resolve Center name (priority: current_center -> center -> parent_center)
           let resolvedCenter = data.current_center || data.center;
+          if (!resolvedCenter && data.parent_center && data.parent_center !== 'None') {
+            resolvedCenter = data.parent_center;
+          }
           if (resolvedCenter === 'Other') {
             resolvedCenter = data.other_center || 'Other Center';
           }
@@ -105,8 +108,8 @@ export default function DonationPage() {
 
           setTargetUser({
             ...data,
-            resolvedCenter: resolvedCenter || 'General',
-            resolvedTemple: resolvedTemple || 'N/A',
+            resolvedCenter: (resolvedCenter && resolvedCenter !== 'None' && resolvedCenter !== 'General') ? resolvedCenter : '',
+            resolvedTemple: (resolvedTemple && resolvedTemple !== 'None') ? resolvedTemple : '',
             ashram: data.ashram || 'N/A'
           });
 
@@ -157,10 +160,6 @@ export default function DonationPage() {
           throw new Error('Payment gateway failed to load. Please refresh.');
         }
 
-        if (!RAZORPAY_KEY_ID) {
-          throw new Error('Payment configuration missing (Key ID). Please contact admin.');
-        }
-
         const orderRes = await fetch('/api/donations/order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -178,8 +177,13 @@ export default function DonationPage() {
           throw new Error(orderData.error || 'Failed to initialize secure payment order.');
         }
 
+        const keyToUse = orderData.keyId || RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+        if (!keyToUse) {
+          throw new Error('Payment configuration missing (Key ID). Please contact admin.');
+        }
+
         const options = {
-          key: RAZORPAY_KEY_ID,
+          key: keyToUse,
           amount: orderData.amount,
           currency: "INR",
           name: "Voice Gurukul",

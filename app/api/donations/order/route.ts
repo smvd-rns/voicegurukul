@@ -12,9 +12,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
+    const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!razorpayKeyId || !razorpayKeySecret) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Payment gateway configuration is missing on server.' 
+      }, { status: 500 });
+    }
+
     const razorpay = new Razorpay({
-      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
-      key_secret: process.env.RAZORPAY_KEY_SECRET!
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret
     });
 
     // 1. Create Razorpay Order
@@ -40,6 +50,7 @@ export async function POST(req: Request) {
     const sadhanaDb = getSadhanaAdminClient();
     const donationData = {
       id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
       donor_name: donorName,
       donor_email: donorEmail,
       donor_mobile: donorMobile,
@@ -69,7 +80,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, orderId: order.id, amount: options.amount });
+    return NextResponse.json({ 
+      success: true, 
+      orderId: order.id, 
+      amount: options.amount,
+      keyId: razorpayKeyId
+    });
   } catch (error: any) {
     console.error('Order creation error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
