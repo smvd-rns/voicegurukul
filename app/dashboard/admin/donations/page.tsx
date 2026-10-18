@@ -118,21 +118,32 @@ export default function AdminDonationsPage() {
   // Dynamic Filter Options
   const availableTemples = useMemo(() => {
     const ts = new Set<string>();
-    donations.forEach(d => { if (d.temple) ts.add(d.temple); });
+    donations.forEach(d => {
+      const collector = collectors[d.tag_user_id];
+      const temple = collector?.temple || d.temple;
+      if (temple && temple !== 'General' && temple !== 'None') ts.add(temple);
+    });
+    Object.values(collectors).forEach(c => {
+      if (c.temple && c.temple !== 'General' && c.temple !== 'None') ts.add(c.temple);
+    });
     return Array.from(ts).sort();
-  }, [donations]);
+  }, [donations, collectors]);
 
   const availableCenters = useMemo(() => {
     const cs = new Set<string>();
     donations.forEach(d => {
-      const matchesTemple = selectedTemple === 'all' || d.temple === selectedTemple;
-      if (matchesTemple && d.center && d.center !== 'General' && d.center !== 'None') {
-        cs.add(d.center);
+      const collector = collectors[d.tag_user_id];
+      const templeVal = collector?.temple || d.temple;
+      const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
+      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
+      if (matchesTemple && centerVal && centerVal !== 'General' && centerVal !== 'None' && centerVal !== 'No Center') {
+        cs.add(centerVal);
       }
     });
     // Also include valid centers from collectors
     Object.values(collectors).forEach(c => {
-      if (c.center && c.center !== 'General' && c.center !== 'None' && c.center !== 'No Center') {
+      const matchesTemple = selectedTemple === 'all' || c.temple === selectedTemple;
+      if (matchesTemple && c.center && c.center !== 'General' && c.center !== 'None' && c.center !== 'No Center') {
         cs.add(c.center);
       }
     });
@@ -143,8 +154,9 @@ export default function AdminDonationsPage() {
     const ids = new Set<string>();
     donations.forEach(d => {
       const collector = collectors[d.tag_user_id];
-      const matchesTemple = selectedTemple === 'all' || d.temple === selectedTemple || collector?.temple === selectedTemple;
-      const centerVal = (d.center && d.center !== 'General' && d.center !== 'None') ? d.center : collector?.center;
+      const templeVal = collector?.temple || d.temple;
+      const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
+      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
       const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
       if (matchesTemple && matchesCenter && d.tag_user_id) ids.add(d.tag_user_id);
     });
@@ -161,10 +173,10 @@ export default function AdminDonationsPage() {
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
       
       const collector = collectors[d.tag_user_id];
-      const centerVal = (d.center && d.center !== 'General' && d.center !== 'None') ? d.center : collector?.center;
+      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
       const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
       
-      const templeVal = d.temple || collector?.temple;
+      const templeVal = collector?.temple || d.temple;
       const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
       
       const matchesStatus = selectedStatus === 'all' 
@@ -230,10 +242,9 @@ export default function AdminDonationsPage() {
 
     const rows = filteredDonations.map(d => {
       const collector = collectors[d.tag_user_id];
-      const resolvedCenter = (d.center && d.center !== 'General' && d.center !== 'None')
-        ? d.center 
-        : (collector?.center || 'Direct / HQ');
-      const resolvedTemple = d.temple || collector?.temple || 'General';
+      const resolvedCenter = collector?.center 
+        || ((d.center && d.center !== 'General' && d.center !== 'None') ? d.center : 'Direct / HQ');
+      const resolvedTemple = collector?.temple || d.temple || 'General';
       const dateStr = formatDonationDate(d);
 
       return [
@@ -324,27 +335,33 @@ export default function AdminDonationsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, name, center, current_center, parent_center, other_center, current_temple')
+        .select('id, name, center, current_center, parent_center, other_center, other_parent_center, current_temple, parent_temple, other_temple, other_parent_temple')
         .in('id', activeCollectorIds);
       
       const userMap: Record<string, {name: string, center: string | null, temple: string | null}> = {};
       const centerList = new Set<string>();
 
       ((userData || []) as any[]).forEach((u: any) => {
-        const resolvedCenter = (u.current_center && u.current_center !== 'None' && u.current_center !== 'General')
-          ? u.current_center
+        // Resolve collector Center strictly on parent center basis
+        const resolvedCenter = (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General')
+          ? (u.parent_center === 'Other' ? (u.other_parent_center || u.other_center || 'Other Center') : u.parent_center)
           : (u.center && u.center !== 'None' && u.center !== 'General')
             ? u.center
-            : (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General')
-              ? u.parent_center
-              : (u.other_center && u.other_center !== 'None' && u.other_center !== 'General')
-                ? u.other_center
-                : null;
+            : (u.current_center && u.current_center !== 'None' && u.current_center !== 'General')
+              ? (u.current_center === 'Other' ? (u.other_center || 'Other Center') : u.current_center)
+              : null;
+
+        // Resolve collector Temple strictly on parent temple basis
+        const resolvedTemple = (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General')
+          ? (u.parent_temple === 'Other' ? (u.other_parent_temple || u.other_temple || 'Other Temple') : u.parent_temple)
+          : (u.current_temple && u.current_temple !== 'None' && u.current_temple !== 'General')
+            ? (u.current_temple === 'Other' ? (u.other_temple || 'Other Temple') : u.current_temple)
+            : null;
 
         userMap[u.id] = { 
           name: u.name || 'Unknown', 
           center: resolvedCenter,
-          temple: u.current_temple || null
+          temple: resolvedTemple
         };
         if (resolvedCenter) centerList.add(resolvedCenter);
       });
@@ -352,8 +369,13 @@ export default function AdminDonationsPage() {
       setCollectors(userMap);
       setCenters(Array.from(centerList).sort());
 
-      const uniqueTemples = Array.from(new Set(rawDonations.map((d: any) => d.temple).filter(Boolean))) as string[];
-      setTempleList(uniqueTemples.sort());
+      const uniqueTemples = new Set<string>();
+      rawDonations.forEach((d: any) => {
+        const c = userMap[d.tag_user_id];
+        const t = c?.temple || d.temple;
+        if (t && t !== 'General' && t !== 'None') uniqueTemples.add(t);
+      });
+      setTempleList(Array.from(uniqueTemples).sort());
 
     } catch (err: any) {
       console.error('Fetch error:', err);
@@ -688,10 +710,9 @@ export default function AdminDonationsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                       const collector = collectors[donation.tag_user_id];
-                      const resolvedCenter = (donation.center && donation.center !== 'General' && donation.center !== 'None')
-                        ? donation.center 
-                        : collector?.center;
-                      const resolvedTemple = donation.temple || collector?.temple;
+                      const resolvedCenter = collector?.center 
+                        || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
+                      const resolvedTemple = collector?.temple || donation.temple;
 
                       return (
                         <tr key={donation.id} className="hover:bg-orange-50/20 transition-colors group">
@@ -795,10 +816,9 @@ export default function AdminDonationsPage() {
               <div className="md:hidden divide-y divide-gray-100">
                 {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                   const collector = collectors[donation.tag_user_id];
-                  const resolvedCenter = (donation.center && donation.center !== 'General' && donation.center !== 'None')
-                    ? donation.center 
-                    : collector?.center;
-                  const resolvedTemple = donation.temple || collector?.temple;
+                  const resolvedCenter = collector?.center 
+                    || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
+                  const resolvedTemple = collector?.temple || donation.temple;
 
                   return (
                     <div key={donation.id} className="p-4 space-y-3 hover:bg-orange-50/20 transition-colors">
@@ -852,10 +872,9 @@ export default function AdminDonationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                 const collector = collectors[donation.tag_user_id];
-                const resolvedCenter = (donation.center && donation.center !== 'General' && donation.center !== 'None')
-                  ? donation.center 
-                  : collector?.center;
-                const resolvedTemple = donation.temple || collector?.temple;
+                const resolvedCenter = collector?.center 
+                  || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
+                const resolvedTemple = collector?.temple || donation.temple;
 
                 return (
                   <div key={donation.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-md hover:border-orange-200 hover:shadow-lg transition-all group flex flex-col justify-between">

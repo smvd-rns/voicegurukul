@@ -84,27 +84,28 @@ export default function DonationPage() {
       try {
         const { data, error: fetchError } = await supabase
           .from('users')
-          .select('id, name, profile_image, current_center, other_center, current_temple, other_temple, center, ashram')
+          .select('id, name, profile_image, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
           .eq('donation_slug', slug)
           .single();
 
         if (fetchError || !data) {
           setError('This donation link is invalid or has expired.');
         } else {
-          // Resolve Center name (priority: current_center -> center -> parent_center)
-          let resolvedCenter = data.current_center || data.center;
-          if (!resolvedCenter && data.parent_center && data.parent_center !== 'None') {
-            resolvedCenter = data.parent_center;
-          }
-          if (resolvedCenter === 'Other') {
-            resolvedCenter = data.other_center || 'Other Center';
-          }
+          // Resolve Center name strictly on parent center basis
+          let resolvedCenter = (data.parent_center && data.parent_center !== 'None' && data.parent_center !== 'General')
+            ? (data.parent_center === 'Other' ? (data.other_parent_center || data.other_center || 'Other Center') : data.parent_center)
+            : (data.center && data.center !== 'None' && data.center !== 'General')
+              ? data.center
+              : (data.current_center && data.current_center !== 'None' && data.current_center !== 'General')
+                ? (data.current_center === 'Other' ? (data.other_center || 'Other Center') : data.current_center)
+                : '';
           
-          // Resolve Temple name
-          let resolvedTemple = data.current_temple;
-          if (resolvedTemple === 'Other') {
-            resolvedTemple = data.other_temple || 'Other Temple';
-          }
+          // Resolve Temple name strictly on parent temple basis
+          let resolvedTemple = (data.parent_temple && data.parent_temple !== 'None' && data.parent_temple !== 'General')
+            ? (data.parent_temple === 'Other' ? (data.other_parent_temple || data.other_temple || 'Other Temple') : data.parent_temple)
+            : (data.current_temple && data.current_temple !== 'None' && data.current_temple !== 'General')
+              ? (data.current_temple === 'Other' ? (data.other_temple || 'Other Temple') : data.current_temple)
+              : '';
 
           setTargetUser({
             ...data,

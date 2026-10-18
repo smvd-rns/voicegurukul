@@ -27,6 +27,43 @@ export async function POST(req: Request) {
       key_secret: razorpayKeySecret
     });
 
+    // Resolve collector's parent center and parent temple from DB
+    let finalCenter = center || null;
+    let finalTemple = temple || null;
+
+    const sadhanaDb = getSadhanaAdminClient();
+
+    if (targetUserId) {
+      try {
+        const { data: collectorUser } = await sadhanaDb
+          .from('users')
+          .select('parent_center, other_parent_center, parent_temple, other_parent_temple, center, current_center, other_center, current_temple, other_temple')
+          .eq('id', targetUserId)
+          .single();
+
+        if (collectorUser) {
+          const resolvedParentCenter = (collectorUser.parent_center && collectorUser.parent_center !== 'None' && collectorUser.parent_center !== 'General')
+            ? (collectorUser.parent_center === 'Other' ? (collectorUser.other_parent_center || collectorUser.other_center || 'Other Center') : collectorUser.parent_center)
+            : (collectorUser.center && collectorUser.center !== 'None' && collectorUser.center !== 'General')
+              ? collectorUser.center
+              : (collectorUser.current_center && collectorUser.current_center !== 'None' && collectorUser.current_center !== 'General')
+                ? (collectorUser.current_center === 'Other' ? (collectorUser.other_center || 'Other Center') : collectorUser.current_center)
+                : null;
+
+          const resolvedParentTemple = (collectorUser.parent_temple && collectorUser.parent_temple !== 'None' && collectorUser.parent_temple !== 'General')
+            ? (collectorUser.parent_temple === 'Other' ? (collectorUser.other_parent_temple || collectorUser.other_temple || 'Other Temple') : collectorUser.parent_temple)
+            : (collectorUser.current_temple && collectorUser.current_temple !== 'None' && collectorUser.current_temple !== 'General')
+              ? (collectorUser.current_temple === 'Other' ? (collectorUser.other_temple || 'Other Temple') : collectorUser.current_temple)
+              : null;
+
+          if (resolvedParentCenter) finalCenter = resolvedParentCenter;
+          if (resolvedParentTemple) finalTemple = resolvedParentTemple;
+        }
+      } catch (err) {
+        console.error('Error resolving collector parent center/temple:', err);
+      }
+    }
+
     // 1. Create Razorpay Order
     const options = {
       amount: Math.round(parseFloat(amount) * 100), // convert to paise
@@ -39,15 +76,14 @@ export async function POST(req: Request) {
         donor_address: donorAddress || "",
         donor_pan: donorPan || "",
         target_user_id: targetUserId,
-        center: center || "",
-        temple: temple || "",
+        center: finalCenter || "",
+        temple: finalTemple || "",
         ashram: ashram || ""
       }
     };
     const order = await razorpay.orders.create(options);
 
     // 2. Save pending donation to Supabase
-    const sadhanaDb = getSadhanaAdminClient();
     const donationData = {
       id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
@@ -61,8 +97,8 @@ export async function POST(req: Request) {
       payment_method: 'Razorpay',
       txnid: order.id, // Store Razorpay Order ID as our internal transaction ID
       tag_user_id: targetUserId,
-      center: center || null,
-      temple: temple || null,
+      center: finalCenter || null,
+      temple: finalTemple || null,
       ashram: ashram || null,
       metadata: {
         environment: process.env.NODE_ENV,
