@@ -29,7 +29,7 @@ export default function PublicFooter() {
               <span className="text-xl font-black text-white font-display tracking-tight">VOICE Gurukul</span>
             </Link>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Vedic Oasis for Inspiration, Culture & Education. Empowering university youth with character, leadership, mental resilience, and spiritual principles across 100+ centres.
+              Vedic Oasis for Inspiration, Culture & Education. Empowering university youth with character, leadership, mental resilience, and spiritual principles across 120+ centres.
             </p>
             <div className="pt-2">
               <span className="inline-flex items-center text-[11px] font-semibold text-sky-400 bg-sky-950/60 border border-sky-800/60 px-3 py-1 rounded-full">

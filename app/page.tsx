@@ -319,7 +319,7 @@ export default function Home() {
 
               {/* Tagline */}
               <p className="text-base sm:text-lg lg:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-normal">
-                VOICE Gurukul bridges academic brilliance with the drug-free VOICE lifestyle, mental resilience, and timeless values across <strong className="text-slate-900 font-semibold">100+ university centres</strong>.
+                VOICE Gurukul bridges academic brilliance with the drug-free VOICE lifestyle, mental resilience, and timeless values across <strong className="text-slate-900 font-semibold">120+ university centres</strong>.
               </p>
 
               {/* Primary Call to Action Buttons */}
@@ -350,7 +350,7 @@ export default function Home() {
                   className="w-full sm:w-auto px-6 py-4 rounded-full text-slate-600 hover:text-slate-900 font-bold text-sm flex items-center justify-center space-x-1.5 hover:underline"
                 >
                   <MapPin className="w-4 h-4 text-sky-600" />
-                  <span>Find 100+ Centres</span>
+                  <span>Find 120+ Centres</span>
                 </Link>
               </div>
 
@@ -496,7 +496,7 @@ export default function Home() {
                     className="absolute -bottom-3 right-1 sm:-bottom-4 sm:-right-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl shadow-xl flex items-center space-x-1.5 sm:space-x-2 z-20"
                   >
                     <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-white" />
-                    <span className="text-[11px] sm:text-xs font-bold">100+ Youth Centres</span>
+                    <span className="text-[11px] sm:text-xs font-bold">120+ Youth Centres</span>
                   </motion.div>
 
                 </motion.div>
@@ -1135,7 +1135,7 @@ export default function Home() {
                     <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <h3 className="text-lg sm:text-xl font-bold font-display group-hover:text-indigo-300 transition-colors">
-                    Find 100+ Centres
+                    Find 120+ Centres
                   </h3>
                   <p className="text-xs text-slate-300 leading-relaxed font-light">
                     Locate student youth centres and study spaces across Pune, Mumbai, Delhi, Bengaluru, and beyond.

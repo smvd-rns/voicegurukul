@@ -12,9 +12,12 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
 import { EducationEntry, WorkExperienceEntry, LanguageEntry, SkillEntry, ServiceEntry } from '@/types';
 import { SPIRITUAL_MASTERS } from '@/lib/utils/spiritual-masters';
+import { useSystemConfigs } from '@/hooks/useSystemConfigs';
 
 export default function ProfilePage() {
   const { user, userData, loading: authLoading, refreshUserData } = useAuth();
+  const { isEnabled: isConfigEnabled } = useSystemConfigs();
+  const isProfileLockActive = isConfigEnabled('profile_completion_15_day_lock');
   const [loading, setLoading] = useState(false);
   const [counselors, setCounselors] = useState<Array<{ id: string; name: string; email: string; user_id?: string; current_temple?: string; parent_temple?: string }>>([]);
   const [allCounselors, setAllCounselors] = useState<Array<{ id: string; name: string; email: string; user_id?: string; current_temple?: string; parent_temple?: string }>>([]);
@@ -788,67 +791,63 @@ export default function ProfilePage() {
       return;
     }
 
-    // Check if profile completion is mandatory (account > 7 days old)
-    const isMandatory = () => {
-      if (!userData?.createdAt) return false;
+    if (formData.initiationStatus === 'initiated' && (!formData.initiatedName || !formData.spiritualMasterName)) {
+      setError('Initiated Name and Spiritual Master Name are mandatory for initiated devotees.');
+      return;
+    }
+
+    // Dynamic 15-day profile completion lock (Enforced only when Super Admin enables the feature switch)
+    if (isProfileLockActive && userData?.createdAt) {
       const createdAt = new Date(userData.createdAt);
       const now = new Date();
       const diffInDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-      return diffInDays >= 15;
-    };
 
-    const mandatory = isMandatory();
+      if (diffInDays >= 15) {
+        // 1. Profile Photo
+        if (!profileImage && !selectedPhoto) {
+          setError('Profile Photo is mandatory for accounts older than 15 days.');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
 
-    if (mandatory) {
-      // 1. Profile Photo
-      if (!profileImage && !selectedPhoto) {
-        setError('Profile Photo is mandatory for accounts older than 15 days.');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+        // 2. Aadhar Card Photo
+        if (!aadharImage && !selectedAadharPhoto) {
+          setError('Aadhar Card photo upload is mandatory for accounts older than 15 days.');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
 
-      // 2. Aadhar Card Photo
-      if (!aadharImage && !selectedAadharPhoto) {
-        setError('Aadhar Card photo upload is mandatory for accounts older than 15 days.');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+        // 3. Spiritual Information - full section
+        const spiritualMissing = [];
+        if (!formData.initiationStatus) spiritualMissing.push('Initiation Status');
+        if (!formData.ashram) spiritualMissing.push('Ashram');
+        if (!formData.rounds && formData.rounds !== '0') spiritualMissing.push('Rounds');
+        if (!formData.counselor) spiritualMissing.push('Counselor');
 
-      // 3. Spiritual Information - full section
-      const spiritualMissing = [];
-      if (!formData.initiationStatus) spiritualMissing.push('Initiation Status');
-      if (!formData.ashram) spiritualMissing.push('Ashram');
-      if (!formData.rounds && formData.rounds !== '0') spiritualMissing.push('Rounds');
-      if (!formData.counselor) spiritualMissing.push('Counselor');
+        if (spiritualMissing.length > 0) {
+          setError(`Please fill all Spiritual Information (mandatory for accounts older than 15 days): ${spiritualMissing.join(', ')}`);
+          return;
+        }
 
-      if (spiritualMissing.length > 0) {
-        setError(`Please fill all Spiritual Information (mandatory for accounts older than 15 days): ${spiritualMissing.join(', ')}`);
-        return;
-      }
+        // 4. Camps completed (at least some)
+        const campFields = [
+          'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
+          'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
+          'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
+        ];
+        const hasAnyCamp = campFields.some(field => (formData as any)[field]);
+        if (!hasAnyCamp) {
+          setError('At least one Completed Camp must be selected.');
+          return;
+        }
 
-      if (formData.initiationStatus === 'initiated' && (!formData.initiatedName || !formData.spiritualMasterName)) {
-        setError('Initiated Name and Spiritual Master Name are mandatory for initiated devotees.');
-        return;
-      }
-
-      // 4. Camps completed (at least some)
-      const campFields = [
-        'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
-        'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
-        'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
-      ];
-      const hasAnyCamp = campFields.some(field => (formData as any)[field]);
-      if (!hasAnyCamp) {
-        setError('At least one Completed Camp must be selected.');
-        return;
-      }
-
-      // 5. SP Book study (at least some)
-      const spBookFields = Object.keys(formData).filter(key => key.startsWith('spbook'));
-      const hasAnyBook = spBookFields.some(field => (formData as any)[field]);
-      if (!hasAnyBook) {
-        setError('At least one SP Book study entry must be selected.');
-        return;
+        // 5. SP Book study (at least some)
+        const spBookFields = Object.keys(formData).filter(key => key.startsWith('spbook'));
+        const hasAnyBook = spBookFields.some(field => (formData as any)[field]);
+        if (!hasAnyBook) {
+          setError('At least one SP Book study entry must be selected.');
+          return;
+        }
       }
     }
 
@@ -1671,7 +1670,7 @@ export default function ProfilePage() {
               </h2>
             </div>
 
-            {userData?.createdAt && (new Date().getTime() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24) >= 15 && (
+            {isProfileLockActive && userData?.createdAt && (new Date().getTime() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24) >= 15 && (
               (() => {
                 const campFields = [
                   'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
@@ -1698,13 +1697,14 @@ export default function ProfilePage() {
                       <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800">
                         <span className="font-bold">Mandatory Profile Update:</span> Your account is more than 15 days old and some required information is missing. 
-                        Profile Photo, Aadhar Card, Spiritual Info, and at least one Camp/Book completion are now required.
+                        Profile Photo, Aadhar Card, Spiritual Info, and at least one Camp/Book completion are currently required by platform policy.
                       </p>
                     </div>
                   </div>
                 );
               })()
             )}
+
 
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 mb-4 sm:mb-6">

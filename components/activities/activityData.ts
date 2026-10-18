@@ -26,7 +26,7 @@ export const ACTIVITIES_DATA: ActivitySectionItem[] = [
     badge: 'Flagship Youth Modules',
     summary: 'Empowering engineering & university scholars across IITs, NITs, and top institutes with vital life-skills.',
     description:
-      'Conducted over two decades in 100+ prestigious colleges across India. Our interactive modules address root behavioral challenges—transforming stress into calm clarity, lethargy into proactive discipline, and negative tendencies into purposeful living.',
+      'Conducted over two decades in 120+ prestigious colleges across India. Our interactive modules address root behavioral challenges—transforming stress into calm clarity, lethargy into proactive discipline, and negative tendencies into purposeful living.',
     keyTopics: [
       'Drug Abuse & Vice Prevention',
       'The Science & Power of Habits',

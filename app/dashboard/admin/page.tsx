@@ -1,7 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, FileText, Activity, Shield, Settings, UserPlus, Database, AlertCircle, Briefcase, BarChart, UserCircle, Building2, MapPin, UserCheck, CheckCircle2, Upload, Radio, MessageSquare, ChevronRight, CreditCard, GraduationCap } from 'lucide-react';
+import {
+    Users, FileText, Activity, Shield, Settings, UserPlus, Database,
+    AlertCircle, Briefcase, BarChart, UserCircle, Building2, MapPin,
+    UserCheck, CheckCircle2, Upload, Radio, MessageSquare, ChevronRight,
+    CreditCard, GraduationCap, Sliders
+} from 'lucide-react';
 
 export default function AdminDashboardPage() {
     const adminSections = [
@@ -10,6 +15,14 @@ export default function AdminDashboardPage() {
             description: 'Manage all users and roles',
             icon: Users,
             href: '/dashboard/admin/users',
+            color: 'text-amber-600',
+            bgColor: 'bg-amber-100',
+        },
+        {
+            title: 'System Controls',
+            description: 'Feature toggles, locks & platform policies',
+            icon: Sliders,
+            href: '/dashboard/admin/system-controls',
             color: 'text-amber-600',
             bgColor: 'bg-amber-100',
         },
@@ -40,7 +53,7 @@ export default function AdminDashboardPage() {
         {
             title: 'Temples',
             description: 'Manage temples information',
-            icon: Building2, // Reusing Building2 for Temples as well
+            icon: Building2,
             href: '/dashboard/temples',
             color: 'text-rose-600',
             bgColor: 'bg-rose-100',
@@ -136,7 +149,7 @@ export default function AdminDashboardPage() {
         {
             title: 'Organization View',
             description: 'Hierarchy & Stats Overview',
-            icon: BarChart, // Or Activity/LayoutGrid
+            icon: BarChart,
             href: '/dashboard/admin/organization',
             color: 'text-amber-600',
             bgColor: 'bg-amber-100',
@@ -192,13 +205,13 @@ export default function AdminDashboardPage() {
     ];
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8 pb-12">
             <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
                     Admin Dashboard
                 </h1>
                 <p className="text-gray-600 mt-2">
-                    Manage system configuration, approvals, and data.
+                    Manage system configuration, approvals, feature controls, and platform data.
                 </p>
             </div>
 

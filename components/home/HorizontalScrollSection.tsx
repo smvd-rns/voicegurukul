@@ -98,13 +98,13 @@ export default function HorizontalScrollSection() {
     {
       id: '04',
       sector: 'SECTOR-DELTA // NATIONWIDE MESH',
-      title: '100+ Centres Across India',
-      tagline: 'A thriving student community spanning over 100+ university campuses.',
+      title: '120+ Centres Across India',
+      tagline: 'A thriving student community spanning over 120+ university campuses.',
       depthZ: '-80.5m',
       accent: '#c1ff00',
       borderGlow: 'hover:border-[#c1ff00]/60 hover:shadow-[0_0_50px_rgba(193,255,0,0.25)]',
       stats: [
-        { label: 'Student Ashrams', val: '100+' },
+        { label: 'Student Ashrams', val: '120+' },
         { label: 'Indian Cities', val: '50+' },
         { label: 'Annual Retreats', val: '120+' },
       ],

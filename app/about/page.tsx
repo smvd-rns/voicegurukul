@@ -23,103 +23,226 @@ import {
   Flame,
   CheckCircle2,
   Navigation,
-  Globe2
+  Globe2,
+  RotateCw
 } from 'lucide-react';
+
+export interface VoiceGoalItem {
+  id: number;
+  sanskritNum: string;
+  pillarSanskrit: string;
+  pillarEng: string;
+  title: string;
+  fullContent: string;
+}
+
+const ACTUAL_VOICE_GOALS: VoiceGoalItem[] = [
+  {
+    id: 1,
+    sanskritNum: '१',
+    pillarSanskrit: 'विज्ञान एवं अध्यात्म',
+    pillarEng: 'Science & Spirituality',
+    title: 'Training & Education in Science and Spirituality',
+    fullContent:
+      'Training and education in Science and Spirituality as well as Leadership and Self-excellence skills by application of timeless wisdom in modern scenario.',
+  },
+  {
+    id: 2,
+    sanskritNum: '२',
+    pillarSanskrit: 'सद्गुण एवं चरित्र',
+    pillarEng: 'Noble Character',
+    title: 'Creating Role Model Gentlemanly Youths',
+    fullContent:
+      'Creating Role model perfect gentlemanly youths with noble qualities, Character, Competence and Spiritual wisdom.',
+  },
+  {
+    id: 3,
+    sanskritNum: '३',
+    pillarSanskrit: 'संयम एवं शुद्धि',
+    pillarEng: 'Self-Discipline & Purity',
+    title: 'Saving Youth from Self-Destructive Habits',
+    fullContent:
+      'Saving youth from self-destructive habits that harm body and mind through positive progressive engagements.',
+  },
+  {
+    id: 4,
+    sanskritNum: '४',
+    pillarSanskrit: 'संस्कृति एवं कला',
+    pillarEng: 'Vedic Culture & Arts',
+    title: 'Arts, Culture, Music & Media Outreach',
+    fullContent:
+      'Use Arts, Culture, Music and Media to distribute the message of Vedic Wisdom.',
+  },
+  {
+    id: 5,
+    sanskritNum: '५',
+    pillarSanskrit: 'सेवा एवं समाज',
+    pillarEng: 'Harmonious Society',
+    title: 'Engaging Youth Talents for a Harmonious Society',
+    fullContent:
+      'Engage youth talents for creating a happy, holistic and harmonious divine society.',
+  },
+  {
+    id: 6,
+    sanskritNum: '६',
+    pillarSanskrit: 'शास्त्र एवं साहित्य',
+    pillarEng: 'Sacred Literature',
+    title: 'Subsidized Spiritual Literature for Youths',
+    fullContent:
+      'Reach subsidized spiritual literature for youths to rekindle wisdom and revive love.',
+  },
+  {
+    id: 7,
+    sanskritNum: '७',
+    pillarSanskrit: 'सौहार्द एवं समुपदेशन',
+    pillarEng: 'Caring Communities',
+    title: 'Establishing Youth Communities for Caring & Counseling',
+    fullContent:
+      'Establishing youth communities for caring and counseling youth in holistic life.',
+  },
+  {
+    id: 8,
+    sanskritNum: '८',
+    pillarSanskrit: 'संतुलन एवं नेतृत्व',
+    pillarEng: 'Life Balance & Leadership',
+    title: 'Balancing Personal and Professional Life',
+    fullContent:
+      'Balancing Personal and Professional Life by self-managing long-enduring leadership.',
+  },
+];
+
+function GoalMilestoneCard({ goal, idx }: { goal: VoiceGoalItem; idx: number }) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const isLeft = idx % 2 === 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ duration: 0.45, ease: 'easeOut' }}
+      className={`flex items-center justify-center ${
+        isLeft ? 'md:justify-start md:pl-4' : 'md:justify-end md:pr-4'
+      }`}
+    >
+      <div
+        className={`w-full max-w-md sm:max-w-lg ${
+          isLeft ? 'md:mr-auto' : 'md:ml-auto'
+        } mx-auto md:mx-0 group cursor-pointer [perspective:1000px] select-none`}
+        onPointerEnter={(e) => {
+          if (e.pointerType === 'mouse') {
+            setIsFlipped(true);
+          }
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType === 'mouse') {
+            setIsFlipped(false);
+          }
+        }}
+        onClick={() => setIsFlipped((prev) => !prev)}
+        style={{
+          WebkitFontSmoothing: 'antialiased',
+          textRendering: 'optimizeLegibility',
+        }}
+      >
+        {/* Independent Synchronized 3D Card Faces (Eliminates Nested 3D Blurring) */}
+        <div className="relative w-full h-[104px] sm:h-[114px]">
+          
+          {/* FRONT FACE: Rotates from 0deg to 180deg (Smooth 180° Turn) */}
+          <div
+            className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-r from-white via-[#fffdfa] to-white border border-amber-300/80 p-1 shadow-[0_6px_20px_rgba(180,83,9,0.08)] group-hover:border-amber-500 group-hover:shadow-[0_10px_28px_rgba(180,83,9,0.18)] transition-transform duration-[900ms] [transition-timing-function:cubic-bezier(0.35,0,0.25,1)]"
+            style={{
+              WebkitBackfaceVisibility: 'hidden',
+              backfaceVisibility: 'hidden',
+              transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              WebkitFontSmoothing: 'antialiased',
+              textRendering: 'optimizeLegibility',
+              zIndex: isFlipped ? 0 : 2,
+            }}
+          >
+            <div className="w-full h-full rounded-xl border border-amber-200/70 group-hover:border-amber-400/60 p-2.5 sm:p-3.5 flex items-center justify-between gap-2.5 sm:gap-4 transition-colors bg-white/80">
+              
+              {/* Sacred Saffron-Gold Temple Seal */}
+              <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-xl bg-gradient-to-b from-[#d97706] to-[#b45309] border border-amber-300 text-white flex flex-col items-center justify-center shrink-0 shadow-md group-hover:from-amber-600 group-hover:to-orange-700 transition-colors">
+                <span className="text-base sm:text-lg font-black leading-none text-amber-50 font-serif">
+                  {goal.sanskritNum}
+                </span>
+                <span className="text-[8.5px] sm:text-[9px] font-mono tracking-widest text-amber-200 font-bold mt-0.5 uppercase">
+                  GOAL {goal.id}
+                </span>
+              </div>
+
+              {/* Title & Vedic Pillar Inscription */}
+              <div className="flex-1 min-w-0 pr-0.5">
+                <div className="flex items-center flex-wrap gap-x-1 gap-y-0.5 mb-1 text-[11px] sm:text-[11.5px] text-amber-900 font-bold tracking-wide">
+                  <span>॥</span>
+                  <span>{goal.pillarSanskrit}</span>
+                  <span className="text-amber-500">•</span>
+                  <span className="text-slate-600 font-sans text-[10px] sm:text-[10.5px] font-semibold">{goal.pillarEng}</span>
+                  <span>॥</span>
+                </div>
+                <h3 className="text-[13.5px] sm:text-base font-bold text-slate-900 leading-snug group-hover:text-amber-800 transition-colors line-clamp-2 tracking-tight">
+                  {goal.title}
+                </h3>
+              </div>
+
+              {/* Mobile Tap Cue */}
+              <div className="flex flex-col items-center justify-center shrink-0 text-amber-700/70 sm:hidden pl-0.5">
+                <RotateCw className="w-3.5 h-3.5 text-amber-600/80" />
+                <span className="text-[7.5px] font-sans font-bold tracking-tighter uppercase mt-0.5">Tap</span>
+              </div>
+
+            </div>
+          </div>
+
+          {/* BACK FACE: Rotates from -180deg to 0deg (Lands flat at 0deg for 100% Crisp Native Text) */}
+          <div
+            className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-r from-[#fffcf2] via-[#fff9e6] to-[#fffcf2] border border-amber-400/90 p-1 shadow-[0_10px_26px_rgba(180,83,9,0.14)] transition-transform duration-[900ms] [transition-timing-function:cubic-bezier(0.35,0,0.25,1)]"
+            style={{
+              WebkitBackfaceVisibility: 'hidden',
+              backfaceVisibility: 'hidden',
+              transform: isFlipped ? 'rotateY(0deg)' : 'rotateY(-180deg)',
+              WebkitFontSmoothing: 'antialiased',
+              textRendering: 'optimizeLegibility',
+              zIndex: isFlipped ? 2 : 0,
+            }}
+          >
+            <div className="w-full h-full rounded-xl border border-amber-300/80 p-2.5 sm:p-3.5 flex flex-col justify-center text-slate-900 bg-[#fffdf5]/90">
+              
+              <div className="flex items-center justify-between mb-1.5 text-[10px] sm:text-[11px] text-amber-900 font-bold tracking-wider uppercase">
+                <span>॥ सूत्र {goal.sanskritNum} • Principle {goal.id} ॥</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-emerald-700 text-[10px] sm:text-[11px] font-sans flex items-center gap-1 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Vedic Goal
+                  </span>
+                  <span className="text-[8px] font-sans text-amber-800 font-semibold sm:hidden">
+                    (Tap)
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[12.5px] sm:text-[13.5px] font-sans text-slate-900 leading-relaxed font-semibold">
+                &ldquo;{goal.fullContent}&rdquo;
+              </p>
+
+            </div>
+          </div>
+        </div>
+
+        {/* Subtle Sacred Knot Connector */}
+        <div className="flex items-center justify-center mt-1.5 space-x-1 opacity-70 group-hover:opacity-100 transition-opacity">
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-500/70" />
+          <div className="w-6 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-500/70" />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function AboutPage() {
   const [activeGoal, setActiveGoal] = useState<number | null>(null);
-
-  // The exact 8 Goals of VOICE transcribed verbatim
-  const voiceGoals = [
-    {
-      id: 1,
-      title: 'Soft Skills Training',
-      desc: 'Training in soft skills such as Stress Management, Public-Speaking, Leadership and management etc by application of timeless wisdom in modern day scenario.',
-      tag: 'Soft Skills',
-      icon: '🧠',
-      position: 'top-left', // layout coordinate anchor
-      topOffset: '0%',
-      leftPercent: '12%',
-      woodAngle: '-2deg',
-    },
-    {
-      id: 2,
-      title: 'Bringing Out Potential',
-      desc: 'Bringing out the potential in the individual like Concentration, Motivation, Self-confidence etc..',
-      tag: 'Inner Power',
-      icon: '⚡',
-      position: 'top-right',
-      topOffset: '12%',
-      leftPercent: '60%',
-      woodAngle: '2deg',
-    },
-    {
-      id: 3,
-      title: 'Character With Competence',
-      desc: 'Blending Character with Competence in bringing about long enduring success.',
-      tag: 'Integrity',
-      icon: '🏛️',
-      position: 'mid-left',
-      topOffset: '25%',
-      leftPercent: '8%',
-      woodAngle: '1deg',
-    },
-    {
-      id: 4,
-      title: 'Personal vs Professional Balance',
-      desc: 'Balancing Personal vs Professional life and Work Vs. Entertainment.',
-      tag: 'Life Balance',
-      icon: '⚖️',
-      position: 'mid-right',
-      topOffset: '38%',
-      leftPercent: '58%',
-      woodAngle: '-2deg',
-    },
-    {
-      id: 5,
-      title: 'Substance-Free Campuses',
-      desc: 'Saving youth from self-destructive habits and addictions that harm body and mind.',
-      tag: 'De-Addiction',
-      icon: '🌿',
-      position: 'center-left',
-      topOffset: '50%',
-      leftPercent: '16%',
-      woodAngle: '-1deg',
-    },
-    {
-      id: 6,
-      title: 'Sensitivity & Self-Awareness',
-      desc: 'Dealing with sensitivity and self awareness, in thought, word and action.',
-      tag: 'Empathy',
-      icon: '🤝',
-      position: 'center-right',
-      topOffset: '63%',
-      leftPercent: '62%',
-      woodAngle: '2deg',
-    },
-    {
-      id: 7,
-      title: 'International Faculty Interaction',
-      desc: 'Offering interaction with international faculty for broadening perspectives.',
-      tag: 'Global Mentors',
-      icon: '🌐',
-      position: 'bottom-left',
-      topOffset: '75%',
-      leftPercent: '10%',
-      woodAngle: '-2deg',
-    },
-    {
-      id: 8,
-      title: 'Nature Outings & Treks',
-      desc: 'Organizing outings for experiencing closer touch with nature and marvelous gifts of Supreme Divinity.',
-      tag: 'Divinity in Nature',
-      icon: '🏔️',
-      position: 'bottom-right',
-      topOffset: '87%',
-      leftPercent: '56%',
-      woodAngle: '1deg',
-    }
-  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fafcff] text-slate-800 font-sans selection:bg-amber-100 selection:text-amber-900 overflow-x-clip relative">
@@ -476,192 +599,239 @@ export default function AboutPage() {
         </section>
 
         {/* =========================================================================
-            SECTION 4: GOALS OF VOICE CLUB — THE MAGICAL WINDING FOREST PATHWAY
-            (Inspired by User's Reference Painting: Serpentine Trail with 8 Wooden Signs)
+            SECTION 4: GOALS OF VOICE CLUB — SACRED LUMINOUS JOURNEY
+            (Sleek Dark Glassmorphism, Dedicated Icons, and Luminous Animated Trail)
             ========================================================================= */}
-        <section id="goals" className="py-24 lg:py-36 relative overflow-hidden bg-gradient-to-b from-[#1b2f23] via-[#213a2b] via-[#1c3326] to-[#122218] text-white">
+        {/* =========================================================================
+            SECTION 4: GOALS OF VOICE CLUB — SACRED VEDIC PILLARS
+            (Authentic Vedic Sandalwood Tablets, Golden Sutra Thread, Simple & Attractive)
+            ========================================================================= */}
+        <section id="goals" className="py-14 sm:py-20 lg:py-24 relative overflow-hidden bg-gradient-to-b from-[#fdfbf7] via-[#f7f1e1] via-[#faf5e7] to-[#f3ebd9] text-slate-900 border-y border-amber-200/80">
 
-          {/* Ambient Cosmic Forest Twilight Lights & Floating Fireflies */}
-          <div className="absolute top-0 right-10 w-[700px] h-[700px] bg-gradient-to-br from-amber-400/15 via-emerald-400/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute bottom-10 left-10 w-[700px] h-[700px] bg-gradient-to-tr from-sky-400/15 via-teal-400/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+          {/* Delicate Sacred Golden Ambient Light Halos */}
+          <div className="absolute top-0 right-10 w-[600px] h-[600px] bg-gradient-to-br from-amber-200/40 via-orange-100/30 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-10 left-10 w-[600px] h-[600px] bg-gradient-to-tr from-amber-300/30 via-yellow-100/30 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-          {/* Glowing Fairy Light Firefly Specks */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-40">
-            <div className="absolute top-24 left-1/4 w-3 h-3 rounded-full bg-amber-300 blur-[1px] animate-pulse"></div>
-            <div className="absolute top-1/3 right-1/4 w-3.5 h-3.5 rounded-full bg-yellow-200 blur-[1px] animate-ping"></div>
-            <div className="absolute top-2/3 left-1/3 w-2.5 h-2.5 rounded-full bg-emerald-300 blur-[1px] animate-pulse delay-500"></div>
-            <div className="absolute bottom-32 right-1/3 w-3 h-3 rounded-full bg-amber-400 blur-[1px] animate-ping delay-700"></div>
+          {/* Traditional Temple Decorative Subtle Rings */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-10">
+            <div className="absolute top-10 left-10 w-44 h-44 rounded-full border-2 border-dashed border-amber-700" />
+            <div className="absolute bottom-10 right-10 w-56 h-56 rounded-full border-2 border-dashed border-amber-700" />
           </div>
 
-          <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10 space-y-16">
+          <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10 space-y-8 sm:space-y-10">
 
-            {/* Header: The Journey Pathway */}
-            <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
+            {/* Header: Goals of VOICE Club in Dignified Vedic Typography */}
+            <div className="text-center max-w-3xl mx-auto space-y-2 sm:space-y-2.5 px-2">
+              <div className="inline-flex items-center space-x-2 px-3 sm:px-4 py-1 rounded-full bg-amber-100/90 border border-amber-300/80 text-amber-900 text-xs sm:text-[13px] font-serif font-bold tracking-widest uppercase shadow-sm">
+                <span>॥</span>
+                <span>श्रीः • 8 Sacred Pillars</span>
+                <span>॥</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl lg:text-5xl font-serif font-black text-slate-900 tracking-tight">
                 Goals of VOICE Club
               </h2>
+              <p className="text-xs sm:text-sm font-medium text-amber-950 tracking-wide max-w-xl mx-auto leading-relaxed">
+                Rekindling Wisdom • Reviving Love • 8 Foundational Pillars of VOICE Gurukul
+              </p>
             </div>
 
             {/* =====================================================================
-                THE WINDING SERPENTINE LANDSCAPE CANVAS
-                (Snaking curvy trail with wooden signboards placed left & right!)
+                THE GOLDEN SUTRA THREAD & SACRED VEDIC MILESTONES
                 ===================================================================== */}
-            <div className="relative max-w-5xl mx-auto py-12">
+            <div className="relative max-w-5xl mx-auto py-2 sm:py-4 isolate">
 
-              {/* SVG Winding Curved Road Pathway Background */}
+              {/* SVG Sacred Golden Sutra Thread Background with Flowing Light Animation */}
               <div className="absolute inset-0 pointer-events-none flex justify-center">
+                {/* 1. DESKTOP VIEW (md+): Winding S-curve gracefully weaving between alternating left & right cards */}
                 <svg
-                  className="w-full h-full max-w-3xl stroke-[#6b4724] fill-none"
-                  viewBox="0 0 800 2400"
+                  className="hidden md:block w-full h-full max-w-3xl fill-none"
+                  viewBox="0 0 800 1350"
                   preserveAspectRatio="none"
                 >
-                  {/* Outer dirt path glow / border */}
+                  <defs>
+                    <filter id="golden-glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="5" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  {/* Subtle warm thread ambient guide */}
                   <path
                     d="M 400 0 
-                       C 150 150, 100 300, 250 450 
-                       C 400 600, 700 650, 600 850 
-                       C 500 1050, 120 1100, 250 1350 
-                       C 380 1550, 720 1600, 600 1850 
-                       C 480 2050, 200 2150, 400 2400"
-                    strokeWidth="80"
+                       C 160 85, 120 170, 250 255 
+                       C 380 340, 680 370, 580 480 
+                       C 480 590, 140 620, 250 760 
+                       C 360 870, 700 900, 580 1040 
+                       C 460 1150, 220 1210, 400 1350"
+                    stroke="#fde68a"
+                    strokeWidth="8"
                     strokeLinecap="round"
-                    className="opacity-25 stroke-amber-900"
+                    className="opacity-40"
                   />
-                  {/* Cobblestone / Earth Trail Main Ribbon */}
+
+                  {/* Base Golden Sutra thread */}
                   <path
                     d="M 400 0 
-                       C 150 150, 100 300, 250 450 
-                       C 400 600, 700 650, 600 850 
-                       C 500 1050, 120 1100, 250 1350 
-                       C 380 1550, 720 1600, 600 1850 
-                       C 480 2050, 200 2150, 400 2400"
-                    strokeWidth="48"
+                       C 160 85, 120 170, 250 255 
+                       C 380 340, 680 370, 580 480 
+                       C 480 590, 140 620, 250 760 
+                       C 360 870, 700 900, 580 1040 
+                       C 460 1150, 220 1210, 400 1350"
+                    stroke="#b45309"
+                    strokeWidth="2"
                     strokeLinecap="round"
-                    className="opacity-80 stroke-[#82542a]"
+                    className="opacity-30"
                   />
-                  {/* Glowing Trail Center Guide Line */}
+
+                  {/* Dotted Light Stream Gently Flowing from Top to Down continuously */}
                   <path
                     d="M 400 0 
-                       C 150 150, 100 300, 250 450 
-                       C 400 600, 700 650, 600 850 
-                       C 500 1050, 120 1100, 250 1350 
-                       C 380 1550, 720 1600, 600 1850 
-                       C 480 2050, 200 2150, 400 2400"
-                    strokeWidth="6"
-                    strokeDasharray="14 10"
-                    className="opacity-70 stroke-amber-300"
+                       C 160 85, 120 170, 250 255 
+                       C 380 340, 680 370, 580 480 
+                       C 480 590, 140 620, 250 760 
+                       C 360 870, 700 900, 580 1040 
+                       C 460 1150, 220 1210, 400 1350"
+                    stroke="#d97706"
+                    strokeWidth="3"
+                    strokeDasharray="8 8"
+                    strokeLinecap="round"
+                    className="opacity-80"
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      from="160"
+                      to="0"
+                      dur="5s"
+                      repeatCount="indefinite"
+                    />
+                  </path>
+
+                  {/* Continuous Flowing Golden Light Pulse 1 */}
+                  <circle r="6" fill="#f59e0b" filter="url(#golden-glow)">
+                    <animateMotion
+                      path="M 400 0 C 160 85, 120 170, 250 255 C 380 340, 680 370, 580 480 C 480 590, 140 620, 250 760 C 360 870, 700 900, 580 1040 C 460 1150, 220 1210, 400 1350"
+                      dur="8s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+
+                  {/* Continuous Flowing Golden Light Pulse 2 (Staggered trailing pulse) */}
+                  <circle r="4.5" fill="#fef08a" opacity="0.9">
+                    <animateMotion
+                      path="M 400 0 C 160 85, 120 170, 250 255 C 380 340, 680 370, 580 480 C 480 590, 140 620, 250 760 C 360 870, 700 900, 580 1040 C 460 1150, 220 1210, 400 1350"
+                      dur="8s"
+                      begin="4s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+                </svg>
+
+                {/* 2. MOBILE VIEW (<md): Dedicated Vertical Golden Sutra Spine aligned right with the cards & center knots */}
+                <svg
+                  className="block md:hidden w-full h-full fill-none"
+                  viewBox="0 0 100 1000"
+                  preserveAspectRatio="none"
+                >
+                  <defs>
+                    <filter id="golden-glow-mob" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  {/* Ambient Glow Spine */}
+                  <line
+                    x1="50"
+                    y1="0"
+                    x2="50"
+                    y2="1000"
+                    stroke="#fde68a"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    className="opacity-45"
                   />
+
+                  {/* Base Golden Sutra Spine Line */}
+                  <line
+                    x1="50"
+                    y1="0"
+                    x2="50"
+                    y2="1000"
+                    stroke="#b45309"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    className="opacity-35"
+                  />
+
+                  {/* Continuous Downward Flowing Dotted Light Stream */}
+                  <line
+                    x1="50"
+                    y1="0"
+                    x2="50"
+                    y2="1000"
+                    stroke="#d97706"
+                    strokeWidth="2.5"
+                    strokeDasharray="6 6"
+                    strokeLinecap="round"
+                    className="opacity-80"
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      from="48"
+                      to="0"
+                      dur="3.2s"
+                      repeatCount="indefinite"
+                    />
+                  </line>
+
+                  {/* Mobile Continuous Flowing Golden Light Orb 1 */}
+                  <circle cx="50" r="4.5" fill="#f59e0b" filter="url(#golden-glow-mob)">
+                    <animate
+                      attributeName="cy"
+                      from="0"
+                      to="1000"
+                      dur="6.5s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+
+                  {/* Mobile Continuous Flowing Golden Light Orb 2 (Trailing) */}
+                  <circle cx="50" r="3" fill="#fef08a" opacity="0.95">
+                    <animate
+                      attributeName="cy"
+                      from="0"
+                      to="1000"
+                      dur="6.5s"
+                      begin="3.25s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
                 </svg>
               </div>
 
-              {/* Start Signboard Banner at the Top */}
-              <div className="flex justify-center mb-16 relative z-20">
-                <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  className="px-8 py-3 rounded-2xl bg-gradient-to-b from-[#6b3a1a] to-[#48240f] border-4 border-[#8f5228] shadow-2xl text-amber-200 font-black tracking-widest uppercase text-sm sm:text-base flex items-center space-x-3 rotate-[-1deg]"
-                >
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <span>START THE SACRED PATH!</span>
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                </motion.div>
+              {/* THE 8 DISTINCT SACRED VEDIC MILESTONES (Optimized Spacing for Mobile & Desktop) */}
+              <div className="space-y-4 sm:space-y-6 md:space-y-8 relative z-20 pt-2 px-1 sm:px-0">
+                {ACTUAL_VOICE_GOALS.map((goal, idx) => (
+                  <GoalMilestoneCard key={goal.id} goal={goal} idx={idx} />
+                ))}
               </div>
 
-              {/* THE 8 DISTINCT WOODEN MILESTONE SIGNS ALONG THE WINDING CURVES */}
-              <div className="space-y-24 sm:space-y-36 relative z-20">
-                {voiceGoals.map((goal, idx) => {
-                  const isLeft = idx % 2 === 0;
-
-                  return (
-                    <div
-                      key={goal.id}
-                      className={`flex items-center ${isLeft ? 'justify-start md:pl-6' : 'justify-end md:pr-6'
-                        }`}
-                    >
-                      {/* Floating Anti-Gravity Wooden Signboard Card */}
-                      <motion.div
-                        initial={{
-                          opacity: 0,
-                          x: isLeft ? -70 : 70,
-                          y: 30,
-                          rotate: isLeft ? -4 : 4
-                        }}
-                        whileInView={{
-                          opacity: 1,
-                          x: 0,
-                          y: 0,
-                          rotate: goal.woodAngle === '1deg' ? 1 : goal.woodAngle === '-1deg' ? -1 : goal.woodAngle === '2deg' ? 2 : -2
-                        }}
-                        viewport={{ once: false, margin: "-60px" }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        whileHover={{ scale: 1.04, y: -6, rotate: 0 }}
-                        className={`w-full max-w-md sm:max-w-lg cursor-pointer ${isLeft ? 'mr-auto' : 'ml-auto'
-                          }`}
-                        onClick={() => setActiveGoal(activeGoal === goal.id ? null : goal.id)}
-                      >
-                        {/* Hanging Lamp / Glowing Fairy Light on the Post */}
-                        <div className="flex items-center justify-between px-6 -mb-2 relative z-30">
-                          <div className="flex items-center space-x-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-amber-400/40 text-[11px] font-black uppercase tracking-widest text-amber-300 shadow-md">
-                            <span>{goal.icon}</span>
-                            <span>GOAL {goal.id} • {goal.tag}</span>
-                          </div>
-                          <div className="w-4 h-4 rounded-full bg-amber-400 shadow-[0_0_15px_#f59e0b] animate-ping"></div>
-                        </div>
-
-                        {/* RUSTIC CARVED WOODEN SIGNBOARD (Matching User's Reference Painting) */}
-                        <div className="relative p-7 sm:p-8 rounded-3xl bg-gradient-to-b from-[#6b3a1a] via-[#522910] to-[#3a1a09] border-[5px] border-[#91552a] shadow-[0_20px_45px_rgba(0,0,0,0.85)] text-white overflow-hidden group">
-
-                          {/* Authentic Woodgrain Plank Lines */}
-                          <div className="absolute inset-0 opacity-20 pointer-events-none bg-[repeating-linear-gradient(45deg,#000,#000_2px,transparent_2px,transparent_10px)]"></div>
-                          <div className="absolute top-0 left-0 right-0 h-2 bg-amber-300/30"></div>
-                          <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/70"></div>
-
-                          {/* Metallic Corner Rivets / Bolts */}
-                          <div className="absolute top-3 left-3 w-3 h-3 rounded-full bg-[#200e05] border border-amber-500/70 shadow-inner"></div>
-                          <div className="absolute top-3 right-3 w-3 h-3 rounded-full bg-[#200e05] border border-amber-500/70 shadow-inner"></div>
-                          <div className="absolute bottom-3 left-3 w-3 h-3 rounded-full bg-[#200e05] border border-amber-500/70 shadow-inner"></div>
-                          <div className="absolute bottom-3 right-3 w-3 h-3 rounded-full bg-[#200e05] border border-amber-500/70 shadow-inner"></div>
-
-                          {/* Number Medallion pinned on top header */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-lg border-2 border-[#fff]/40">
-                              {goal.id}
-                            </div>
-                            <span className="text-[11px] font-mono text-amber-300 font-bold tracking-wider">
-                              MILESTONE #{goal.id}
-                            </span>
-                          </div>
-
-                          {/* Carved Wood Sign Title */}
-                          <h3 className="text-xl sm:text-2xl font-black text-amber-100 drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)] group-hover:text-amber-300 transition-colors leading-snug">
-                            {goal.title}
-                          </h3>
-
-                          {/* Carved Wood Description */}
-                          <p className="text-sm sm:text-base text-amber-100/90 leading-relaxed font-medium mt-2.5 drop-shadow">
-                            {goal.desc}
-                          </p>
-                        </div>
-
-                        {/* Wooden Stake / Pillar Post in Ground */}
-                        <div className="w-8 h-10 bg-gradient-to-r from-[#2c1306] via-[#4d250d] to-[#1f0c03] mx-auto shadow-2xl border-x border-[#6e3917]"></div>
-                        {/* Grass & Forest Floor Shadow */}
-                        <div className="w-24 h-4 bg-emerald-950/90 rounded-full mx-auto blur-[2px]"></div>
-
-                      </motion.div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Bottom Journey Complete / Summit Signboard */}
-              <div className="flex flex-col items-center justify-center mt-20 text-center relative z-20 space-y-4">
-                <div className="px-8 py-3.5 rounded-2xl bg-gradient-to-b from-[#6b3a1a] to-[#48240f] border-4 border-amber-400 shadow-2xl text-amber-300 font-black tracking-widest uppercase text-base sm:text-lg">
-                  🏆 JOURNEY COMPLETE: EMPOWERED YOUTH LEADER!
+              {/* Bottom Sacred Completion Signboard */}
+              <div className="flex flex-col items-center justify-center mt-12 text-center relative z-20 space-y-2">
+                <div className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-50 via-white to-amber-50 border border-amber-300 shadow-sm text-amber-900 font-serif font-bold tracking-widest text-xs sm:text-sm flex items-center space-x-2">
+                  <span>॥</span>
+                  <span>पूर्णम् • 8 Sacred Pillars of VOICE Gurukul</span>
+                  <span>॥</span>
                 </div>
-                <p className="text-xs sm:text-sm text-emerald-200 tracking-wider">
-                  Keep Scrolling to Discover Your Journey • Connecting 100+ Centres Worldwide
+                <p className="text-xs text-amber-800/80 font-serif tracking-wider">
+                  Connecting 120+ Centres Worldwide
                 </p>
               </div>
 

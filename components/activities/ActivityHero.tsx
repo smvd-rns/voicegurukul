@@ -19,7 +19,7 @@ const PILLARS_DATA = [
   {
     id: '01',
     tabLabel: 'Since 1996',
-    tag: 'Since 1996 • 100+ Colleges',
+    tag: 'Since 1996 • 120+ Colleges',
     title: 'Two Decades of Youth Social Welfare',
     desc: 'Voluntary youth forum conducting self-help and motivational seminars for university youth across India.',
     color: 'from-amber-500 to-orange-600',
@@ -28,7 +28,7 @@ const PILLARS_DATA = [
     icon: Award,
     highlights: [
       'Over 5,000 motivational seminars conducted nationwide',
-      'Active student communities in 100+ colleges across India',
+      'Active student communities in 120+ colleges across India',
       'Addiction-free, purposeful lifestyle training',
       'Serving IITs, NITs, COEP, and premier engineering hubs',
     ],
@@ -637,7 +637,7 @@ export default function ActivityHero() {
                 <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform shadow-xs">
                   <GraduationCap className="w-4 h-4" />
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight">100+</div>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight">120+</div>
                 <div className="text-[11px] sm:text-xs text-slate-600 font-semibold pt-0.5">Colleges Nationwide</div>
               </div>
 

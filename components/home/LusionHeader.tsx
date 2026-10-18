@@ -99,7 +99,7 @@ export default function LusionHeader({ onOpenDonate }: LusionHeaderProps) {
     { num: '01', title: 'Home', href: '/' },
     { num: '02', title: 'About VOICE', href: '/about' },
     { num: '03', title: 'Activities & Workshops', href: '/programmes' },
-    { num: '04', title: '100+ Centres', href: '/centres' },
+    { num: '04', title: '120+ Centres', href: '/centres' },
     { num: '05', title: 'Student Transformation Stories', href: '/stories' },
     { num: '06', title: 'Partnerships & Collaboration', href: '/collaborate' },
   ];
@@ -249,7 +249,7 @@ export default function LusionHeader({ onOpenDonate }: LusionHeaderProps) {
                 </Link>
                 <span>{"//"}</span>
                 <Link href="/centres" onClick={() => setMenuOpen(false)} className="text-white hover:text-[#c1ff00]">
-                  100+ CENTRES
+                  120+ CENTRES
                 </Link>
               </div>
             </div>

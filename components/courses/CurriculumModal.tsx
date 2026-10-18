@@ -285,7 +285,7 @@ export default function CurriculumModal({
             {/* Modal Footer Actions */}
             <div className="px-6 sm:px-8 py-4 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <div className="text-xs text-slate-600 text-center sm:text-left">
-                Offered offline across 100+ university centres and online on weekends.
+                Offered offline across 120+ university centres and online on weekends.
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">

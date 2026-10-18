@@ -536,7 +536,7 @@ export default function CollaboratePage() {
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 font-display">Join Student Programmes</h3>
                         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                          Enroll in our signature Discover Yourself modules, weekly campus sangas, and offline weekend retreats at our 100+ youth centres.
+                          Enroll in our signature Discover Yourself modules, weekly campus sangas, and offline weekend retreats at our 120+ youth centres.
                         </p>
                       </div>
                     </div>
