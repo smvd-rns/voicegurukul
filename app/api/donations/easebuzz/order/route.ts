@@ -41,27 +41,31 @@ export async function POST(req: Request) {
       try {
         const { data: collectorUser } = await sadhanaDb
           .from('users')
-          .select('parent_center, other_parent_center, parent_temple, other_parent_temple, center, current_center, other_center, current_temple, other_temple')
+          .select('parent_center, other_parent_center, parent_temple, other_parent_temple')
           .eq('id', targetUserId)
           .single();
 
         if (collectorUser) {
-          const resolvedParentCenter = (collectorUser.parent_center && collectorUser.parent_center !== 'None' && collectorUser.parent_center !== 'General')
-            ? (collectorUser.parent_center === 'Other' ? (collectorUser.other_parent_center || collectorUser.other_center || 'Other Center') : collectorUser.parent_center)
-            : (collectorUser.center && collectorUser.center !== 'None' && collectorUser.center !== 'General')
-              ? collectorUser.center
-              : (collectorUser.current_center && collectorUser.current_center !== 'None' && collectorUser.current_center !== 'General')
-                ? (collectorUser.current_center === 'Other' ? (collectorUser.other_center || 'Other Center') : collectorUser.current_center)
-                : null;
+          let resolvedParentCenter = 'None';
+          if (collectorUser.parent_center && collectorUser.parent_center !== 'None' && collectorUser.parent_center !== 'General') {
+            if (collectorUser.parent_center === 'Other') {
+              resolvedParentCenter = collectorUser.other_parent_center ? collectorUser.other_parent_center.trim() : 'Other';
+            } else {
+              resolvedParentCenter = collectorUser.parent_center.trim();
+            }
+          }
 
-          const resolvedParentTemple = (collectorUser.parent_temple && collectorUser.parent_temple !== 'None' && collectorUser.parent_temple !== 'General')
-            ? (collectorUser.parent_temple === 'Other' ? (collectorUser.other_parent_temple || collectorUser.other_temple || 'Other Temple') : collectorUser.parent_temple)
-            : (collectorUser.current_temple && collectorUser.current_temple !== 'None' && collectorUser.current_temple !== 'General')
-              ? (collectorUser.current_temple === 'Other' ? (collectorUser.other_temple || 'Other Temple') : collectorUser.current_temple)
-              : null;
+          let resolvedParentTemple = 'None';
+          if (collectorUser.parent_temple && collectorUser.parent_temple !== 'None' && collectorUser.parent_temple !== 'General') {
+            if (collectorUser.parent_temple === 'Other') {
+              resolvedParentTemple = collectorUser.other_parent_temple ? collectorUser.other_parent_temple.trim() : 'Other';
+            } else {
+              resolvedParentTemple = collectorUser.parent_temple.trim();
+            }
+          }
 
-          if (resolvedParentCenter) finalCenter = resolvedParentCenter;
-          if (resolvedParentTemple) finalTemple = resolvedParentTemple;
+          finalCenter = resolvedParentCenter;
+          finalTemple = resolvedParentTemple;
         }
       } catch (err) {
         console.error('Error resolving collector parent center/temple for Easebuzz:', err);

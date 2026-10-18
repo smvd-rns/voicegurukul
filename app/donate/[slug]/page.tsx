@@ -91,26 +91,30 @@ export default function DonationPage() {
         if (fetchError || !data) {
           setError('This donation link is invalid or has expired.');
         } else {
-          // Resolve Center name strictly on parent center basis
-          let resolvedCenter = (data.parent_center && data.parent_center !== 'None' && data.parent_center !== 'General')
-            ? (data.parent_center === 'Other' ? (data.other_parent_center || data.other_center || 'Other Center') : data.parent_center)
-            : (data.center && data.center !== 'None' && data.center !== 'General')
-              ? data.center
-              : (data.current_center && data.current_center !== 'None' && data.current_center !== 'General')
-                ? (data.current_center === 'Other' ? (data.other_center || 'Other Center') : data.current_center)
-                : '';
+          // Resolve Center name strictly on parent center basis (NEVER fallback to current_center or center)
+          let resolvedCenter = 'None';
+          if (data.parent_center && data.parent_center !== 'None' && data.parent_center !== 'General') {
+            if (data.parent_center === 'Other') {
+              resolvedCenter = data.other_parent_center ? data.other_parent_center.trim() : 'Other';
+            } else {
+              resolvedCenter = data.parent_center.trim();
+            }
+          }
           
-          // Resolve Temple name strictly on parent temple basis
-          let resolvedTemple = (data.parent_temple && data.parent_temple !== 'None' && data.parent_temple !== 'General')
-            ? (data.parent_temple === 'Other' ? (data.other_parent_temple || data.other_temple || 'Other Temple') : data.parent_temple)
-            : (data.current_temple && data.current_temple !== 'None' && data.current_temple !== 'General')
-              ? (data.current_temple === 'Other' ? (data.other_temple || 'Other Temple') : data.current_temple)
-              : '';
+          // Resolve Temple name strictly on parent temple basis (NEVER fallback to current_temple)
+          let resolvedTemple = 'None';
+          if (data.parent_temple && data.parent_temple !== 'None' && data.parent_temple !== 'General') {
+            if (data.parent_temple === 'Other') {
+              resolvedTemple = data.other_parent_temple ? data.other_parent_temple.trim() : 'Other';
+            } else {
+              resolvedTemple = data.parent_temple.trim();
+            }
+          }
 
           setTargetUser({
             ...data,
-            resolvedCenter: (resolvedCenter && resolvedCenter !== 'None' && resolvedCenter !== 'General') ? resolvedCenter : '',
-            resolvedTemple: (resolvedTemple && resolvedTemple !== 'None') ? resolvedTemple : '',
+            resolvedCenter,
+            resolvedTemple,
             ashram: data.ashram || 'N/A'
           });
 

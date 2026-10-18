@@ -133,17 +133,17 @@ export default function AdminDonationsPage() {
     const cs = new Set<string>();
     donations.forEach(d => {
       const collector = collectors[d.tag_user_id];
-      const templeVal = collector?.temple || d.temple;
+      const templeVal = collector?.temple || d.temple || 'None';
       const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
-      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
-      if (matchesTemple && centerVal && centerVal !== 'General' && centerVal !== 'None' && centerVal !== 'No Center') {
+      const centerVal = collector?.center || d.center || 'None';
+      if (matchesTemple && centerVal && centerVal !== 'General' && centerVal !== 'No Center') {
         cs.add(centerVal);
       }
     });
     // Also include valid centers from collectors
     Object.values(collectors).forEach(c => {
       const matchesTemple = selectedTemple === 'all' || c.temple === selectedTemple;
-      if (matchesTemple && c.center && c.center !== 'General' && c.center !== 'None' && c.center !== 'No Center') {
+      if (matchesTemple && c.center && c.center !== 'General' && c.center !== 'No Center') {
         cs.add(c.center);
       }
     });
@@ -154,9 +154,9 @@ export default function AdminDonationsPage() {
     const ids = new Set<string>();
     donations.forEach(d => {
       const collector = collectors[d.tag_user_id];
-      const templeVal = collector?.temple || d.temple;
+      const templeVal = collector?.temple || d.temple || 'None';
       const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
-      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
+      const centerVal = collector?.center || d.center || 'None';
       const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
       if (matchesTemple && matchesCenter && d.tag_user_id) ids.add(d.tag_user_id);
     });
@@ -173,10 +173,10 @@ export default function AdminDonationsPage() {
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
       
       const collector = collectors[d.tag_user_id];
-      const centerVal = collector?.center || (d.center && d.center !== 'General' && d.center !== 'None' ? d.center : null);
+      const centerVal = collector?.center || d.center || 'None';
       const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
       
-      const templeVal = collector?.temple || d.temple;
+      const templeVal = collector?.temple || d.temple || 'None';
       const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
       
       const matchesStatus = selectedStatus === 'all' 
@@ -242,9 +242,8 @@ export default function AdminDonationsPage() {
 
     const rows = filteredDonations.map(d => {
       const collector = collectors[d.tag_user_id];
-      const resolvedCenter = collector?.center 
-        || ((d.center && d.center !== 'General' && d.center !== 'None') ? d.center : 'Direct / HQ');
-      const resolvedTemple = collector?.temple || d.temple || 'General';
+      const resolvedCenter = collector?.center || d.center || 'None';
+      const resolvedTemple = collector?.temple || d.temple || 'None';
       const dateStr = formatDonationDate(d);
 
       return [
@@ -335,35 +334,39 @@ export default function AdminDonationsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, name, center, current_center, parent_center, other_center, other_parent_center, current_temple, parent_temple, other_temple, other_parent_temple')
+        .select('id, name, parent_center, other_parent_center, parent_temple, other_parent_temple')
         .in('id', activeCollectorIds);
       
-      const userMap: Record<string, {name: string, center: string | null, temple: string | null}> = {};
+      const userMap: Record<string, {name: string, center: string, temple: string}> = {};
       const centerList = new Set<string>();
 
       ((userData || []) as any[]).forEach((u: any) => {
-        // Resolve collector Center strictly on parent center basis
-        const resolvedCenter = (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General')
-          ? (u.parent_center === 'Other' ? (u.other_parent_center || u.other_center || 'Other Center') : u.parent_center)
-          : (u.center && u.center !== 'None' && u.center !== 'General')
-            ? u.center
-            : (u.current_center && u.current_center !== 'None' && u.current_center !== 'General')
-              ? (u.current_center === 'Other' ? (u.other_center || 'Other Center') : u.current_center)
-              : null;
+        // Resolve collector Center strictly on parent center basis (NEVER fallback to current_center or center)
+        let resolvedCenter = 'None';
+        if (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General') {
+          if (u.parent_center === 'Other') {
+            resolvedCenter = u.other_parent_center ? u.other_parent_center.trim() : 'Other';
+          } else {
+            resolvedCenter = u.parent_center.trim();
+          }
+        }
 
-        // Resolve collector Temple strictly on parent temple basis
-        const resolvedTemple = (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General')
-          ? (u.parent_temple === 'Other' ? (u.other_parent_temple || u.other_temple || 'Other Temple') : u.parent_temple)
-          : (u.current_temple && u.current_temple !== 'None' && u.current_temple !== 'General')
-            ? (u.current_temple === 'Other' ? (u.other_temple || 'Other Temple') : u.current_temple)
-            : null;
+        // Resolve collector Temple strictly on parent temple basis (NEVER fallback to current_temple)
+        let resolvedTemple = 'None';
+        if (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General') {
+          if (u.parent_temple === 'Other') {
+            resolvedTemple = u.other_parent_temple ? u.other_parent_temple.trim() : 'Other';
+          } else {
+            resolvedTemple = u.parent_temple.trim();
+          }
+        }
 
         userMap[u.id] = { 
           name: u.name || 'Unknown', 
           center: resolvedCenter,
           temple: resolvedTemple
         };
-        if (resolvedCenter) centerList.add(resolvedCenter);
+        centerList.add(resolvedCenter);
       });
 
       setCollectors(userMap);
@@ -710,18 +713,21 @@ export default function AdminDonationsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                       const collector = collectors[donation.tag_user_id];
-                      const resolvedCenter = collector?.center 
-                        || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
-                      const resolvedTemple = collector?.temple || donation.temple;
+                      const resolvedCenter = collector?.center || donation.center || 'None';
+                      const resolvedTemple = collector?.temple || donation.temple || 'None';
 
                       return (
                         <tr key={donation.id} className="hover:bg-orange-50/20 transition-colors group">
                           <td className="px-5 py-3.5">
                              <div className="flex flex-col gap-1">
-                                <span className="text-orange-700 font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 bg-orange-50 border border-orange-200/70 rounded-md w-fit whitespace-nowrap">
-                                   {resolvedCenter || 'Direct / HQ'}
+                                <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
+                                  resolvedCenter === 'None'
+                                    ? 'text-gray-500 bg-gray-100 border border-gray-200'
+                                    : 'text-orange-700 bg-orange-50 border border-orange-200/70'
+                                }`}>
+                                   {resolvedCenter}
                                 </span>
-                                {resolvedTemple && (
+                                {resolvedTemple && resolvedTemple !== 'None' && (
                                   <span className="text-stone-700 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md w-fit whitespace-nowrap">
                                      {resolvedTemple}
                                   </span>
@@ -816,9 +822,8 @@ export default function AdminDonationsPage() {
               <div className="md:hidden divide-y divide-gray-100">
                 {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                   const collector = collectors[donation.tag_user_id];
-                  const resolvedCenter = collector?.center 
-                    || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
-                  const resolvedTemple = collector?.temple || donation.temple;
+                  const resolvedCenter = collector?.center || donation.center || 'None';
+                  const resolvedTemple = collector?.temple || donation.temple || 'None';
 
                   return (
                     <div key={donation.id} className="p-4 space-y-3 hover:bg-orange-50/20 transition-colors">
@@ -847,10 +852,14 @@ export default function AdminDonationsPage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">
-                         <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 bg-orange-50 border border-orange-200/70 rounded-md">
-                           {resolvedCenter || 'Direct / HQ'}
+                         <span className={`font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                           resolvedCenter === 'None'
+                             ? 'text-gray-500 bg-gray-100 border border-gray-200'
+                             : 'text-orange-700 bg-orange-50 border border-orange-200/70'
+                         }`}>
+                           {resolvedCenter}
                          </span>
-                         {resolvedTemple && (
+                         {resolvedTemple && resolvedTemple !== 'None' && (
                            <span className="text-stone-700 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md">
                              {resolvedTemple}
                            </span>
@@ -872,9 +881,8 @@ export default function AdminDonationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                 const collector = collectors[donation.tag_user_id];
-                const resolvedCenter = collector?.center 
-                  || ((donation.center && donation.center !== 'General' && donation.center !== 'None') ? donation.center : null);
-                const resolvedTemple = collector?.temple || donation.temple;
+                const resolvedCenter = collector?.center || donation.center || 'None';
+                const resolvedTemple = collector?.temple || donation.temple || 'None';
 
                 return (
                   <div key={donation.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-md hover:border-orange-200 hover:shadow-lg transition-all group flex flex-col justify-between">
@@ -883,7 +891,11 @@ export default function AdminDonationsPage() {
                           <div className="space-y-0.5 min-w-0">
                             <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
                             <h3 className="text-gray-900 font-bold text-sm tracking-tight truncate mt-1">{collector?.name || 'System Executive'}</h3>
-                            <p className="text-[10px] text-gray-500 font-medium truncate">{resolvedCenter || resolvedTemple || 'Direct / HQ'}</p>
+                            <p className="text-[10px] text-gray-500 font-medium truncate">
+                              {resolvedCenter !== 'None' 
+                                ? (resolvedTemple !== 'None' ? `${resolvedCenter} • ${resolvedTemple}` : resolvedCenter)
+                                : (resolvedTemple !== 'None' ? resolvedTemple : 'None')}
+                            </p>
                           </div>
                           <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100 shadow-inner group-hover:bg-orange-100/60 transition-all">
                             <IndianRupee className="w-4 h-4 text-orange-600" />
