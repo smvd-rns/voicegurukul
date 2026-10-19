@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { motion, useScroll, useTransform, MotionValue, AnimatePresence } from 'framer-motion';
 import {
   ShieldCheck,
   Zap,
@@ -23,6 +23,7 @@ const PILLARS_DATA = [
     title: 'Drug-Free & Inspiring VOICE Lifestyle',
     desc: 'Clean, supportive student hostels near top universities providing peaceful study environments and positive peer culture.',
     badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    iconBoxBg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
     driveId: '16DDNYKy6WSL41Gb6rLVaS5tYi7-E5eyt',
     icon: ShieldCheck,
     highlights: [
@@ -40,6 +41,7 @@ const PILLARS_DATA = [
     title: 'Mind Power & Exam Stress Mastery',
     desc: 'Scientific meditation and concentration tools that help engineering & medical students convert stress into peak focus.',
     badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
+    iconBoxBg: 'bg-sky-50 text-sky-600 border-sky-200',
     driveId: '1s3Ai7y4ZxfhWqvG68mANk4tKMSlEm9mP',
     icon: Zap,
     highlights: [
@@ -57,6 +59,7 @@ const PILLARS_DATA = [
     title: 'Character with High Competence',
     desc: 'Blending professional ethics and integrity with cutting-edge academic excellence for enduring life success.',
     badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+    iconBoxBg: 'bg-amber-50 text-amber-600 border-amber-200',
     driveId: '1dgEsq4Yy9q5kWfVpCYIeBqRGOWxXRNsV',
     icon: Award,
     highlights: [
@@ -74,6 +77,7 @@ const PILLARS_DATA = [
     title: 'Vedic Leadership & Life Mentorship',
     desc: 'Personal 1-on-1 guidance from IIT, NIT alumni and corporate mentors to navigate careers and relationships gracefully.',
     badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
+    iconBoxBg: 'bg-purple-50 text-purple-600 border-purple-200',
     driveId: '1TdrXQ3W_jWAzbqd-SfiFMztLPTgfMXhs',
     icon: Compass,
     highlights: [
@@ -86,100 +90,84 @@ const PILLARS_DATA = [
   },
 ];
 
-// Helper to calculate circular distance and position in 3D carousel
-function getCardOffset(index: number, activeIndex: number, total: number) {
-  let diff = index - activeIndex;
-  if (diff > total / 2) diff -= total;
-  if (diff < -total / 2) diff += total;
-  return diff;
-}
-
-// 3D positioning styles for Laptop / Desktop stage
-function get3DStyles(diff: number) {
-  if (diff === 0) {
-    // Active Center Card
-    return {
-      x: '0%',
-      y: '0%',
-      z: 0,
-      rotateY: 0,
-      rotateZ: 0,
-      scale: 1,
-      opacity: 1,
-      zIndex: 30,
-      pointerEvents: 'auto' as const,
-      filter: 'blur(0px)',
-    };
-  }
-  if (diff === -1) {
-    // Left Angled 3D Card
-    return {
-      x: '-44%',
-      y: '0%',
-      z: -180,
-      rotateY: 22,
-      rotateZ: 1.2,
-      scale: 0.88,
-      opacity: 0.6,
-      zIndex: 15,
-      pointerEvents: 'auto' as const,
-      filter: 'blur(0.5px)',
-    };
-  }
-  if (diff === 1) {
-    // Right Angled 3D Card
-    return {
-      x: '44%',
-      y: '0%',
-      z: -180,
-      rotateY: -22,
-      rotateZ: -1.2,
-      scale: 0.88,
-      opacity: 0.6,
-      zIndex: 15,
-      pointerEvents: 'auto' as const,
-      filter: 'blur(0.5px)',
-    };
-  }
-  // Far back hidden card
-  return {
-    x: diff < 0 ? '-75%' : '75%',
-    y: '0%',
-    z: -360,
-    rotateY: diff < 0 ? 32 : -32,
-    rotateZ: 0,
-    scale: 0.72,
-    opacity: 0,
-    zIndex: 5,
-    pointerEvents: 'none' as const,
-    filter: 'blur(4px)',
-  };
-}
-
-// Single 3D Cylindrical Card Component for Desktop / Laptop
-function DesktopPillar3DCard({
-  pillar,
-  index,
-  activeIndex,
-  total,
-  onSelect,
-}: {
+interface Pillar3DCardProps {
   pillar: (typeof PILLARS_DATA)[0];
   index: number;
-  activeIndex: number;
   total: number;
-  onSelect: () => void;
-}) {
-  const diff = getCardOffset(index, activeIndex, total);
-  const styles = get3DStyles(diff);
-  const isCenter = diff === 0;
+  scrollYProgress: MotionValue<number>;
+  onSelect?: () => void;
+}
+
+// 3D Curved Card for Desktop (>= 1024px) driven by vertical page scroll
+function Pillar3DCard({ pillar, index, total, scrollYProgress, onSelect }: Pillar3DCardProps) {
+  const steps = total - 1;
+  const c = index / steps;
+  const s = 1 / steps;
+
+  const inputPoints = [
+    c - s * 2,
+    c - s,
+    c - s * 0.5,
+    c,
+    c + s * 0.5,
+    c + s,
+    c + s * 2,
+  ];
 
   const [hoverRotX, setHoverRotX] = useState(0);
   const [hoverRotY, setHoverRotY] = useState(0);
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50, opacity: 0 });
 
+  // 1. Horizontal Curved Trajectory: Inactive cards pushed off-screen (120vw / -120vw)
+  const x = useTransform(
+    scrollYProgress,
+    inputPoints,
+    ['120vw', '100vw', '70vw', '0vw', '-70vw', '-100vw', '-120vw']
+  );
+
+  // 2. 3D Cylindrical Curvature (rotateY):
+  const scrollRotateY = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [-22, -14, -7, 0, 7, 14, 22]
+  );
+
+  // 3. 3D Banking Tilt along curve (rotateZ):
+  const rotateZ = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [2, 1.2, 0.5, 0, -0.5, -1.2, -2]
+  );
+
+  // 4. 3D Depth along Z axis:
+  const z = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [-300, -180, -60, 0, -60, -180, -300]
+  );
+
+  // 5. Scale Arc:
+  const scale = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [0.88, 0.93, 0.98, 1, 0.98, 0.93, 0.88]
+  );
+
+  // 6. Smooth Opacity Curve: ZERO OVERLAP (inactive cards fade cleanly)
+  const opacity = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [0, 0, 0.1, 1, 0.1, 0, 0]
+  );
+
+  // 7. Dynamic Z-Index Stacking:
+  const zIndex = useTransform(
+    scrollYProgress,
+    inputPoints,
+    [1, 5, 10, 30, 10, 5, 1]
+  );
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isCenter) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -204,214 +192,167 @@ function DesktopPillar3DCard({
   const Icon = pillar.icon;
 
   return (
-    <motion.div
-      onClick={onSelect}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      animate={{
-        x: styles.x,
-        y: styles.y,
-        z: styles.z,
-        rotateY: styles.rotateY + (isCenter ? hoverRotY : 0),
-        rotateX: isCenter ? hoverRotX : 0,
-        rotateZ: styles.rotateZ,
-        scale: styles.scale,
-        opacity: styles.opacity,
-        filter: styles.filter,
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 260,
-        damping: 28,
-        mass: 0.8,
-      }}
-      style={{
-        zIndex: styles.zIndex,
-        pointerEvents: styles.pointerEvents,
-      }}
-      className={`absolute w-full max-w-4xl lg:max-w-5xl rounded-[32px] lg:rounded-[36px] bg-white border border-slate-200/90 p-6 lg:p-8 flex flex-col justify-between group transition-shadow duration-300 antialiased select-none cursor-pointer ${
-        isCenter
-          ? 'shadow-2xl hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/20'
-          : 'shadow-lg hover:opacity-80'
-      }`}
-    >
-      {/* Dynamic Specular Glare (Center active card only) */}
-      {isCenter && (
+    <div className="absolute inset-0 flex items-center justify-center px-4 sm:px-6 lg:px-8 pointer-events-none [transform-style:preserve-3d]">
+      <motion.div
+        onClick={onSelect}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          x,
+          rotateY: scrollRotateY,
+          rotateZ,
+          rotateX: hoverRotX,
+          scale,
+          z,
+          opacity,
+          zIndex,
+        }}
+        className="pointer-events-auto w-full max-w-4xl lg:max-w-5xl rounded-2xl lg:rounded-3xl xl:rounded-[32px] bg-white border border-slate-200/90 shadow-2xl p-5 lg:p-6 xl:p-7 relative overflow-hidden flex flex-col justify-between group transition-shadow duration-300 hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/10 cursor-pointer antialiased select-none"
+      >
+        {/* Dynamic Subtle Specular Glare */}
         <div
-          className="absolute inset-0 pointer-events-none transition-opacity duration-300 rounded-[32px] lg:rounded-[36px]"
+          className="absolute inset-0 pointer-events-none transition-opacity duration-300 rounded-2xl lg:rounded-3xl xl:rounded-[32px]"
           style={{
             background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.7) 0%, transparent 60%)`,
             opacity: glarePos.opacity,
           }}
         />
-      )}
 
-      {/* Non-center card click overlay pill */}
-      {!isCenter && (
-        <div className="absolute inset-0 bg-slate-900/5 hover:bg-slate-900/0 transition-colors z-40 rounded-[32px] lg:rounded-[36px] flex items-center justify-center">
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity px-4 py-2 rounded-full bg-slate-900/80 text-white text-xs font-bold shadow-lg backdrop-blur-sm">
-            Click to view Pillar {pillar.id}
-          </span>
-        </div>
-      )}
-
-      {/* Card Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3 relative z-30">
-        <div className="flex items-center space-x-3">
-          <span className="text-2xl lg:text-3xl font-black text-slate-900 font-mono tracking-tighter">
-            {pillar.id}
-          </span>
-          <span className="text-slate-300">•</span>
-          <span className={`px-3 py-0.5 rounded-full text-xs font-bold border shadow-xs ${pillar.badgeBg}`}>
-            {pillar.tag}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-2 text-xs font-bold text-slate-400">
-          <span>PILLAR {pillar.id} OF 04</span>
-        </div>
-      </div>
-
-      {/* Card Content Grid (2 columns on Desktop) */}
-      <div className="grid md:grid-cols-12 gap-6 lg:gap-8 items-center my-3 relative z-30">
-        {/* Left Column: Descriptive Content & Highlights */}
-        <div className="md:col-span-7 space-y-3">
-          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-xs">
-            <Icon className="w-5 h-5 lg:w-6 lg:h-6" />
+        {/* Card Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 relative z-30">
+          <div className="flex items-center space-x-3">
+            <span className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 font-mono tracking-tighter">
+              {pillar.id}
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] xl:text-xs font-bold border shadow-2xs ${pillar.badgeBg}`}>
+              {pillar.tag}
+            </span>
           </div>
 
-          <h3 className="text-2xl lg:text-3xl xl:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-            {pillar.title}
-          </h3>
+          <div className="flex items-center space-x-2 text-[11px] xl:text-xs font-bold text-slate-400">
+            <span>PILLAR {pillar.id} OF 04</span>
+          </div>
+        </div>
 
-          <p className="text-sm text-slate-600 leading-relaxed font-normal">
-            {pillar.desc}
-          </p>
+        {/* Card Body Grid (2 columns on Desktop) */}
+        <div className="grid md:grid-cols-12 gap-5 lg:gap-7 items-center my-2.5 xl:my-3 relative z-30">
+          {/* Left Column: Descriptive Content & Highlights */}
+          <div className="md:col-span-7 space-y-2.5 xl:space-y-3">
+            <div className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl flex items-center justify-center border shadow-xs ${pillar.iconBoxBg}`}>
+              <Icon className="w-5 h-5 lg:w-6 lg:h-6" />
+            </div>
 
-          {/* Concise Bullet Points with Emerald Dots */}
-          <div className="space-y-1.5 pt-1">
-            {pillar.highlights.map((h: string, i: number) => (
-              <div key={i} className="flex items-center space-x-3 text-sm text-slate-700 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                <span>{h}</span>
+            <h3 className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 tracking-tight leading-snug">
+              {pillar.title}
+            </h3>
+
+            <p className="text-xs lg:text-[13px] xl:text-sm text-slate-600 leading-relaxed font-normal">
+              {pillar.desc}
+            </p>
+
+            {/* Concise Bullet Points with Emerald Dots */}
+            <div className="space-y-1.5 pt-1">
+              {pillar.highlights.map((h: string, i: number) => (
+                <div key={i} className="flex items-center space-x-2.5 text-xs lg:text-sm text-slate-700 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span>{h}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Column: Photo Frame */}
+          <div className="md:col-span-5 flex justify-center">
+            <div className="w-full max-w-sm md:max-w-md aspect-[4/3] rounded-2xl lg:rounded-3xl overflow-hidden bg-slate-100 shadow-lg border border-slate-200 relative group/img">
+              <DriveImage
+                driveId={pillar.driveId}
+                alt={pillar.title}
+                size={800}
+                className="w-full h-full"
+                imgClassName="w-full h-full object-cover object-center group-hover/img:scale-105 transition-transform duration-700 pointer-events-none"
+                showZoomIcon={false}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-3.5 pointer-events-none z-10">
+                <span className="text-xs font-bold text-white drop-shadow">
+                  {pillar.tag} • VOICE Gurukul
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Column: Photo Frame */}
-        <div className="md:col-span-5 flex justify-center">
-          <div className="w-full max-w-sm md:max-w-md aspect-[4/3] rounded-2xl lg:rounded-3xl overflow-hidden bg-slate-100 shadow-xl border border-slate-200 relative group/img">
-            <DriveImage
-              driveId={pillar.driveId}
-              alt={pillar.title}
-              size={800}
-              className="w-full h-full"
-              imgClassName="w-full h-full object-cover object-center group-hover/img:scale-105 transition-transform duration-700 pointer-events-none"
-              showZoomIcon={false}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-4 pointer-events-none z-10">
-              <span className="text-xs font-bold text-white drop-shadow">
-                {pillar.tag} • VOICE Gurukul
-              </span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Card Footer */}
-      <div className="flex items-center justify-between border-t border-slate-100 pt-3 relative z-30">
-        <span className="text-xs text-slate-500 font-medium">
-          Empowering university youth with character and composure.
-        </span>
+        {/* Card Footer */}
+        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 relative z-30">
+          <span className="text-[11px] xl:text-xs text-slate-500 font-medium truncate max-w-[70%]">
+            Empowering university youth with character and composure.
+          </span>
 
-        <Link
-          href={pillar.href}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-          className="inline-flex items-center space-x-1.5 text-sm font-bold text-amber-700 hover:text-amber-900 group-hover:translate-x-1 transition-all"
-        >
-          <span>{pillar.linkText}</span>
-          <ChevronRight className="w-4 h-4" />
-        </Link>
-      </div>
-    </motion.div>
+          <Link
+            href={pillar.href}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+            className="inline-flex items-center space-x-1.5 text-xs xl:text-sm font-bold text-amber-700 hover:text-amber-900 group-hover:translate-x-1 transition-all shrink-0"
+          >
+            <span>{pillar.linkText}</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
 export default function VoicegurukulHorizontalPillars() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [direction, setDirection] = useState(1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [activePillarIndex, setActivePillarIndex] = useState(0);
+  const [mobilePillarIndex, setMobilePillarIndex] = useState(0);
 
   const pillars = PILLARS_DATA;
 
-  const nextSlide = useCallback(() => {
-    setDirection(1);
-    setActiveIndex((prev) => (prev + 1) % pillars.length);
-  }, [pillars.length]);
+  // Measure vertical scroll progress of this container
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ['start start', 'end end'],
+  });
 
-  const prevSlide = useCallback(() => {
-    setDirection(-1);
-    setActiveIndex((prev) => (prev > 0 ? prev - 1 : pillars.length - 1));
-  }, [pillars.length]);
+  const progressWidth = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
-  const goToSlide = useCallback(
-    (idx: number) => {
-      setDirection(idx >= activeIndex ? 1 : -1);
-      setActiveIndex(idx);
-    },
-    [activeIndex]
-  );
-
-  // Continuous auto-scroll effect: smoothly advances every 5 seconds
+  // Dynamically track active pillar index for navigation tab highlight on desktop
   useEffect(() => {
-    const timer = setInterval(() => {
-      nextSlide();
-    }, 5000);
+    const unsubscribe = scrollYProgress.on('change', (latest) => {
+      if (latest < 0.167) {
+        setActivePillarIndex(0);
+      } else if (latest < 0.50) {
+        setActivePillarIndex(1);
+      } else if (latest < 0.833) {
+        setActivePillarIndex(2);
+      } else {
+        setActivePillarIndex(3);
+      }
+    });
+    return () => unsubscribe();
+  }, [scrollYProgress]);
 
-    return () => clearInterval(timer);
-  }, [nextSlide]);
-
-  const activePillar = pillars[activeIndex];
-  const ActiveIcon = activePillar.icon;
-
-  // Horizontal motion variants for mobile smooth sliding
-  const mobileSlideVariants: Variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? 70 : -70,
-      opacity: 0,
-      scale: 0.98,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      scale: 1,
-      transition: {
-        x: { type: 'spring' as const, stiffness: 340, damping: 30 },
-        opacity: { duration: 0.25 },
-        scale: { duration: 0.25 },
-      },
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? -70 : 70,
-      opacity: 0,
-      scale: 0.98,
-      transition: {
-        x: { type: 'spring' as const, stiffness: 340, damping: 30 },
-        opacity: { duration: 0.2 },
-        scale: { duration: 0.2 },
-      },
-    }),
+  // Click handler on desktop navigation tabs to smoothly scroll to that pillar
+  const scrollToPillar = (idx: number) => {
+    if (!containerRef.current) return;
+    const containerTop = containerRef.current.offsetTop;
+    const containerHeight = containerRef.current.offsetHeight;
+    const scrollTarget = containerTop + (idx / (pillars.length - 1)) * (containerHeight - window.innerHeight);
+    window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
   };
+
+  const activeMobilePillar = pillars[mobilePillarIndex];
+  const MobilePillarIcon = activeMobilePillar.icon;
 
   return (
     <>
       {/* =========================================================================
           1. MOBILE & TABLET COMPACT HORIZONTAL CAROUSEL (Visible on < 1024px)
-          - Horizontal auto-scroll + Touch swipe gestures + 1-tap tabs.
-          - Smooth direction-aware sliding animation.
-          - Auto-pause on hover/touch with live timer line on active tab.
+          - ZERO AUTO-SCROLL: Stays put and respects user control!
+          - Manual Touch Swipe + Tab Buttons + Prev/Next Controls.
          ========================================================================= */}
       <section className="block lg:hidden w-full py-4 sm:py-6 px-3 sm:px-6 bg-gradient-to-b from-[#fafcff] via-amber-50/20 to-[#fafcff]">
         <div className="max-w-md sm:max-w-xl mx-auto space-y-3 sm:space-y-4">
@@ -427,30 +368,20 @@ export default function VoicegurukulHorizontalPillars() {
             </h2>
           </div>
 
-          {/* Interactive Pillar Selector Tabs with Auto-Scroll Progress Line */}
+          {/* Interactive Pillar Selector Tabs */}
           <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200 shadow-2xs">
             {pillars.map((p, idx) => {
-              const isSelected = activeIndex === idx;
+              const isSelected = mobilePillarIndex === idx;
               return (
                 <button
                   key={p.id}
-                  onClick={() => goToSlide(idx)}
-                  className={`relative py-1.5 px-1 rounded-lg text-center transition-all duration-200 cursor-pointer overflow-hidden ${
+                  onClick={() => setMobilePillarIndex(idx)}
+                  className={`py-1.5 px-1 rounded-lg text-center transition-all duration-200 cursor-pointer ${
                     isSelected
                       ? 'bg-white text-slate-900 font-black shadow-sm border border-slate-200 scale-[1.02]'
                       : 'text-slate-500 hover:text-slate-900 font-bold hover:bg-white/50'
                   }`}
                 >
-                  {/* Continuous auto-advance progress indicator bar on active tab */}
-                  {isSelected && (
-                    <motion.div
-                      key={`timer-bar-${idx}-${activeIndex}`}
-                      initial={{ width: '0%' }}
-                      animate={{ width: '100%' }}
-                      transition={{ duration: 5, ease: 'linear' }}
-                      className="absolute bottom-0 left-0 h-[2.5px] bg-amber-500 rounded-full"
-                    />
-                  )}
                   <div className="text-[10px] font-mono text-amber-600 font-black">{p.id}</div>
                   <div className="text-[10px] sm:text-xs truncate leading-tight">{p.tabLabel}</div>
                 </button>
@@ -460,22 +391,21 @@ export default function VoicegurukulHorizontalPillars() {
 
           {/* Active Card Container with Horizontal Swipe */}
           <div className="relative overflow-hidden">
-            <AnimatePresence mode="wait" custom={direction}>
+            <AnimatePresence mode="wait">
               <motion.div
-                key={activePillar.id}
-                custom={direction}
-                variants={mobileSlideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
+                key={activeMobilePillar.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.2}
                 onDragEnd={(_, { offset, velocity }) => {
                   if (offset.x < -35 || velocity.x < -300) {
-                    nextSlide();
+                    setMobilePillarIndex((prev) => (prev < pillars.length - 1 ? prev + 1 : 0));
                   } else if (offset.x > 35 || velocity.x > 300) {
-                    prevSlide();
+                    setMobilePillarIndex((prev) => (prev > 0 ? prev - 1 : pillars.length - 1));
                   }
                 }}
                 className="w-full bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-lg p-4 sm:p-6 flex flex-col space-y-3 sm:space-y-4 touch-pan-y cursor-grab active:cursor-grabbing select-none"
@@ -484,15 +414,15 @@ export default function VoicegurukulHorizontalPillars() {
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tighter">
-                      {activePillar.id}
+                      {activeMobilePillar.id}
                     </span>
                     <span className="text-slate-300">•</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs ${activePillar.badgeBg}`}>
-                      {activePillar.tag}
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs ${activeMobilePillar.badgeBg}`}>
+                      {activeMobilePillar.tag}
                     </span>
                   </div>
                   <span className="text-[10px] font-bold text-slate-400">
-                    PILLAR {activePillar.id} OF 04
+                    PILLAR {activeMobilePillar.id} OF 04
                   </span>
                 </div>
 
@@ -500,20 +430,20 @@ export default function VoicegurukulHorizontalPillars() {
                 <div className="space-y-1.5">
                   <div className="flex items-center space-x-2.5">
                     <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shrink-0">
-                      <ActiveIcon className="w-4 h-4" />
+                      <MobilePillarIcon className="w-4 h-4" />
                     </div>
                     <h3 className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-snug">
-                      {activePillar.title}
+                      {activeMobilePillar.title}
                     </h3>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
-                    {activePillar.desc}
+                    {activeMobilePillar.desc}
                   </p>
                 </div>
 
                 {/* Compact Highlights List */}
                 <div className="space-y-1.5 bg-slate-50/90 p-2.5 sm:p-3 rounded-xl border border-slate-100">
-                  {activePillar.highlights.map((h, i) => (
+                  {activeMobilePillar.highlights.map((h, i) => (
                     <div key={i} className="flex items-start space-x-2 text-xs text-slate-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
                       <span className="font-medium leading-snug">{h}</span>
@@ -524,8 +454,8 @@ export default function VoicegurukulHorizontalPillars() {
                 {/* Snug Image Frame */}
                 <div className="w-full aspect-[16/9] max-h-48 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 relative shadow-2xs">
                   <DriveImage
-                    driveId={activePillar.driveId}
-                    alt={activePillar.title}
+                    driveId={activeMobilePillar.driveId}
+                    alt={activeMobilePillar.title}
                     size={600}
                     className="w-full h-full"
                     imgClassName="w-full h-full object-cover object-center pointer-events-none"
@@ -533,7 +463,7 @@ export default function VoicegurukulHorizontalPillars() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-2.5 pointer-events-none">
                     <span className="text-[10px] sm:text-[11px] font-bold text-white drop-shadow">
-                      {activePillar.tag} • VOICE Gurukul
+                      {activeMobilePillar.tag} • VOICE Gurukul
                     </span>
                   </div>
                 </div>
@@ -541,13 +471,13 @@ export default function VoicegurukulHorizontalPillars() {
                 {/* Card Action Link */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-[11px] text-slate-500 font-medium">
-                    Pillar {activePillar.id}
+                    Pillar {activeMobilePillar.id}
                   </span>
                   <Link
-                    href={activePillar.href}
+                    href={activeMobilePillar.href}
                     className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all"
                   >
-                    <span>{activePillar.linkText}</span>
+                    <span>{activeMobilePillar.linkText}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -558,7 +488,7 @@ export default function VoicegurukulHorizontalPillars() {
           {/* Bottom Navigation Controls: Prev / Dots / Next */}
           <div className="flex items-center justify-between pt-0.5 px-1">
             <button
-              onClick={prevSlide}
+              onClick={() => setMobilePillarIndex((prev) => (prev > 0 ? prev - 1 : pillars.length - 1))}
               className="inline-flex items-center space-x-1 px-3 py-1 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 active:scale-95 transition-all shadow-2xs cursor-pointer"
               aria-label="Previous Pillar"
             >
@@ -571,9 +501,9 @@ export default function VoicegurukulHorizontalPillars() {
               {pillars.map((_, idx) => (
                 <button
                   key={idx}
-                  onClick={() => goToSlide(idx)}
+                  onClick={() => setMobilePillarIndex(idx)}
                   className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                    activeIndex === idx
+                    mobilePillarIndex === idx
                       ? 'w-5 bg-amber-500'
                       : 'w-2 bg-slate-300 hover:bg-slate-400'
                   }`}
@@ -583,7 +513,7 @@ export default function VoicegurukulHorizontalPillars() {
             </div>
 
             <button
-              onClick={nextSlide}
+              onClick={() => setMobilePillarIndex((prev) => (prev < pillars.length - 1 ? prev + 1 : 0))}
               className="inline-flex items-center space-x-1 px-3 py-1 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 active:scale-95 transition-all shadow-2xs cursor-pointer"
               aria-label="Next Pillar"
             >
@@ -596,121 +526,79 @@ export default function VoicegurukulHorizontalPillars() {
       </section>
 
       {/* =========================================================================
-          2. DESKTOP & LAPTOP 3D CYLINDRICAL CAROUSEL STAGE (Visible on >= 1024px)
-          - TRUE 3D CYLINDER: Visible adjacent cards angled inward in 3D perspective!
-          - Continuous horizontal auto-scroll without pause interruption.
-          - 1-click tabs, floating 3D arrows, and clickable side cards.
+          2. DESKTOP 3D CURVED PILLAR STAGE (Visible on >= 1024px)
+          - SCROLL TO MOVE HORIZONTALLY: Vertical page scroll drives horizontal 3D card movement!
+          - ZERO OVERLAP: Cards smoothly glide in and out along 3D trajectory without colliding.
+          - Top interactive navigation tabs + bottom progress line.
+          - NO AUTO-SCROLL: Stays aligned precisely with scroll position.
          ========================================================================= */}
-      <section className="hidden lg:block relative py-12 lg:py-16 bg-gradient-to-b from-[#fafcff] via-amber-50/25 to-[#fafcff] overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-6">
-
-          {/* Top Header Strip */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center space-x-2 px-3 py-0.5 rounded-full bg-amber-100/90 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+      <section
+        ref={containerRef}
+        id="pillars"
+        className="hidden lg:block relative h-[380vh] bg-gradient-to-b from-[#fafcff] via-amber-50/20 to-[#fafcff]"
+      >
+        <div className="sticky top-20 h-[calc(100vh-5rem)] max-h-[720px] w-full overflow-hidden flex flex-col justify-between pt-2 pb-2 xl:pt-3 xl:pb-3 z-20">
+          
+          {/* Top Header Strip with Interactive Pillar Tabs */}
+          <div className="w-full max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between gap-4 z-30 shrink-0">
+            <div className="space-y-0.5 xl:space-y-1">
+              <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-amber-100/90 border border-amber-200 text-amber-900 text-[10px] xl:text-[11px] font-bold uppercase tracking-wider shadow-xs">
+                <Sparkles className="w-3 h-3 xl:w-3.5 xl:h-3.5 text-amber-600 animate-pulse" />
                 <span>Core Pillars of VOICE Gurukul</span>
               </div>
-              <h2 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight font-sans">
+              <h2 className="text-2xl lg:text-3xl xl:text-4xl font-black text-slate-900 tracking-tight font-sans">
                 A Safe Oasis for University Youth
               </h2>
             </div>
 
-            {/* Desktop Tabs with Auto-scroll Timer Bar */}
-            <div className="flex items-center space-x-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 shadow-2xs">
-              {pillars.map((p, idx) => {
-                const isSelected = activeIndex === idx;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => goToSlide(idx)}
-                    className={`relative px-4 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer overflow-hidden ${
-                      isSelected
-                        ? 'bg-white text-slate-900 font-black shadow-sm border border-slate-200 scale-[1.02]'
-                        : 'text-slate-600 hover:text-slate-900 font-bold hover:bg-white/60'
-                    }`}
-                  >
-                    {/* Live countdown timer bar */}
-                    {isSelected && (
-                      <motion.div
-                        key={`desktop-timer-${idx}-${activeIndex}`}
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 5, ease: 'linear' }}
-                        className="absolute bottom-0 left-0 h-[2.5px] bg-amber-500 rounded-full"
-                      />
-                    )}
-                    <span className="text-xs font-mono text-amber-600 font-black mr-1.5">{p.id}</span>
-                    <span className="text-xs font-bold">{p.tabLabel}</span>
-                  </button>
-                );
-              })}
+            {/* Interactive Navigation Tabs */}
+            <div className="flex items-center gap-1.5 xl:gap-2">
+              {pillars.map((pillar, idx) => (
+                <button
+                  key={pillar.id}
+                  onClick={() => scrollToPillar(idx)}
+                  className={`px-3 xl:px-4 py-1.5 rounded-2xl text-xs font-bold transition-all duration-300 cursor-pointer ${
+                    activePillarIndex === idx
+                      ? 'bg-slate-900 text-white shadow-md scale-105'
+                      : 'bg-white/80 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-mono text-amber-600 mr-1 text-[11px]">{pillar.id}</span>
+                  <span>{pillar.tabLabel}</span>
+                </button>
+              ))}
+
+              <Link
+                href="/centres"
+                className="inline-flex items-center space-x-1.5 px-3 xl:px-3.5 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-xs font-bold transition-colors ml-1"
+              >
+                <span>Explore Centres</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
 
-          {/* 3D Cylindrical Stage */}
-          <div className="relative w-full h-[520px] lg:h-[560px] flex items-center justify-center [perspective:1400px] [transform-style:preserve-3d] my-3">
-            {/* Left Floating Arrow */}
-            <button
-              onClick={prevSlide}
-              className="absolute left-2 lg:left-6 z-40 p-3 rounded-full bg-white/90 hover:bg-white border border-slate-200 text-slate-700 hover:text-amber-600 shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-sm"
-              title="Previous Pillar"
-              aria-label="Previous Pillar"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-
-            {/* 3D Cards */}
+          {/* The 3D Curved Horizontal Pillar Stage */}
+          <div className="relative w-full flex-1 min-h-[340px] max-h-[540px] flex items-center justify-center [perspective:1300px] [transform-style:preserve-3d] my-auto">
             {pillars.map((pillar, idx) => (
-              <DesktopPillar3DCard
+              <Pillar3DCard
                 key={pillar.id}
                 pillar={pillar}
                 index={idx}
-                activeIndex={activeIndex}
                 total={pillars.length}
-                onSelect={() => goToSlide(idx)}
+                scrollYProgress={scrollYProgress}
+                onSelect={() => scrollToPillar(idx)}
               />
             ))}
-
-            {/* Right Floating Arrow */}
-            <button
-              onClick={nextSlide}
-              className="absolute right-2 lg:right-6 z-40 p-3 rounded-full bg-white/90 hover:bg-white border border-slate-200 text-slate-700 hover:text-amber-600 shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-sm"
-              title="Next Pillar"
-              aria-label="Next Pillar"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
           </div>
 
-          {/* Bottom Bar: Indicators & Action CTA */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-200/80">
-            <div className="flex items-center space-x-1.5">
-              {pillars.map((p, idx) => (
-                <button
-                  key={p.id}
-                  onClick={() => goToSlide(idx)}
-                  className={`h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    activeIndex === idx
-                      ? 'w-7 bg-amber-500'
-                      : 'w-2.5 bg-slate-300 hover:bg-slate-400'
-                  }`}
-                  aria-label={`Go to pillar ${p.id}`}
-                />
-              ))}
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-slate-500 font-medium">
-                Pillar {pillars[activeIndex].id} of 04
-              </span>
-              <Link
-                href={pillars[activeIndex].href}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all"
-              >
-                <span>{pillars[activeIndex].linkText}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+          {/* Bottom Pinned Progress Line */}
+          <div className="w-full max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-center z-30 pt-1.5 xl:pt-2 border-t border-slate-200/80 shrink-0">
+            <div className="w-56 sm:w-72 xl:w-80 h-2 rounded-full bg-slate-200/90 overflow-hidden relative shadow-inner">
+              <motion.div
+                style={{ width: progressWidth }}
+                className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-full"
+              />
             </div>
           </div>
 

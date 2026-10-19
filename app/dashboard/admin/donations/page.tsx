@@ -25,7 +25,8 @@ import {
   Mail,
   X,
   UserCheck,
-  MapPin
+  MapPin,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/config';
@@ -97,96 +98,183 @@ export default function AdminDonationsPage() {
   const [selectedGateway, setSelectedGateway] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [collectors, setCollectors] = useState<Record<string, {name: string, center: string | null, temple: string | null}>>({});
+  const [collectors, setCollectors] = useState<Record<string, {
+    name: string;
+    parentCenter: string;
+    parentTemple: string;
+    currentCenter: string;
+    currentTemple: string;
+    center: string;
+    temple: string;
+  }>>({});
   const [centers, setCenters] = useState<string[]>([]);
   const [usersWithoutSlugs, setUsersWithoutSlugs] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [activeTab, setActiveTab] = useState<'donations' | 'missing-links'>('donations');
   
+  // Helper to extract parent and current center/temple for any donation
+  const getDonationCenters = (donation: any) => {
+    const collector = collectors[donation.tag_user_id];
+    const metaCollector = donation.metadata?.collector;
+
+    const parentCenter = metaCollector?.parent_center || collector?.parentCenter || donation.center || 'None';
+    const parentTemple = metaCollector?.parent_temple || collector?.parentTemple || donation.temple || 'None';
+    const currentCenter = metaCollector?.current_center || collector?.currentCenter || 'None';
+    const currentTemple = metaCollector?.current_temple || collector?.currentTemple || 'None';
+
+    return { parentCenter, parentTemple, currentCenter, currentTemple };
+  };
+
   // Filtering State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCollector, setSelectedCollector] = useState('all');
-  const [selectedCenter, setSelectedCenter] = useState('all');
+  const [selectedCurrentTemple, setSelectedCurrentTemple] = useState('all');
+  const [selectedCurrentCenter, setSelectedCurrentCenter] = useState('all');
+  const [selectedParentTemple, setSelectedParentTemple] = useState('all');
+  const [selectedParentCenter, setSelectedParentCenter] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('captured');
-  const [selectedTemple, setSelectedTemple] = useState('all');
   const [templeList, setTempleList] = useState<string[]>([]);
 
   // Pagination State
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Dynamic Filter Options
-  const availableTemples = useMemo(() => {
+  // Dynamic Filter Options - Current Hierarchy
+  const availableCurrentTemples = useMemo(() => {
     const ts = new Set<string>();
     donations.forEach(d => {
-      const collector = collectors[d.tag_user_id];
-      const temple = collector?.temple || d.temple;
-      if (temple && temple !== 'General' && temple !== 'None') ts.add(temple);
+      const { currentTemple } = getDonationCenters(d);
+      if (currentTemple && currentTemple !== 'General' && currentTemple !== 'None') ts.add(currentTemple);
     });
     Object.values(collectors).forEach(c => {
-      if (c.temple && c.temple !== 'General' && c.temple !== 'None') ts.add(c.temple);
+      if (c.currentTemple && c.currentTemple !== 'General' && c.currentTemple !== 'None') ts.add(c.currentTemple);
     });
     return Array.from(ts).sort();
   }, [donations, collectors]);
 
-  const availableCenters = useMemo(() => {
+  const availableCurrentCenters = useMemo(() => {
     const cs = new Set<string>();
     donations.forEach(d => {
-      const collector = collectors[d.tag_user_id];
-      const templeVal = collector?.temple || d.temple || 'None';
-      const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
-      const centerVal = collector?.center || d.center || 'None';
-      if (matchesTemple && centerVal && centerVal !== 'General' && centerVal !== 'No Center') {
-        cs.add(centerVal);
+      const { currentCenter, currentTemple } = getDonationCenters(d);
+      const matchesTemple = selectedCurrentTemple === 'all' || currentTemple === selectedCurrentTemple;
+      if (matchesTemple && currentCenter && currentCenter !== 'General' && currentCenter !== 'No Center' && currentCenter !== 'None') {
+        cs.add(currentCenter);
       }
     });
-    // Also include valid centers from collectors
     Object.values(collectors).forEach(c => {
-      const matchesTemple = selectedTemple === 'all' || c.temple === selectedTemple;
-      if (matchesTemple && c.center && c.center !== 'General' && c.center !== 'No Center') {
-        cs.add(c.center);
+      const matchesTemple = selectedCurrentTemple === 'all' || c.currentTemple === selectedCurrentTemple;
+      if (matchesTemple && c.currentCenter && c.currentCenter !== 'General' && c.currentCenter !== 'No Center' && c.currentCenter !== 'None') {
+        cs.add(c.currentCenter);
       }
     });
     return Array.from(cs).sort();
-  }, [donations, selectedTemple, collectors]);
+  }, [donations, selectedCurrentTemple, collectors]);
+
+  // Dynamic Filter Options - Parent Hierarchy
+  const availableParentTemples = useMemo(() => {
+    const ts = new Set<string>();
+    donations.forEach(d => {
+      const { parentTemple } = getDonationCenters(d);
+      if (parentTemple && parentTemple !== 'General' && parentTemple !== 'None') ts.add(parentTemple);
+    });
+    Object.values(collectors).forEach(c => {
+      if (c.parentTemple && c.parentTemple !== 'General' && c.parentTemple !== 'None') ts.add(c.parentTemple);
+    });
+    return Array.from(ts).sort();
+  }, [donations, collectors]);
+
+  const availableParentCenters = useMemo(() => {
+    const cs = new Set<string>();
+    donations.forEach(d => {
+      const { parentCenter, parentTemple } = getDonationCenters(d);
+      const matchesTemple = selectedParentTemple === 'all' || parentTemple === selectedParentTemple;
+      if (matchesTemple && parentCenter && parentCenter !== 'General' && parentCenter !== 'No Center' && parentCenter !== 'None') {
+        cs.add(parentCenter);
+      }
+    });
+    Object.values(collectors).forEach(c => {
+      const matchesTemple = selectedParentTemple === 'all' || c.parentTemple === selectedParentTemple;
+      if (matchesTemple && c.parentCenter && c.parentCenter !== 'General' && c.parentCenter !== 'No Center' && c.parentCenter !== 'None') {
+        cs.add(c.parentCenter);
+      }
+    });
+    return Array.from(cs).sort();
+  }, [donations, selectedParentTemple, collectors]);
 
   const availableCollectors = useMemo(() => {
     const ids = new Set<string>();
     donations.forEach(d => {
-      const collector = collectors[d.tag_user_id];
-      const templeVal = collector?.temple || d.temple || 'None';
-      const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
-      const centerVal = collector?.center || d.center || 'None';
-      const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
-      if (matchesTemple && matchesCenter && d.tag_user_id) ids.add(d.tag_user_id);
+      const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
+      const matchesCurrentTemple = selectedCurrentTemple === 'all' || currentTemple === selectedCurrentTemple;
+      const matchesCurrentCenter = selectedCurrentCenter === 'all' || currentCenter === selectedCurrentCenter;
+      const matchesParentTemple = selectedParentTemple === 'all' || parentTemple === selectedParentTemple;
+      const matchesParentCenter = selectedParentCenter === 'all' || parentCenter === selectedParentCenter;
+      if (matchesCurrentTemple && matchesCurrentCenter && matchesParentTemple && matchesParentCenter && d.tag_user_id) {
+        ids.add(d.tag_user_id);
+      }
     });
     return Array.from(ids).map(id => ({ id, name: collectors[id]?.name || 'Unknown' })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [donations, selectedTemple, selectedCenter, collectors]);
+  }, [donations, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, collectors]);
 
   const filteredDonations = useMemo(() => {
     return donations.filter(d => {
-      const search = searchTerm.toLowerCase();
+      const search = searchTerm.toLowerCase().trim();
       const name = (d.donor_name || '').toLowerCase();
       const email = (d.donor_email || '').toLowerCase();
-      const tx = (d.txnid || '').toLowerCase();
-      const matchesSearch = name.includes(search) || email.includes(search) || tx.includes(search);
+      const phone = (d.donor_phone || d.donor_mobile || '').toLowerCase();
+      const pan = (d.donor_pan || '').toLowerCase();
+      const tx = (d.txnid || d.id || '').toLowerCase();
+      const collectorObj = collectors[d.tag_user_id];
+      const collectorName = (collectorObj?.name || d.metadata?.collector?.name || '').toLowerCase();
+
+      const matchesSearch = !search || 
+        name.includes(search) || 
+        email.includes(search) || 
+        phone.includes(search) || 
+        pan.includes(search) || 
+        tx.includes(search) ||
+        collectorName.includes(search);
+
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
       
-      const collector = collectors[d.tag_user_id];
-      const centerVal = collector?.center || d.center || 'None';
-      const matchesCenter = selectedCenter === 'all' || centerVal === selectedCenter;
-      
-      const templeVal = collector?.temple || d.temple || 'None';
-      const matchesTemple = selectedTemple === 'all' || templeVal === selectedTemple;
+      const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
+      const matchesCurrentTemple = selectedCurrentTemple === 'all' || currentTemple === selectedCurrentTemple;
+      const matchesCurrentCenter = selectedCurrentCenter === 'all' || currentCenter === selectedCurrentCenter;
+      const matchesParentTemple = selectedParentTemple === 'all' || parentTemple === selectedParentTemple;
+      const matchesParentCenter = selectedParentCenter === 'all' || parentCenter === selectedParentCenter;
       
       const matchesStatus = selectedStatus === 'all' 
         ? true 
         : selectedStatus === 'captured' 
           ? (d.payment_status === 'captured' || d.payment_status === 'success')
           : d.payment_status === selectedStatus;
-      return matchesSearch && matchesCollector && matchesCenter && matchesStatus && matchesTemple;
+
+      return matchesSearch && matchesCollector && matchesCurrentTemple && matchesCurrentCenter && matchesParentTemple && matchesParentCenter && matchesStatus;
     });
-  }, [donations, searchTerm, selectedCollector, selectedCenter, selectedStatus, selectedTemple, collectors]);
+  }, [donations, searchTerm, selectedCollector, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus, collectors]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (searchTerm.trim()) count++;
+    if (selectedCollector !== 'all') count++;
+    if (selectedCurrentTemple !== 'all') count++;
+    if (selectedCurrentCenter !== 'all') count++;
+    if (selectedParentTemple !== 'all') count++;
+    if (selectedParentCenter !== 'all') count++;
+    if (selectedStatus !== 'captured') count++;
+    return count;
+  }, [searchTerm, selectedCollector, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedCollector('all');
+    setSelectedCurrentTemple('all');
+    setSelectedCurrentCenter('all');
+    setSelectedParentTemple('all');
+    setSelectedParentCenter('all');
+    setSelectedStatus('captured');
+    setCurrentPage(1);
+  };
 
   const stats = useMemo(() => {
     const total = filteredDonations.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
@@ -224,9 +312,11 @@ export default function AdminDonationsPage() {
       'Donor Phone',
       'Donor PAN',
       'Donor Address',
-      'Center',
-      'Temple',
       'Collector Name',
+      'Collector Parent Center',
+      'Collector Parent Temple',
+      'Collector Current Center',
+      'Collector Current Temple',
       'Ashram / Category',
       'Amount (INR)',
       'Payment Gateway',
@@ -242,8 +332,7 @@ export default function AdminDonationsPage() {
 
     const rows = filteredDonations.map(d => {
       const collector = collectors[d.tag_user_id];
-      const resolvedCenter = collector?.center || d.center || 'None';
-      const resolvedTemple = collector?.temple || d.temple || 'None';
+      const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
       const dateStr = formatDonationDate(d);
 
       return [
@@ -254,9 +343,11 @@ export default function AdminDonationsPage() {
         escapeCsv(d.donor_phone || ''),
         escapeCsv(d.donor_pan || ''),
         escapeCsv(d.donor_address || ''),
-        escapeCsv(resolvedCenter),
-        escapeCsv(resolvedTemple),
         escapeCsv(collector?.name || 'System Executive'),
+        escapeCsv(parentCenter),
+        escapeCsv(parentTemple),
+        escapeCsv(currentCenter),
+        escapeCsv(currentTemple),
         escapeCsv(d.ashram || ''),
         escapeCsv(Number(d.amount || 0)),
         escapeCsv(d.payment_gateway || activeGateway),
@@ -334,39 +425,74 @@ export default function AdminDonationsPage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, name, parent_center, other_parent_center, parent_temple, other_parent_temple')
+        .select('id, name, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center')
         .in('id', activeCollectorIds);
       
-      const userMap: Record<string, {name: string, center: string, temple: string}> = {};
+      const userMap: Record<string, {
+        name: string;
+        parentCenter: string;
+        parentTemple: string;
+        currentCenter: string;
+        currentTemple: string;
+        center: string;
+        temple: string;
+      }> = {};
       const centerList = new Set<string>();
 
       ((userData || []) as any[]).forEach((u: any) => {
-        // Resolve collector Center strictly on parent center basis (NEVER fallback to current_center or center)
-        let resolvedCenter = 'None';
+        // 1. Resolve Parent Center
+        let parentCenter = 'None';
         if (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General') {
           if (u.parent_center === 'Other') {
-            resolvedCenter = u.other_parent_center ? u.other_parent_center.trim() : 'Other';
+            parentCenter = u.other_parent_center ? u.other_parent_center.trim() : 'Other';
           } else {
-            resolvedCenter = u.parent_center.trim();
+            parentCenter = u.parent_center.trim();
           }
         }
 
-        // Resolve collector Temple strictly on parent temple basis (NEVER fallback to current_temple)
-        let resolvedTemple = 'None';
+        // 2. Resolve Parent Temple
+        let parentTemple = 'None';
         if (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General') {
           if (u.parent_temple === 'Other') {
-            resolvedTemple = u.other_parent_temple ? u.other_parent_temple.trim() : 'Other';
+            parentTemple = u.other_parent_temple ? u.other_parent_temple.trim() : 'Other';
           } else {
-            resolvedTemple = u.parent_temple.trim();
+            parentTemple = u.parent_temple.trim();
+          }
+        }
+
+        // 3. Resolve Current Center
+        let currentCenter = 'None';
+        if (u.current_center && u.current_center !== 'None' && u.current_center !== 'General') {
+          if (u.current_center === 'Other') {
+            currentCenter = u.other_center ? u.other_center.trim() : 'Other';
+          } else {
+            currentCenter = u.current_center.trim();
+          }
+        } else if (u.center && u.center !== 'None') {
+          currentCenter = u.center.trim();
+        }
+
+        // 4. Resolve Current Temple
+        let currentTemple = 'None';
+        if (u.current_temple && u.current_temple !== 'None' && u.current_temple !== 'General') {
+          if (u.current_temple === 'Other') {
+            currentTemple = u.other_temple ? u.other_temple.trim() : 'Other';
+          } else {
+            currentTemple = u.current_temple.trim();
           }
         }
 
         userMap[u.id] = { 
           name: u.name || 'Unknown', 
-          center: resolvedCenter,
-          temple: resolvedTemple
+          parentCenter,
+          parentTemple,
+          currentCenter,
+          currentTemple,
+          center: parentCenter !== 'None' ? parentCenter : currentCenter,
+          temple: parentTemple !== 'None' ? parentTemple : currentTemple
         };
-        centerList.add(resolvedCenter);
+        if (parentCenter !== 'None') centerList.add(parentCenter);
+        if (currentCenter !== 'None') centerList.add(currentCenter);
       });
 
       setCollectors(userMap);
@@ -608,71 +734,28 @@ export default function AdminDonationsPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
-              <div className="col-span-2 relative flex-1 sm:w-56 group">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto flex-1 sm:justify-end">
+              <div className="relative flex-1 sm:max-w-xs group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
                 <input 
                   type="text" 
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Donor or TRX ID..."
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search donor, collector, PAN, TRX ID..."
                   className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-gray-400 shadow-sm"
                 />
               </div>
 
               <div className="relative group">
                 <select
-                  value={selectedTemple}
-                  onChange={(e) => {
-                    setSelectedTemple(e.target.value);
-                    setSelectedCenter('all');
-                    setSelectedCollector('all');
-                  }}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
-                >
-                  <option value="all">All Temples</option>
-                  {availableTemples.map(temple => (
-                    <option key={temple} value={temple}>{temple}</option>
-                  ))}
-                </select>
-                <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative group">
-                <select
-                  value={selectedCenter}
-                  onChange={(e) => {
-                    setSelectedCenter(e.target.value);
-                    setSelectedCollector('all');
-                  }}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
-                >
-                  <option value="all">All Centers</option>
-                  {availableCenters.map(center => (
-                    <option key={center} value={center}>{center}</option>
-                  ))}
-                </select>
-                <MapPin className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative group">
-                <select
-                  value={selectedCollector}
-                  onChange={(e) => setSelectedCollector(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
-                >
-                  <option value="all">All Collectors</option>
-                  {availableCollectors.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <UserCheck className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative group">
-                <select
                   value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedStatus(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
                 >
                   <option value="all">All Statuses</option>
@@ -683,14 +766,136 @@ export default function AdminDonationsPage() {
                 <CheckCircle2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               </div>
 
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={resetFilters}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                  title="Reset all filters"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Reset ({activeFiltersCount})</span>
+                </button>
+              )}
+
               <button 
                 onClick={handleExportCSV}
-                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl active:scale-95 transition-all shadow-md shadow-emerald-600/20"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl active:scale-95 transition-all shadow-md shadow-emerald-600/20"
                 title="Download CSV Audit Report"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export
               </button>
+            </div>
+          </div>
+
+          {/* Dedicated Hierarchy & Collector Filter Bar (Separate spaces for Current and Parent) */}
+          <div className="bg-white rounded-2xl border border-gray-200/80 p-3 shadow-md shadow-gray-100/60 mb-4 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+            {/* 1. Collector Current Section (Blue Theme) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1 p-2 rounded-xl bg-blue-50/40 border border-blue-100">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-100/80 border border-blue-200/80 rounded-lg text-blue-800 text-[10px] font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                Collector Current
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                <div className="relative group">
+                  <select
+                    value={selectedCurrentTemple}
+                    onChange={(e) => {
+                      setSelectedCurrentTemple(e.target.value);
+                      setSelectedCurrentCenter('all');
+                      setCurrentPage(1);
+                    }}
+                    className="w-full bg-white border border-blue-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                  >
+                    <option value="all">All Current Temples</option>
+                    {availableCurrentTemples.map(temple => (
+                      <option key={temple} value={temple}>{temple}</option>
+                    ))}
+                  </select>
+                  <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-blue-400 pointer-events-none" />
+                </div>
+
+                <div className="relative group">
+                  <select
+                    value={selectedCurrentCenter}
+                    onChange={(e) => {
+                      setSelectedCurrentCenter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full bg-white border border-blue-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                  >
+                    <option value="all">All Current Centers</option>
+                    {availableCurrentCenters.map(center => (
+                      <option key={center} value={center}>{center}</option>
+                    ))}
+                  </select>
+                  <MapPin className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-blue-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Collector Parent Section (Orange Theme) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1 p-2 rounded-xl bg-orange-50/40 border border-orange-100">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-100/80 border border-orange-200/80 rounded-lg text-orange-800 text-[10px] font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-600"></span>
+                Collector Parent
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                <div className="relative group">
+                  <select
+                    value={selectedParentTemple}
+                    onChange={(e) => {
+                      setSelectedParentTemple(e.target.value);
+                      setSelectedParentCenter('all');
+                      setCurrentPage(1);
+                    }}
+                    className="w-full bg-white border border-orange-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-950 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                  >
+                    <option value="all">All Parent Temples</option>
+                    {availableParentTemples.map(temple => (
+                      <option key={temple} value={temple}>{temple}</option>
+                    ))}
+                  </select>
+                  <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-400 pointer-events-none" />
+                </div>
+
+                <div className="relative group">
+                  <select
+                    value={selectedParentCenter}
+                    onChange={(e) => {
+                      setSelectedParentCenter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full bg-white border border-orange-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-orange-950 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                  >
+                    <option value="all">All Parent Centers</option>
+                    {availableParentCenters.map(center => (
+                      <option key={center} value={center}>{center}</option>
+                    ))}
+                  </select>
+                  <MapPin className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Collector Section */}
+            <div className="flex items-center gap-2 xl:w-56 shrink-0 p-2 rounded-xl bg-gray-50 border border-gray-100">
+              <div className="relative group w-full">
+                <select
+                  value={selectedCollector}
+                  onChange={(e) => {
+                    setSelectedCollector(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-800 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                >
+                  <option value="all">All Collectors</option>
+                  {availableCollectors.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <UserCheck className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+              </div>
             </div>
           </div>
 
@@ -702,8 +907,17 @@ export default function AdminDonationsPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/80">
-                      <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Center / Temple</th>
-                      <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Collector / Ashram</th>
+                      <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Collector</th>
+                      <th className="px-5 py-3 text-[10px] font-extrabold text-orange-600 uppercase tracking-wider whitespace-nowrap">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
+                        </span>
+                      </th>
+                      <th className="px-5 py-3 text-[10px] font-extrabold text-blue-600 uppercase tracking-wider whitespace-nowrap">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
+                        </span>
+                      </th>
                       <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Donor Details</th>
                       <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Amount</th>
                       <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Trx ID</th>
@@ -713,29 +927,13 @@ export default function AdminDonationsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                       const collector = collectors[donation.tag_user_id];
-                      const resolvedCenter = collector?.center || donation.center || 'None';
-                      const resolvedTemple = collector?.temple || donation.temple || 'None';
+                      const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
 
                       return (
                         <tr key={donation.id} className="hover:bg-orange-50/20 transition-colors group">
+                          {/* 1. Collector Identity */}
                           <td className="px-5 py-3.5">
-                             <div className="flex flex-col gap-1">
-                                <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
-                                  resolvedCenter === 'None'
-                                    ? 'text-gray-500 bg-gray-100 border border-gray-200'
-                                    : 'text-orange-700 bg-orange-50 border border-orange-200/70'
-                                }`}>
-                                   {resolvedCenter}
-                                </span>
-                                {resolvedTemple && resolvedTemple !== 'None' && (
-                                  <span className="text-stone-700 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md w-fit whitespace-nowrap">
-                                     {resolvedTemple}
-                                  </span>
-                                )}
-                             </div>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex flex-col gap-1 min-w-[120px]">
+                            <div className="flex flex-col gap-1 min-w-[130px]">
                               <div className="flex items-center gap-1.5">
                                 <UserCheck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
                                 <span className="text-gray-900 font-bold text-xs tracking-tight truncate">
@@ -749,6 +947,48 @@ export default function AdminDonationsPage() {
                               )}
                             </div>
                           </td>
+
+                          {/* 2. Collector Parent Column */}
+                          <td className="px-5 py-3.5">
+                            <div className="flex flex-col gap-1 min-w-[140px]">
+                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
+                                parentCenter === 'None'
+                                  ? 'text-gray-400 bg-gray-50 border border-gray-200'
+                                  : 'text-orange-800 bg-orange-50 border border-orange-200/80 font-bold'
+                              }`}>
+                                {parentCenter}
+                              </span>
+                              {parentTemple && parentTemple !== 'None' ? (
+                                <span className="text-stone-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md w-fit whitespace-nowrap">
+                                  {parentTemple}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-400 italic">No Temple</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 3. Collector Current Column */}
+                          <td className="px-5 py-3.5">
+                            <div className="flex flex-col gap-1 min-w-[140px]">
+                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
+                                currentCenter === 'None'
+                                  ? 'text-gray-400 bg-gray-50 border border-gray-200'
+                                  : 'text-blue-800 bg-blue-50 border border-blue-200/80 font-bold'
+                              }`}>
+                                {currentCenter}
+                              </span>
+                              {currentTemple && currentTemple !== 'None' ? (
+                                <span className="text-sky-800 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-sky-50 border border-sky-200/80 rounded-md w-fit whitespace-nowrap">
+                                  {currentTemple}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-400 italic">No Temple</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 4. Donor Details */}
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5 min-w-[180px]">
                               <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-xs font-bold text-orange-700 border border-orange-200/80 shrink-0">
@@ -777,6 +1017,8 @@ export default function AdminDonationsPage() {
                               </div>
                             </div>
                           </td>
+
+                          {/* 5. Amount */}
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex flex-col items-end gap-0.5">
                               <div className="flex items-center gap-0.5 text-gray-900 font-black text-sm sm:text-base">
@@ -788,6 +1030,8 @@ export default function AdminDonationsPage() {
                               </span>
                             </div>
                           </td>
+
+                          {/* 6. Trx ID */}
                           <td className="px-5 py-3.5">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-gray-700 font-mono text-[10px] tracking-tight truncate max-w-[140px]" title={donation.txnid}>
@@ -801,6 +1045,8 @@ export default function AdminDonationsPage() {
                               </div>
                             </div>
                           </td>
+
+                          {/* 7. Status */}
                           <td className="px-5 py-3.5">
                              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border w-fit ${
                               donation.payment_status === 'captured' || donation.payment_status === 'success'
@@ -822,8 +1068,7 @@ export default function AdminDonationsPage() {
               <div className="md:hidden divide-y divide-gray-100">
                 {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                   const collector = collectors[donation.tag_user_id];
-                  const resolvedCenter = collector?.center || donation.center || 'None';
-                  const resolvedTemple = collector?.temple || donation.temple || 'None';
+                  const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
 
                   return (
                     <div key={donation.id} className="p-4 space-y-3 hover:bg-orange-50/20 transition-colors">
@@ -851,26 +1096,28 @@ export default function AdminDonationsPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                         <span className={`font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                           resolvedCenter === 'None'
-                             ? 'text-gray-500 bg-gray-100 border border-gray-200'
-                             : 'text-orange-700 bg-orange-50 border border-orange-200/70'
-                         }`}>
-                           {resolvedCenter}
-                         </span>
-                         {resolvedTemple && resolvedTemple !== 'None' && (
-                           <span className="text-stone-700 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md">
-                             {resolvedTemple}
+                      {/* Separate spaces for Collector Parent and Collector Current */}
+                      <div className="grid grid-cols-2 gap-2">
+                         <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
+                           <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
                            </span>
-                         )}
-                         <span className="text-[9px] font-medium text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-md flex items-center gap-1 ml-auto">
-                           <Clock className="w-2.5 h-2.5" /> {formatDonationDate(donation)}
-                         </span>
+                           <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
+                           <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
+                         </div>
+                         <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
+                           <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
+                           </span>
+                           <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
+                           <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
+                         </div>
                       </div>
                       <div className="pt-2 border-t border-gray-100 flex justify-between items-center text-[9px] text-gray-500">
                          <span className="font-mono truncate max-w-[140px] text-gray-600">{donation.txnid}</span>
-                         <span className="font-bold uppercase tracking-wider text-gray-400">{donation.payment_method || 'Razorpay'}</span>
+                         <span className="text-[9px] font-medium text-gray-500 flex items-center gap-1">
+                           <Clock className="w-2.5 h-2.5" /> {formatDonationDate(donation)}
+                         </span>
                       </div>
                     </div>
                   );
@@ -881,25 +1128,44 @@ export default function AdminDonationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                 const collector = collectors[donation.tag_user_id];
-                const resolvedCenter = collector?.center || donation.center || 'None';
-                const resolvedTemple = collector?.temple || donation.temple || 'None';
+                const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
 
                 return (
                   <div key={donation.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-md hover:border-orange-200 hover:shadow-lg transition-all group flex flex-col justify-between">
                      <div>
                        <div className="flex justify-between items-start mb-4">
-                          <div className="space-y-0.5 min-w-0">
-                            <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
-                            <h3 className="text-gray-900 font-bold text-sm tracking-tight truncate mt-1">{collector?.name || 'System Executive'}</h3>
-                            <p className="text-[10px] text-gray-500 font-medium truncate">
-                              {resolvedCenter !== 'None' 
-                                ? (resolvedTemple !== 'None' ? `${resolvedCenter} • ${resolvedTemple}` : resolvedCenter)
-                                : (resolvedTemple !== 'None' ? resolvedTemple : 'None')}
-                            </p>
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
+                              {donation.ashram && (
+                                <span className="text-gray-600 font-semibold text-[9px] bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[130px]">
+                                  {donation.ashram}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-gray-900 font-bold text-sm tracking-tight truncate">{collector?.name || 'System Executive'}</h3>
                           </div>
-                          <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100 shadow-inner group-hover:bg-orange-100/60 transition-all">
+                          <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100 shadow-inner group-hover:bg-orange-100/60 transition-all shrink-0">
                             <IndianRupee className="w-4 h-4 text-orange-600" />
                           </div>
+                       </div>
+                       
+                       {/* Separate spaces for Collector Parent and Collector Current */}
+                       <div className="grid grid-cols-2 gap-2 mb-4">
+                         <div className="p-2 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
+                           <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
+                           </span>
+                           <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
+                           <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
+                         </div>
+                         <div className="p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
+                           <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
+                           </span>
+                           <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
+                           <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
+                         </div>
                        </div>
                        
                        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-4">

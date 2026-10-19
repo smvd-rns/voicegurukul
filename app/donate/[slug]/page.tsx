@@ -84,37 +84,63 @@ export default function DonationPage() {
       try {
         const { data, error: fetchError } = await supabase
           .from('users')
-          .select('id, name, profile_image, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
+          .select('id, name, email, phone, profile_image, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
           .eq('donation_slug', slug)
           .single();
 
         if (fetchError || !data) {
           setError('This donation link is invalid or has expired.');
         } else {
-          // Resolve Center name strictly on parent center basis (NEVER fallback to current_center or center)
-          let resolvedCenter = 'None';
+          // 1. Resolve Parent Center
+          let resolvedParentCenter = 'None';
           if (data.parent_center && data.parent_center !== 'None' && data.parent_center !== 'General') {
             if (data.parent_center === 'Other') {
-              resolvedCenter = data.other_parent_center ? data.other_parent_center.trim() : 'Other';
+              resolvedParentCenter = data.other_parent_center ? data.other_parent_center.trim() : 'Other';
             } else {
-              resolvedCenter = data.parent_center.trim();
+              resolvedParentCenter = data.parent_center.trim();
             }
           }
           
-          // Resolve Temple name strictly on parent temple basis (NEVER fallback to current_temple)
-          let resolvedTemple = 'None';
+          // 2. Resolve Parent Temple
+          let resolvedParentTemple = 'None';
           if (data.parent_temple && data.parent_temple !== 'None' && data.parent_temple !== 'General') {
             if (data.parent_temple === 'Other') {
-              resolvedTemple = data.other_parent_temple ? data.other_parent_temple.trim() : 'Other';
+              resolvedParentTemple = data.other_parent_temple ? data.other_parent_temple.trim() : 'Other';
             } else {
-              resolvedTemple = data.parent_temple.trim();
+              resolvedParentTemple = data.parent_temple.trim();
+            }
+          }
+
+          // 3. Resolve Current Center
+          let resolvedCurrentCenter = 'None';
+          if (data.current_center && data.current_center !== 'None' && data.current_center !== 'General') {
+            if (data.current_center === 'Other') {
+              resolvedCurrentCenter = data.other_center ? data.other_center.trim() : 'Other';
+            } else {
+              resolvedCurrentCenter = data.current_center.trim();
+            }
+          } else if (data.center && data.center !== 'None') {
+            resolvedCurrentCenter = data.center.trim();
+          }
+
+          // 4. Resolve Current Temple
+          let resolvedCurrentTemple = 'None';
+          if (data.current_temple && data.current_temple !== 'None' && data.current_temple !== 'General') {
+            if (data.current_temple === 'Other') {
+              resolvedCurrentTemple = data.other_temple ? data.other_temple.trim() : 'Other';
+            } else {
+              resolvedCurrentTemple = data.current_temple.trim();
             }
           }
 
           setTargetUser({
             ...data,
-            resolvedCenter,
-            resolvedTemple,
+            resolvedParentCenter,
+            resolvedParentTemple,
+            resolvedCurrentCenter,
+            resolvedCurrentTemple,
+            resolvedCenter: resolvedParentCenter, // backward compatibility
+            resolvedTemple: resolvedParentTemple, // backward compatibility
             ashram: data.ashram || 'N/A'
           });
 
@@ -156,6 +182,9 @@ export default function DonationPage() {
     setIsProcessing(true);
     setError('');
 
+    const websiteHost = typeof window !== 'undefined' ? window.location.host : 'voicegurukul.com';
+    const websiteUrl = typeof window !== 'undefined' ? window.location.href : '';
+
     try {
       if (MOCK_MODE) {
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -170,10 +199,21 @@ export default function DonationPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             ...formData, 
-            targetUserId: targetUser.id, 
+            targetUserId: targetUser.id,
+            collectorName: targetUser.name,
+            collectorEmail: targetUser.email,
+            collectorMobile: targetUser.phone,
+            collectorSlug: slug,
+            parentCenter: targetUser.resolvedParentCenter,
+            parentTemple: targetUser.resolvedParentTemple,
+            currentCenter: targetUser.resolvedCurrentCenter,
+            currentTemple: targetUser.resolvedCurrentTemple,
             center: targetUser.resolvedCenter,
             temple: targetUser.resolvedTemple,
-            ashram: targetUser.ashram
+            ashram: targetUser.ashram,
+            website: websiteHost,
+            websiteUrl: websiteUrl,
+            paymentFor: 'Donation'
           })
         });
         const orderData = await orderRes.json();
@@ -192,7 +232,7 @@ export default function DonationPage() {
           amount: orderData.amount,
           currency: "INR",
           name: "Voice Gurukul",
-          description: "Supporting Voice Gurukul",
+          description: `Donation via ${targetUser.name || 'Voice Gurukul'}`,
           image: targetUser.profile_image || "",
           order_id: orderData.orderId,
           handler: async function (response: any) {
@@ -226,17 +266,21 @@ export default function DonationPage() {
             contact: formData.donorMobile,
           },
           notes: {
-            donor_name: formData.donorName,
-            donor_email: formData.donorEmail,
-            donor_phone: formData.donorMobile,
-            donor_address: formData.donorAddress,
-            donor_pan: formData.donorPan,
-            target_user_id: targetUser.id,
-            target_user_name: targetUser.name,
-            donation_slug: slug,
-            center: targetUser.resolvedCenter,
-            temple: targetUser.resolvedTemple,
-            ashram: targetUser.ashram
+            payment_for: "Donation",
+            website: websiteHost.substring(0, 40),
+            collector_name: String(targetUser.name || "").substring(0, 50),
+            collector_mobile: String(targetUser.phone || "").substring(0, 20),
+            collector_email: String(targetUser.email || "").substring(0, 50),
+            collector_slug: String(slug || "").substring(0, 30),
+            collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
+            collector_parent_temple: String(targetUser.resolvedParentTemple || "None").substring(0, 50),
+            collector_current_center: String(targetUser.resolvedCurrentCenter || "None").substring(0, 50),
+            collector_current_temple: String(targetUser.resolvedCurrentTemple || "None").substring(0, 50),
+            collector_ashram: String(targetUser.ashram || "N/A").substring(0, 30),
+            donor_name: String(formData.donorName || "").substring(0, 50),
+            donor_mobile: String(formData.donorMobile || "").substring(0, 20),
+            donor_email: String(formData.donorEmail || "").substring(0, 50),
+            donor_pan: String(formData.donorPan || "N/A").substring(0, 20)
           },
           theme: {
             color: "#4f46e5", // indigo-600
@@ -257,10 +301,21 @@ export default function DonationPage() {
           body: JSON.stringify({ 
             ...formData, 
             targetUserId: targetUser.id, 
+            collectorName: targetUser.name,
+            collectorEmail: targetUser.email,
+            collectorMobile: targetUser.phone,
+            collectorSlug: slug,
             slug, 
+            parentCenter: targetUser.resolvedParentCenter,
+            parentTemple: targetUser.resolvedParentTemple,
+            currentCenter: targetUser.resolvedCurrentCenter,
+            currentTemple: targetUser.resolvedCurrentTemple,
             center: targetUser.resolvedCenter,
             temple: targetUser.resolvedTemple,
-            ashram: targetUser.ashram
+            ashram: targetUser.ashram,
+            website: websiteHost,
+            websiteUrl: websiteUrl,
+            paymentFor: 'Donation'
           })
         });
         const orderData = await orderRes.json();

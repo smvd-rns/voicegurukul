@@ -18,9 +18,13 @@ export async function POST(req: Request) {
     }
 
     const txnid = `EBD_${Date.now()}_${targetUserId.substring(0, 5)}`;
-    const productInfo = `Donation via ${slug}`;
+    const productInfo = `Donation via ${body.collectorName || slug}`;
     const surl = `${baseUrl}/api/donations/easebuzz/verify?status=success&slug=${slug}`;
     const furl = `${baseUrl}/api/donations/easebuzz/verify?status=failed&slug=${slug}`;
+
+    const hostHeader = req.headers.get('host') || '';
+    const detectedWebsite = body.website || hostHeader || 'voicegurukul.com';
+    const detectedUrl = body.websiteUrl || '';
 
     // Easebuzz strict hash format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt
     const formatAmount = parseFloat(amount).toFixed(2); // strictly requires 2 decimals
@@ -28,12 +32,19 @@ export async function POST(req: Request) {
     const udf2 = donorPan || "";
     const udf3 = slug || "";
     const udf4 = targetUserId || "";
-    const hashString = `${easebuzzKey}|${txnid}|${formatAmount}|${productInfo}|${donorName}|${donorEmail}|${udf1}|${udf2}|${udf3}|${udf4}|||||||${easebuzzSalt}`;
+    const udf5 = body.paymentFor || "Donation";
+    const hashString = `${easebuzzKey}|${txnid}|${formatAmount}|${productInfo}|${donorName}|${donorEmail}|${udf1}|${udf2}|${udf3}|${udf4}|${udf5}||||||${easebuzzSalt}`;
     const hash = crypto.createHash('sha512').update(hashString).digest('hex');
 
-    // Resolve collector's parent center and parent temple from DB
-    let finalCenter = center || null;
-    let finalTemple = temple || null;
+    // Resolve collector details from DB
+    let collectorName = body.collectorName || '';
+    let collectorEmail = body.collectorEmail || '';
+    let collectorMobile = body.collectorMobile || '';
+    let resolvedParentCenter = body.parentCenter || 'None';
+    let resolvedParentTemple = body.parentTemple || 'None';
+    let resolvedCurrentCenter = body.currentCenter || 'None';
+    let resolvedCurrentTemple = body.currentTemple || 'None';
+    let collectorAshram = ashram || body.ashram || 'N/A';
 
     const sadhanaDb = getSadhanaAdminClient();
 
@@ -41,36 +52,53 @@ export async function POST(req: Request) {
       try {
         const { data: collectorUser } = await sadhanaDb
           .from('users')
-          .select('parent_center, other_parent_center, parent_temple, other_parent_temple')
+          .select('name, email, phone, donation_slug, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
           .eq('id', targetUserId)
           .single();
 
         if (collectorUser) {
-          let resolvedParentCenter = 'None';
+          if (collectorUser.name) collectorName = collectorUser.name;
+          if (collectorUser.email) collectorEmail = collectorUser.email;
+          if (collectorUser.phone) collectorMobile = collectorUser.phone;
+          if (collectorUser.ashram) collectorAshram = collectorUser.ashram;
+
+          // Parent Center
           if (collectorUser.parent_center && collectorUser.parent_center !== 'None' && collectorUser.parent_center !== 'General') {
-            if (collectorUser.parent_center === 'Other') {
-              resolvedParentCenter = collectorUser.other_parent_center ? collectorUser.other_parent_center.trim() : 'Other';
-            } else {
-              resolvedParentCenter = collectorUser.parent_center.trim();
-            }
+            resolvedParentCenter = (collectorUser.parent_center === 'Other' && collectorUser.other_parent_center)
+              ? collectorUser.other_parent_center.trim()
+              : collectorUser.parent_center.trim();
           }
 
-          let resolvedParentTemple = 'None';
+          // Parent Temple
           if (collectorUser.parent_temple && collectorUser.parent_temple !== 'None' && collectorUser.parent_temple !== 'General') {
-            if (collectorUser.parent_temple === 'Other') {
-              resolvedParentTemple = collectorUser.other_parent_temple ? collectorUser.other_parent_temple.trim() : 'Other';
-            } else {
-              resolvedParentTemple = collectorUser.parent_temple.trim();
-            }
+            resolvedParentTemple = (collectorUser.parent_temple === 'Other' && collectorUser.other_parent_temple)
+              ? collectorUser.other_parent_temple.trim()
+              : collectorUser.parent_temple.trim();
           }
 
-          finalCenter = resolvedParentCenter;
-          finalTemple = resolvedParentTemple;
+          // Current Center
+          if (collectorUser.current_center && collectorUser.current_center !== 'None' && collectorUser.current_center !== 'General') {
+            resolvedCurrentCenter = (collectorUser.current_center === 'Other' && collectorUser.other_center)
+              ? collectorUser.other_center.trim()
+              : collectorUser.current_center.trim();
+          } else if (collectorUser.center && collectorUser.center !== 'None') {
+            resolvedCurrentCenter = collectorUser.center.trim();
+          }
+
+          // Current Temple
+          if (collectorUser.current_temple && collectorUser.current_temple !== 'None' && collectorUser.current_temple !== 'General') {
+            resolvedCurrentTemple = (collectorUser.current_temple === 'Other' && collectorUser.other_temple)
+              ? collectorUser.other_temple.trim()
+              : collectorUser.current_temple.trim();
+          }
         }
       } catch (err) {
-        console.error('Error resolving collector parent center/temple for Easebuzz:', err);
+        console.error('Error resolving collector info for Easebuzz:', err);
       }
     }
+
+    const primaryCenter = resolvedParentCenter !== 'None' ? resolvedParentCenter : (resolvedCurrentCenter !== 'None' ? resolvedCurrentCenter : null);
+    const primaryTemple = resolvedParentTemple !== 'None' ? resolvedParentTemple : (resolvedCurrentTemple !== 'None' ? resolvedCurrentTemple : null);
 
     // 1. Create Pending DB Record first
     const { error: dbError } = await sadhanaDb.from('donations').insert([{
@@ -85,10 +113,36 @@ export async function POST(req: Request) {
       payment_method: 'Easebuzz',
       txnid: txnid,
       tag_user_id: targetUserId,
-      center: finalCenter || null,
-      temple: finalTemple || null,
-      ashram: ashram || null,
-      metadata: { environment: env, created_at: new Date().toISOString() }
+      center: primaryCenter,
+      temple: primaryTemple,
+      ashram: collectorAshram !== 'N/A' ? collectorAshram : null,
+      metadata: {
+        payment_for: body.paymentFor || 'Donation',
+        category: 'Donation',
+        website: detectedWebsite,
+        website_url: detectedUrl,
+        collector: {
+          id: targetUserId,
+          name: collectorName,
+          email: collectorEmail,
+          mobile: collectorMobile,
+          slug: slug,
+          parent_center: resolvedParentCenter,
+          parent_temple: resolvedParentTemple,
+          current_center: resolvedCurrentCenter,
+          current_temple: resolvedCurrentTemple,
+          ashram: collectorAshram
+        },
+        donor: {
+          name: donorName,
+          email: donorEmail,
+          mobile: donorMobile,
+          address: donorAddress || null,
+          pan: donorPan || null
+        },
+        environment: env,
+        created_at: new Date().toISOString()
+      }
     }]);
 
     if (dbError) throw dbError;
