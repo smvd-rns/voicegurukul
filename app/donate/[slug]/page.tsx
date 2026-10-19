@@ -59,6 +59,7 @@ function Counter({ target, suffix = "" }: { target: number; suffix?: string }) {
 export default function DonationPage() {
   const { slug } = useParams();
   const router = useRouter();
+  const [paymentForParam, setPaymentForParam] = useState('Donation');
 
   const [targetUser, setTargetUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,6 +167,10 @@ export default function DonationPage() {
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const camp = params.get('camp') || params.get('for') || params.get('activity');
+      if (camp) {
+        setPaymentForParam(camp);
+      }
       const mode = params.get('mode');
       const msg = params.get('message');
 
@@ -213,7 +218,7 @@ export default function DonationPage() {
             ashram: targetUser.ashram,
             website: websiteHost,
             websiteUrl: websiteUrl,
-            paymentFor: 'Donation'
+            paymentFor: paymentForParam
           })
         });
         const orderData = await orderRes.json();
@@ -232,7 +237,7 @@ export default function DonationPage() {
           amount: orderData.amount,
           currency: "INR",
           name: "Voice Gurukul",
-          description: `Donation via ${targetUser.name || 'Voice Gurukul'}`,
+          description: `${paymentForParam} via ${targetUser.name || 'Voice Gurukul'}`,
           image: targetUser.profile_image || "",
           order_id: orderData.orderId,
           handler: async function (response: any) {
@@ -266,21 +271,16 @@ export default function DonationPage() {
             contact: formData.donorMobile,
           },
           notes: {
-            payment_for: "Donation",
+            payment_for: String(paymentForParam).substring(0, 50),
             website: websiteHost.substring(0, 40),
-            collector_name: String(targetUser.name || "").substring(0, 50),
-            collector_mobile: String(targetUser.phone || "").substring(0, 20),
-            collector_email: String(targetUser.email || "").substring(0, 50),
-            collector_slug: String(slug || "").substring(0, 30),
-            collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
-            collector_parent_temple: String(targetUser.resolvedParentTemple || "None").substring(0, 50),
-            collector_current_center: String(targetUser.resolvedCurrentCenter || "None").substring(0, 50),
-            collector_current_temple: String(targetUser.resolvedCurrentTemple || "None").substring(0, 50),
-            collector_ashram: String(targetUser.ashram || "N/A").substring(0, 30),
             donor_name: String(formData.donorName || "").substring(0, 50),
-            donor_mobile: String(formData.donorMobile || "").substring(0, 20),
+            donor_phone: String(formData.donorMobile || "").substring(0, 20),
             donor_email: String(formData.donorEmail || "").substring(0, 50),
-            donor_pan: String(formData.donorPan || "N/A").substring(0, 20)
+            donor_address: String(formData.donorAddress || "N/A").substring(0, 100),
+            donor_pan: String(formData.donorPan || "N/A").substring(0, 20),
+            collector_parent_temple: String(targetUser.resolvedParentTemple || "None").substring(0, 50),
+            collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
+            collector_slug: String(slug || "").substring(0, 30)
           },
           theme: {
             color: "#4f46e5", // indigo-600
@@ -315,7 +315,7 @@ export default function DonationPage() {
             ashram: targetUser.ashram,
             website: websiteHost,
             websiteUrl: websiteUrl,
-            paymentFor: 'Donation'
+            paymentFor: paymentForParam
           })
         });
         const orderData = await orderRes.json();

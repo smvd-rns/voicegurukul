@@ -111,7 +111,7 @@ export default function MyDonationsPage() {
 
   const totalPages = Math.ceil(filteredDonations.length / pageSize);
   const paginatedDonations = filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const totalAmount = filteredDonations.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const totalAmount = filteredDonations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
   if (isLoading) {
     return (
@@ -150,7 +150,7 @@ export default function MyDonationsPage() {
                  <span className="text-[9px] font-bold text-blue-50 uppercase tracking-widest drop-shadow-sm">Total Raised</span>
               </div>
               <div className="flex items-baseline gap-1 text-white">
-                 <span className="text-2xl md:text-3xl font-black tracking-tighter drop-shadow-md">₹{totalAmount.toLocaleString()}</span>
+                 <span className="text-2xl md:text-3xl font-black tracking-tighter drop-shadow-md">₹{totalAmount.toLocaleString('en-IN')}</span>
                  <span className="text-cyan-400 font-black text-[10px] uppercase drop-shadow-sm">INR</span>
               </div>
             </div>
@@ -311,7 +311,7 @@ export default function MyDonationsPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex flex-col items-end">
-                            <span className="text-lg font-black text-slate-900 tracking-tighter">₹{(d.amount || 0).toLocaleString()}</span>
+                            <span className="text-lg font-black text-slate-900 tracking-tighter">₹{Number(d.amount || 0).toLocaleString('en-IN')}</span>
                             <span className={`text-[8px] font-black px-2 py-0.5 rounded border mt-1 uppercase tracking-widest shadow-sm ${d.payment_status === 'captured' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-amber-600 bg-amber-50 border-amber-100'}`}>
                               {d.payment_status === 'captured' ? 'Verified' : 'Pending'}
                             </span>
@@ -347,7 +347,7 @@ export default function MyDonationsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-black text-slate-900 tracking-tighter">₹{(d.amount || 0).toLocaleString()}</p>
+                        <p className="text-lg font-black text-slate-900 tracking-tighter">₹{Number(d.amount || 0).toLocaleString('en-IN')}</p>
                         <span className={`text-[8px] font-black uppercase tracking-widest ${d.payment_status === 'captured' ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {d.payment_status === 'captured' ? 'Recorded' : 'Pending'}
                         </span>

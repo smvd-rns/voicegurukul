@@ -110,27 +110,23 @@ export async function POST(req: Request) {
       }
     }
 
-    // 1. Create Razorpay Order with exactly 15 informative note fields
+    // 1. Create Razorpay Order with simplified, focused notes payload
+    const paymentForTitle = paymentFor || body.payment_for || "Donation";
     const options = {
       amount: Math.round(parseFloat(amount) * 100), // convert to paise
       currency: "INR",
       receipt: `RCPT_${Date.now()}_${targetUserId.substring(0, 5)}`,
       notes: {
-        payment_for: paymentFor || "Donation",
+        payment_for: String(paymentForTitle).substring(0, 50),
         website: String(detectedWebsite).substring(0, 40),
-        collector_name: String(collectorName || "").substring(0, 50),
-        collector_mobile: String(collectorMobile || "").substring(0, 20),
-        collector_email: String(collectorEmail || "").substring(0, 50),
-        collector_slug: String(collectorSlugValue || "").substring(0, 30),
-        collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50),
-        collector_parent_temple: String(resolvedParentTemple || "None").substring(0, 50),
-        collector_current_center: String(resolvedCurrentCenter || "None").substring(0, 50),
-        collector_current_temple: String(resolvedCurrentTemple || "None").substring(0, 50),
-        collector_ashram: String(collectorAshram || "N/A").substring(0, 30),
         donor_name: String(donorName || "").substring(0, 50),
-        donor_mobile: String(donorMobile || "").substring(0, 20),
+        donor_phone: String(donorMobile || "").substring(0, 20),
         donor_email: String(donorEmail || "").substring(0, 50),
-        donor_pan: String(donorPan || "N/A").substring(0, 20)
+        donor_address: String(donorAddress || "N/A").substring(0, 100),
+        donor_pan: String(donorPan || "N/A").substring(0, 20),
+        collector_parent_temple: String(resolvedParentTemple || "None").substring(0, 50),
+        collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50),
+        collector_slug: String(collectorSlugValue || "").substring(0, 30)
       }
     };
     const order = await razorpay.orders.create(options);
@@ -157,10 +153,18 @@ export async function POST(req: Request) {
       temple: primaryTemple,
       ashram: collectorAshram !== 'N/A' ? collectorAshram : null,
       metadata: {
-        payment_for: paymentFor || 'Donation',
-        category: 'Donation',
+        payment_for: paymentForTitle,
+        category: paymentForTitle.toLowerCase().includes('camp') ? 'Camp' : 'Donation',
         website: detectedWebsite,
         website_url: detectedUrl,
+        donor_name: donorName,
+        donor_phone: donorMobile,
+        donor_email: donorEmail,
+        donor_address: donorAddress || null,
+        donor_pan: donorPan || null,
+        collector_parent_temple: resolvedParentTemple,
+        collector_parent_center: resolvedParentCenter,
+        collector_slug: collectorSlugValue,
         collector: {
           id: targetUserId,
           name: collectorName,
