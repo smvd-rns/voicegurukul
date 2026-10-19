@@ -26,7 +26,8 @@ import {
   X,
   UserCheck,
   MapPin,
-  RotateCcw
+  RotateCcw,
+  Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/config';
@@ -298,6 +299,10 @@ export default function AdminDonationsPage() {
     });
   };
 
+  const getDonorPhone = (donation: any) => {
+    return donation.donor_mobile || donation.donor_phone || donation.metadata?.donor?.donor_phone || donation.metadata?.donor_phone || donation.phone || '';
+  };
+
   const handleExportCSV = () => {
     if (!filteredDonations.length) {
       alert('No donation records found to export.');
@@ -334,15 +339,16 @@ export default function AdminDonationsPage() {
       const collector = collectors[d.tag_user_id];
       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
       const dateStr = formatDonationDate(d);
+      const donorPhone = getDonorPhone(d);
 
       return [
         escapeCsv(dateStr),
         escapeCsv(d.txnid || d.id),
         escapeCsv(d.donor_name),
         escapeCsv(d.donor_email),
-        escapeCsv(d.donor_phone || ''),
+        escapeCsv(donorPhone),
         escapeCsv(d.donor_pan || ''),
-        escapeCsv(d.donor_address || ''),
+        escapeCsv(d.donor_address || d.address || ''),
         escapeCsv(collector?.name || 'System Executive'),
         escapeCsv(parentCenter),
         escapeCsv(parentTemple),
@@ -928,6 +934,7 @@ export default function AdminDonationsPage() {
                     {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                       const collector = collectors[donation.tag_user_id];
                       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
+                      const donorPhone = getDonorPhone(donation);
 
                       return (
                         <tr key={donation.id} className="hover:bg-orange-50/20 transition-colors group">
@@ -990,16 +997,22 @@ export default function AdminDonationsPage() {
 
                           {/* 4. Donor Details */}
                           <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2.5 min-w-[180px]">
+                            <div className="flex items-center gap-2.5 min-w-[190px]">
                               <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-xs font-bold text-orange-700 border border-orange-200/80 shrink-0">
                                 {donation.donor_name ? donation.donor_name.charAt(0).toUpperCase() : 'D'}
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="text-gray-900 font-bold text-xs truncate">{donation.donor_name}</span>
                                 <span className="text-[10px] text-gray-500 truncate flex items-center gap-1 font-medium">
-                                  <Mail className="w-2.5 h-2.5 text-gray-400" />
+                                  <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
                                   {donation.donor_email}
                                 </span>
+                                {donorPhone && (
+                                  <span className="text-[10px] text-gray-600 truncate flex items-center gap-1 font-semibold mt-0.5">
+                                    <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    {donorPhone}
+                                  </span>
+                                )}
                                 {(donation.donor_address || donation.donor_pan) && (
                                   <div className="flex gap-1.5 mt-0.5">
                                     {donation.donor_pan && (
@@ -1069,6 +1082,7 @@ export default function AdminDonationsPage() {
                 {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                   const collector = collectors[donation.tag_user_id];
                   const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
+                  const donorPhone = getDonorPhone(donation);
 
                   return (
                     <div key={donation.id} className="p-4 space-y-3 hover:bg-orange-50/20 transition-colors">
@@ -1080,8 +1094,13 @@ export default function AdminDonationsPage() {
                           <div className="min-w-0">
                             <p className="text-gray-900 font-bold text-xs truncate tracking-tight">{donation.donor_name}</p>
                             <p className="text-[10px] text-gray-500 truncate flex items-center gap-1 font-medium">
-                              <Mail className="w-2.5 h-2.5 text-gray-400" /> {donation.donor_email}
+                              <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" /> {donation.donor_email}
                             </p>
+                            {donorPhone && (
+                              <p className="text-[10px] text-gray-600 truncate flex items-center gap-1 font-semibold mt-0.5">
+                                <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" /> {donorPhone}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
@@ -1129,6 +1148,7 @@ export default function AdminDonationsPage() {
               {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                 const collector = collectors[donation.tag_user_id];
                 const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
+                const donorPhone = getDonorPhone(donation);
 
                 return (
                   <div key={donation.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-md hover:border-orange-200 hover:shadow-lg transition-all group flex flex-col justify-between">
@@ -1172,12 +1192,18 @@ export default function AdminDonationsPage() {
                           <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-sm font-bold text-orange-700 border border-orange-200/80 shadow-sm shrink-0">
                              {donation.donor_name ? donation.donor_name.charAt(0).toUpperCase() : 'D'}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                               <p className="text-gray-900 font-bold truncate text-xs">{donation.donor_name}</p>
                               <p className="text-[10px] text-gray-500 flex items-center gap-1 truncate font-medium">
-                                 <Clock className="w-2.5 h-2.5 text-gray-400" />
-                                 {formatDonationDate(donation)}
+                                 <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                                 {donation.donor_email}
                               </p>
+                              {donorPhone && (
+                                 <p className="text-[10px] text-gray-600 flex items-center gap-1 truncate font-semibold mt-0.5">
+                                    <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    {donorPhone}
+                                 </p>
+                              )}
                               <p className="text-[9px] font-mono text-gray-500 truncate mt-0.5">{donation.txnid}</p>
                           </div>
                        </div>

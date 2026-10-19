@@ -20,7 +20,8 @@ import {
   ChevronRight,
   PieChart,
   Award,
-  Wallet
+  Wallet,
+  MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/config';
@@ -251,7 +252,6 @@ export default function MyDonationsPage() {
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-100">
                       <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Donor</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Center / Temple</th>
                       <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Payment Info</th>
                       <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest">Contact Identity</th>
                       <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">Settled Amount</th>
@@ -271,18 +271,6 @@ export default function MyDonationsPage() {
                                 {new Date(d.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                               </p>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-emerald-600 font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-md w-fit">
-                              {d.center || 'Main Center'}
-                            </span>
-                            {d.temple && (
-                              <span className="text-blue-500 font-bold text-[9px] uppercase tracking-widest px-2 py-0.5 bg-blue-50 border border-blue-100 rounded-md w-fit">
-                                {d.temple}
-                              </span>
-                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -307,6 +295,12 @@ export default function MyDonationsPage() {
                               <span className="w-5 h-5 bg-emerald-50 rounded-md flex items-center justify-center text-emerald-500"><Phone className="w-3 h-3" /></span>
                               {d.donor_mobile}
                             </div>
+                            {(d.donor_address || d.address) && (
+                              <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                                <span className="w-5 h-5 bg-rose-50 rounded-md flex items-center justify-center text-rose-500 shrink-0"><MapPin className="w-3 h-3" /></span>
+                                <span className="truncate max-w-[240px]" title={d.donor_address || d.address}>{d.donor_address || d.address}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -339,11 +333,6 @@ export default function MyDonationsPage() {
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-0.5">
                             {new Date(d.created_at).toLocaleDateString()}
                           </p>
-                          {d.temple && (
-                            <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">
-                              {d.temple}
-                            </p>
-                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -367,6 +356,12 @@ export default function MyDonationsPage() {
                          <div className="w-5 h-5 bg-emerald-100/50 rounded flex items-center justify-center"><Phone className="w-3 h-3 text-emerald-500" /></div>
                          <span className="font-medium text-slate-600">{d.donor_mobile}</span>
                       </div>
+                      {(d.donor_address || d.address) && (
+                        <div className="flex items-center gap-2">
+                           <div className="w-5 h-5 bg-rose-100/50 rounded flex items-center justify-center shrink-0"><MapPin className="w-3 h-3 text-rose-500" /></div>
+                           <span className="font-medium text-slate-600 truncate">{d.donor_address || d.address}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
