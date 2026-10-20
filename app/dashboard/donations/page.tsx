@@ -247,66 +247,66 @@ export default function MyDonationsPage() {
           ) : (
             <>
               {/* ✅ Desktop Pro Table (lg and up) ✅ */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="hidden lg:block overflow-x-auto table-scroll">
+                <table className="w-full text-left border-collapse min-w-[700px]">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Donor</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Payment Info</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest">Contact Identity</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">Settled Amount</th>
+                      <th className="px-4 xl:px-6 py-3.5 text-[9.5px] xl:text-[10px] font-black text-slate-400 uppercase tracking-widest">Donor</th>
+                      <th className="px-4 xl:px-6 py-3.5 text-[9.5px] xl:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Payment Info</th>
+                      <th className="px-4 xl:px-6 py-3.5 text-[10px] xl:text-[11px] font-black text-slate-400 uppercase tracking-widest">Contact Identity</th>
+                      <th className="px-4 xl:px-6 py-3.5 text-[10px] xl:text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">Settled Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedDonations.map((d) => (
                       <tr key={d.id} className="hover:bg-blue-50/30 transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm">
-                              <User className="w-4 h-4" />
+                        <td className="px-4 xl:px-6 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm shrink-0">
+                              <User className="w-3.5 h-3.5" />
                             </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-800 tracking-tight">{d.donor_name}</p>
-                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">
+                            <div className="min-w-0">
+                              <p className="text-xs xl:text-sm font-bold text-slate-800 tracking-tight truncate">{d.donor_name}</p>
+                              <p className="text-[9.5px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wider">
                                 {new Date(d.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 h-5 bg-slate-100 rounded-md flex items-center justify-center text-slate-500"><CreditCard className="w-3 h-3" /></span>
-                              <code className="text-[11px] font-black text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-widest">{d.payment_id || 'PENDING'}</code>
+                        <td className="px-4 xl:px-6 py-3.5">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-4 h-4 bg-slate-100 rounded flex items-center justify-center text-slate-500 shrink-0"><CreditCard className="w-2.5 h-2.5" /></span>
+                              <code className="text-[10px] font-black text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 uppercase tracking-wider truncate max-w-[170px]">{d.payment_id || 'PENDING'}</code>
                             </div>
-                            <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                              <Contact className="w-3 h-3 text-amber-500" />
+                            <span className="text-[9.5px] font-bold text-slate-500 flex items-center gap-1 ml-0.5">
+                              <Contact className="w-2.5 h-2.5 text-amber-500 shrink-0" />
                               PAN: {d.donor_pan || 'N/A'}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
-                              <span className="w-5 h-5 bg-sky-50 rounded-md flex items-center justify-center text-sky-500"><Mail className="w-3 h-3" /></span>
-                              {d.donor_email}
+                        <td className="px-4 xl:px-6 py-3.5">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-600">
+                              <span className="w-4 h-4 bg-sky-50 rounded flex items-center justify-center text-sky-500 shrink-0"><Mail className="w-2.5 h-2.5" /></span>
+                              <span className="truncate max-w-[180px] xl:max-w-[220px]">{d.donor_email}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
-                              <span className="w-5 h-5 bg-emerald-50 rounded-md flex items-center justify-center text-emerald-500"><Phone className="w-3 h-3" /></span>
-                              {d.donor_mobile}
+                            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-600">
+                              <span className="w-4 h-4 bg-emerald-50 rounded flex items-center justify-center text-emerald-500 shrink-0"><Phone className="w-2.5 h-2.5" /></span>
+                              <span>{d.donor_mobile}</span>
                             </div>
                             {(d.donor_address || d.address) && (
-                              <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
-                                <span className="w-5 h-5 bg-rose-50 rounded-md flex items-center justify-center text-rose-500 shrink-0"><MapPin className="w-3 h-3" /></span>
-                                <span className="truncate max-w-[240px]" title={d.donor_address || d.address}>{d.donor_address || d.address}</span>
+                              <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
+                                <span className="w-4 h-4 bg-rose-50 rounded flex items-center justify-center text-rose-500 shrink-0"><MapPin className="w-2.5 h-2.5" /></span>
+                                <span className="truncate max-w-[180px] xl:max-w-[240px]" title={d.donor_address || d.address}>{d.donor_address || d.address}</span>
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-4 xl:px-6 py-3.5 text-right">
                           <div className="flex flex-col items-end">
-                            <span className="text-lg font-black text-slate-900 tracking-tighter">₹{Number(d.amount || 0).toLocaleString('en-IN')}</span>
-                            <span className={`text-[8px] font-black px-2 py-0.5 rounded border mt-1 uppercase tracking-widest shadow-sm ${d.payment_status === 'captured' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-amber-600 bg-amber-50 border-amber-100'}`}>
+                            <span className="text-base xl:text-lg font-black text-slate-900 tracking-tight">₹{Number(d.amount || 0).toLocaleString('en-IN')}</span>
+                            <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded border mt-0.5 uppercase tracking-widest shadow-sm ${d.payment_status === 'captured' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-amber-600 bg-amber-50 border-amber-100'}`}>
                               {d.payment_status === 'captured' ? 'Verified' : 'Pending'}
                             </span>
                           </div>

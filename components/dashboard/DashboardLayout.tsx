@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { logout } from '@/lib/supabase/auth';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
-import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart } from 'lucide-react';
+import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import ProfileCompletionModal from '@/components/auth/ProfileCompletionModal';
 import ProfileCreationLoadingModal from '@/components/auth/ProfileCreationLoadingModal';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
@@ -19,6 +19,7 @@ import { useTheme } from '@/components/providers/ThemeProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [sidebarImgError, setSidebarImgError] = useState(false);
   const [topbarImgError, setTopbarImgError] = useState(false);
   const { user, userData, loading } = useAuth();
@@ -27,6 +28,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const [showProfileModal, setShowProfileModal] = useState(false);
 
    const { theme, themeName, setTheme } = useTheme();
+
+   // Initialize isCollapsed from localStorage or screen width
+   useEffect(() => {
+     try {
+       const saved = localStorage.getItem('sidebar_collapsed');
+       if (saved !== null) {
+         setIsCollapsed(saved === 'true');
+       } else if (typeof window !== 'undefined' && window.innerWidth >= 1024 && window.innerWidth <= 1366) {
+         // Auto-collapse on 14" screens for optimum room
+         setIsCollapsed(true);
+       }
+     } catch (e) {}
+   }, []);
+
+   const toggleCollapse = () => {
+     setIsCollapsed(prev => {
+       const next = !prev;
+       try { localStorage.setItem('sidebar_collapsed', String(next)); } catch (e) {}
+       return next;
+     });
+   };
+
+   // Keyboard shortcut Ctrl+B to toggle sidebar collapse
+   useEffect(() => {
+     const handleKeyDown = (e: KeyboardEvent) => {
+       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+         e.preventDefault();
+         toggleCollapse();
+       }
+     };
+     window.addEventListener('keydown', handleKeyDown);
+     return () => window.removeEventListener('keydown', handleKeyDown);
+   }, []);
 
    const themesList = [
      { id: 'chaitanya', name: 'Chaitanya', dot: 'bg-orange-500'  },
@@ -278,48 +312,61 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar / More Menu */}
       <div
-        className={`fixed z-30 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] 
+        className={`fixed z-30 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] 
           t-sidebar-gradient shadow-2xl lg:shadow-none
-          w-72 lg:w-80
+          w-72 ${isCollapsed ? 'lg:w-[72px]' : 'lg:w-60 xl:w-64 2xl:w-72'}
           bottom-[88px] lg:bottom-0 lg:top-0 right-0 lg:left-0
           max-h-[calc(100vh-140px)] lg:max-h-none lg:h-screen
           ${sidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 lg:opacity-100 lg:translate-x-0'} 
           lg:static lg:block lg:translate-x-0 lg:border-r lg:border-white/10
           rounded-t-[2.5rem] lg:rounded-none
           ${!sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}
-          flex flex-col
+          flex flex-col flex-shrink-0
         `}
       >
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]">
+          <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between px-5 lg:px-4'} h-14 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]`}>
             <Link 
               href="/" 
-              className="flex items-center space-x-3 group hover:opacity-90 transition-opacity"
+              className="flex items-center space-x-2.5 group hover:opacity-90 transition-opacity"
               title="Go to Home Page"
             >
-              <h1 className="text-lg font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors">
-                VOICE Gurukul
-              </h1>
+              {isCollapsed ? (
+                <span className="text-base font-black text-amber-300 font-display tracking-widest">VG</span>
+              ) : (
+                <h1 className="text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
+                  VOICE Gurukul
+                </h1>
+              )}
             </Link>
-             <button
-               onClick={() => {
-                 if (window.location.hash === '#menu') {
-                   window.history.back();
-                 } else {
-                   setSidebarOpen(false);
-                 }
-               }}
-               className="lg:hidden text-white/60 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all duration-200"
-             >
-               <X className="h-6 w-6" />
-             </button>
+            {!isCollapsed && (
+              <button
+                onClick={toggleCollapse}
+                className="hidden lg:flex text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
+                title="Collapse Sidebar (Ctrl+B)"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (window.location.hash === '#menu') {
+                  window.history.back();
+                } else {
+                  setSidebarOpen(false);
+                }
+              }}
+              className="lg:hidden text-white/60 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all duration-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           {/* Navigation */}
-          <div className="flex-1 overflow-y-auto py-4 px-4 relative z-10">
-            <nav className="space-y-1">
-              {navigation.map((item, index) => {
+          <div className="flex-1 overflow-y-auto py-2.5 px-2.5 lg:px-2 sidebar-scroll relative z-10">
+            <nav className="space-y-0.5">
+              {navigation.map((item) => {
                 const Icon = item.icon;
                 const isMobileHidden = ['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
                 const isActive = pathname === item.href;
@@ -327,16 +374,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`group items-center px-4 py-2.5 lg:px-5 lg:py-3.5 rounded-xl lg:rounded-none transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${isActive ? 'bg-white/20 text-white font-bold' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                    title={isCollapsed ? item.name : undefined}
+                    className={`group items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'px-3 lg:px-3'} py-2 lg:py-2 rounded-xl transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${isActive ? 'bg-white/20 text-white font-bold shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className="relative z-10 flex items-center w-full">
-                      <div className={`p-1.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-white/20' : 'bg-white/5 group-hover:bg-white/15'}`}>
-                        <Icon className={`h-4 w-4 lg:h-5 lg:w-5 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`} />
+                    <div className={`relative z-10 flex items-center ${isCollapsed ? 'lg:justify-center' : 'w-full'}`}>
+                      <div className={`p-1.5 rounded-lg transition-all duration-200 flex-shrink-0 ${isActive ? 'bg-white/20' : 'bg-white/5 group-hover:bg-white/15'}`}>
+                        <Icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`} />
                       </div>
-                      <span className="ml-4 font-bold text-[10px] lg:text-[11.5px] tracking-widest uppercase font-sans">
-                        {item.name}
-                      </span>
+                      {!isCollapsed && (
+                        <span className="ml-3 font-bold text-[10.5px] lg:text-[11px] tracking-wider uppercase font-sans truncate">
+                          {item.name}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 );
@@ -345,61 +395,100 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Theme Selector Dropdown */}
-          <div className="px-5 py-3 border-t border-white/10 bg-black/15 relative z-10 lg:px-4 lg:py-2.5">
-            <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase block mb-1.5">
-              Theme
-            </span>
-            <select
-              value={theme}
-              onChange={(e) => setTheme(e.target.value as any)}
-              className="w-full bg-white/10 text-white border border-white/20 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer"
-            >
-              {themesList.map((t) => (
-                <option key={t.id} value={t.id} className="text-gray-900 bg-white font-sans">
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* User Profile Section */}
-          <div className="border-t border-white/10 p-4 lg:p-3 flex-shrink-0 relative z-10 bg-black/25">
-            <div className="flex items-center mb-3 lg:mb-2 p-3 lg:p-2 bg-white/10 rounded-xl shadow-sm border border-white/10">
-              <div className="mr-3 lg:mr-2.5 flex-shrink-0">
-                <div className="relative">
-                  {userData?.profileImage && !sidebarImgError ? (
-                    <Image
-                      src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
-                      alt={userData.name || 'Profile'}
-                      width={32}
-                      height={32}
-                      className="relative w-8 h-8 rounded-full object-cover border-2 border-white/20 shadow-sm"
-                      unoptimized={true}
-                      onError={() => setSidebarImgError(true)}
-                    />
-                  ) : (
-                    <div className="relative w-8 h-8 rounded-full bg-white/15 border-2 border-white/20 shadow-sm flex items-center justify-center">
-                      <UserCircle2 className="w-5 h-5 text-white" />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white truncate uppercase tracking-tight">
-                  {userData?.name}
-                </p>
-                <p className="text-[9px] text-white/60 font-medium truncate uppercase">
-                  {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
-                </p>
+          {!isCollapsed ? (
+            <div className="px-3 py-2 border-t border-white/10 bg-black/15 relative z-10">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-bold tracking-widest text-white/50 uppercase">
+                  Theme
+                </span>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value as any)}
+                  className="w-full bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1 text-[10.5px] font-semibold focus:outline-none focus:ring-1 focus:ring-white/40 cursor-pointer max-w-[130px]"
+                >
+                  {themesList.map((t) => (
+                    <option key={t.id} value={t.id} className="text-gray-900 bg-white font-sans">
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
+          ) : (
+            <div className="py-2 border-t border-white/10 bg-black/15 flex justify-center relative z-10">
+              <button
+                onClick={() => {
+                  const curIdx = themesList.findIndex(t => t.id === theme);
+                  const nextIdx = (curIdx + 1) % themesList.length;
+                  setTheme(themesList[nextIdx].id as any);
+                }}
+                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                title={`Theme: ${themeName} (Click to switch)`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${themesList.find(t => t.id === theme)?.dot || 'bg-white'}`} />
+              </button>
+            </div>
+          )}
+
+          {/* User Profile Section */}
+          <div className="border-t border-white/10 p-2.5 lg:p-2 flex-shrink-0 relative z-10 bg-black/25">
+            {!isCollapsed ? (
+              <div className="flex items-center mb-1.5 p-2 bg-white/10 rounded-xl border border-white/10">
+                <div className="mr-2 flex-shrink-0">
+                  <div className="relative">
+                    {userData?.profileImage && !sidebarImgError ? (
+                      <Image
+                        src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
+                        alt={userData.name || 'Profile'}
+                        width={28}
+                        height={28}
+                        className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm"
+                        unoptimized={true}
+                        onError={() => setSidebarImgError(true)}
+                      />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center">
+                        <UserCircle2 className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-white truncate uppercase tracking-tight">
+                    {userData?.name}
+                  </p>
+                  <p className="text-[8.5px] text-white/60 font-medium truncate uppercase">
+                    {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-center mb-1.5" title={`${userData?.name} (${getRoleDisplayName(getHighestRole(userData?.role || 'student'))})`}>
+                {userData?.profileImage && !sidebarImgError ? (
+                  <Image
+                    src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
+                    alt={userData.name || 'Profile'}
+                    width={28}
+                    height={28}
+                    className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm"
+                    unoptimized={true}
+                    onError={() => setSidebarImgError(true)}
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center">
+                    <UserCircle2 className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               onClick={handleLogout}
-              className="group flex items-center justify-center w-full px-4 py-2.5 lg:py-2 text-white/60 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all duration-200 font-bold text-[10px] uppercase tracking-widest"
+              className={`group flex items-center justify-center w-full ${isCollapsed ? 'py-1.5 px-0' : 'px-3 py-1.5'} text-white/60 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all duration-200 font-bold text-[9.5px] uppercase tracking-wider`}
+              title="Logout Session"
             >
-              <LogOut className="h-3.5 w-3.5 mr-2.5 text-white/60 group-hover:text-red-400 transition-colors" />
-              <span>Logout Session</span>
+              <LogOut className={`h-3.5 w-3.5 ${!isCollapsed ? 'mr-1.5' : ''} text-white/60 group-hover:text-red-400 transition-colors`} />
+              {!isCollapsed && <span>Logout</span>}
             </button>
           </div>
         </div>
@@ -408,8 +497,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-16 flex items-center px-4 lg:px-8 flex-shrink-0 border-b border-gray-200/60 justify-between">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-14 flex items-center px-3 sm:px-4 lg:px-6 flex-shrink-0 border-b border-gray-200/60 justify-between">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggleCollapse}
+              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all border border-gray-200/70 shadow-sm bg-white"
+              title={isCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
+            >
+              {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
             <Link href="/" className="lg:hidden font-display font-bold text-lg t-text-accent transition-colors duration-500 hover:opacity-80">
               VOICE Gurukul
             </Link>
@@ -420,30 +516,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* User Profile & Logout */}
           <div className="flex items-center gap-2 lg:gap-3">
             {/* User Profile */}
-            <div className="flex items-center gap-2 lg:gap-2.5 px-2 py-1.5 lg:px-3 lg:py-2 t-bg-light rounded-lg transition-all duration-200 border t-border">
+            <div className="flex items-center gap-2 lg:gap-2.5 px-2 py-1 lg:px-2.5 lg:py-1.5 t-bg-light rounded-lg transition-all duration-200 border t-border">
               <div className="relative">
                 <div className="absolute inset-0 bg-white/20 rounded-full blur-sm opacity-30"></div>
                 {userData?.profileImage && !topbarImgError ? (
                   <Image
                     src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
                     alt={userData.name || 'Profile'}
-                    width={32}
-                    height={32}
-                    className="relative w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm"
+                    width={28}
+                    height={28}
+                    className="relative w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm"
                     unoptimized={true}
                     onError={() => setTopbarImgError(true)}
                   />
                 ) : (
-                  <div className="relative w-8 h-8 rounded-full bg-white border-2 border-white shadow-sm flex items-center justify-center">
-                    <UserCircle2 className="w-5 h-5 t-text-accent" />
+                  <div className="relative w-7 h-7 rounded-full bg-white border-2 border-white shadow-sm flex items-center justify-center">
+                    <UserCircle2 className="w-4 h-4 t-text-accent" />
                   </div>
                 )}
               </div>
               <div className="hidden sm:flex flex-col">
-                <p className="text-sm font-semibold text-gray-800 leading-tight max-w-[100px] truncate">
+                <p className="text-xs font-semibold text-gray-800 leading-tight max-w-[120px] truncate">
                   {userData?.name}
                 </p>
-                <p className="text-xs text-gray-500 leading-tight">
+                <p className="text-[10px] text-gray-500 leading-tight">
                   {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
                 </p>
               </div>
@@ -452,11 +548,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Logout Button */}
             <button
               onClick={handleLogout}
-              className="group flex items-center justify-center lg:gap-2 w-10 h-10 lg:w-auto lg:h-auto lg:px-3 lg:py-2 text-red-600 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-all duration-200 font-medium border border-red-100 hover:border-red-500 hover:shadow-md"
+              className="group flex items-center justify-center lg:gap-1.5 w-8 h-8 lg:w-auto lg:h-auto lg:px-2.5 lg:py-1.5 text-red-600 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-all duration-200 font-medium border border-red-100 hover:border-red-500 hover:shadow-sm"
               title="Logout"
             >
-              <LogOut className="h-5 w-5 lg:h-4 lg:w-4 group-hover:rotate-12 transition-transform duration-200" />
-              <span className="hidden lg:inline text-sm">Logout</span>
+              <LogOut className="h-4 w-4 lg:h-3.5 lg:w-3.5 group-hover:rotate-12 transition-transform duration-200" />
+              <span className="hidden lg:inline text-xs font-semibold">Logout</span>
             </button>
           </div>
         </div>
@@ -499,7 +595,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         {/* Page content */}
-        <main className="flex-1 p-4 pb-32 lg:p-6 lg:pb-8 xl:p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-3 pb-24 sm:p-4 lg:p-5 lg:pb-8 xl:p-6 2xl:p-8 overflow-y-auto overflow-x-hidden min-w-0">{children}</main>
 
         {/* Mobile Bottom Navigation */}
         <div className="t-gradient lg:hidden fixed bottom-0 left-0 right-0 shadow-2xl z-40 px-1 pb-2 pb-safe border-t border-white/10 transition-all duration-500">

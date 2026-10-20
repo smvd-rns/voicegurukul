@@ -302,42 +302,42 @@ export default function SadhanaPage() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-6">
 
                 {/* ── Left Column: Form ── */}
-                <div className="lg:col-span-2">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="lg:col-span-8 xl:col-span-8">
+                    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
                                 <Loader2 className="h-8 w-8 animate-spin text-orange-500 mb-4" />
                                 <span className="text-sm font-medium text-gray-500">Loading your sadhana data...</span>
                             </div>
                         ) : (
-                            <div className="space-y-6">
+                            <div className="space-y-5 sm:space-y-6">
                                 {/* ── Spiritual Group ── */}
-                                <section className="bg-white rounded-3xl p-6 shadow-sm border border-orange-100 relative overflow-hidden">
+                                <section className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 lg:p-6 shadow-sm border border-orange-100 relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-rose-400"></div>
 
-                                    <div className="flex items-center gap-3 mb-6">
+                                    <div className="flex items-center gap-3 mb-4 sm:mb-6">
                                         <div className="p-2 bg-orange-50 rounded-xl text-orange-500">
                                             <Flower2 className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <h2 className="text-lg font-bold text-gray-900">Spiritual Practices</h2>
-                                            <p className="text-sm text-gray-500 font-medium">Japa, hearing, reading, and study</p>
+                                            <h2 className="text-base sm:text-lg font-bold text-gray-900">Spiritual Practices</h2>
+                                            <p className="text-xs sm:text-sm text-gray-500 font-medium">Japa, hearing, reading, and study</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 xl:gap-5">
                                         {SPIRITUAL_TILES.map(t => {
                                             const val = (form as any)[t.id] as number;
                                             const weeklyVal = Math.min(70, weeklyTotals?.[t.id] || 0);
                                             const progressPct = (weeklyVal / 70) * 100;
                                             return (
                                                 <div key={t.id} className="flex flex-col">
-                                                    <label className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
+                                                    <label className="flex items-center justify-between text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
                                                         <span className="flex items-center gap-1.5 truncate">
-                                                            <span className={`w-7 h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-base flex-shrink-0`}>{t.icon}</span>
+                                                            <span className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-sm sm:text-base flex-shrink-0`}>{t.icon}</span>
                                                             <span className="truncate">{t.label}</span>
                                                         </span>
                                                     </label>
@@ -349,7 +349,7 @@ export default function SadhanaPage() {
                                                             id={t.id}
                                                             value={val}
                                                             onChange={e => setForm(p => ({ ...p, [t.id]: t.id === 'study' ? parseFloat(e.target.value) || 0 : parseInt(e.target.value) || 0 }))}
-                                                            className={`w-full py-3 pl-3 pr-10 border rounded-xl text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
+                                                            className={`w-full py-2 sm:py-2.5 px-3 border rounded-xl text-base sm:text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
                                                             style={{ backgroundColor: t.bgHex, borderColor: t.borderHex }}
                                                             placeholder="0"
                                                         />
@@ -396,29 +396,29 @@ export default function SadhanaPage() {
                                 </section>
 
                                 {/* ── Physical Group ── */}
-                                <section className="bg-white rounded-3xl p-6 shadow-sm border border-blue-100 relative overflow-hidden">
+                                <section className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 lg:p-6 shadow-sm border border-blue-100 relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-400 to-indigo-400"></div>
 
-                                    <div className="flex items-center gap-3 mb-6">
+                                    <div className="flex items-center gap-3 mb-4 sm:mb-6">
                                         <div className="p-2 bg-blue-50 rounded-xl text-blue-500">
                                             <HeartPulse className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <h2 className="text-lg font-bold text-gray-900">Physical & Well-being</h2>
-                                            <p className="text-sm text-gray-500 font-medium">Daily habits and routines</p>
+                                            <h2 className="text-base sm:text-lg font-bold text-gray-900">Physical & Well-being</h2>
+                                            <p className="text-xs sm:text-sm text-gray-500 font-medium">Daily habits and routines</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 xl:gap-5">
                                         {PHYSICAL_TILES.map(t => {
                                             const val = (form as any)[t.id] as number;
                                             const weeklyVal = Math.min(70, weeklyTotals?.[t.id] || 0);
                                             const progressPct = (weeklyVal / 70) * 100;
                                             return (
                                                 <div key={t.id} className="flex flex-col">
-                                                    <label className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-2">
+                                                    <label className="flex items-center justify-between text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
                                                         <span className="flex items-center gap-1.5 truncate">
-                                                            <span className={`w-7 h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-base flex-shrink-0`}>{t.icon}</span>
+                                                            <span className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center ${t.bgLight} rounded-lg text-sm sm:text-base flex-shrink-0`}>{t.icon}</span>
                                                             <span className="truncate">{t.label}</span>
                                                         </span>
                                                     </label>
@@ -429,11 +429,10 @@ export default function SadhanaPage() {
                                                             id={t.id}
                                                             value={val}
                                                             onChange={e => setForm(p => ({ ...p, [t.id]: parseInt(e.target.value) || 0 }))}
-                                                            className={`w-full py-3 pl-3 pr-10 border rounded-xl text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
+                                                            className={`w-full py-2 sm:py-2.5 px-3 border rounded-xl text-base sm:text-lg font-bold ${t.textClass} focus:outline-none focus:ring-2 ${t.ring} focus:bg-white placeholder:text-current placeholder:opacity-40 transition-all`}
                                                             style={{ backgroundColor: t.bgHex, borderColor: t.borderHex }}
                                                             placeholder="0"
                                                         />
-                                                        {/* Sub label removed */}
                                                     </div>
                                                     <div className="mt-2 space-y-1">
                                                         <div className="flex items-center justify-between text-[11px] font-semibold">
@@ -465,7 +464,7 @@ export default function SadhanaPage() {
                                     <button
                                         type="submit"
                                         disabled={saving}
-                                        className="w-full sm:w-auto min-w-[200px] flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white py-3.5 px-8 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                                        className="w-full sm:w-auto min-w-[180px] flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white py-3 px-6 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
                                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                         {saving ? 'Saving...' : 'Save Report'}
@@ -477,14 +476,14 @@ export default function SadhanaPage() {
                 </div>
 
                 {/* ── Right Column: Weekly Scoreboard ── */}
-                <div className="lg:col-span-1">
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 sticky top-6">
-                        <div className="flex items-center gap-3 mb-6">
+                <div className="lg:col-span-4 xl:col-span-4">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 lg:p-6 shadow-sm border border-gray-100 sticky top-4 sm:top-6">
+                        <div className="flex items-center gap-3 mb-5 sm:mb-6">
                             <div className="p-2 bg-indigo-50 rounded-xl text-indigo-500">
                                 <TrendingUp className="h-5 w-5" />
                             </div>
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Weekly Scoreboard</h2>
+                                <h2 className="text-base sm:text-lg font-bold text-gray-900">Weekly Scoreboard</h2>
                                 <p className="text-xs text-gray-500 font-medium">{weekDateRangeStr}</p>
                             </div>
                         </div>

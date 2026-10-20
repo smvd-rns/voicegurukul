@@ -151,50 +151,50 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative overflow-hidden px-4 sm:px-6">
+    <div className="relative overflow-hidden px-2 sm:px-4 lg:px-6">
       {/* Background blobs for aesthetics */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full t-blob-a blur-[100px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full t-blob-b blur-[100px]" />
       </div>
 
-      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 relative z-10">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 lg:space-y-7 relative z-10">
 
         {/* Hero Section */}
-        <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2rem] shadow-xl shadow-orange-900/5 border border-white/50 p-4 sm:p-10 overflow-hidden">
+        <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-[2rem] shadow-xl shadow-orange-900/5 border border-white/50 p-4 sm:p-6 lg:p-7 xl:p-8 overflow-hidden">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 sm:w-64 sm:h-64 rounded-full t-blob-a blur-2xl sm:blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-24 h-24 sm:w-48 sm:h-48 rounded-full t-blob-b blur-xl sm:blur-2xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
             <div>
-              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full t-bg-badge t-text-badge text-[10px] sm:text-sm font-semibold mb-3 sm:mb-5 shadow-sm border t-border">
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 t-text-accent" />
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full t-bg-badge t-text-badge text-[10px] sm:text-xs font-semibold mb-2 sm:mb-3.5 shadow-sm border t-border">
+                <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 t-text-accent" />
                 <span>Hare Krishna</span>
               </div>
-              <h1 className="text-2xl sm:text-4xl md:text-4xl xl:text-5xl font-extrabold text-slate-800 tracking-tight mb-2 sm:mb-3">
+              <h1 className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-extrabold text-slate-800 tracking-tight mb-2 sm:mb-2.5">
                 {greeting}, <br className="sm:hidden" />
                 <span className="t-text-accent">{userData?.name?.split(' ')[0] || 'Devotee'}</span>
               </h1>
-              <div className="flex items-start gap-2 sm:gap-3 mt-3 sm:mt-5">
-                <div className="mt-1 w-1 h-8 sm:h-12 t-bg-primary rounded-full shrink-0 opacity-70" />
-                <p className="text-xs sm:text-base text-slate-600 max-w-xl italic font-medium leading-relaxed">
+              <div className="flex items-start gap-2 sm:gap-3 mt-2 sm:mt-3.5">
+                <div className="mt-1 w-1 h-6 sm:h-9 t-bg-primary rounded-full shrink-0 opacity-70" />
+                <p className="text-xs sm:text-sm lg:text-base text-slate-600 max-w-xl italic font-medium leading-relaxed">
                   &quot;{quote}&quot;
                 </p>
               </div>
             </div>
 
-            <div className="hidden md:flex flex-col items-center justify-center min-w-[120px] p-5 t-bg-light rounded-3xl border t-border shadow-sm">
+            <div className="hidden md:flex flex-col items-center justify-center min-w-[105px] xl:min-w-[120px] p-3.5 xl:p-4 t-bg-light rounded-2xl xl:rounded-3xl border t-border shadow-sm">
               <div className="text-center">
-                <div className="text-4xl font-black t-text-accent">{new Date().getDate()}</div>
-                <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">{new Date().toLocaleString('default', { month: 'short' })}</div>
-                <div className="text-xs font-semibold text-slate-400 mt-1">{new Date().getFullYear()}</div>
+                <div className="text-3xl xl:text-4xl font-black t-text-accent">{new Date().getDate()}</div>
+                <div className="text-xs xl:text-sm font-bold text-slate-500 uppercase tracking-widest mt-0.5">{new Date().toLocaleString('default', { month: 'short' })}</div>
+                <div className="text-[10px] xl:text-xs font-semibold text-slate-400 mt-0.5">{new Date().getFullYear()}</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Dynamic Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
           {stats.map((stat, i) => {
             const Icon = stat.icon;
             const colSpan = i === 2 ? "col-span-2 sm:col-span-1" : "";
@@ -202,21 +202,21 @@ export default function DashboardPage() {
               <Link
                 key={stat.name}
                 href={stat.href}
-                className={`group relative overflow-hidden bg-white/60 backdrop-blur-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-white/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${colSpan}`}
+                className={`group relative overflow-hidden bg-white/60 backdrop-blur-lg rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 lg:p-5 xl:p-6 shadow-xl border border-white/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${colSpan}`}
               >
                 <div className="absolute top-0 left-0 w-1 sm:w-1.5 h-full t-gradient" />
-                <div className="flex justify-between items-start mb-3 sm:mb-6">
-                  <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl t-gradient text-white shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300">
-                    <Icon className="w-5 h-5 sm:w-7 sm:h-7" />
+                <div className="flex justify-between items-start mb-2.5 sm:mb-4">
+                  <div className="p-2 sm:p-3 xl:p-3.5 rounded-xl sm:rounded-2xl t-gradient text-white shadow-lg shadow-black/5 group-hover:scale-105 transition-transform duration-300">
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5 xl:w-6 xl:h-6" />
                   </div>
-                  <div className="p-1.5 sm:p-2.5 bg-slate-100/50 text-slate-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:bg-slate-100 group-hover:text-slate-600 transition-all duration-300 transform group-hover:translate-x-1">
-                    <ArrowRight className="w-3 h-3 sm:w-5 sm:h-5" />
+                  <div className="p-1.5 bg-slate-100/50 text-slate-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:bg-slate-100 group-hover:text-slate-600 transition-all duration-300 transform group-hover:translate-x-1">
+                    <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4" />
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-800 mb-1 sm:mb-2 tracking-tight">{stat.value}</h3>
-                  <p className="text-[10px] sm:text-sm font-bold text-slate-500 uppercase sm:normal-case">{stat.name}</p>
-                  <p className="text-[9px] sm:text-xs text-slate-400 mt-1 sm:mt-2 font-medium bg-slate-100/50 inline-block px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md">{stat.subtext}</p>
+                  <h3 className="text-lg sm:text-2xl xl:text-3xl font-extrabold text-slate-800 mb-0.5 sm:mb-1.5 tracking-tight">{stat.value}</h3>
+                  <p className="text-[10px] sm:text-xs xl:text-sm font-bold text-slate-500 uppercase sm:normal-case">{stat.name}</p>
+                  <p className="text-[9px] sm:text-xs text-slate-400 mt-1 sm:mt-1.5 font-medium bg-slate-100/50 inline-block px-1.5 sm:px-2 py-0.5 rounded-md">{stat.subtext}</p>
                 </div>
               </Link>
             );
