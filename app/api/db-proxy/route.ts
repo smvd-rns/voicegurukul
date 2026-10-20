@@ -61,8 +61,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const isSuperAdmin = isInternalServer || userRole.includes(8);
-    const isCounselor = isSuperAdmin || userRole.includes(2) || userRole.includes(3) || userRole.includes(4);
+    const numericRoles = (Array.isArray(userRole) ? userRole : [userRole])
+      .map((r: any) => Number(r))
+      .filter((r: number) => !isNaN(r));
+    const isSuperAdmin = isInternalServer || numericRoles.includes(8) || (Array.isArray(userRole) && userRole.includes('super_admin' as any));
+    const isHigherAdmin = isSuperAdmin || numericRoles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r));
+    const isCounselor = isHigherAdmin || numericRoles.some((r: number) => [2, 3, 4, 20, 31].includes(r));
 
     // ─── 4. RPC Handling ───────────────────────────────────────
     if (method === 'rpc') {
@@ -125,7 +129,7 @@ export async function POST(req: NextRequest) {
       // Rule C: Public Catalog Tables (Read-only for guests, Admin for mutations)
       const publicCatalogTables = ['temples', 'centers', 'cities', 'states', 'spiritual_masters', 'policies', 'stories', 'app_configs'];
       if (publicCatalogTables.includes(table)) {
-        if (method !== 'select' && !isSuperAdmin) {
+        if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Only administrators can modify catalog data' }, { status: 403 });
         }
       }
@@ -150,7 +154,7 @@ export async function POST(req: NextRequest) {
         if (!session) {
           return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
         }
-        if (method === 'insert' && !isSuperAdmin) {
+        if (method === 'insert' && !isSuperAdmin && !isHigherAdmin) {
           if (insertData?.sender_id && insertData.sender_id !== session.userId) {
             return NextResponse.json({ data: null, error: 'Forbidden: Invalid sender_id' }, { status: 403 });
           }
@@ -159,7 +163,7 @@ export async function POST(req: NextRequest) {
 
       // Rule F: Users Table Defense
       if (table === 'users') {
-        if (method === 'delete' && !isSuperAdmin) {
+        if (method === 'delete' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Only Super Admins can delete users' }, { status: 403 });
         }
 
@@ -176,15 +180,52 @@ export async function POST(req: NextRequest) {
         }
 
         // Block role escalation: non-admins cannot change roles!
-        if (updateData && 'role' in updateData && !isSuperAdmin) {
+        if (updateData && 'role' in updateData && !isSuperAdmin && !isHigherAdmin) {
           delete updateData.role;
         }
 
         // Non-admins can only update their own profile
-        if (method === 'update' && !isSuperAdmin) {
+        if (method === 'update' && !isSuperAdmin && !isHigherAdmin) {
           const targetId = filters?.find((f: any) => f.col === 'id')?.val;
           if (targetId && targetId !== session?.userId) {
             return NextResponse.json({ data: null, error: 'Forbidden: Cannot edit another user profile' }, { status: 403 });
+          }
+        }
+      }
+
+      // Rule G: Organizational, Role Allocation & Platform Settings Tables
+      const orgTables = ['counselors', 'event_admin_allocations', 'user_centers', 'membership_cards', 'platform_settings'];
+      if (orgTables.includes(table)) {
+        if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
+          return NextResponse.json({ data: null, error: 'Forbidden: Super Admin access required' }, { status: 403 });
+        }
+      }
+
+      // Rule H: User Profile Details Protection
+      if (table === 'user_profile_details') {
+        if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
+          if (!session) {
+            return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
+          }
+          const targetUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
+                               (updateData && updateData.user_id) ||
+                               filters?.find((f: any) => f.col === 'user_id')?.val;
+          if (targetUserId && targetUserId !== session.userId) {
+            return NextResponse.json({ data: null, error: 'Forbidden: Cannot edit another user profile details' }, { status: 403 });
+          }
+        }
+      }
+
+      // Rule I: Request & Approval Ticket Tables
+      const requestTicketTables = ['profile_update_requests', 'counselor_requests', 'voice_manager_requests', 'bc_voice_manager_requests'];
+      if (requestTicketTables.includes(table)) {
+        if (!session) {
+          return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
+        }
+        if (method === 'insert' && !isSuperAdmin && !isHigherAdmin) {
+          const reqUserId = insertData?.user_id || insertData?.requester_id;
+          if (reqUserId && reqUserId !== session.userId) {
+            return NextResponse.json({ data: null, error: 'Forbidden: Invalid request user ID' }, { status: 403 });
           }
         }
       }

@@ -14,10 +14,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Rate Limiting
-    // Create a temporary client to get the user ID from the token
+    // Authentication & Rate Limiting
     const user = await getAuthUserFromRequest(request);
-    const userId = user?.id || null;
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Login required to add cities' }, { status: 401 });
+    }
+    const userId = user.id;
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {

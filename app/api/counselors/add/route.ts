@@ -19,10 +19,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error || 'Invalid counselor information' }, { status: 400 });
     }
 
-    // Rate Limiting
-    // Create a temporary client to get the user ID from the token
+    // Authentication & Role Check
     const user = await getAuthUserFromRequest(request);
-    const userId = user?.id || null;
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Login required to add counselors' }, { status: 401 });
+    }
+    const userId = user.id;
+
+    const authClient = createClient();
+    const { data: profile } = await authClient
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorized = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13, 14, 15, 16, 21].includes(r)) ||
+      roles.includes('super_admin') || roles.includes('managing_director');
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient privileges to add counselors' }, { status: 403 });
+    }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {

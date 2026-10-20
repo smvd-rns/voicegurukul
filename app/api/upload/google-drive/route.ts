@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 // Google Drive API configuration
 const FOLDER_ID = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
@@ -167,6 +168,11 @@ async function createFolder(folderName: string, parentFolderId: string): Promise
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthUserFromRequest(request);
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Login required to upload files' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const action = formData.get('action') as string || 'upload';
 

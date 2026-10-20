@@ -1,8 +1,32 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
     try {
+        const user = await getAuthUserFromRequest(request);
+        if (!user || !user.id) {
+            return NextResponse.json({ error: 'Unauthorized: Login required to update temples' }, { status: 401 });
+        }
+
+        const authenticatedClient = createClient();
+
+        // Check permissions
+        const { data: profile } = await authenticatedClient
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isAuthorized = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13].includes(r)) ||
+            roles.includes('super_admin') || roles.includes('managing_director');
+
+        if (!isAuthorized) {
+            return NextResponse.json({ error: 'Forbidden: Insufficient privileges to update temples' }, { status: 403 });
+        }
+
         const body = await request.json();
         let {
             id, name, state, city, address, contact,
@@ -23,8 +47,6 @@ export async function POST(request: Request) {
 
         const authHeader = request.headers.get('authorization');
         const accessToken = authHeader?.replace('Bearer ', '');
-
-        const authenticatedClient = createClient();
 
         // 1. Fetch current temple state for role cleanup
         const { data: oldTemple } = await authenticatedClient

@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { sendApprovalNotification } from '@/lib/utils/email';
 
 export async function POST(request: Request) {
     try {
+        const requester = await getAuthUserFromRequest(request);
+        if (!requester || !requester.id) {
+            return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
+        }
+
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { userId } = await request.json();
         if (!userId) {

@@ -8,14 +8,11 @@ export async function POST(request: Request) {
     // 1. Verify Authentication
     console.log('--- CANCEL REQUEST INITIATED ---');
     const user = await getAuthUserFromRequest(request);
-
-    // Use session user if available, fallback to bodyUserId
-    const targetUserId = user?.id || bodyUserId;
-
-    if (!targetUserId) {
-      console.warn('Unauthorized cancel attempt: No session and no body userId');
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
     }
+
+    const targetUserId = user.id;
 
     // 2. Verify Role 8 using Admin Client (Bypasses RLS issues)
     const admin = getAdminClient();

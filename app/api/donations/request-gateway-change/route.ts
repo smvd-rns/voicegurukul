@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/server-db';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
-    const { nextGateway, userId } = await request.json();
+    const authUser = await getAuthUserFromRequest(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
+    }
+
+    const { nextGateway } = await request.json();
+    const userId = authUser.id;
 
     // 1. Verify User Role 8
     const { data: user, error: userError } = await supabase

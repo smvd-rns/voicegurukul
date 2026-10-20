@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { sendRejectionNotification } from '@/lib/utils/email';
 
 export async function POST(request: Request) {
     try {
+        const requester = await getAuthUserFromRequest(request);
+        if (!requester || !requester.id) {
+            return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
+        }
+
         const { userId, rejectionReason } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });

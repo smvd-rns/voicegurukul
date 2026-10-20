@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabase/admin';
+import { getAdminClient, getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 /**
  * GET Redirect:
@@ -26,7 +26,12 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const { token, userId } = await request.json();
+    const user = await getAuthUserFromRequest(request);
+    if (!user || !user.id) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Session required.' }, { status: 401 });
+    }
+
+    const { token } = await request.json();
 
     const admin = getAdminClient();
 
@@ -34,10 +39,13 @@ export async function POST(request: Request) {
     const { data: userData, error: userError } = await admin
       .from('users')
       .select('role')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single();
 
-    if (userError || !userData?.role?.includes(8)) {
+    const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+    const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+    if (userError || !isSuperAdmin) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Role 8 required.' }, { status: 403 });
     }
 

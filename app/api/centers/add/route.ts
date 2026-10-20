@@ -6,6 +6,31 @@ import { validateCenterInput, sanitizeInput } from '@/lib/utils/validation';
 
 export async function POST(request: Request) {
   try {
+    // Authentication & Role Check
+    const user = await getAuthUserFromRequest(request);
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Login required to add centers' }, { status: 401 });
+    }
+    const userId = user.id;
+
+    const cleanClient = createClient();
+    // Fetch user role to determine verification status and temple scoping for MD
+    const { data: profile } = await cleanClient
+      .from('users')
+      .select('role, hierarchy')
+      .eq('id', userId)
+      .single();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+    const hierarchy = profile?.hierarchy;
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorizedToManageCenters = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13, 21].includes(r)) ||
+      roles.includes('super_admin') || roles.includes('managing_director') || roles.includes('director') || roles.includes('central_voice_manager');
+
+    if (!isAuthorizedToManageCenters) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient privileges to add centers' }, { status: 403 });
+    }
+
     const body = await request.json();
     let {
       name, state, city, address, contact, temple_id, temple_name,
@@ -33,31 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Rate Limiting
-    const user = await getAuthUserFromRequest(request);
-    const userId = user?.id || null;
-    let isVerified = false;
-
-    if (userId) {
-        const cleanClient = createClient();
-        // Fetch user role to determine verification status and temple scoping for MD
-        const { data: profile } = await cleanClient
-          .from('users')
-          .select('role, hierarchy')
-          .eq('id', userId)
-          .single();
-
-        const roles = profile?.role;
-        const hierarchy = profile?.hierarchy;
-
-        // User logic: if role is anything other than 1 or 'student', auto-verify
-        const hasPrivilegedRole = Array.isArray(roles)
-          ? roles.some(r => r !== 1 && r !== 'student')
-          : (roles !== 1 && roles !== 'student');
-
-        if (hasPrivilegedRole) {
-          isVerified = true;
-        }
+    let isVerified = true;
 
         // MD Logic (Role 11): Enforce Temple ID
         const isManagingDirector = Array.isArray(roles)
@@ -98,7 +99,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'You can only add centers to your assigned temple.' }, { status: 403 });
           }
         }
-      }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {

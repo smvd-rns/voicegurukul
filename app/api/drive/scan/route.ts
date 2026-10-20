@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 // --- Helpers (ported from indexer-service) ---
 
@@ -265,9 +266,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        const { driveLink, displayName, description, userId, userName } = await request.json();
+        const user = await getAuthUserFromRequest(request as any);
+        if (!user || !user.id) {
+            return NextResponse.json({ error: 'Unauthorized: Login required to start drive scans' }, { status: 401 });
+        }
 
-        const folderId = extractFolderId(driveLink.trim());
+        const { driveLink, displayName, description, userName } = await request.json();
+        const effectiveUserId = user.id;
+        const effectiveUserName = user.user_metadata?.name || user.email?.split('@')[0] || userName || 'User';
+
+        const folderId = extractFolderId(driveLink?.trim() || '');
         if (!folderId) {
             return NextResponse.json({ error: 'Invalid Google Drive folder link' }, { status: 400 });
         }
@@ -277,11 +285,11 @@ export async function POST(request: NextRequest) {
         await pool.query(
             `INSERT INTO drive_scans (id, user_id, user_name, drive_link, description, scan_status, started_at, metadata)
              VALUES ($1, $2, $3, $4, $5, 'processing', NOW(), $6)`,
-            [scanId, userId, userName || null, driveLink, description || null, JSON.stringify({ display_name: displayName || null })]
+            [scanId, effectiveUserId, effectiveUserName, driveLink, description || null, JSON.stringify({ display_name: displayName || null })]
         );
 
         // Start background scan (fire and forget)
-        runScanWorker({ scanId, folderId, displayName: displayName || '', userId, description: description || '' })
+        runScanWorker({ scanId, folderId, displayName: displayName || '', userId: effectiveUserId, description: description || '' })
             .catch(err => console.error('[Scan Worker Fatal]', err));
 
         return NextResponse.json({ success: true, scanId, message: 'Scan started in background' });

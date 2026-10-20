@@ -5,6 +5,29 @@ import crypto from 'crypto';
 
 export async function POST(request: Request) {
     try {
+        // Authentication & Role Check
+        const user = await getAuthUserFromRequest(request);
+        if (!user || !user.id) {
+            return NextResponse.json({ error: 'Unauthorized: Login required to add temples' }, { status: 401 });
+        }
+        const userId = user.id;
+
+        const cleanClient = createClient();
+        const { data: profile } = await cleanClient
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isAuthorizedToManageTemples = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13, 21].includes(r)) ||
+            roles.includes('super_admin') || roles.includes('managing_director');
+
+        if (!isAuthorizedToManageTemples) {
+            return NextResponse.json({ error: 'Forbidden: Insufficient privileges to add temples' }, { status: 403 });
+        }
+
         const body = await request.json();
         let {
             name, state, city, address, contact,
@@ -19,31 +42,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Name, State, and City are required' }, { status: 400 });
         }
 
-        // Rate Limiting
-        const user = await getAuthUserFromRequest(request);
-        const userId = user?.id || null;
-        let isVerified = false;
-
-        if (userId) {
-                const cleanClient = createClient();
-                // Fetch user role to determine verification status
-                const { data: profile } = await cleanClient
-                    .from('users')
-                    .select('role')
-                    .eq('id', userId)
-                    .single();
-
-                const roles = profile?.role;
-                // User logic: if role is anything other than 1 or 'student', auto-verify
-                // This covers: 2-13 (counselor, voice_manager, bc_voice_manager, city_admin, state_admin, zonal_admin, super_admin, and roles 9-13)
-                const hasPrivilegedRole = Array.isArray(roles)
-                    ? roles.some(r => r !== 1 && r !== 'student')
-                    : (roles !== 1 && roles !== 'student');
-
-                if (hasPrivilegedRole) {
-                    isVerified = true;
-                }
-            }
+        let isVerified = true;
 
         const { checkRateLimit } = await import('@/lib/rate-limit');
         const rateLimit = await checkRateLimit(request, userId, {

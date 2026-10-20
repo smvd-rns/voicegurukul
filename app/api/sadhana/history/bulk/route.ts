@@ -24,7 +24,25 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Too many users requested' }, { status: 400 });
         }
 
-        const reports = await getBulkSadhanaReportsByRange(userIds, from, to);
+        const supabase = createClient();
+        const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', requester.id)
+            .single();
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isLeadershipOrCounselor = numRoles.some((r: number) => [2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 21, 31].includes(r)) ||
+            roles.includes('super_admin') || roles.includes('counselor') || roles.includes('managing_director');
+
+        let targetUserIds = userIds;
+        if (!isLeadershipOrCounselor) {
+            // Normal students are scoped strictly to their own ID
+            targetUserIds = [requester.id];
+        }
+
+        const reports = await getBulkSadhanaReportsByRange(targetUserIds, from, to);
 
         return NextResponse.json({ success: true, data: reports });
 

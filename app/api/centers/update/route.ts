@@ -1,9 +1,33 @@
 import { NextResponse } from 'next/server';
 import {  createClient  } from '@/lib/supabase/server-db';
 import { sanitizeInput } from '@/lib/utils/validation';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
     try {
+        const user = await getAuthUserFromRequest(request);
+        if (!user || !user.id) {
+            return NextResponse.json({ error: 'Unauthorized: Login required to update centers' }, { status: 401 });
+        }
+
+        const supabase = createClient();
+
+        // Check permissions
+        const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isAuthorized = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13, 14, 15, 16, 21].includes(r)) ||
+            roles.includes('super_admin') || roles.includes('managing_director') || roles.includes('project_manager');
+
+        if (!isAuthorized) {
+            return NextResponse.json({ error: 'Forbidden: Insufficient privileges to update centers' }, { status: 403 });
+        }
+
         const body = await request.json();
         let {
             id,
@@ -34,8 +58,7 @@ export async function POST(request: Request) {
 
         // Rate Limiting & Auth Setup
 
-        // Use Service Role Key for Admin operations (Bypassing RLS for updates and user role changes)
-        const supabase = createClient();
+
 
         // Sanitize inputs
         name = sanitizeInput(name);
