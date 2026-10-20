@@ -143,9 +143,13 @@ class QueryBuilder {
   async then(onfulfilled?: (value: any) => any, onrejected?: (reason: any) => any) {
     try {
       const baseUrl = getBaseUrl();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (typeof window === 'undefined' && process.env.JWT_SECRET) {
+        headers['x-internal-secret'] = process.env.JWT_SECRET;
+      }
       const res = await fetch(`${baseUrl}/api/db-proxy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           table: this.table,
           method: this.method,
@@ -190,9 +194,13 @@ export const supabase = {
   rpc: async (func: string, params?: any) => {
     try {
       const baseUrl = getBaseUrl();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (typeof window === 'undefined' && process.env.JWT_SECRET) {
+        headers['x-internal-secret'] = process.env.JWT_SECRET;
+      }
       const res = await fetch(`${baseUrl}/api/db-proxy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           method: 'rpc',
           rpcFunc: func,
