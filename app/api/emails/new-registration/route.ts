@@ -105,7 +105,11 @@ export async function POST(request: Request) {
         }
 
         // 2. Send 1-click approval notification to managers / admins
-        const secret = process.env.EMAIL_APPROVAL_SECRET || process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'voicegurukul_secure_token_secret_89234891238912';
+        const secret = process.env.EMAIL_APPROVAL_SECRET || process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!secret) {
+            console.error('Email approval secret not configured on server');
+            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
         const token = crypto.createHmac('sha256', secret).update(userId).digest('hex');
         const approveLink = `${baseUrl}/api/emails/approve?userId=${userId}&token=${token}`;
 

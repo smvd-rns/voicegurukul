@@ -4,11 +4,32 @@ import { getActiveSadhanaSupabase, getAdminSadhanaSupabase } from '@/lib/supabas
 import { ManagedEvent, ManagedEventResponse, ManagedEventAttachment } from '@/types';
 import { sendPushNotification } from '@/lib/firebase/admin';
 import { revalidatePath } from 'next/cache';
+import { getAuthUserFromCookies, getAdminClient } from '@/lib/supabase/admin';
 
 /**
  * Create a new event in the second Supabase
  */
 export async function createEvent(eventData: Omit<ManagedEvent, 'id' | 'createdAt' | 'updatedAt'>) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) throw new Error('Unauthorized: Authentication required to create events');
+
+    // Verify creator has role permissions
+    const mainAdmin = getAdminClient();
+    const { data: creatorProfile } = await mainAdmin
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+
+    const roles = Array.isArray(creatorProfile?.role) ? creatorProfile.role : [creatorProfile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorized = numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+        roles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+    if (!isAuthorized) {
+        throw new Error('Forbidden: Insufficient privileges to create events');
+    }
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -17,7 +38,7 @@ export async function createEvent(eventData: Omit<ManagedEvent, 'id' | 'createdA
         .from('events')
         .insert({
             type: eventData.type || 'event',
-            created_by: eventData.createdBy,
+            created_by: authUser.id,
             title: eventData.title,
             event_date: eventData.type === 'event' ? eventData.eventDate : null,
             message: eventData.message,
@@ -515,6 +536,12 @@ export async function submitEventResponse(response: {
     isImportantDismissed?: boolean;
     guestCount?: number;
 }) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) throw new Error('Unauthorized: Session required');
+    if (!response.isBulk && response.userId !== authUser.id) {
+        throw new Error('Forbidden: Cannot submit response on behalf of another user');
+    }
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -537,7 +564,7 @@ export async function submitEventResponse(response: {
         .from('event_responses')
         .upsert({
             event_id: response.eventId,
-            user_id: response.userId,
+            user_id: response.isBulk ? response.userId : authUser.id,
             status: response.status,
             reason: response.reason,
             is_bulk: response.isBulk || false,
@@ -557,6 +584,9 @@ export async function submitEventResponse(response: {
  * Toggle personal pin for an event
  */
 export async function toggleEventPin(eventId: string, userId: string, isPinned: boolean) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser || authUser.id !== userId) throw new Error('Unauthorized');
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -564,7 +594,7 @@ export async function toggleEventPin(eventId: string, userId: string, isPinned: 
         .from('event_responses')
         .upsert({
             event_id: eventId,
-            user_id: userId,
+            user_id: authUser.id,
             is_pinned: isPinned,
             status: 'seen' // Ensure there is a status if it's the first interaction
         }, { onConflict: 'event_id,user_id' });
@@ -579,6 +609,9 @@ export async function toggleEventPin(eventId: string, userId: string, isPinned: 
  * Toggle personal importance dismissal for an event
  */
 export async function toggleEventImportance(eventId: string, userId: string, dismissed: boolean) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser || authUser.id !== userId) throw new Error('Unauthorized');
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -586,7 +619,7 @@ export async function toggleEventImportance(eventId: string, userId: string, dis
         .from('event_responses')
         .upsert({
             event_id: eventId,
-            user_id: userId,
+            user_id: authUser.id,
             is_important_dismissed: dismissed,
             status: 'seen' 
         }, { onConflict: 'event_id,user_id' });
@@ -602,6 +635,9 @@ export async function toggleEventImportance(eventId: string, userId: string, dis
  * Bulk submit responses (for Project Managers)
  */
 export async function bulkSubmitResponses(eventId: string, userIds: string[], pmId: string, status: 'coming' | 'not_coming') {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser || authUser.id !== pmId) throw new Error('Unauthorized');
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -610,7 +646,7 @@ export async function bulkSubmitResponses(eventId: string, userIds: string[], pm
         user_id: userId,
         status: status,
         is_bulk: true,
-        bulk_added_by: pmId,
+        bulk_added_by: authUser.id,
         updated_at: new Date().toISOString()
     }));
 
@@ -872,6 +908,10 @@ export async function getEventTargetedUsers(eventId: string, filters?: { temple?
 }
 
 export async function updateEventDeadline(eventId: string, rsvpDeadline: Date | null, userId: string) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser || authUser.id !== userId) {
+        throw new Error('Unauthorized: Session required');
+    }
     console.log(`[updateEventDeadline] Starting update for event ${eventId} by user ${userId}`);
     try {
         const sadhanaSupabase = getActiveSadhanaSupabase(); // anon (for reading)

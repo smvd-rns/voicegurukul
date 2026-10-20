@@ -17,7 +17,11 @@ export async function GET(request: Request) {
             return new NextResponse('Missing required parameters', { status: 400 });
         }
 
-        const secret = process.env.EMAIL_APPROVAL_SECRET || process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'voicegurukul_secure_token_secret_89234891238912';
+        const secret = process.env.EMAIL_APPROVAL_SECRET || process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!secret) {
+            console.error('Email approval secret not configured on server');
+            return new NextResponse('Server configuration error', { status: 500 });
+        }
         const expectedToken = crypto.createHmac('sha256', secret).update(userId).digest('hex');
 
         if (token !== expectedToken) {

@@ -24,7 +24,10 @@ export async function fetchAllDonations(accessToken?: string) {
       .eq('id', requesterId)
       .single();
 
-    if (roleError || !userData?.role?.includes(8)) {
+    const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+    const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+    if (roleError || !isSuperAdmin) {
       throw new Error('Unauthorized: Super Admin access required.');
     }
 
