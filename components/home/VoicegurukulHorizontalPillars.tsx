@@ -207,7 +207,7 @@ function Pillar3DCard({ pillar, index, total, scrollYProgress, onSelect }: Pilla
           opacity,
           zIndex,
         }}
-        className="pointer-events-auto w-full max-w-4xl lg:max-w-5xl rounded-2xl lg:rounded-3xl xl:rounded-[32px] bg-white border border-slate-200/90 shadow-2xl p-5 lg:p-6 xl:p-7 relative overflow-hidden flex flex-col justify-between group transition-shadow duration-300 hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/10 cursor-pointer antialiased select-none"
+        className="pointer-events-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-2xl lg:rounded-3xl xl:rounded-[32px] bg-white border border-slate-200/90 shadow-2xl p-4 lg:p-4.5 xl:p-7 relative overflow-hidden flex flex-col justify-between group transition-shadow duration-300 hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/10 cursor-pointer antialiased select-none"
       >
         {/* Dynamic Subtle Specular Glare */}
         <div
@@ -219,44 +219,44 @@ function Pillar3DCard({ pillar, index, total, scrollYProgress, onSelect }: Pilla
         />
 
         {/* Card Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 relative z-30">
-          <div className="flex items-center space-x-3">
-            <span className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 font-mono tracking-tighter">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2 xl:pb-2.5 relative z-30">
+          <div className="flex items-center space-x-2.5 xl:space-x-3">
+            <span className="text-lg lg:text-xl xl:text-3xl font-black text-slate-900 font-mono tracking-tighter">
               {pillar.id}
             </span>
             <span className="text-slate-300">•</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[11px] xl:text-xs font-bold border shadow-2xs ${pillar.badgeBg}`}>
+            <span className={`px-2 xl:px-2.5 py-0.5 rounded-full text-[10px] xl:text-xs font-bold border shadow-2xs ${pillar.badgeBg}`}>
               {pillar.tag}
             </span>
           </div>
 
-          <div className="flex items-center space-x-2 text-[11px] xl:text-xs font-bold text-slate-400">
+          <div className="flex items-center space-x-2 text-[10px] xl:text-xs font-bold text-slate-400">
             <span>PILLAR {pillar.id} OF 04</span>
           </div>
         </div>
 
         {/* Card Body Grid (2 columns on Desktop) */}
-        <div className="grid md:grid-cols-12 gap-5 lg:gap-7 items-center my-2.5 xl:my-3 relative z-30">
+        <div className="grid md:grid-cols-12 gap-3.5 lg:gap-4 xl:gap-7 items-center my-1.5 lg:my-2 xl:my-3 relative z-30">
           {/* Left Column: Descriptive Content & Highlights */}
-          <div className="md:col-span-7 space-y-2.5 xl:space-y-3">
-            <div className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl flex items-center justify-center border shadow-xs ${pillar.iconBoxBg}`}>
-              <Icon className="w-5 h-5 lg:w-6 lg:h-6" />
+          <div className="md:col-span-7 space-y-1.5 lg:space-y-2 xl:space-y-3">
+            <div className={`w-8 h-8 lg:w-9 lg:h-9 xl:w-11 xl:h-11 rounded-xl lg:rounded-2xl flex items-center justify-center border shadow-xs ${pillar.iconBoxBg}`}>
+              <Icon className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
             </div>
 
-            <h3 className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 tracking-tight leading-snug">
+            <h3 className="text-lg lg:text-xl xl:text-2xl 2xl:text-3xl font-black text-slate-900 tracking-tight leading-snug">
               {pillar.title}
             </h3>
 
-            <p className="text-xs lg:text-[13px] xl:text-sm text-slate-600 leading-relaxed font-normal">
+            <p className="text-xs lg:text-[13px] xl:text-sm text-slate-600 leading-relaxed font-normal line-clamp-2 xl:line-clamp-none">
               {pillar.desc}
             </p>
 
             {/* Concise Bullet Points with Emerald Dots */}
-            <div className="space-y-1.5 pt-1">
+            <div className="space-y-1 xl:space-y-1.5 pt-0.5 xl:pt-1">
               {pillar.highlights.map((h: string, i: number) => (
-                <div key={i} className="flex items-center space-x-2.5 text-xs lg:text-sm text-slate-700 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span>{h}</span>
+                <div key={i} className="flex items-center space-x-2 xl:space-x-2.5 text-xs lg:text-[13px] xl:text-sm text-slate-700 font-medium">
+                  <span className="w-1.5 h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="truncate">{h}</span>
                 </div>
               ))}
             </div>
@@ -264,7 +264,7 @@ function Pillar3DCard({ pillar, index, total, scrollYProgress, onSelect }: Pilla
 
           {/* Right Column: Photo Frame */}
           <div className="md:col-span-5 flex justify-center">
-            <div className="w-full max-w-sm md:max-w-md aspect-[4/3] rounded-2xl lg:rounded-3xl overflow-hidden bg-slate-100 shadow-lg border border-slate-200 relative group/img">
+            <div className="w-full max-w-xs md:max-w-sm xl:max-w-md h-36 lg:h-44 xl:h-56 rounded-xl lg:rounded-2xl xl:rounded-3xl overflow-hidden bg-slate-100 shadow-lg border border-slate-200 relative group/img">
               <DriveImage
                 driveId={pillar.driveId}
                 alt={pillar.title}
@@ -273,8 +273,8 @@ function Pillar3DCard({ pillar, index, total, scrollYProgress, onSelect }: Pilla
                 imgClassName="w-full h-full object-cover object-center group-hover/img:scale-105 transition-transform duration-700 pointer-events-none"
                 showZoomIcon={false}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-3.5 pointer-events-none z-10">
-                <span className="text-xs font-bold text-white drop-shadow">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-2.5 xl:p-3.5 pointer-events-none z-10">
+                <span className="text-[11px] xl:text-xs font-bold text-white drop-shadow">
                   {pillar.tag} • VOICE Gurukul
                 </span>
               </div>
@@ -537,49 +537,49 @@ export default function VoicegurukulHorizontalPillars() {
         id="pillars"
         className="hidden lg:block relative h-[380vh] bg-gradient-to-b from-[#fafcff] via-amber-50/20 to-[#fafcff]"
       >
-        <div className="sticky top-20 h-[calc(100vh-5rem)] max-h-[720px] w-full overflow-hidden flex flex-col justify-between pt-2 pb-2 xl:pt-3 xl:pb-3 z-20">
+        <div className="sticky top-16 lg:top-16 xl:top-20 h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] xl:h-[calc(100vh-5rem)] max-h-[620px] xl:max-h-[720px] w-full overflow-hidden flex flex-col justify-between pt-1 pb-1.5 xl:pt-3 xl:pb-3 z-20">
           
           {/* Top Header Strip with Interactive Pillar Tabs */}
-          <div className="w-full max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between gap-4 z-30 shrink-0">
-            <div className="space-y-0.5 xl:space-y-1">
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2 xl:gap-4 z-30 shrink-0 mb-1 xl:mb-2">
+            <div className="space-y-0.5">
               <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-amber-100/90 border border-amber-200 text-amber-900 text-[10px] xl:text-[11px] font-bold uppercase tracking-wider shadow-xs">
                 <Sparkles className="w-3 h-3 xl:w-3.5 xl:h-3.5 text-amber-600 animate-pulse" />
                 <span>Core Pillars of VOICE Gurukul</span>
               </div>
-              <h2 className="text-2xl lg:text-3xl xl:text-4xl font-black text-slate-900 tracking-tight font-sans">
+              <h2 className="text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-black text-slate-900 tracking-tight font-sans whitespace-normal md:whitespace-nowrap">
                 A Safe Oasis for University Youth
               </h2>
             </div>
 
             {/* Interactive Navigation Tabs */}
-            <div className="flex items-center gap-1.5 xl:gap-2">
+            <div className="flex items-center flex-wrap gap-1 xl:gap-2">
               {pillars.map((pillar, idx) => (
                 <button
                   key={pillar.id}
                   onClick={() => scrollToPillar(idx)}
-                  className={`px-3 xl:px-4 py-1.5 rounded-2xl text-xs font-bold transition-all duration-300 cursor-pointer ${
+                  className={`px-2.5 xl:px-4 py-1 xl:py-1.5 rounded-xl xl:rounded-2xl text-[11px] xl:text-xs font-bold transition-all duration-300 cursor-pointer ${
                     activePillarIndex === idx
                       ? 'bg-slate-900 text-white shadow-md scale-105'
                       : 'bg-white/80 text-slate-600 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <span className="font-mono text-amber-600 mr-1 text-[11px]">{pillar.id}</span>
+                  <span className="font-mono text-amber-600 mr-1 text-[10px] xl:text-[11px]">{pillar.id}</span>
                   <span>{pillar.tabLabel}</span>
                 </button>
               ))}
 
               <Link
                 href="/centres"
-                className="inline-flex items-center space-x-1.5 px-3 xl:px-3.5 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-xs font-bold transition-colors ml-1"
+                className="inline-flex items-center space-x-1 px-2.5 xl:px-3.5 py-1 xl:py-1.5 rounded-xl xl:rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-[11px] xl:text-xs font-bold transition-colors ml-0.5"
               >
                 <span>Explore Centres</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3 h-3 xl:w-3.5 xl:h-3.5" />
               </Link>
             </div>
           </div>
 
           {/* The 3D Curved Horizontal Pillar Stage */}
-          <div className="relative w-full flex-1 min-h-[340px] max-h-[540px] flex items-center justify-center [perspective:1300px] [transform-style:preserve-3d] my-auto">
+          <div className="relative w-full flex-1 min-h-[290px] max-h-[450px] xl:max-h-[540px] flex items-center justify-center [perspective:1300px] [transform-style:preserve-3d] my-auto">
             {pillars.map((pillar, idx) => (
               <Pillar3DCard
                 key={pillar.id}

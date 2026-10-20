@@ -9,7 +9,13 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const slug = url.searchParams.get('slug');
     
-    const easebuzzSalt = process.env.EASEBUZZ_SALT!;
+    const easebuzzSalt = process.env.EASEBUZZ_SALT;
+    const easebuzzKey = process.env.EASEBUZZ_KEY;
+    
+    if (!easebuzzSalt || !easebuzzKey) {
+      console.error('Easebuzz secrets not configured');
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL || ''}/?mode=error&message=gateway_config_error`, 303);
+    }
     
     const status = formData.get('status') as string;
     const txnid = formData.get('txnid') as string;
@@ -22,7 +28,6 @@ export async function POST(req: Request) {
 
     // Verify reverse hash from Easebuzz
     // Format: salt|status|||||||||||email|firstname|productinfo|amount|txnid|key
-    const easebuzzKey = process.env.EASEBUZZ_KEY!;
     const hashString = `${easebuzzSalt}|${status}|||||||||||${email}|${firstname}|${productinfo}|${amount}|${txnid}|${easebuzzKey}`;
     const generatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
 

@@ -8,8 +8,13 @@ export async function POST(req: Request) {
     const signature = req.headers.get('x-razorpay-signature');
     
     // Use Key Secret if user hasn't set an explicit Webhook Secret
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET!;
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
     
+    if (!webhookSecret) {
+      console.error('Razorpay webhook secret not configured');
+      return NextResponse.json({ success: false, error: 'Webhook secret not configured' }, { status: 500 });
+    }
+
     if (!signature) {
       return NextResponse.json({ success: false, error: 'Missing signature' }, { status: 400 });
     }

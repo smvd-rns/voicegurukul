@@ -285,31 +285,31 @@ export default function Home() {
       {/* =========================================================================
           HERO SECTION: Authentic Voicegurukul Copy + Real 3D Three.js Background
           ========================================================================= */}
-      <section className="relative overflow-hidden pt-10 pb-16 lg:pt-16 lg:pb-24 bg-gradient-to-b from-amber-50/40 via-sky-50/30 to-[#fafcff]">
+      <section className="relative overflow-hidden pt-6 pb-12 lg:pt-10 lg:pb-16 xl:pt-16 xl:pb-24 bg-gradient-to-b from-amber-50/40 via-sky-50/30 to-[#fafcff]">
         
         {/* Soft Ambient Vector Glow Orbs */}
         <div className="absolute top-0 right-10 w-[600px] h-[600px] bg-gradient-to-br from-amber-300/25 via-orange-200/20 to-purple-200/15 rounded-full blur-3xl pointer-events-none -z-0"></div>
         <div className="absolute top-1/3 left-0 w-[550px] h-[550px] bg-gradient-to-tr from-sky-200/30 via-indigo-100/25 to-emerald-100/20 rounded-full blur-3xl pointer-events-none -z-0"></div>
 
-        <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10">
-          <div className="grid lg:grid-cols-12 gap-12 lg:gap-14 items-center">
+        <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 relative z-10">
+          <div className="grid lg:grid-cols-12 gap-8 lg:gap-8 xl:gap-14 items-center">
             
             {/* Left Column: Authentic Voicegurukul Copy */}
             <motion.div 
               initial={{ opacity: 0, y: 25 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: "easeOut" }}
-              className="lg:col-span-7 space-y-6 text-center lg:text-left"
+              className="lg:col-span-7 space-y-4 lg:space-y-5 xl:space-y-6 text-center lg:text-left"
             >
               
               {/* Devotional Badge */}
-              <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white/95 border border-amber-200/90 shadow-sm text-amber-900 text-xs sm:text-sm font-bold tracking-wide">
+              <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/95 border border-amber-200/90 shadow-sm text-amber-900 text-xs sm:text-sm font-bold tracking-wide">
                 <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
                 <span>Rekindling Wisdom • Reviving Love • Est. 1996</span>
               </div>
 
               {/* Main Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.12]">
+              <h1 className="text-3xl sm:text-4xl lg:text-4xl xl:text-6xl font-black text-slate-900 tracking-tight leading-[1.14]">
                 Empowering Youth.<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-600 to-indigo-700">
                   Rekindling Wisdom.
@@ -318,7 +318,7 @@ export default function Home() {
               </h1>
 
               {/* Tagline */}
-              <p className="text-base sm:text-lg lg:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-normal">
+              <p className="text-sm sm:text-base lg:text-base xl:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-normal">
                 VOICE Gurukul bridges academic brilliance with the drug-free VOICE lifestyle, mental resilience, and timeless values across <strong className="text-slate-900 font-semibold">120+ university centres</strong>.
               </p>
 
@@ -974,7 +974,7 @@ export default function Home() {
           {/* =========================================================================
               2. DESKTOP & TABLET: Standard 4-Column Grid (Visible on >= 640px)
              ========================================================================= */}
-          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-10">
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3.5 xl:gap-6 mb-8 sm:mb-10">
             {donationTiers.map((tier) => {
               const isSelected = selectedDonationTier === tier.amount && !customAmount;
               return (
@@ -985,7 +985,7 @@ export default function Home() {
                     setSelectedDonationTier(tier.amount);
                     setCustomAmount('');
                   }}
-                  className={`cursor-pointer rounded-2xl sm:rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col justify-between relative border ${
+                  className={`cursor-pointer rounded-2xl sm:rounded-3xl p-4 sm:p-5 xl:p-6 transition-all duration-300 flex flex-col justify-between relative border ${
                     isSelected
                       ? 'bg-gradient-to-b from-amber-500/25 via-orange-500/15 to-transparent border-amber-400 shadow-xl shadow-amber-500/20 scale-[1.02] sm:scale-105'
                       : 'bg-white/5 border-white/10 hover:border-amber-400/40 hover:bg-white/10'
@@ -997,19 +997,19 @@ export default function Home() {
                     </span>
                   )}
 
-                  <div className="space-y-2 sm:space-y-3 pt-1 sm:pt-2">
-                    <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-400 block">
+                  <div className="space-y-1.5 sm:space-y-2.5 pt-1 sm:pt-2">
+                    <span className="text-[10px] sm:text-[11px] xl:text-xs font-bold uppercase tracking-wider text-amber-400 block">
                       {tier.badge}
                     </span>
                     
                     <div className="flex items-baseline space-x-1">
-                      <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-white font-mono">
+                      <span className="text-2xl sm:text-2xl lg:text-3xl xl:text-4xl font-black text-white font-mono">
                         ₹{tier.amount.toLocaleString()}
                       </span>
                       <span className="text-xs text-slate-400 font-medium">/ package</span>
                     </div>
 
-                    <h4 className="font-bold text-white text-sm sm:text-base">
+                    <h4 className="font-bold text-white text-xs sm:text-sm xl:text-base">
                       {tier.title}
                     </h4>
 
@@ -1018,7 +1018,7 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-white/10 flex items-center justify-between">
+                  <div className="pt-2.5 sm:pt-3.5 mt-2.5 sm:mt-3.5 border-t border-white/10 flex items-center justify-between">
                     <span className={`text-xs font-bold ${isSelected ? 'text-amber-400' : 'text-slate-400'}`}>
                       {isSelected ? '✓ Selected' : 'Select Package'}
                     </span>

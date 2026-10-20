@@ -21,18 +21,12 @@ export async function POST(request: Request) {
             .eq('id', adminUser.id)
             .single();
 
-        const adminRoles = adminProfile?.role || [];
-        const hierarchy = adminProfile?.hierarchy || {};
-
-        // Allow role 8 (Super Admin) and Role 11 (Managing Director)
-        const isSuperAdmin = Array.isArray(adminRoles)
-            ? adminRoles.some((r: any) => r === 8 || r === 'super_admin')
-            : (adminRoles === 8 || adminRoles === 'super_admin');
-
-        const isManagingDirector = Array.isArray(adminRoles)
-            ? adminRoles.some((r: any) => r === 11 || r === 'managing_director' || r === 12 || r === 'director' || r === 13 || r === 'central_voice_manager')
-            : (adminRoles === 11 || adminRoles === 'managing_director' || adminRoles === 12 || adminRoles === 13);
-
+        const adminRoles = Array.isArray(adminProfile?.role) ? adminProfile.role : [adminProfile?.role];
+        const isSuperAdmin = adminRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+        const isManagingDirector = adminRoles.some((r: any) => 
+            [11, 12, 13].includes(Number(r)) || 
+            ['managing_director', 'director', 'central_voice_manager'].includes(String(r))
+        );
         const isAuthorized = isSuperAdmin || isManagingDirector;
 
         if (!isAuthorized) {

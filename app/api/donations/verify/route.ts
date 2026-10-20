@@ -11,7 +11,11 @@ export async function POST(req: Request) {
     }
 
     // 1. Verify Signature
-    const secret = process.env.RAZORPAY_KEY_SECRET!;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+      console.error('RAZORPAY_KEY_SECRET is not configured on server');
+      return NextResponse.json({ success: false, error: 'Payment gateway configuration error' }, { status: 500 });
+    }
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto.createHmac('sha256', secret).update(body.toString()).digest('hex');
     

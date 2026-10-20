@@ -428,19 +428,19 @@ export default function CentresPage() {
         {/* =====================================================================
             HERO HEADER - VOICE PREACHING IN 120 COLLEGES ACROSS INDIA
             ===================================================================== */}
-        <section className="bg-gradient-to-b from-amber-50/80 via-sky-50/30 to-[#fafcff] py-12 lg:py-16 border-b border-amber-200/60 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4 relative z-10">
-            <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500/15 via-yellow-500/15 to-amber-500/15 border border-amber-400/40 text-amber-900 text-xs font-black uppercase tracking-widest shadow-sm">
+        <section className="bg-gradient-to-b from-amber-50/80 via-sky-50/30 to-[#fafcff] py-8 sm:py-10 lg:py-12 xl:py-16 border-b border-amber-200/60 relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3 sm:space-y-4 relative z-10">
+            <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/15 via-yellow-500/15 to-amber-500/15 border border-amber-400/40 text-amber-900 text-xs font-black uppercase tracking-widest shadow-sm">
               <MapPin className="w-4 h-4 text-amber-600" />
               <span>VOICE Network • Where Can I Find VOICE?</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-black text-slate-900 tracking-tight">
               VOICE Preaching in 120 Colleges across India
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-600 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm lg:text-base text-slate-600 max-w-3xl mx-auto leading-relaxed">
               Explore our 17 dedicated ISKCON youth centres empowering students with Vedic wisdom, character, and mental clarity across 120+ premier engineering and medical colleges nationwide, alongside top international university chapters.
             </p>
 

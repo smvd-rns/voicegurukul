@@ -258,38 +258,38 @@ export default function AboutPage() {
         {/* =========================================================================
             SECTION 1: ABOUT US & FOUNDING MOTTO (Clean, Professional, Crisp)
             ========================================================================= */}
-        <section className="relative pt-12 pb-20 lg:pt-20 lg:pb-28 bg-gradient-to-b from-sky-50/70 via-indigo-50/30 to-[#fafcff] border-b border-slate-100">
+        <section className="relative pt-8 pb-14 lg:pt-14 lg:pb-20 xl:pt-20 xl:pb-28 bg-gradient-to-b from-sky-50/70 via-indigo-50/30 to-[#fafcff] border-b border-slate-100">
 
           {/* Subtle Ambient Light Blobs */}
           <div className="absolute top-0 right-10 w-[600px] h-[600px] bg-gradient-to-br from-amber-200/30 via-orange-100/20 to-indigo-100/20 rounded-full blur-3xl pointer-events-none"></div>
           <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-sky-200/30 via-teal-100/20 to-purple-100/15 rounded-full blur-3xl pointer-events-none"></div>
 
-          <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10 space-y-12">
+          <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 relative z-10 space-y-8 sm:space-y-12">
 
             {/* Header Title & Motto */}
-            <div className="max-w-4xl space-y-5">
-              <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white border border-sky-200 shadow-sm text-indigo-900 text-xs sm:text-sm font-bold tracking-wide">
+            <div className="max-w-4xl space-y-3.5 sm:space-y-5">
+              <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white border border-sky-200 shadow-sm text-indigo-900 text-xs sm:text-sm font-bold tracking-wide">
                 <Sparkles className="w-4 h-4 text-sky-600 animate-pulse" />
                 <span>Our Heritage &amp; Founding Vision</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-none">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black text-slate-900 tracking-tight leading-none">
                 About Us!
               </h1>
 
               {/* Motto Banner */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-white/95 backdrop-blur-md border border-amber-200/90 shadow-md space-y-2">
-                <p className="text-lg sm:text-2xl font-black text-slate-900">
+              <div className="p-4 sm:p-6 lg:p-7 xl:p-8 rounded-2xl sm:rounded-3xl bg-white/95 backdrop-blur-md border border-amber-200/90 shadow-md space-y-2">
+                <p className="text-base sm:text-xl lg:text-2xl font-black text-slate-900">
                   The motto of VOICE is <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600">“Rekindling Wisdom &amp; Reviving Love”</span>.
                 </p>
-                <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-normal">
+                <p className="text-slate-600 text-xs sm:text-sm lg:text-base leading-relaxed font-normal">
                   When wisdom is rekindled, people can discriminate between good and bad. One can obtain everlasting Joy by reviving LOVE.
                 </p>
               </div>
             </div>
 
             {/* 3 Visual Photo Story Cards (Photos First, Bite-Sized Micro-Text, No Clutter) */}
-            <div className="grid md:grid-cols-3 gap-8 items-stretch">
+            <div className="grid md:grid-cols-3 gap-4 sm:gap-5 xl:gap-8 items-stretch">
 
               {/* Visual Card 1: Pune Heritage */}
               <motion.div

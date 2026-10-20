@@ -119,53 +119,53 @@ function ActivityPillarCard({
   const [hoverRotY, setHoverRotY] = useState(0);
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50, opacity: 0 });
 
-  // 1. Horizontal Curved Trajectory along cylinder
+  // 1. Horizontal Curved Trajectory: Inactive cards pushed off-screen (120vw / -120vw)
   const x = useTransform(
     scrollYProgress,
     inputPoints,
-    ['110vw', '58vw', '28vw', '0vw', '-28vw', '-58vw', '-110vw']
+    ['120vw', '100vw', '70vw', '0vw', '-70vw', '-100vw', '-120vw']
   );
 
   // 2. 3D Cylindrical Curvature (rotateY):
   const scrollRotateY = useTransform(
     scrollYProgress,
     inputPoints,
-    [-26, -18, -9, 0, 9, 18, 26]
+    [-22, -14, -7, 0, 7, 14, 22]
   );
 
   // 3. 3D Banking Tilt along curve (rotateZ):
   const rotateZ = useTransform(
     scrollYProgress,
     inputPoints,
-    [2.2, 1.5, 0.7, 0, -0.7, -1.5, -2.2]
+    [2, 1.2, 0.5, 0, -0.5, -1.2, -2]
   );
 
   // 4. 3D Depth along Z axis:
   const z = useTransform(
     scrollYProgress,
     inputPoints,
-    [-360, -200, -70, 0, -70, -200, -360]
+    [-300, -180, -60, 0, -60, -180, -300]
   );
 
   // 5. Scale Arc:
   const scale = useTransform(
     scrollYProgress,
     inputPoints,
-    [0.85, 0.92, 0.97, 1, 0.97, 0.92, 0.85]
+    [0.88, 0.93, 0.98, 1, 0.98, 0.93, 0.88]
   );
 
-  // 6. Smooth Opacity Curve:
+  // 6. Smooth Opacity Curve: ZERO OVERLAP (inactive cards fade cleanly)
   const opacity = useTransform(
     scrollYProgress,
     inputPoints,
-    [0, 0.7, 0.95, 1, 0.95, 0.7, 0]
+    [0, 0, 0.08, 1, 0.08, 0, 0]
   );
 
   // 7. Dynamic Z-Index Stacking:
   const zIndex = useTransform(
     scrollYProgress,
     inputPoints,
-    [5, 10, 20, 30, 20, 10, 5]
+    [1, 5, 10, 30, 10, 5, 1]
   );
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -175,8 +175,8 @@ function ActivityPillarCard({
     const cx = rect.width / 2;
     const cy = rect.height / 2;
 
-    setHoverRotX(-((my - cy) / cy) * 6);
-    setHoverRotY(((mx - cx) / cx) * 6);
+    setHoverRotX(-((my - cy) / cy) * 5);
+    setHoverRotY(((mx - cx) / cx) * 5);
     setGlarePos({
       x: (mx / rect.width) * 100,
       y: (my / rect.height) * 100,
@@ -208,67 +208,78 @@ function ActivityPillarCard({
           opacity,
           zIndex,
         }}
-        className="pointer-events-auto w-full max-w-4xl lg:max-w-5xl h-full max-h-[520px] lg:max-h-[550px] rounded-[36px] bg-white border border-slate-200/90 shadow-2xl p-6 sm:p-8 lg:p-10 relative overflow-hidden flex flex-col justify-between group transition-shadow duration-300 hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] cursor-pointer antialiased"
+        className="pointer-events-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl rounded-2xl lg:rounded-3xl xl:rounded-[32px] bg-white border border-slate-200/90 shadow-2xl p-4 lg:p-4.5 xl:p-7 relative overflow-hidden flex flex-col justify-between group transition-shadow duration-300 hover:shadow-[0_25px_60px_-15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/10 cursor-pointer antialiased select-none"
       >
 
         {/* Card Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 relative z-30">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tighter">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2 xl:pb-2.5 relative z-30">
+          <div className="flex items-center space-x-2.5 xl:space-x-3">
+            <span className="text-lg lg:text-xl xl:text-3xl font-black text-slate-900 font-mono tracking-tighter">
               {pillar.id}
             </span>
             <span className="text-slate-300">•</span>
             <span
-              className={`px-3 py-0.5 rounded-full text-xs font-bold border shadow-xs ${pillar.badgeBg}`}
+              className={`px-2 xl:px-2.5 py-0.5 rounded-full text-[10px] xl:text-xs font-bold border shadow-2xs ${pillar.badgeBg}`}
             >
               {pillar.tag}
             </span>
           </div>
+
+          <div className="flex items-center space-x-2 text-[10px] xl:text-xs font-bold text-slate-400">
+            <span>PILLAR {pillar.id} OF 04</span>
+          </div>
         </div>
 
         {/* Card Content Grid (2 Columns) */}
-        <div className="grid lg:grid-cols-12 gap-6 lg:gap-8 items-center my-auto py-2 relative z-30">
+        <div className="grid md:grid-cols-12 gap-3.5 lg:gap-4 xl:gap-7 items-center my-1.5 lg:my-2 xl:my-3 relative z-30">
           {/* Left Column: Descriptive Content & 4 Bullets */}
-          <div className="lg:col-span-7 space-y-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-xs">
-              <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div className="md:col-span-7 space-y-1.5 lg:space-y-2 xl:space-y-3">
+            <div className="w-8 h-8 lg:w-9 lg:h-9 xl:w-11 xl:h-11 rounded-xl lg:rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-xs">
+              <Icon className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
             </div>
 
-            <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+            <h3 className="text-lg lg:text-xl xl:text-2xl 2xl:text-3xl font-black text-slate-900 tracking-tight leading-snug">
               {pillar.title}
             </h3>
 
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+            <p className="text-xs lg:text-[13px] xl:text-sm text-slate-600 leading-relaxed font-normal line-clamp-2 xl:line-clamp-none">
               {pillar.desc}
             </p>
 
             {/* Exactly 4 Concise Bullet Points with Emerald Dots */}
-            <div className="space-y-1.5 pt-1">
+            <div className="space-y-1 xl:space-y-1.5 pt-0.5 xl:pt-1">
               {pillar.highlights.map((h, i) => (
-                <div key={i} className="flex items-center space-x-3 text-xs sm:text-sm text-slate-700 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span>{h}</span>
+                <div key={i} className="flex items-center space-x-2 xl:space-x-2.5 text-xs lg:text-[13px] xl:text-sm text-slate-700 font-medium">
+                  <span className="w-1.5 h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="truncate">{h}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Right Column: Clean Rounded Photo Frame with Google Drive Image */}
-          <div className="lg:col-span-5 flex justify-center">
-            <div className="w-full max-w-sm sm:max-w-md aspect-[4/3] rounded-3xl overflow-hidden bg-slate-100 shadow-xl border border-slate-200/90 relative group/img">
+          <div className="md:col-span-5 flex justify-center">
+            <div className="w-full max-w-xs md:max-w-sm xl:max-w-md h-36 lg:h-44 xl:h-56 rounded-xl lg:rounded-2xl xl:rounded-3xl overflow-hidden bg-slate-100 shadow-lg border border-slate-200/90 relative group/img">
               <DriveImage
                 driveId={pillar.driveId}
                 alt={pillar.title}
-                size={900}
+                size={800}
                 className="w-full h-full"
+                imgClassName="w-full h-full object-cover object-center group-hover/img:scale-105 transition-transform duration-700 pointer-events-none"
+                showZoomIcon={false}
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex flex-col justify-end p-2.5 xl:p-3.5 pointer-events-none z-10">
+                <span className="text-[11px] xl:text-xs font-bold text-white drop-shadow">
+                  {pillar.tag} • VOICE Gurukul
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Card Footer with Tagline */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium relative z-30">
-          <span>{pillar.footerTag}</span>
+        <div className="pt-2 xl:pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium relative z-30">
+          <span className="text-[11px] xl:text-xs text-slate-500 font-medium truncate max-w-[80%]">{pillar.footerTag}</span>
         </div>
       </motion.div>
     </div>
@@ -277,10 +288,21 @@ function ActivityPillarCard({
 
 export default function ActivityHero() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [activeDesktopIndex, setActiveDesktopIndex] = useState(0);
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start start', 'end end'],
   });
+
+  useEffect(() => {
+    return scrollYProgress.onChange((latest) => {
+      const idx = Math.min(
+        Math.floor(latest * PILLARS_DATA.length),
+        PILLARS_DATA.length - 1
+      );
+      setActiveDesktopIndex(idx);
+    });
+  }, [scrollYProgress]);
 
   const progressWidth = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
@@ -555,24 +577,42 @@ export default function ActivityHero() {
         ref={containerRef}
         className="hidden lg:block relative h-[380vh] bg-gradient-to-b from-sky-50/70 via-indigo-50/20 to-[#fafcff]"
       >
-        <div className="sticky top-20 h-[calc(100vh-5rem)] w-full overflow-hidden flex flex-col justify-between pt-3 pb-4 z-20">
+        <div className="sticky top-16 lg:top-16 xl:top-20 h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] xl:h-[calc(100vh-5rem)] max-h-[620px] xl:max-h-[720px] w-full overflow-hidden flex flex-col justify-between pt-1 pb-1.5 xl:pt-3 xl:pb-3 z-20">
           
-          {/* Top Header Strip (Always fully visible below navbar) */}
-          <div className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 flex items-center justify-between z-30">
-            <div className="space-y-1">
-              <div className="inline-flex items-center space-x-2 px-3 py-0.5 rounded-full bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-amber-500/15 border border-sky-300/80 text-sky-950 text-[11px] font-black uppercase tracking-widest shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+          {/* Top Header Strip with Interactive Navigation Tabs */}
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2 xl:gap-4 z-30 shrink-0 mb-1 xl:mb-2">
+            <div className="space-y-0.5">
+              <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-amber-500/15 border border-sky-300/80 text-sky-950 text-[10px] xl:text-[11px] font-black uppercase tracking-widest shadow-xs">
+                <Sparkles className="w-3 h-3 xl:w-3.5 xl:h-3.5 text-sky-600" />
                 <span>VOICE Core Initiatives • Youth Social Welfare</span>
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <Sparkles className="w-3 h-3 xl:w-3.5 xl:h-3.5 text-amber-500" />
               </div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight font-sans">
+              <h1 className="text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-black text-slate-900 tracking-tight font-sans whitespace-normal md:whitespace-nowrap">
                 Activities &amp; Core Welfare Pillars
               </h1>
             </div>
+
+            {/* Interactive Navigation Tabs */}
+            <div className="flex items-center flex-wrap gap-1 xl:gap-2">
+              {PILLARS_DATA.map((pillar, idx) => (
+                <button
+                  key={pillar.id}
+                  onClick={() => scrollToPillar(idx)}
+                  className={`px-2.5 xl:px-4 py-1 xl:py-1.5 rounded-xl xl:rounded-2xl text-[11px] xl:text-xs font-bold transition-all duration-300 cursor-pointer ${
+                    activeDesktopIndex === idx
+                      ? 'bg-slate-900 text-white shadow-md scale-105'
+                      : 'bg-white/80 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="font-mono text-amber-600 mr-1 text-[10px] xl:text-[11px]">{pillar.id}</span>
+                  <span>{pillar.tabLabel}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* The 3D Curved Horizontal Stage (Smooth side-by-side transition, 3D depth, crystal clear text!) */}
-          <div className="relative w-full h-[calc(100vh-13rem)] flex items-center justify-center [perspective:1300px] [transform-style:preserve-3d] overflow-hidden">
+          {/* The 3D Curved Horizontal Stage */}
+          <div className="relative w-full flex-1 min-h-[290px] max-h-[450px] xl:max-h-[540px] flex items-center justify-center [perspective:1300px] [transform-style:preserve-3d] my-auto">
             {PILLARS_DATA.map((pillar, idx) => (
               <ActivityPillarCard
                 key={pillar.id}
@@ -585,8 +625,8 @@ export default function ActivityHero() {
           </div>
 
           {/* Bottom Pinned Minimal Progress Line */}
-          <div className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 flex items-center justify-center z-30 pt-2 border-t border-slate-200/80">
-            <div className="w-56 sm:w-96 h-2 rounded-full bg-slate-200/90 overflow-hidden relative shadow-inner">
+          <div className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 flex items-center justify-center z-30 pt-1.5 xl:pt-2 border-t border-slate-200/80 shrink-0">
+            <div className="w-56 sm:w-72 xl:w-80 h-2 rounded-full bg-slate-200/90 overflow-hidden relative shadow-inner">
               <motion.div
                 style={{ width: progressWidth }}
                 className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 rounded-full"

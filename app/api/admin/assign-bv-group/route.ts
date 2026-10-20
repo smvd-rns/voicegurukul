@@ -28,7 +28,9 @@ export async function POST(request: Request) {
         }
 
         const roles = Array.isArray(currentUser.role) ? currentUser.role : [currentUser.role];
-        const isAuthorized = roles.some((r: any) => [8, 10, 11, 12, 13, 14, 15, 16, 21, 'project_manager', 'project_advisor', 'acting_manager', 'super_admin', 'managing_director', 'director', 'central_voice_manager', 'youth_preacher'].includes(r));
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isAuthorized = numRoles.some((r: number) => [8, 10, 11, 12, 13, 14, 15, 16, 21].includes(r)) ||
+            roles.some((r: any) => ['project_manager', 'project_advisor', 'acting_manager', 'super_admin', 'managing_director', 'director', 'central_voice_manager', 'youth_preacher'].includes(String(r)));
 
         if (!isAuthorized) {
             return NextResponse.json({ error: 'Unauthorized to assign groups' }, { status: 403 });

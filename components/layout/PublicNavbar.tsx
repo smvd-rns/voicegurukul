@@ -52,7 +52,7 @@ export default function PublicNavbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur-xl border-b border-sky-100/80 shadow-[0_4px_30px_rgba(30,41,59,0.03)] transition-all">
-      <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-10 h-20 flex items-center justify-between gap-4">
+      <div className="w-full max-w-7xl 2xl:max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 h-16 lg:h-16 xl:h-20 flex items-center justify-between gap-4">
         
         {/* Brand Logo & Name */}
         <Link href="/" className="group shrink-0 block">

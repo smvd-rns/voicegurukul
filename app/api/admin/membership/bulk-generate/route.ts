@@ -19,7 +19,10 @@ export async function POST(request: Request) {
             .eq('id', user.id)
             .single();
 
-        if (roleError || !currentUser || !(Array.isArray(currentUser.role) ? currentUser.role.includes(8) : currentUser.role === 8)) {
+        const roles = Array.isArray(currentUser?.role) ? currentUser.role : [currentUser?.role];
+        const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+        if (roleError || !currentUser || !isSuperAdmin) {
             return NextResponse.json({ error: 'Forbidden: Admin access only' }, { status: 403 });
         }
 

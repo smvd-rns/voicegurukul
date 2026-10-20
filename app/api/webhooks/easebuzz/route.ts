@@ -5,8 +5,13 @@ import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
-    const easebuzzSalt = process.env.EASEBUZZ_SALT!;
-    const easebuzzKey = process.env.EASEBUZZ_KEY!;
+    const easebuzzSalt = process.env.EASEBUZZ_SALT;
+    const easebuzzKey = process.env.EASEBUZZ_KEY;
+
+    if (!easebuzzSalt || !easebuzzKey) {
+      console.error('Easebuzz webhook secrets not configured');
+      return NextResponse.json({ success: false, error: 'Webhook configuration error' }, { status: 500 });
+    }
 
     const status = formData.get('status') as string;
     const txnid = formData.get('txnid') as string;

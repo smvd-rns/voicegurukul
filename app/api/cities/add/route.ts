@@ -21,6 +21,23 @@ export async function POST(request: Request) {
     }
     const userId = user.id;
 
+    // Authorization check - only administrative/temple management roles can add cities
+    const authenticatedClient = createClient();
+    const { data: profile } = await authenticatedClient
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorized = numRoles.some((r: number) => [8, 9, 10, 11, 12, 13, 21].includes(r)) ||
+      roles.includes('super_admin') || roles.includes('managing_director');
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient privileges to add cities' }, { status: 403 });
+    }
+
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rateLimit = await checkRateLimit(request, userId, {
       action: 'add_city',
@@ -39,11 +56,6 @@ export async function POST(request: Request) {
     // Sanitize inputs
     state = sanitizeInput(state);
     cityName = sanitizeInput(cityName);
-
-    // Use Service Role Key if available (Restricted RLS), otherwise fallback to Anon Key (Public RLS)
-
-    // Custom fetch
-    const authenticatedClient = createClient();
 
     const trimmedState = state.trim();
     const trimmedCityName = cityName.trim();

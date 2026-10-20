@@ -29,9 +29,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized: User record not found' }, { status: 403 });
     }
 
-    // Support both array [8] and single value 8
-    const role = userData.role;
-    const isAuthorized = Array.isArray(role) ? role.includes(8) : role === 8;
+    // Support both array [8] and single value 8, string or number
+    const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+    const isAuthorized = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
 
     if (!isAuthorized) {
       console.error('Unauthorized cancel attempt (insufficient role):', { email: userData.email, role: userData.role });

@@ -21,7 +21,10 @@ export async function POST(request: Request) {
       .eq('id', userId)
       .single();
 
-    if (userError || !user || !user.role?.includes(8)) {
+    const roles = Array.isArray(user?.role) ? user.role : [user?.role];
+    const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+    if (userError || !user || !isSuperAdmin) {
       console.error('Unauthorized change request:', { userId, role: user?.role });
       return NextResponse.json({ error: 'Unauthorized: Role 8 required' }, { status: 403 });
     }

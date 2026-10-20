@@ -368,11 +368,11 @@ export default function StoriesPage() {
         {/* =========================================================
             HERO SECTION: Atmospheric Header & Scroll-Revealed Stats
         ========================================================= */}
-        <section id="hero-section" className="relative pt-16 pb-16 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28 overflow-hidden border-b border-slate-200/60">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 text-center">
+        <section id="hero-section" className="relative pt-10 pb-12 sm:pt-14 sm:pb-16 lg:pt-16 lg:pb-20 xl:pt-24 xl:pb-28 overflow-hidden border-b border-slate-200/60">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 text-center">
             {/* Top Eyebrow */}
             <Scroll3DReveal yOffset={20} rotateX={4}>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur-md border border-indigo-200/80 shadow-sm text-xs font-bold text-indigo-700 tracking-wide">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 backdrop-blur-md border border-indigo-200/80 shadow-sm text-xs font-bold text-indigo-700 tracking-wide">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>PROVEN SOCIAL PROOF &amp; MULTI-DECADE IMPACT</span>
               </div>
@@ -380,22 +380,21 @@ export default function StoriesPage() {
 
             {/* Main Title & Subtitle */}
             <Scroll3DReveal delay={0.1} yOffset={30} rotateX={6}>
-              <div className="space-y-4 max-w-4xl mx-auto">
-                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight font-display leading-[1.1]">
+              <div className="space-y-3 sm:space-y-4 max-w-4xl mx-auto">
+                <h1 className="text-2xl sm:text-4xl lg:text-4xl xl:text-6xl font-black text-slate-900 tracking-tight font-display leading-[1.12]">
                   Transformations That Speak <br className="hidden sm:inline" />
                   <span className="bg-gradient-to-r from-indigo-600 via-sky-600 to-purple-600 bg-clip-text text-transparent">
                     For Themselves
                   </span>
                 </h1>
-                <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
+                <p className="text-xs sm:text-base lg:text-base xl:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
                   Academic directors, university deans, corporate leaders, and students share how timeless Vedic principles empowered their focus, character, and life milestones.
                 </p>
               </div>
             </Scroll3DReveal>
 
             {/* 3D Floating Interactive Metrics Ribbon with Staggered Scroll Reveal */}
-            {/* 3D Floating Interactive Metrics Ribbon with Staggered Scroll Reveal & Count-Up */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-5xl mx-auto pt-4 perspective-[1200px]">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 xl:gap-6 max-w-5xl mx-auto pt-2 sm:pt-4 perspective-[1200px]">
               {[
                 {
                   value: 25,

@@ -20,10 +20,8 @@ export async function POST(request: Request) {
             .eq('id', adminUser.id)
             .single();
 
-        const adminRoles = adminProfile?.role || [];
-        const isSuperAdmin = Array.isArray(adminRoles)
-            ? adminRoles.some((r: any) => r === 8 || r === 'super_admin')
-            : (adminRoles === 8 || adminRoles === 'super_admin');
+        const adminRoles = Array.isArray(adminProfile?.role) ? adminProfile.role : [adminProfile?.role];
+        const isSuperAdmin = adminRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
 
         if (!isSuperAdmin) {
             return NextResponse.json({ error: 'Forbidden. Only Super Admins can manage Event Admins.' }, { status: 403 });
