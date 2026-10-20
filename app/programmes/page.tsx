@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { Heart } from 'lucide-react';
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
 import ProgrammesVideoIntro from '@/components/activities/ProgrammesVideoIntro';
@@ -96,6 +98,52 @@ export default function ActivitiesPage() {
               reverse={false}
             />
           )}
+        </div>
+
+        {/* Bottom Sponsorship & Donation Banner */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-14">
+          <div className="p-8 sm:p-10 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-2xl border border-white/10 flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="space-y-2 text-center lg:text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[11px] font-bold uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5 fill-amber-400" />
+                <span>80G Tax-Exempt Impact</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black font-display text-white">
+                Sponsor a Student&apos;s Value Education &amp; Meals
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
+                Empower youth through subsidised seminar literature, holistic counselling, study facilities, and sanctified meals across India.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 shrink-0">
+              <Link
+                href="/donate/2026GUW00001?amount=1500"
+                className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold hover:scale-105 transition-all text-center"
+              >
+                ₹1,500 <span className="text-[10px] text-slate-400 block font-normal">Meals (30 Days)</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001?amount=5000"
+                className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold hover:scale-105 transition-all text-center"
+              >
+                ₹5,000 <span className="text-[10px] text-slate-400 block font-normal">Semester Kit</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001?amount=15000"
+                className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold hover:scale-105 transition-all text-center"
+              >
+                ₹15,000 <span className="text-[10px] text-slate-400 block font-normal">Full Residency</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001"
+                className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs uppercase tracking-wider shadow-xl hover:scale-105 transition-all flex items-center gap-1.5"
+              >
+                <Heart className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Sponsor a Student</span>
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
 

@@ -5,6 +5,7 @@ import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
 import CollegeLogoSlider from '@/components/centres/CollegeLogoSlider';
 import CentresMapExplorer from '@/components/centres/CentresMapExplorer';
+import Link from 'next/link';
 import {
   MapPin,
   Sparkles,
@@ -17,6 +18,7 @@ import {
   ChevronUp,
   X,
   ExternalLink,
+  Heart,
 } from 'lucide-react';
 
 export interface VoiceCentreItem {
@@ -748,6 +750,52 @@ export default function CentresPage() {
                   <p className="text-xs text-slate-300 font-medium">{chap.colleges}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 5: SPONSOR GURUKUL RESIDENT MEALS & FACILITIES */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+          <div className="p-8 sm:p-10 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-300/40 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="space-y-2 text-center lg:text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-800 text-[11px] font-bold uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5 fill-amber-600 text-amber-600" />
+                <span>80G Tax-Exempt Contribution</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 font-display">
+                Sponsor a Resident Scholar at Our Centres
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-xl leading-relaxed">
+                Your support covers pure Sattvic meals, study facilities, and value education for deserving engineering and medical students residing at VOICE centres.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 shrink-0">
+              <Link
+                href="/donate/2026GUW00001?amount=1500"
+                className="px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 text-xs font-bold shadow-xs hover:scale-105 transition-all text-center"
+              >
+                ₹1,500 <span className="text-[10px] text-slate-500 block font-normal">Meals (30 Days)</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001?amount=5000"
+                className="px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 text-xs font-bold shadow-xs hover:scale-105 transition-all text-center"
+              >
+                ₹5,000 <span className="text-[10px] text-slate-500 block font-normal">Semester Kit</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001?amount=15000"
+                className="px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 text-xs font-bold shadow-xs hover:scale-105 transition-all text-center"
+              >
+                ₹15,000 <span className="text-[10px] text-slate-500 block font-normal">Full Residency</span>
+              </Link>
+              <Link
+                href="/donate/2026GUW00001"
+                className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md hover:scale-105 transition-all flex items-center gap-1.5"
+              >
+                <Heart className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Donate Now</span>
+              </Link>
             </div>
           </div>
         </section>

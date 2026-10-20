@@ -244,7 +244,7 @@ export default function LusionHeader({ onOpenDonate }: LusionHeaderProps) {
                 <span>ISKCON YOUTH FORUM AFFILIATED • 80G TAX EXEMPT</span>
               </div>
               <div className="flex items-center space-x-6">
-                <Link href="/collaborate#community" onClick={() => setMenuOpen(false)} className="text-white hover:text-[#c1ff00]">
+                <Link href="/donate/2026GUW00001" onClick={() => setMenuOpen(false)} className="text-white hover:text-[#c1ff00]">
                   DIRECT PLEDGE
                 </Link>
                 <span>{"//"}</span>

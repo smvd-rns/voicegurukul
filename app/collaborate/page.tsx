@@ -630,7 +630,7 @@ export default function CollaboratePage() {
 
                     <div className="pt-1">
                       <Link
-                        href="/dashboard/donations"
+                        href="/donate/2026GUW00001"
                         className="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider shadow-md text-center block transition-all hover:scale-[1.02]"
                       >
                         Sponsor &amp; Donate Now
@@ -782,37 +782,58 @@ export default function CollaboratePage() {
                   <div className="grid sm:grid-cols-3 gap-5 text-center">
                     
                     {/* Tier 1 */}
-                    <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 transition-all hover:scale-105">
+                    <Link
+                      href="/donate/2026GUW00001?amount=1500"
+                      className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 hover:border-sky-400/50 transition-all hover:scale-105 block group cursor-pointer"
+                    >
                       <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-sky-300 font-display">
                         <AnimatedCounter prefix="₹" to={1500} duration={1.6} />
                       </p>
-                      <p className="text-xs font-bold text-white uppercase tracking-wider">Yuva Meal Sponsorship</p>
+                      <p className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-sky-300 transition-colors">Yuva Meal Sponsorship</p>
                       <p className="text-[11px] text-slate-300">Provides 30 wholesome, sanctified meals for college residents</p>
-                    </div>
+                      <div className="pt-2 text-[10px] font-black uppercase text-sky-300 tracking-wider flex items-center justify-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        <span>Select ₹1,500</span>
+                        <span>→</span>
+                      </div>
+                    </Link>
 
                     {/* Tier 2 */}
-                    <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 transition-all hover:scale-105">
+                    <Link
+                      href="/donate/2026GUW00001?amount=5000"
+                      className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 hover:border-indigo-400/50 transition-all hover:scale-105 block group cursor-pointer"
+                    >
                       <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-indigo-300 font-display">
                         <AnimatedCounter prefix="₹" to={5000} duration={1.9} />
                       </p>
-                      <p className="text-xs font-bold text-white uppercase tracking-wider">Semester Course Kit</p>
+                      <p className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-indigo-300 transition-colors">Semester Course Kit</p>
                       <p className="text-[11px] text-slate-300">Covers 1 student study materials, coursebooks, and retreat fee</p>
-                    </div>
+                      <div className="pt-2 text-[10px] font-black uppercase text-indigo-300 tracking-wider flex items-center justify-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        <span>Select ₹5,000</span>
+                        <span>→</span>
+                      </div>
+                    </Link>
 
                     {/* Tier 3 */}
-                    <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 transition-all hover:scale-105">
+                    <Link
+                      href="/donate/2026GUW00001?amount=15000"
+                      className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-2 hover:bg-white/10 hover:border-purple-400/50 transition-all hover:scale-105 block group cursor-pointer"
+                    >
                       <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-purple-300 font-display">
                         <AnimatedCounter prefix="₹" to={15000} duration={2.2} />
                       </p>
-                      <p className="text-xs font-bold text-white uppercase tracking-wider">Full Gurukul Residency</p>
+                      <p className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-purple-300 transition-colors">Full Gurukul Residency</p>
                       <p className="text-[11px] text-slate-300">1 month comprehensive student hostel stay, meals, and mentorship</p>
-                    </div>
+                      <div className="pt-2 text-[10px] font-black uppercase text-purple-300 tracking-wider flex items-center justify-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        <span>Select ₹15,000</span>
+                        <span>→</span>
+                      </div>
+                    </Link>
 
                   </div>
 
                   <div className="text-center pt-2">
                     <Link
-                      href="/dashboard/donations"
+                      href="/donate/2026GUW00001"
                       className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-105"
                     >
                       <Heart className="w-4 h-4 fill-slate-950" />

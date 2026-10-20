@@ -69,13 +69,21 @@ export default function DonationPage() {
   const [activeGateway, setActiveGateway] = useState('razorpay');
   const [imageError, setImageError] = useState(false);
 
-  const [formData, setFormData] = useState({
-    amount: '',
-    donorName: '',
-    donorEmail: '',
-    donorMobile: '',
-    donorAddress: '',
-    donorPan: ''
+  const [formData, setFormData] = useState(() => {
+    let initialAmount = '';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const a = params.get('amount');
+      if (a && !isNaN(Number(a))) initialAmount = a;
+    }
+    return {
+      amount: initialAmount,
+      donorName: '',
+      donorEmail: '',
+      donorMobile: '',
+      donorAddress: '',
+      donorPan: ''
+    };
   });
 
   useEffect(() => {
@@ -170,6 +178,10 @@ export default function DonationPage() {
       const camp = params.get('camp') || params.get('for') || params.get('activity');
       if (camp) {
         setPaymentForParam(camp);
+      }
+      const amountParam = params.get('amount');
+      if (amountParam && !isNaN(Number(amountParam))) {
+        setFormData(prev => ({ ...prev, amount: amountParam }));
       }
       const mode = params.get('mode');
       const msg = params.get('message');
@@ -545,6 +557,26 @@ export default function DonationPage() {
                       placeholder="Enter amount to contribute"
                       className="w-full pl-8 pr-3.5 h-12 bg-white border-2 border-slate-100 rounded-xl text-black text-[15px] font-semibold outline-none focus:border-indigo-500 transition-all shadow-sm placeholder:text-slate-300 placeholder:font-normal"
                     />
+                  </div>
+                  {/* Preset Amount Badges */}
+                  <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5">
+                    {[1500, 5000, 15000, 50000].map((preset) => {
+                      const isSelected = formData.amount === String(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, amount: String(preset) })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          ₹{preset.toLocaleString()}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

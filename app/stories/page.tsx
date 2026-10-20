@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Rocket,
   Play,
+  Heart,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -815,16 +816,23 @@ export default function StoriesPage() {
                 <div className="flex flex-wrap items-center justify-center gap-3.5 relative z-10 shrink-0">
                   <Link
                     href="/collaborate#colleges"
-                    className="px-7 py-4 rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-indigo-600 text-white font-bold text-xs uppercase tracking-wider hover:opacity-95 transition-opacity shadow-xl flex items-center gap-2 group"
+                    className="px-6 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-indigo-600 text-white font-bold text-xs uppercase tracking-wider hover:opacity-95 transition-opacity shadow-xl flex items-center gap-2 group"
                   >
-                    <span>Request Campus Collaboration</span>
+                    <span>Request Collaboration</span>
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
                   <Link
                     href="/programmes"
-                    className="px-6 py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-colors border border-white/20"
+                    className="px-5 py-3.5 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-colors border border-white/20"
                   >
                     Explore Programmes
+                  </Link>
+                  <Link
+                    href="/donate/2026GUW00001"
+                    className="px-6 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition-all flex items-center gap-1.5"
+                  >
+                    <Heart className="w-4 h-4 fill-slate-950" />
+                    <span>Sponsor a Student (80G)</span>
                   </Link>
                 </div>
               </div>

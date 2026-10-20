@@ -11,7 +11,8 @@ import {
   Menu, 
   X,
   ArrowRight,
-  UserCheck
+  UserCheck,
+  Heart
 } from 'lucide-react';
 
 export default function PublicNavbar() {
@@ -84,8 +85,16 @@ export default function PublicNavbar() {
           })}
         </nav>
 
-        {/* Top Right Action Button (Login / Dashboard) */}
-        <div className="hidden sm:flex items-center space-x-3 shrink-0">
+        {/* Top Right Action Button (Donate + Login / Dashboard) */}
+        <div className="hidden sm:flex items-center space-x-2.5 shrink-0">
+          <Link
+            href="/donate/2026GUW00001"
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 hover:scale-105 transition-all"
+          >
+            <Heart className="w-3.5 h-3.5 fill-slate-950" />
+            <span>Donate</span>
+          </Link>
+
           {user ? (
             <Link
               href="/dashboard"
@@ -151,6 +160,15 @@ export default function PublicNavbar() {
             </Link>
           ))}
           <div className="pt-4 border-t border-slate-100 flex flex-col space-y-3">
+            <Link
+              href="/donate/2026GUW00001"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md text-center"
+            >
+              <Heart className="w-4 h-4 fill-slate-950" />
+              <span>Donate (80G Tax-Exempt)</span>
+            </Link>
+
             {user ? (
               <Link
                 href="/dashboard"

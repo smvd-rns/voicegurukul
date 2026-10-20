@@ -43,7 +43,6 @@ export default function Home() {
   // Interactive Donation State
   const [selectedDonationTier, setSelectedDonationTier] = useState<number>(5000);
   const [customAmount, setCustomAmount] = useState<string>('');
-  const [showDonationModal, setShowDonationModal] = useState<boolean>(false);
 
   // Gallery Filter State
   const [activeGalleryTab, setActiveGalleryTab] = useState<string>('all');
@@ -1067,19 +1066,12 @@ export default function Home() {
 
               <div className="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
                 <Link
-                  href={`/collaborate#community`}
-                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 transition-all text-center flex items-center justify-center space-x-2"
+                  href={`/donate/2026GUW00001${currentDonationAmount ? `?amount=${currentDonationAmount}` : ''}`}
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 transition-all text-center flex items-center justify-center space-x-2 hover:scale-105"
                 >
                   <Gift className="w-4 h-4" />
                   <span>Proceed to Donate</span>
                 </Link>
-
-                <button
-                  onClick={() => setShowDonationModal(true)}
-                  className="w-full sm:w-auto px-5 py-3 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/20 transition-all shrink-0 text-center"
-                >
-                  Direct Bank / UPI
-                </button>
               </div>
             </div>
 
@@ -1224,50 +1216,6 @@ export default function Home() {
 
         </div>
       </section>
-
-      {/* =========================================================================
-          DIRECT BANK & UPI MODAL (Quick Scan & Pay for Indian Donors)
-          ========================================================================= */}
-      {showDonationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative border border-slate-200">
-            <button 
-              onClick={() => setShowDonationModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-sm"
-            >
-              ✕
-            </button>
-
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-                <Gift className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Direct Bank &amp; UPI Donation</h3>
-              <p className="text-xs text-slate-500">ISKCON NVCC Pune • VOICE Youth Leadership Account</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5 text-xs text-slate-700 font-mono">
-              <div><strong className="text-slate-900 font-sans">Account Name:</strong> ISKCON</div>
-              <div><strong className="text-slate-900 font-sans">Bank:</strong> HDFC Bank Ltd</div>
-              <div><strong className="text-slate-900 font-sans">Account No:</strong> 50100234567890</div>
-              <div><strong className="text-slate-900 font-sans">IFSC Code:</strong> HDFC0000052</div>
-              <div><strong className="text-slate-900 font-sans">UPI ID:</strong> iskcon.voice@hdfcbank</div>
-            </div>
-
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
-              💡 <em>After transferring, please share a screenshot to accounts@voicegurukul.com along with your PAN details to receive an instant 80G tax receipt.</em>
-            </div>
-
-            <Link
-              href="/collaborate#community"
-              onClick={() => setShowDonationModal(false)}
-              className="block text-center py-3.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-xs uppercase tracking-wider shadow-md"
-            >
-              Online Payment Gateway →
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <PublicFooter />

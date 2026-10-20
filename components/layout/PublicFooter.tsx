@@ -67,7 +67,7 @@ export default function PublicFooter() {
                 <Link href="/refund-policy" className="hover:text-white transition-colors">Cancellation &amp; Refund Policy</Link>
               </li>
               <li className="pt-2">
-                <Link href="/dashboard/donations" className="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center space-x-1">
+                <Link href="/donate/2026GUW00001" className="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center space-x-1">
                   <Heart className="w-3.5 h-3.5 fill-amber-400 shrink-0" />
                   <span>Sponsor Yuva Meals (80G Tax-exempt)</span>
                 </Link>

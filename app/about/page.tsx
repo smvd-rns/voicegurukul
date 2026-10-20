@@ -867,16 +867,23 @@ export default function AboutPage() {
               <div className="flex flex-col sm:flex-row items-center w-full lg:w-auto gap-3 sm:gap-4 shrink-0 relative z-10">
                 <Link
                   href="/programmes"
-                  className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 active:scale-95 transition-all flex items-center justify-center space-x-2 text-center"
+                  className="w-full sm:w-auto px-6 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 active:scale-95 transition-all flex items-center justify-center space-x-2 text-center"
                 >
                   <span>Explore Programmes</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
                 <Link
                   href="/centres"
-                  className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/25 hover:border-white/40 active:scale-95 transition-all flex items-center justify-center text-center"
+                  className="w-full sm:w-auto px-6 py-3.5 sm:py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/25 hover:border-white/40 active:scale-95 transition-all flex items-center justify-center text-center"
                 >
                   Locate Centres
+                </Link>
+                <Link
+                  href="/donate/2026GUW00001"
+                  className="w-full sm:w-auto px-6 py-3.5 sm:py-4 rounded-full bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:shadow-rose-500/30 active:scale-95 transition-all flex items-center justify-center space-x-1.5 text-center"
+                >
+                  <Heart className="w-3.5 h-3.5 fill-white" />
+                  <span>Sponsor a Student</span>
                 </Link>
               </div>
 
