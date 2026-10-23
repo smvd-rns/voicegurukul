@@ -90,28 +90,28 @@ export default function StatsSection({ users }: StatsSectionProps) {
     ];
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-6 mb-8">
-            {cards.map((card, index) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 md:gap-3 mb-4">
+            {cards.map((card) => (
                 <div
                     key={card.title}
-                    className={`relative overflow-hidden rounded-2xl md:rounded-[2rem] p-4 md:p-6 bg-white border border-gray-100 shadow-lg ${card.shadow} transition-all duration-300 hover:scale-[1.02] hover:shadow-xl group`}
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 group"
                 >
-                    {/* Background Gradient Blob */}
-                    <div className={`absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-gradient-to-br ${card.gradient} opacity-10 rounded-full blur-2xl -mr-8 -mt-8 md:-mr-10 md:-mt-10 transition-opacity duration-300 group-hover:opacity-20`} />
+                    {/* Subtle Background Accent */}
+                    <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${card.gradient} opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-20`} />
 
                     <div className="relative z-10">
-                        <div className={`inline-flex p-2 md:p-3 rounded-xl md:rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-md mb-3 md:mb-4 transform transition-transform duration-300 group-hover:rotate-6`}>
-                            <card.icon className="w-4 h-4 md:w-6 md:h-6" />
+                        <div className="flex items-center justify-between mb-2">
+                            <div className={`inline-flex p-1.5 md:p-2 rounded-lg md:rounded-xl bg-gradient-to-br ${card.gradient} text-white shadow-sm`}>
+                                <card.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                            </div>
+                            <span className="text-lg md:text-2xl font-black text-gray-900 font-display tracking-tight">
+                                {card.value.toLocaleString()}
+                            </span>
                         </div>
 
-                        <div className="space-y-0.5 md:space-y-1">
-                            <h3 className="text-gray-500 text-[10px] md:text-sm font-bold uppercase tracking-wider">{card.title}</h3>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-xl md:text-3xl font-black text-gray-900 font-display">
-                                    {card.value.toLocaleString()}
-                                </span>
-                            </div>
-                            <p className={`text-[9px] md:text-xs font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent truncate`}>
+                        <div className="space-y-0.5">
+                            <h3 className="text-gray-500 text-[10px] md:text-[11px] font-bold uppercase tracking-wider truncate">{card.title}</h3>
+                            <p className={`text-[9px] md:text-[10px] font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent truncate`}>
                                 {card.desc}
                             </p>
                         </div>

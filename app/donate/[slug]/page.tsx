@@ -93,7 +93,7 @@ export default function DonationPage() {
       try {
         const { data, error: fetchError } = await supabase
           .from('users')
-          .select('id, name, email, phone, profile_image, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
+          .select('id, name, email, phone, profile_image, donation_slug, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center, ashram')
           .eq('donation_slug', slug)
           .single();
 
@@ -220,7 +220,7 @@ export default function DonationPage() {
             collectorName: targetUser.name,
             collectorEmail: targetUser.email,
             collectorMobile: targetUser.phone,
-            collectorSlug: slug,
+            collectorSlug: targetUser?.donation_slug || (Array.isArray(slug) ? slug[0] : slug) || '',
             parentCenter: targetUser.resolvedParentCenter,
             parentTemple: targetUser.resolvedParentTemple,
             currentCenter: targetUser.resolvedCurrentCenter,
@@ -282,18 +282,21 @@ export default function DonationPage() {
             email: formData.donorEmail,
             contact: formData.donorMobile,
           },
-          notes: {
-            payment_for: String(paymentForParam).substring(0, 50),
-            website: websiteHost.substring(0, 40),
-            donor_name: String(formData.donorName || "").substring(0, 50),
-            donor_phone: String(formData.donorMobile || "").substring(0, 20),
-            donor_email: String(formData.donorEmail || "").substring(0, 50),
-            donor_address: String(formData.donorAddress || "N/A").substring(0, 100),
-            donor_pan: String(formData.donorPan || "N/A").substring(0, 20),
-            collector_parent_temple: String(targetUser.resolvedParentTemple || "None").substring(0, 50),
-            collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
-            collector_slug: String(slug || "").substring(0, 30)
-          },
+          notes: (() => {
+            const notesMap: Record<string, string> = {
+              payment_for: String(paymentForParam).substring(0, 50),
+              website: websiteHost.substring(0, 40),
+              donor_name: String(formData.donorName || "").substring(0, 50),
+              collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
+            };
+            if (formData.donorAddress && formData.donorAddress.trim() && formData.donorAddress.trim().toUpperCase() !== 'N/A') {
+              notesMap.donor_address = String(formData.donorAddress.trim()).substring(0, 100);
+            }
+            if (formData.donorPan && formData.donorPan.trim() && formData.donorPan.trim().toUpperCase() !== 'N/A') {
+              notesMap.donor_pan = String(formData.donorPan.trim()).substring(0, 20);
+            }
+            return notesMap;
+          })(),
           theme: {
             color: "#4f46e5", // indigo-600
           },

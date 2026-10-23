@@ -5,11 +5,19 @@ import {
     Users, FileText, Activity, Shield, Settings, UserPlus, Database,
     AlertCircle, Briefcase, BarChart, UserCircle, Building2, MapPin,
     UserCheck, CheckCircle2, Upload, Radio, MessageSquare, ChevronRight,
-    CreditCard, GraduationCap, Sliders
+    CreditCard, GraduationCap, Sliders, Tent
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
     const adminSections = [
+        {
+            title: 'Camps',
+            description: 'Host & manage camps, dates, fees & registrations',
+            icon: Tent,
+            href: '/dashboard/admin/camps',
+            color: 'text-amber-600',
+            bgColor: 'bg-amber-100',
+        },
         {
             title: 'Users',
             description: 'Manage all users and roles',

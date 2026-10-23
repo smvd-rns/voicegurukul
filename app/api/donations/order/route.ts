@@ -110,24 +110,29 @@ export async function POST(req: Request) {
       }
     }
 
-    // 1. Create Razorpay Order with simplified, focused notes payload
+    // 1. Create Razorpay Order with strictly required notes payload
     const paymentForTitle = paymentFor || body.payment_for || "Donation";
+    
+    const notesPayload: Record<string, string> = {
+      payment_for: String(paymentForTitle).substring(0, 50),
+      website: String(detectedWebsite).substring(0, 40),
+      donor_name: String(donorName || "").substring(0, 50),
+      collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50)
+    };
+
+    if (donorAddress && typeof donorAddress === 'string' && donorAddress.trim() && donorAddress.trim().toUpperCase() !== 'N/A') {
+      notesPayload.donor_address = String(donorAddress.trim()).substring(0, 100);
+    }
+
+    if (donorPan && typeof donorPan === 'string' && donorPan.trim() && donorPan.trim().toUpperCase() !== 'N/A') {
+      notesPayload.donor_pan = String(donorPan.trim()).substring(0, 20);
+    }
+
     const options = {
       amount: Math.round(parseFloat(amount) * 100), // convert to paise
       currency: "INR",
       receipt: `RCPT_${Date.now()}_${targetUserId.substring(0, 5)}`,
-      notes: {
-        payment_for: String(paymentForTitle).substring(0, 50),
-        website: String(detectedWebsite).substring(0, 40),
-        donor_name: String(donorName || "").substring(0, 50),
-        donor_phone: String(donorMobile || "").substring(0, 20),
-        donor_email: String(donorEmail || "").substring(0, 50),
-        donor_address: String(donorAddress || "N/A").substring(0, 100),
-        donor_pan: String(donorPan || "N/A").substring(0, 20),
-        collector_parent_temple: String(resolvedParentTemple || "None").substring(0, 50),
-        collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50),
-        collector_slug: String(collectorSlugValue || "").substring(0, 30)
-      }
+      notes: notesPayload
     };
     const order = await razorpay.orders.create(options);
 

@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Rule C: Public Catalog Tables (Read-only for guests, Admin for mutations)
-      const publicCatalogTables = ['temples', 'centers', 'cities', 'states', 'spiritual_masters', 'policies', 'stories', 'app_configs'];
+      const publicCatalogTables = ['temples', 'centers', 'cities', 'states', 'spiritual_masters', 'policies', 'stories', 'app_configs', 'camps'];
       if (publicCatalogTables.includes(table)) {
         if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Only administrators can modify catalog data' }, { status: 403 });

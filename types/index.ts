@@ -442,3 +442,210 @@ export interface ManagedEventResponse {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface CampMealConfig {
+  date: string; // e.g. "14" or "2026-04-14"
+  label: string; // e.g. "14 - April"
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+  isPeak?: boolean;
+  full_date?: string; // e.g. "2026-10-29"
+}
+
+export interface CampAccommodationPricing {
+  regular_daily: number; // e.g. 120
+  peak_daily: number; // e.g. 200
+  peak_start_date?: string; // e.g. "18"
+  peak_end_date?: string; // e.g. "20"
+  ac_charge: number; // Optional miscellaneous or other charge amount (₹)
+  facility_charge_label?: string; // Custom label, e.g. "Other Charges", "AC Charge", "Hall Setup"
+  allow_female_cv_accommodation?: boolean;
+}
+
+export interface CampRoleWaiver {
+  role: string; // e.g. 'Volunteer', 'Mentor', 'Brahmachari'
+  free_meals?: boolean;
+  free_accommodation?: boolean;
+  fixed_token_fee?: number | null; // e.g. 0 for full free, 100 for Brahmachari, or null for calculated
+  notice_message?: string;
+}
+
+export interface CampCoupon {
+  code: string; // e.g. 'STUDENT100', 'VOLUNTEERFREE'
+  discount_type: 'PERCENT' | 'FLAT';
+  discount_value: number; // e.g. 100 for 100%, 500 for ₹500
+  description?: string;
+  max_uses?: number | null; // e.g. 10 for first 10 users, null/0 for unlimited
+  used_count?: number; // count of times redeemed
+}
+
+export interface CampTrackFee {
+  track: string; // e.g. 'GS Camp - 1st Timer'
+  fee: number; // e.g. 150
+  label?: string; // e.g. 'Camp Booklet & Study Material'
+}
+
+export interface CampSpecialWaivers {
+  brahmachari_fee: number; // e.g. 111 (backward compatibility)
+  brahmachari_message?: string;
+  role_waivers?: CampRoleWaiver[];
+  coupons?: CampCoupon[];
+  track_fees?: CampTrackFee[];
+  base_registration_fee?: number;
+  base_registration_fee_label?: string;
+}
+
+export interface CampIttBankDetails {
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  ifsc_code: string;
+  branch_name?: string;
+  upi_id?: string;
+  instructions?: string;
+}
+
+export interface CampPaymentConfig {
+  enable_razorpay: boolean;
+  surcharge_percent: number; // e.g. 2.0
+  enable_idt: boolean;
+  idt_passcodes: string[];
+  enable_itt?: boolean;
+  itt_bank_details?: CampIttBankDetails;
+  sheets_webhook_url?: string;
+}
+
+export interface CampRefundTier {
+  id: string;
+  cutoff_date: string; // YYYY-MM-DD or empty for fallback
+  refund_percent: number; // e.g. 100, 50, 0
+  label: string; // e.g. "Full Refund (100% of Base Fee)"
+}
+
+export interface CampRefundConfig {
+  enable_refunds: boolean;
+  refund_policy_rules: CampRefundTier[];
+  refund_meals: boolean;
+  refund_accommodation: boolean;
+  refund_instructions?: string;
+}
+
+export interface CampRefundRequest {
+  id: string;
+  camp_id: string;
+  registration_id?: string;
+  group_id?: string;
+  poc_name: string;
+  poc_contact: string;
+  email: string;
+  cancellation_type: 'FULL' | 'PARTIAL_ATTENDEES' | 'PARTIAL_DAYS';
+  cancelled_registrations: {
+    reg_id: string;
+    participant_name: string;
+    camp_track: string;
+    original_total: number;
+    base_cost: number;
+    meal_cost: number;
+    acc_cost: number;
+    refund_amount: number;
+  }[];
+  original_total_amount: number;
+  refund_amount: number;
+  breakdown: {
+    base_fee_refund: number;
+    meal_refund: number;
+    acc_refund: number;
+    non_refundable_fee?: number;
+    tier_label?: string;
+  };
+  payout_type: 'UPI' | 'BANK';
+  upi_id?: string;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  ifsc_code?: string;
+  reason?: string;
+  status: 'pending' | 'refunded' | 'rejected';
+  admin_notes?: string;
+  payout_txn_ref?: string;
+  payout_date?: string;
+  processed_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Camp {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  venue?: string;
+  status: 'draft' | 'active' | 'closed' | 'completed' | 'archived';
+  start_date: string;
+  end_date: string;
+  registration_start_date?: string;
+  late_fee_start_date?: string;
+  registration_deadline?: string;
+  late_fee: number;
+  tracks: string[];
+  participant_types: string[];
+  meal_pricing: CampMealConfig[];
+  accommodation_pricing: CampAccommodationPricing;
+  special_waivers: CampSpecialWaivers;
+  payment_config: CampPaymentConfig;
+  refund_config?: CampRefundConfig;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CampRegistration {
+  id?: string;
+  camp_id: string;
+  group_id?: string;
+  poc_name: string;
+  poc_contact: string;
+  email: string;
+  parent_temple?: string;
+  voice_name?: string;
+  participant_name: string;
+  whatsapp: string;
+  counselor_name?: string;
+  gender: string;
+  age?: number;
+  married_since_year?: number;
+  camp_track: string;
+  participant_type: string;
+  first_meal_date: string;
+  first_meal_type: string;
+  last_meal_date: string;
+  last_meal_type: string;
+  dinner_type?: string;
+  accommodation: string;
+  meal_cost: number;
+  acc_cost: number;
+  ac_cost: number;
+  late_fee: number;
+  entry_cost: number;
+  total_cost: number;
+  discount_amount?: number;
+  coupon_code?: string;
+  payment_method: 'RAZORPAY' | 'IDT' | 'FREE' | 'CASH' | 'COUPON' | 'ROLE_WAIVER' | 'INTER_TEMPLE_TRANSFER' | 'ITT';
+  payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
+  payment_id?: string;
+  order_id?: string;
+  deduction_source?: string;
+  passcode?: string;
+  payment_screenshot_url?: string;
+  transaction_ref?: string;
+  verified_at?: string;
+  verified_by?: string;
+  payment_date?: string;
+  is_cancelled?: boolean;
+  cancellation_id?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+

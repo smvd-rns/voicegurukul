@@ -101,6 +101,7 @@ export default function AdminDonationsPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [collectors, setCollectors] = useState<Record<string, {
     name: string;
+    slug?: string;
     parentCenter: string;
     parentTemple: string;
     currentCenter: string;
@@ -214,7 +215,13 @@ export default function AdminDonationsPage() {
         ids.add(d.tag_user_id);
       }
     });
-    return Array.from(ids).map(id => ({ id, name: collectors[id]?.name || 'Unknown' })).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(ids)
+      .map(id => ({ 
+        id, 
+        name: collectors[id]?.name || 'Unknown',
+        slug: collectors[id]?.slug || ''
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [donations, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, collectors]);
 
   const filteredDonations = useMemo(() => {
@@ -227,6 +234,14 @@ export default function AdminDonationsPage() {
       const tx = (d.txnid || d.id || '').toLowerCase();
       const collectorObj = collectors[d.tag_user_id];
       const collectorName = (collectorObj?.name || d.metadata?.collector?.name || '').toLowerCase();
+      const collectorSlug = (
+        collectorObj?.slug || 
+        d.collector_slug || 
+        d.metadata?.collector_slug || 
+        d.metadata?.collector?.slug || 
+        d.tag_user_id || 
+        ''
+      ).toLowerCase();
 
       const matchesSearch = !search || 
         name.includes(search) || 
@@ -234,7 +249,8 @@ export default function AdminDonationsPage() {
         phone.includes(search) || 
         pan.includes(search) || 
         tx.includes(search) ||
-        collectorName.includes(search);
+        collectorName.includes(search) ||
+        collectorSlug.includes(search);
 
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
       
@@ -303,6 +319,17 @@ export default function AdminDonationsPage() {
     return donation.donor_mobile || donation.donor_phone || donation.metadata?.donor?.donor_phone || donation.metadata?.donor_phone || donation.phone || '';
   };
 
+  const getCollectorSlug = (donation: any) => {
+    const collector = collectors[donation.tag_user_id];
+    return (
+      collector?.slug ||
+      donation.collector_slug ||
+      donation.metadata?.collector_slug ||
+      donation.metadata?.collector?.slug ||
+      ''
+    );
+  };
+
   const handleExportCSV = () => {
     if (!filteredDonations.length) {
       alert('No donation records found to export.');
@@ -318,6 +345,7 @@ export default function AdminDonationsPage() {
       'Donor PAN',
       'Donor Address',
       'Collector Name',
+      'Collector Slug',
       'Collector Parent Center',
       'Collector Parent Temple',
       'Collector Current Center',
@@ -337,6 +365,7 @@ export default function AdminDonationsPage() {
 
     const rows = filteredDonations.map(d => {
       const collector = collectors[d.tag_user_id];
+      const collectorSlug = getCollectorSlug(d);
       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
       const dateStr = formatDonationDate(d);
       const donorPhone = getDonorPhone(d);
@@ -350,6 +379,7 @@ export default function AdminDonationsPage() {
         escapeCsv(d.donor_pan || ''),
         escapeCsv(d.donor_address || d.address || ''),
         escapeCsv(collector?.name || 'System Executive'),
+        escapeCsv(collectorSlug),
         escapeCsv(parentCenter),
         escapeCsv(parentTemple),
         escapeCsv(currentCenter),
@@ -427,78 +457,55 @@ export default function AdminDonationsPage() {
       const rawDonations = result.donations;
       setDonations(rawDonations);
 
-      const activeCollectorIds = Array.from(new Set(rawDonations.map((d: any) => d.tag_user_id).filter(Boolean)));
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, name, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center')
-        .in('id', activeCollectorIds);
-      
-      const userMap: Record<string, {
-        name: string;
-        parentCenter: string;
-        parentTemple: string;
-        currentCenter: string;
-        currentTemple: string;
-        center: string;
-        temple: string;
-      }> = {};
+      let userMap: Record<string, any> = (result as any).collectors || {};
       const centerList = new Set<string>();
 
-      ((userData || []) as any[]).forEach((u: any) => {
-        // 1. Resolve Parent Center
-        let parentCenter = 'None';
-        if (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General') {
-          if (u.parent_center === 'Other') {
-            parentCenter = u.other_parent_center ? u.other_parent_center.trim() : 'Other';
-          } else {
-            parentCenter = u.parent_center.trim();
-          }
-        }
+      if (!result.collectors || Object.keys(result.collectors).length === 0) {
+        const activeCollectorIds = Array.from(new Set(rawDonations.map((d: any) => d.tag_user_id).filter(Boolean)));
 
-        // 2. Resolve Parent Temple
-        let parentTemple = 'None';
-        if (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General') {
-          if (u.parent_temple === 'Other') {
-            parentTemple = u.other_parent_temple ? u.other_parent_temple.trim() : 'Other';
-          } else {
-            parentTemple = u.parent_temple.trim();
-          }
-        }
+        if (activeCollectorIds.length > 0) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id, name, donation_slug, parent_center, other_parent_center, parent_temple, other_parent_temple, current_center, other_center, current_temple, other_temple, center')
+            .in('id', activeCollectorIds);
 
-        // 3. Resolve Current Center
-        let currentCenter = 'None';
-        if (u.current_center && u.current_center !== 'None' && u.current_center !== 'General') {
-          if (u.current_center === 'Other') {
-            currentCenter = u.other_center ? u.other_center.trim() : 'Other';
-          } else {
-            currentCenter = u.current_center.trim();
-          }
-        } else if (u.center && u.center !== 'None') {
-          currentCenter = u.center.trim();
-        }
+          ((userData || []) as any[]).forEach((u: any) => {
+            let parentCenter = 'None';
+            if (u.parent_center && u.parent_center !== 'None' && u.parent_center !== 'General') {
+              parentCenter = u.parent_center === 'Other' && u.other_parent_center ? u.other_parent_center.trim() : u.parent_center.trim();
+            }
+            let parentTemple = 'None';
+            if (u.parent_temple && u.parent_temple !== 'None' && u.parent_temple !== 'General') {
+              parentTemple = u.parent_temple === 'Other' && u.other_parent_temple ? u.other_parent_temple.trim() : u.parent_temple.trim();
+            }
+            let currentCenter = 'None';
+            if (u.current_center && u.current_center !== 'None' && u.current_center !== 'General') {
+              currentCenter = u.current_center === 'Other' && u.other_center ? u.other_center.trim() : u.current_center.trim();
+            } else if (u.center && u.center !== 'None') {
+              currentCenter = u.center.trim();
+            }
+            let currentTemple = 'None';
+            if (u.current_temple && u.current_temple !== 'None' && u.current_temple !== 'General') {
+              currentTemple = u.current_temple === 'Other' && u.other_temple ? u.other_temple.trim() : u.current_temple.trim();
+            }
 
-        // 4. Resolve Current Temple
-        let currentTemple = 'None';
-        if (u.current_temple && u.current_temple !== 'None' && u.current_temple !== 'General') {
-          if (u.current_temple === 'Other') {
-            currentTemple = u.other_temple ? u.other_temple.trim() : 'Other';
-          } else {
-            currentTemple = u.current_temple.trim();
-          }
+            userMap[u.id] = { 
+              name: u.name || 'Unknown', 
+              slug: u.donation_slug || '',
+              parentCenter,
+              parentTemple,
+              currentCenter,
+              currentTemple,
+              center: parentCenter !== 'None' ? parentCenter : currentCenter,
+              temple: parentTemple !== 'None' ? parentTemple : currentTemple
+            };
+          });
         }
+      }
 
-        userMap[u.id] = { 
-          name: u.name || 'Unknown', 
-          parentCenter,
-          parentTemple,
-          currentCenter,
-          currentTemple,
-          center: parentCenter !== 'None' ? parentCenter : currentCenter,
-          temple: parentTemple !== 'None' ? parentTemple : currentTemple
-        };
-        if (parentCenter !== 'None') centerList.add(parentCenter);
-        if (currentCenter !== 'None') centerList.add(currentCenter);
+      Object.values(userMap).forEach((u: any) => {
+        if (u.parentCenter && u.parentCenter !== 'None') centerList.add(u.parentCenter);
+        if (u.currentCenter && u.currentCenter !== 'None') centerList.add(u.currentCenter);
       });
 
       setCollectors(userMap);
@@ -897,7 +904,7 @@ export default function AdminDonationsPage() {
                 >
                   <option value="all">All Collectors</option>
                   {availableCollectors.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{c.name}{c.slug ? ` (@${c.slug})` : ''}</option>
                   ))}
                 </select>
                 <UserCheck className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
@@ -933,6 +940,7 @@ export default function AdminDonationsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                       const collector = collectors[donation.tag_user_id];
+                      const collectorSlug = getCollectorSlug(donation);
                       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
                       const donorPhone = getDonorPhone(donation);
 
@@ -940,13 +948,20 @@ export default function AdminDonationsPage() {
                         <tr key={donation.id} className="hover:bg-orange-50/20 transition-colors group">
                           {/* 1. Collector Identity */}
                           <td className="px-5 py-3.5">
-                            <div className="flex flex-col gap-1 min-w-[130px]">
+                            <div className="flex flex-col gap-1 min-w-[140px]">
                               <div className="flex items-center gap-1.5">
                                 <UserCheck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
                                 <span className="text-gray-900 font-bold text-xs tracking-tight truncate">
                                    {collector?.name || 'System Executive'}
                                 </span>
                               </div>
+                              {collectorSlug ? (
+                                <span className="font-mono text-[9px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/80 w-fit truncate">
+                                  @{collectorSlug}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-400 italic">No Slug</span>
+                              )}
                               {donation.ashram && (
                                 <span className="text-[9px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 w-fit truncate">
                                   {donation.ashram}
@@ -1081,6 +1096,7 @@ export default function AdminDonationsPage() {
               <div className="md:hidden divide-y divide-gray-100">
                 {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                   const collector = collectors[donation.tag_user_id];
+                  const collectorSlug = getCollectorSlug(donation);
                   const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
                   const donorPhone = getDonorPhone(donation);
 
@@ -1115,6 +1131,27 @@ export default function AdminDonationsPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Collector info banner */}
+                      <div className="flex items-center gap-1.5 flex-wrap bg-gray-50/80 p-2 rounded-xl border border-gray-100">
+                        <UserCheck className="w-3 h-3 text-orange-600 shrink-0" />
+                        <span className="text-[10px] font-bold text-gray-800 tracking-tight">
+                          {collector?.name || 'System Executive'}
+                        </span>
+                        {collectorSlug ? (
+                          <span className="font-mono text-[9px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/80">
+                            @{collectorSlug}
+                          </span>
+                        ) : (
+                          <span className="text-[8.5px] text-gray-400 italic">No Slug</span>
+                        )}
+                        {donation.ashram && (
+                          <span className="text-[8.5px] font-semibold text-gray-600 bg-white px-1.5 py-0.5 rounded border border-gray-200 ml-auto">
+                            {donation.ashram}
+                          </span>
+                        )}
+                      </div>
+
                       {/* Separate spaces for Collector Parent and Collector Current */}
                       <div className="grid grid-cols-2 gap-2">
                          <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
@@ -1147,6 +1184,7 @@ export default function AdminDonationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDonations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((donation) => {
                 const collector = collectors[donation.tag_user_id];
+                const collectorSlug = getCollectorSlug(donation);
                 const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(donation);
                 const donorPhone = getDonorPhone(donation);
 
@@ -1157,6 +1195,11 @@ export default function AdminDonationsPage() {
                           <div className="space-y-1 min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
+                              {collectorSlug && (
+                                <span className="font-mono text-[9px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/80 truncate">
+                                  @{collectorSlug}
+                                </span>
+                              )}
                               {donation.ashram && (
                                 <span className="text-gray-600 font-semibold text-[9px] bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[130px]">
                                   {donation.ashram}

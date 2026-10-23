@@ -15,11 +15,12 @@ import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
 import {
   Search, Filter, MapPin, Building2, MoreVertical,
   Shield, UserCheck, Briefcase, Mail, Phone, ExternalLink,
-  Landmark, Users, Crown
+  Landmark, Users, Crown, Pencil
 } from 'lucide-react';
 import { getRoleDisplayName, getHighestRole, hasRole, getRoleHierarchyNumber, roleNumberToName } from '@/lib/utils/roles';
 import StatsSection from './StatsSection';
 import RoleAssignmentModal from './RoleAssignmentModal';
+import EditUserProfileModal from './EditUserProfileModal';
 import { toast } from 'react-hot-toast';
 
 // Extended filter types
@@ -65,6 +66,8 @@ export default function UsersPage() {
   // Modal State
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
 
   // Pagination State
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -158,14 +161,14 @@ export default function UsersPage() {
 
       // Temple Filter
       if (selectedTemple) {
-        const userTemple = user.hierarchy?.currentTemple || user.parentTemple;
-        if (userTemple !== selectedTemple) return false;
+        const userTemple = user.hierarchy?.currentTemple || user.parentTemple || user.currentTemple;
+        if (!userTemple || userTemple.trim().toLowerCase() !== selectedTemple.trim().toLowerCase()) return false;
       }
 
       // Center Filter
       if (selectedCenter) {
-        const userCenter = user.hierarchy?.center || user.hierarchy?.currentCenter;
-        if (userCenter !== selectedCenter) return false;
+        const userCenter = user.hierarchy?.center || user.hierarchy?.currentCenter || user.currentCenter || user.parentCenter;
+        if (!userCenter || userCenter.trim().toLowerCase() !== selectedCenter.trim().toLowerCase()) return false;
       }
 
       // Counselor Filter
@@ -210,14 +213,17 @@ export default function UsersPage() {
     if (!selectedTemple) return centersList;
 
     // Find the temple object for the selected name
-    const templeObj = templesList.find(t => t.name === selectedTemple);
+    const templeObj = templesList.find(
+      t => t.name?.trim().toLowerCase() === selectedTemple.trim().toLowerCase() || t.id === selectedTemple
+    );
 
-    // Filter centers that match this temple
+    // Filter centers that strictly match this temple
     return centersList.filter(c => {
       // Match by ID if possible
-      if (templeObj && c.temple_id === templeObj.id) return true;
+      if (templeObj && c.temple_id && c.temple_id === templeObj.id) return true;
+      if (c.temple_id && c.temple_id === selectedTemple) return true;
       // Match by name as fallback
-      if (c.temple_name === selectedTemple) return true;
+      if (c.temple_name && c.temple_name.trim().toLowerCase() === selectedTemple.trim().toLowerCase()) return true;
       return false;
     });
   }, [centersList, selectedTemple, templesList]);
@@ -283,6 +289,72 @@ export default function UsersPage() {
     } catch (error: any) {
       console.error('Delete user error:', error);
       toast.error(error.message || 'Failed to delete user');
+    }
+  };
+
+  // User Profile Edit handlers
+  const handleEditProfile = (user: User) => {
+    setUserToEdit(user);
+    setIsEditProfileModalOpen(true);
+  };
+
+  const handleSaveUserProfile = async (userId: string, updatedData: Partial<User>) => {
+    try {
+      await updateUser(userId, updatedData);
+
+      try {
+        const { data: sessionData } = await supabase?.auth.getSession();
+        const token = sessionData?.session?.access_token || '';
+        await fetch(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            name: updatedData.name,
+            email: updatedData.email,
+            phone: updatedData.phone,
+            birthDate: updatedData.birthDate,
+            verificationStatus: updatedData.verificationStatus,
+            currentTemple: updatedData.currentTemple || updatedData.hierarchy?.currentTemple,
+            currentCenter: updatedData.currentCenter || updatedData.hierarchy?.currentCenter,
+            parentTemple: updatedData.parentTemple || updatedData.hierarchy?.parentTemple,
+            parentCenter: updatedData.parentCenter || updatedData.hierarchy?.parentCenter,
+            counselor: updatedData.hierarchy?.counselor,
+            counselorId: updatedData.hierarchy?.counselorId,
+            initiationStatus: updatedData.hierarchy?.initiationStatus,
+            initiatedName: updatedData.hierarchy?.initiatedName,
+            spiritualMasterName: updatedData.hierarchy?.spiritualMasterName,
+            rounds: updatedData.hierarchy?.rounds,
+            introducedToKcIn: updatedData.introducedToKcIn || updatedData.hierarchy?.introducedToKcIn
+          })
+        });
+      } catch (patchErr) {
+        console.warn('Optional backend patch sync warning:', patchErr);
+      }
+
+      setUsers(prev =>
+        prev.map(u => {
+          if (u.id === userId) {
+            return {
+              ...u,
+              ...updatedData,
+              hierarchy: {
+                ...(u.hierarchy || {}),
+                ...(updatedData.hierarchy || {})
+              }
+            };
+          }
+          return u;
+        })
+      );
+
+      toast.success('User profile updated successfully');
+    } catch (err: any) {
+      console.error('Error saving user profile:', err);
+      toast.error(err.message || 'Failed to update user profile');
+      throw err;
     }
   };
 
@@ -435,24 +507,24 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF8] p-4 md:p-8 space-y-6 md:space-y-8">
+    <div className="min-h-screen bg-[#FDFCF8] p-3 md:p-6 space-y-4">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-2xl md:text-4xl font-black font-display bg-gradient-to-r from-gray-900 via-gray-700 to-gray-800 bg-clip-text text-transparent tracking-tight">
+          <h1 className="text-xl md:text-2xl font-black font-display text-gray-900 tracking-tight">
             User Management
           </h1>
-          <p className="text-xs md:text-sm text-gray-500 mt-1 font-bold uppercase tracking-wider opacity-60">
+          <p className="text-[11px] md:text-xs text-gray-500 font-bold uppercase tracking-wider opacity-70">
             {users.length} Total Members • {filteredUsers.length} Filtered
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm active:scale-95 transition-all hover:bg-gray-50"
           >
             <Filter className={`w-3.5 h-3.5 ${showFilters ? 'text-orange-500' : ''}`} />
-            {showFilters ? 'Hide Filters' : 'Show Filters'}
+            <span>{showFilters ? 'Hide Advanced Filters' : 'Advanced Filters'}</span>
           </button>
         </div>
       </div>
@@ -460,64 +532,63 @@ export default function UsersPage() {
       {/* Stats Section */}
       <StatsSection users={users} />
 
-      {/* Controls Section */}
-      <div className={`bg-white rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 shadow-xl shadow-gray-200/40 border border-gray-100 flex flex-col gap-4 md:gap-6 sticky top-4 z-30 transition-all ${showFilters ? 'max-h-[1000px] opacity-100' : 'max-h-[4.5rem] md:max-h-none overflow-hidden lg:overflow-visible'}`}>
-
+      {/* Controls Section - Clean, non-sticky to prevent scroll clipping */}
+      <div className="bg-white rounded-2xl p-3.5 md:p-4 shadow-sm border border-gray-100 flex flex-col gap-3">
         {/* Top Filter Bar */}
-        <div className="flex flex-col lg:flex-row gap-3 md:gap-4 justify-between items-start lg:items-center">
+        <div className="flex flex-col md:flex-row gap-2.5 md:gap-3 items-stretch md:items-center">
           {/* Search */}
-          <div className="relative flex-1 group w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
+          <div className="relative flex-1 group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder="Search by name, email, phone, role, temple..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-orange-100 placeholder:text-gray-400 text-sm font-bold transition-all"
+              className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-orange-300 focus:ring-2 focus:ring-orange-100 placeholder:text-gray-400 text-xs md:text-sm font-semibold transition-all"
             />
           </div>
 
-          <div className={`flex flex-col sm:flex-row gap-3 w-full lg:w-auto transition-all lg:opacity-100 ${showFilters ? 'opacity-100' : 'opacity-0 lg:opacity-100 pointer-events-none lg:pointer-events-auto'}`}>
+          <div className="flex flex-wrap sm:flex-nowrap gap-2">
             {/* Role Dropdown */}
-            <div className="relative min-w-[160px] w-full">
+            <div className="relative min-w-[140px] flex-1 sm:flex-none">
               <select
                 value={selectedRole}
                 onChange={(e) => {
                   setSelectedRole(e.target.value);
                   if (e.target.value) setFilterType('all');
                 }}
-                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border-none rounded-xl md:rounded-2xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-700 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
+                className="w-full pl-8 pr-7 py-2 bg-gray-50 border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-700 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
               >
                 <option value="">All Roles</option>
                 {allRolesList.map(role => (
                   <option key={role.id} value={role.id}>{role.label}</option>
                 ))}
               </select>
-              <Crown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
+              <Crown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
             </div>
 
             {/* Camp Dropdown */}
-            <div className="relative min-w-[160px] w-full">
+            <div className="relative min-w-[140px] flex-1 sm:flex-none">
               <select
                 value={selectedCamp}
                 onChange={(e) => {
                   setSelectedCamp(e.target.value);
                   if (e.target.value) setFilterType('all');
                 }}
-                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border-none rounded-xl md:rounded-2xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-700 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
+                className="w-full pl-8 pr-7 py-2 bg-gray-50 border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-700 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
               >
                 <option value="">All Camps</option>
                 {CAMP_OPTIONS.map(camp => (
                   <option key={camp.value} value={camp.value}>{camp.label}</option>
                 ))}
               </select>
-              <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
+              <Shield className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
             </div>
           </div>
         </div>
 
         {/* Advanced Filters */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 pt-4 border-t border-gray-50 transition-all lg:opacity-100 ${showFilters ? 'opacity-100 block' : 'opacity-0 hidden lg:grid pointer-events-none lg:pointer-events-auto'}`}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2.5 border-t border-gray-50 transition-all ${showFilters ? 'block' : 'hidden lg:grid'}`}>
           <div className="relative">
             <select
               value={selectedTemple}
@@ -526,12 +597,12 @@ export default function UsersPage() {
                 setSelectedCenter('');
                 setSelectedCounselor('');
               }}
-              className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
+              className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Temples</option>
               {templesList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
             </select>
-            <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <Landmark className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
           <div className="relative">
@@ -541,30 +612,30 @@ export default function UsersPage() {
                 setSelectedCenter(e.target.value);
                 setSelectedCounselor('');
               }}
-              className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
+              className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Centers</option>
               {availableCenters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
           <div className="relative sm:col-span-2 lg:col-span-1">
             <select
               value={selectedCounselor}
               onChange={(e) => setSelectedCounselor(e.target.value)}
-              className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
+              className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Counselors</option>
               {availableCounselors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
         {/* Quick Group Filters */}
-        <div className={`flex flex-wrap gap-2 pt-2 transition-all lg:opacity-100 ${showFilters ? 'opacity-100' : 'opacity-0 lg:opacity-100 pointer-events-none lg:pointer-events-auto'}`}>
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest py-1.5 mr-2">Quick:</span>
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-1">Quick:</span>
           {[
             { id: 'all', label: 'Reset' },
             { id: 'pending', label: 'Pending Approval' },
@@ -586,8 +657,8 @@ export default function UsersPage() {
                   setSearchQuery('');
                 }
               }}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 border ${filterType === pill.id
-                ? 'bg-gray-900 text-white border-transparent shadow-md'
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 border ${filterType === pill.id
+                ? 'bg-gray-900 text-white border-transparent shadow-sm'
                 : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300 hover:text-orange-600'
                 }`}
             >
@@ -598,9 +669,9 @@ export default function UsersPage() {
       </div>
 
       {/* Users List */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         {filteredUsers.length > 0 ? (
-          paginatedUsers.map((user, index) => {
+          paginatedUsers.map((user) => {
             const highestRole = getHighestRole(user.role || 'student');
             const roleName = getRoleDisplayName(highestRole);
             const isPending = user.verificationStatus === 'pending';
@@ -608,13 +679,13 @@ export default function UsersPage() {
             return (
               <div
                 key={user.id}
-                className="group relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 border border-gray-100 transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-gray-200 flex flex-col md:flex-row md:items-center gap-4 group/item"
+                className="group relative bg-white rounded-xl md:rounded-2xl p-3 md:px-4 md:py-3 border border-gray-100 transition-all duration-200 hover:shadow-md hover:border-gray-200 flex flex-col md:flex-row md:items-center gap-3"
               >
                 {/* Left: Avatar & Primary Info */}
                 <div className="flex items-center gap-3 md:w-1/4 lg:w-1/5 shrink-0">
                   <div className="relative">
-                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 shadow-inner flex items-center justify-center text-lg font-bold text-gray-400 overflow-hidden">
-                      <span className="text-gray-400 text-lg font-bold">
+                    <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 shadow-inner flex items-center justify-center text-sm font-bold text-gray-400 overflow-hidden">
+                      <span className="text-gray-400 text-sm font-bold">
                         {user.name?.charAt(0).toUpperCase() || 'U'}
                       </span>
                       {user.profileImage && (
@@ -627,28 +698,28 @@ export default function UsersPage() {
                         />
                       )}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full shadow-md border border-gray-50 flex items-center justify-center">
-                      <Shield className="w-3 h-3 text-orange-500" />
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full shadow-sm border border-gray-100 flex items-center justify-center">
+                      <Shield className="w-2.5 h-2.5 text-orange-500" />
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 text-sm md:text-base leading-tight truncate" title={user.name}>
+                    <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight truncate" title={user.name}>
                       {user.name || 'Unknown User'}
                     </h3>
-                    <p className="text-orange-600 font-black text-[9px] md:text-[10px] uppercase tracking-widest truncate mt-0.5">{roleName}</p>
+                    <p className="text-orange-600 font-black text-[9px] uppercase tracking-wider truncate mt-0.5">{roleName}</p>
                   </div>
                 </div>
 
-                {/* Middle: Contact Info (Hidden on mobile if needed, or compact) */}
-                <div className="flex flex-col sm:flex-row md:flex-1 gap-2 sm:gap-6 md:gap-4 lg:gap-10">
+                {/* Middle: Contact Info */}
+                <div className="flex flex-col sm:flex-row md:flex-1 gap-2 sm:gap-4 md:gap-4 lg:gap-8">
                   {/* Email & Phone */}
-                  <div className="space-y-1 min-w-0 sm:w-1/2 md:w-auto">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
+                  <div className="space-y-0.5 min-w-0 sm:w-1/2 md:w-auto">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500">
                       <Mail className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
                       <span className="truncate" title={user.email}>{user.email}</span>
                     </div>
                     {user.phone && (
-                      <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500">
                         <Phone className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
                         <span>{user.phone}</span>
                       </div>
@@ -656,7 +727,7 @@ export default function UsersPage() {
                   </div>
 
                   {/* Location */}
-                  <div className="flex items-start gap-2 text-[11px] font-bold text-gray-400 min-w-0 sm:w-1/2 md:w-auto">
+                  <div className="flex items-start gap-1.5 text-[11px] font-bold text-gray-400 min-w-0 sm:w-1/2 md:w-auto">
                     <MapPin className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-0.5" />
                     <span className="truncate leading-relaxed" title={`${user.hierarchy?.center || ''}, ${user.hierarchy?.currentTemple || ''}`}>
                       {user.hierarchy?.center || user.hierarchy?.currentTemple ? (
@@ -670,37 +741,42 @@ export default function UsersPage() {
                 </div>
 
                 {/* Right: Status & Actions */}
-                <div className="flex items-center justify-between md:justify-end gap-3 md:w-1/4 lg:w-1/5 border-t md:border-t-0 pt-3 md:pt-0 mt-1 md:mt-0">
+                <div className="flex items-center justify-between md:justify-end gap-2 md:gap-2.5 md:w-auto shrink-0 border-t md:border-t-0 pt-2.5 md:pt-0 mt-1 md:mt-0">
                   {/* Status Badge */}
-                  <div className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${isPending
+                  <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${isPending
                     ? 'bg-amber-50 text-amber-600 border-amber-100'
                     : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                     }`}>
                     {isPending ? 'Pending' : 'Active'}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {/* Edit Profile Button */}
                     <button
-                      onClick={() => router.push(`/dashboard/profile/${user.id}`)}
-                      className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-all active:scale-95"
-                      title="View Profile"
+                      onClick={() => handleEditProfile(user)}
+                      className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 border border-orange-200/60 shadow-sm"
+                      title="Edit User Profile"
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
                     </button>
 
-                    <button
-                      onClick={() => handleDeleteUser(user.id, user.name || 'Unknown User')}
-                      className="p-2 text-red-500 hover:text-white hover:bg-red-500 rounded-xl transition-all active:scale-95 flex items-center justify-center border border-transparent shadow-sm"
-                      title="Delete User"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </button>
-
+                    {/* Assign Role Button */}
                     <button
                       onClick={() => handleEditRole(user)}
-                      className="px-4 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-gray-900/10 hover:shadow-gray-900/20 active:scale-95 transition-all text-center"
+                      className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all text-center"
+                      title="Assign Roles"
                     >
                       Assign Role
+                    </button>
+
+                    {/* Delete User Button */}
+                    <button
+                      onClick={() => handleDeleteUser(user.id, user.name || 'Unknown User')}
+                      className="p-1.5 text-red-500 hover:text-white hover:bg-red-500 rounded-xl transition-all active:scale-95 flex items-center justify-center border border-gray-100 hover:border-red-500 shadow-sm"
+                      title="Delete User"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                   </div>
                 </div>
@@ -769,6 +845,20 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Edit User Profile Modal */}
+      <EditUserProfileModal
+        isOpen={isEditProfileModalOpen}
+        user={userToEdit}
+        onClose={() => {
+          setIsEditProfileModalOpen(false);
+          setUserToEdit(null);
+        }}
+        onSave={handleSaveUserProfile}
+        templesList={templesList}
+        centersList={centersList}
+        counselorsList={counselorsList}
+      />
 
       {/* Role Assignment Modal */}
       <RoleAssignmentModal
