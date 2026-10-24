@@ -4,14 +4,14 @@ import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
-    const { campId, amount, email } = await req.json();
+    const { campId, amount, payerName, website: clientWebsite } = await req.json();
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
     }
 
     // Verify camp exists and is active
-    const campRes = await query('SELECT status, title FROM camps WHERE id = $1', [campId]);
+    const campRes = await query('SELECT id, status, title, slug FROM camps WHERE id = $1', [campId]);
     if (campRes.rows.length === 0) {
       return NextResponse.json({ error: 'Camp not found' }, { status: 404 });
     }
@@ -49,13 +49,20 @@ export async function POST(req: NextRequest) {
 
     const amountInPaise = Math.round(Number(amount) * 100);
 
+    // Resolve full website URL with public slug
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'voicegurukul.com';
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const fallbackWebsite = `${proto}://${host}/camps/${camp.slug}`;
+    const resolvedWebsite = clientWebsite || fallbackWebsite;
+
     const order = await razorpay.orders.create({
       amount: amountInPaise,
       currency: 'INR',
       receipt: `camp_${Date.now()}`,
       notes: {
-        campId: String(campId),
-        email: String(email || ''),
+        payment_for: String(camp.title || '').substring(0, 100),
+        website: String(resolvedWebsite || '').substring(0, 120),
+        payer_name: String(payerName || '').substring(0, 100),
       },
     });
 

@@ -589,13 +589,16 @@ export default function PublicCampRegistrationPage() {
     setPaymentError(null);
 
     try {
+      const currentWebsite = typeof window !== 'undefined' ? `${window.location.origin}/camps/${slug}` : '';
+
       const orderRes = await fetch('/api/camps/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           campId: camp?.id,
           amount: grandTotalWithSurcharge,
-          email: pocDetails.email,
+          payerName: pocDetails.pocName,
+          website: currentWebsite,
         }),
       });
 
@@ -613,6 +616,11 @@ export default function PublicCampRegistrationPage() {
         name: 'VOICE Gurukul',
         description: `${camp?.title} Registration (${entries.length} Devotees)`,
         order_id: orderData.id,
+        notes: {
+          payment_for: camp?.title || '',
+          website: currentWebsite,
+          payer_name: pocDetails.pocName || '',
+        },
         prefill: {
           name: pocDetails.pocName,
           email: pocDetails.email,

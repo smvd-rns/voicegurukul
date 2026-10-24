@@ -2,7 +2,7 @@
 
 import { query } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
-import { Camp, CampRegistration, CampRefundRequest } from '@/types';
+import { Camp, CampRegistration, CampRefundRequest, CampAuditTransaction } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -337,6 +337,62 @@ export async function verifyAndApproveCampRegistrationAction(
     return { success: true, registration: reg as CampRegistration };
   } catch (error: any) {
     console.error('verifyAndApproveCampRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Verify and approve an entire payment batch (ITT, IDT, or Manual)
+ */
+export async function verifyAndApproveCampBatchAction(
+  batchId: string,
+  data: { transactionId: string; receivedDate: string; remarks?: string }
+) {
+  try {
+    const { user, isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+    }
+
+    if (!data.transactionId || !data.transactionId.trim()) {
+      return { success: false, error: 'Transaction ID / UTR is required for verification.' };
+    }
+    if (!data.receivedDate || !data.receivedDate.trim()) {
+      return { success: false, error: 'Payment received date is required.' };
+    }
+
+    const adminIdentifier = user.email || user.id;
+
+    const sql = `
+      UPDATE camp_registrations
+      SET 
+        payment_status = 'completed',
+        payment_id = $1,
+        payment_date = $2,
+        verified_at = NOW(),
+        verified_by = $3,
+        updated_at = NOW()
+      WHERE group_id = $4 OR payment_id = $4 OR id::text = $4
+      RETURNING camp_id
+    `;
+
+    const res = await query(sql, [
+      data.transactionId.trim(),
+      data.receivedDate.trim(),
+      adminIdentifier,
+      batchId
+    ]);
+
+    if (res.rows.length === 0) {
+      return { success: false, error: 'No matching transaction records found to verify.' };
+    }
+
+    const campId = res.rows[0].camp_id;
+    revalidatePath(`/dashboard/admin/camps/${campId}/registrations`);
+    revalidatePath(`/dashboard/admin/camps`);
+    return { success: true, count: res.rows.length };
+  } catch (error: any) {
+    console.error('verifyAndApproveCampBatchAction error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -750,6 +806,202 @@ export async function submitCampRefundRequestAction(data: {
     };
   } catch (error: any) {
     console.error('submitCampRefundRequestAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Get all camp transactions across all camps grouped by payment batch
+ * for complete financial accounting, reconciliation, and audit.
+ */
+export async function getAllCampTransactionsAction() {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin privileges are required to view organization financial audits.' };
+    }
+
+    const txSql = `
+      SELECT 
+        COALESCE(r.group_id, r.payment_id, r.id::text) AS txn_id,
+        r.camp_id,
+        c.title AS camp_title,
+        c.slug AS camp_slug,
+        MAX(r.poc_name) AS poc_name,
+        MAX(r.poc_contact) AS poc_contact,
+        MAX(r.email) AS email,
+        MAX(r.payment_method) AS payment_method,
+        MAX(r.payment_status) AS payment_status,
+        MAX(r.payment_id) AS payment_id,
+        MAX(r.order_id) AS order_id,
+        MAX(r.deduction_source) AS deduction_source,
+        MAX(r.passcode) AS passcode,
+        MAX(r.payment_screenshot_url) AS payment_screenshot_url,
+        MAX(r.verified_at) AS verified_at,
+        MAX(r.verified_by) AS verified_by,
+        MIN(r.created_at) AS created_at,
+        COUNT(r.id)::int AS participant_count,
+        COALESCE(SUM(r.total_cost), 0)::numeric AS total_amount,
+        COALESCE(SUM(r.meal_cost), 0)::numeric AS total_meal_cost,
+        COALESCE(SUM(r.acc_cost + COALESCE(r.ac_cost, 0)), 0)::numeric AS total_acc_cost,
+        COALESCE(SUM(r.discount_amount), 0)::numeric AS total_discount,
+        MAX(r.coupon_code) AS coupon_code,
+        JSON_AGG(
+          json_build_object(
+            'id', r.id,
+            'participant_name', r.participant_name,
+            'whatsapp', r.whatsapp,
+            'camp_track', r.camp_track,
+            'participant_type', r.participant_type,
+            'gender', r.gender,
+            'voice_name', r.voice_name,
+            'parent_temple', r.parent_temple,
+            'counselor_name', r.counselor_name,
+            'accommodation', r.accommodation,
+            'first_meal_date', r.first_meal_date,
+            'first_meal_type', r.first_meal_type,
+            'last_meal_date', r.last_meal_date,
+            'last_meal_type', r.last_meal_type,
+            'total_cost', r.total_cost,
+            'meal_cost', r.meal_cost,
+            'acc_cost', r.acc_cost,
+            'is_cancelled', r.is_cancelled,
+            'payment_status', r.payment_status
+          )
+        ) AS participants
+      FROM camp_registrations r
+      JOIN camps c ON c.id = r.camp_id
+      GROUP BY COALESCE(r.group_id, r.payment_id, r.id::text), r.camp_id, c.title, c.slug
+      ORDER BY MIN(r.created_at) DESC
+    `;
+
+    const txRes = await query(txSql);
+    const transactions = txRes.rows as CampAuditTransaction[];
+
+    // Fetch all refunds across camps to cross-reference
+    const refundsSql = `
+      SELECT r.*, c.title AS camp_title, c.slug AS camp_slug
+      FROM camp_refund_requests r
+      JOIN camps c ON c.id = r.camp_id
+      ORDER BY r.created_at DESC
+    `;
+    const refundsRes = await query(refundsSql);
+    const allRefunds = refundsRes.rows as (CampRefundRequest & { camp_title: string; camp_slug: string })[];
+
+    // Map refunds to transactions
+    const refundMapByGroupId = new Map<string, CampRefundRequest>();
+    const refundMapByRegId = new Map<string, CampRefundRequest>();
+    for (const ref of allRefunds) {
+      if (ref.group_id) {
+        refundMapByGroupId.set(ref.group_id, ref);
+      }
+      if (ref.registration_id) {
+        refundMapByRegId.set(ref.registration_id, ref);
+      }
+      if (Array.isArray(ref.cancelled_registrations)) {
+        for (const cr of ref.cancelled_registrations) {
+          if (cr.reg_id) {
+            refundMapByRegId.set(cr.reg_id, ref);
+          }
+        }
+      }
+    }
+
+    let totalCollected = 0;
+    let totalGrossFee = 0;
+    let totalDiscounts = 0;
+    let totalCouponsCount = 0;
+    let totalParticipants = 0;
+    let totalRefunded = 0;
+    let pendingVerificationCount = 0;
+
+    for (const t of transactions) {
+      // Numerical conversions
+      t.total_amount = Number(t.total_amount || 0);
+      t.total_meal_cost = Number(t.total_meal_cost || 0);
+      t.total_acc_cost = Number(t.total_acc_cost || 0);
+      t.total_discount = Number(t.total_discount || 0);
+      t.participant_count = Number(t.participant_count || 0);
+
+      // Match refund
+      if (t.txn_id && refundMapByGroupId.has(t.txn_id)) {
+        t.refund = refundMapByGroupId.get(t.txn_id);
+      } else if (Array.isArray(t.participants)) {
+        for (const p of t.participants) {
+          if (p.id && refundMapByRegId.has(p.id)) {
+            t.refund = refundMapByRegId.get(p.id);
+            break;
+          }
+        }
+      }
+
+      if (t.payment_status === 'completed') {
+        totalCollected += t.total_amount;
+        totalGrossFee += (t.total_meal_cost + t.total_acc_cost);
+        totalDiscounts += t.total_discount;
+        if (t.total_discount > 0 || t.coupon_code) {
+          totalCouponsCount++;
+        }
+      }
+      totalParticipants += t.participant_count;
+
+      if (t.payment_status === 'pending' || (t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at)) {
+        pendingVerificationCount++;
+      }
+    }
+
+    for (const r of allRefunds) {
+      if (r.status === 'refunded') {
+        totalRefunded += Number(r.refund_amount || 0);
+      }
+    }
+
+    return {
+      success: true,
+      transactions,
+      refunds: allRefunds,
+      stats: {
+        total_gross_fee: totalGrossFee,
+        total_discounts: totalDiscounts,
+        total_coupons_count: totalCouponsCount,
+        total_collected: totalCollected,
+        total_refunded: totalRefunded,
+        net_revenue: Math.max(0, totalCollected - totalRefunded),
+        total_transactions: transactions.length,
+        total_participants: totalParticipants,
+        pending_verifications: pendingVerificationCount,
+        pending_refunds: allRefunds.filter(r => r.status === 'pending').length
+      }
+    };
+  } catch (error: any) {
+    console.error('getAllCampTransactionsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Get all refund requests across all camps with linked camp info
+ */
+export async function getAllCampRefundsAction() {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin privileges are required.' };
+    }
+
+    const sql = `
+      SELECT r.*, 
+        c.title AS camp_title,
+        c.slug AS camp_slug
+      FROM camp_refund_requests r
+      JOIN camps c ON c.id = r.camp_id
+      ORDER BY r.created_at DESC
+    `;
+
+    const res = await query(sql);
+    return { success: true, refunds: res.rows as (CampRefundRequest & { camp_title: string; camp_slug: string })[] };
+  } catch (error: any) {
+    console.error('getAllCampRefundsAction error:', error);
     return { success: false, error: error.message };
   }
 }

@@ -14,7 +14,7 @@ BEGIN
     -- Update counselor table if this user is also a counselor
     UPDATE counselors 
     SET name = NEW.name, updated_at = NOW()
-    WHERE email = NEW.email;
+    WHERE email = NEW.email OR (NEW.id IS NOT NULL AND user_id = NEW.id);
 
     -- Update the assigned counselor name for all mentees in the users table
     -- (This handles the case where other users have chosen this user as their counselor)
@@ -22,8 +22,14 @@ BEGIN
     SET 
       counselor = NEW.name,
       hierarchy = jsonb_set(coalesce(hierarchy, '{}'::jsonb), '{counselor}', to_jsonb(NEW.name::text))
-    WHERE counselor_id IN (SELECT id FROM counselors WHERE email = NEW.email)
-       OR counselor = OLD.name;
+    WHERE counselor_id IN (
+        SELECT id::text FROM counselors WHERE email = NEW.email OR user_id = NEW.id
+        UNION
+        SELECT user_id::text FROM counselors WHERE (email = NEW.email OR user_id = NEW.id) AND user_id IS NOT NULL
+        UNION
+        SELECT NEW.id::text
+      )
+       OR (OLD.name IS NOT NULL AND OLD.name <> '' AND counselor = OLD.name);
   END IF;
   
   RETURN NEW;
@@ -51,15 +57,16 @@ BEGIN
     -- Update the counselor's own user account name
     UPDATE users 
     SET name = NEW.name, updated_at = NOW()
-    WHERE email = NEW.email;
+    WHERE email = NEW.email OR (NEW.user_id IS NOT NULL AND id = NEW.user_id);
 
     -- Update the assigned counselor name for all their mentees in the users table
     UPDATE users
     SET 
       counselor = NEW.name,
       hierarchy = jsonb_set(coalesce(hierarchy, '{}'::jsonb), '{counselor}', to_jsonb(NEW.name::text))
-    WHERE counselor_id = NEW.id
-       OR counselor = OLD.name;
+    WHERE counselor_id = NEW.id::text
+       OR (NEW.user_id IS NOT NULL AND counselor_id = NEW.user_id::text)
+       OR (OLD.name IS NOT NULL AND OLD.name <> '' AND counselor = OLD.name);
   END IF;
   
   RETURN NEW;

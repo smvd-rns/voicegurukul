@@ -649,3 +649,63 @@ export interface CampRegistration {
   updated_at?: string;
 }
 
+export interface CampAuditTransaction {
+  txn_id: string;
+  camp_id: string;
+  camp_title: string;
+  camp_slug: string;
+  poc_name: string;
+  poc_contact: string;
+  email: string;
+  payment_method: string;
+  payment_status: string;
+  payment_id?: string;
+  order_id?: string;
+  deduction_source?: string;
+  passcode?: string;
+  payment_screenshot_url?: string;
+  verified_at?: string;
+  verified_by?: string;
+  created_at: string;
+  participant_count: number;
+  total_amount: number;
+  total_meal_cost: number;
+  total_acc_cost: number;
+  total_discount: number;
+  coupon_code?: string;
+  participants: Array<{
+    id: string;
+    participant_name: string;
+    whatsapp: string;
+    camp_track: string;
+    participant_type: string;
+    gender: string;
+    voice_name?: string;
+    parent_temple?: string;
+    counselor_name?: string;
+    accommodation?: string;
+    first_meal_date?: string;
+    first_meal_type?: string;
+    last_meal_date?: string;
+    last_meal_type?: string;
+    total_cost: number;
+    meal_cost: number;
+    acc_cost: number;
+    is_cancelled?: boolean;
+    payment_status?: string;
+  }>;
+  refund?: CampRefundRequest | null;
+}
+
+export interface CampAuditStats {
+  total_gross_fee: number;
+  total_discounts: number;
+  total_coupons_count: number;
+  total_collected: number;
+  total_refunded: number;
+  net_revenue: number;
+  total_transactions: number;
+  total_participants: number;
+  pending_verifications: number;
+  pending_refunds: number;
+}

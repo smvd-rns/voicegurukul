@@ -34,7 +34,31 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const isSpiritualPending = pendingRequest?.status === 'pending';
   const [loadingRequest, setLoadingRequest] = useState(false);
+
+  const getFieldPendingInfo = (fieldName: string) => {
+    if (pendingRequest?.status !== 'pending' || !pendingRequest.requested_changes) return null;
+    const camel = fieldName.replace(/(_\w)/g, (k: string) => k[1].toUpperCase());
+    const val = pendingRequest.requested_changes[camel] ?? pendingRequest.requested_changes[fieldName];
+    if (val === undefined || val === null) return null;
+    return val;
+  };
+
+  const isFieldPending = (fieldName: string) => {
+    return getFieldPendingInfo(fieldName) !== null;
+  };
+
+  const renderPendingBadge = (fieldName: string) => {
+    const val = getFieldPendingInfo(fieldName);
+    if (val === null || val === undefined) return null;
+    return (
+      <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 border border-amber-300 shadow-xs">
+        <Clock className="w-3 h-3 text-amber-600" />
+        Pending approval: {String(val || 'None')}
+      </span>
+    );
+  };
   // Track if form has unsaved changes
   const [isDirty, setIsDirty] = useState(false);
   const isInitializedRef = useRef(false);
@@ -716,14 +740,8 @@ export default function ProfilePage() {
         spbookEighthKrishnaBook7889: userData.spbookEighthKrishnaBook7889 || false,
       };
 
-      // Apply pending changes if any (to show user what they've requested)
-      if (pendingRequest?.status === 'pending' && pendingRequest.requested_changes) {
-        Object.entries(pendingRequest.requested_changes).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            baseData[key] = value;
-          }
-        });
-      }
+      // Note: Do not overwrite baseData with pending unapproved changes.
+      // Fields strictly display the current approved profile data.
 
       setFormData(baseData);
       // Set counselor search values from spiritual fields
@@ -1362,22 +1380,25 @@ export default function ProfilePage() {
         }
       });
 
-      // Prepare final basic updates in hierarchy
+      const spiritualCamelFields = spiritualFields.map(snakeToCamel);
+      // Clean hierarchy: start with current saved hierarchy to keep approved spiritual values
+      const cleanHierarchy: any = { ...(userData?.hierarchy || {}) };
+      // Apply only non-spiritual updates from the newly built hierarchy
+      Object.keys(hierarchy).forEach(key => {
+        if (!spiritualCamelFields.includes(key) && !spiritualFields.includes(key)) {
+          cleanHierarchy[key] = hierarchy[key];
+        }
+      });
+      if (formData.birthDate) {
+        const cleanBirth = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
+        cleanHierarchy.birthDate = cleanBirth;
+        cleanHierarchy.birth_date = cleanBirth;
+      }
+
+      // Prepare final basic updates in hierarchy (spiritual fields remain untouched)
       const finalBasicUpdates = {
         ...basicUpdates,
-        hierarchy: {
-          ...hierarchy,
-          ...Object.keys(userData?.hierarchy || {}).reduce((acc: any, key) => {
-            if (!spiritualFields.map(snakeToCamel).includes(key) && key !== 'birthDate' && key !== 'birth_date') {
-              acc[key] = userData?.hierarchy?.[key];
-            }
-            return acc;
-          }, {}),
-          ...(formData.birthDate ? {
-            birthDate: String(formData.birthDate).trim().split('T')[0].split(' ')[0],
-            birth_date: String(formData.birthDate).trim().split('T')[0].split(' ')[0]
-          } : {})
-        }
+        hierarchy: cleanHierarchy
       };
 
       const promises = [];
@@ -1393,7 +1414,7 @@ export default function ProfilePage() {
         }).then(res => res.json())
       );
 
-      // 2. Submit spiritual changes for approval
+      // 2. Submit spiritual changes for approval (will merge with existing pending request if any)
       if (hasSpiritualChanges) {
         const currentSpiritualValues: any = {};
         spiritualFields.forEach(field => {
@@ -2004,17 +2025,33 @@ export default function ProfilePage() {
                         ? <Check className="h-4 w-4 text-emerald-600" />
                         : <MessageCircle className="h-4 w-4 text-red-600" />}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className={`text-xs font-bold leading-tight ${pendingRequest.status === 'pending' ? 'text-purple-800' : pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
-                      {pendingRequest.status === 'pending' ? 'Review in Progress' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Authority Feedback Available'}
+                      {pendingRequest.status === 'pending' ? 'Review in Progress — Pending Fields Locked' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Authority Feedback Available'}
                     </p>
                     <p className={`text-[10px] mt-0.5 leading-relaxed ${pendingRequest.status === 'pending' ? 'text-purple-600' : pendingRequest.status === 'approved' ? 'text-emerald-600' : 'text-red-600'}`}>
                       {pendingRequest.status === 'pending'
-                        ? `Changes made on ${new Date(pendingRequest.created_at).toLocaleDateString()} are currently under review by authority. They will be applied once approved.`
+                        ? `Changes requested on ${new Date(pendingRequest.created_at).toLocaleDateString()} are under review by authority. Pending fields are locked, but you can still update other fields.`
                         : pendingRequest.status === 'approved'
                           ? `Your changes have been approved, but please note the feedback: "${pendingRequest.admin_feedback || 'No detail provided.'}"`
                           : `Your last request was reviewed. Reason: "${pendingRequest.admin_feedback || 'No detail provided.'}"`}
                     </p>
+                    {pendingRequest.status === 'pending' && pendingRequest.requested_changes && Object.keys(pendingRequest.requested_changes).length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-purple-200/70">
+                        <p className="text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1.5">Requested Changes Awaiting Approval:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(pendingRequest.requested_changes).map(([k, v]) => {
+                            const formatName = (str: string) => str.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                            return (
+                              <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-white border border-purple-200 text-purple-800 px-2.5 py-1 rounded-md shadow-xs">
+                                <span className="font-semibold text-purple-600">{formatName(k)}:</span>
+                                <span className="font-medium text-purple-950">{String(v || 'None')}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2028,11 +2065,15 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
                   {/* Initiated/Aspiring Field */}
                   <div>
-                    <label htmlFor="initiationStatus" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Initiated/Aspiring
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="initiationStatus" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Initiated/Aspiring
+                      </label>
+                      {renderPendingBadge('initiationStatus')}
+                    </div>
                     <select
                       id="initiationStatus"
+                      disabled={isFieldPending('initiationStatus')}
                       value={formData.initiationStatus}
                       onChange={(e) => {
                         const newStatus = e.target.value as 'initiated' | 'aspiring' | '';
@@ -2047,7 +2088,7 @@ export default function ProfilePage() {
                         });
                       }}
                       required
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat cursor-pointer"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('initiationStatus') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
                     >
                       <option value="">Select...</option>
                       <option value="initiated">Initiated</option>
@@ -2059,12 +2100,16 @@ export default function ProfilePage() {
                   {formData.initiationStatus === 'initiated' && (
                     <>
                       <div>
-                        <label htmlFor="initiatedName" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                          Initiated Name
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="initiatedName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                            Initiated Name
+                          </label>
+                          {renderPendingBadge('initiatedName')}
+                        </div>
                         <input
                           id="initiatedName"
                           type="text"
+                          disabled={isFieldPending('initiatedName')}
                           value={formData.initiatedName}
                           onChange={(e) => {
                             const sanitized = sanitizeTextInput(e.target.value);
@@ -2079,7 +2124,7 @@ export default function ProfilePage() {
                           }}
                           required
                           placeholder="Enter your initiated name"
-                          className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md ${fieldErrors.initiatedName
+                          className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md ${isFieldPending('initiatedName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.initiatedName
                             ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
                             : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
                             }`}
@@ -2089,12 +2134,16 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div>
-                        <label htmlFor="spiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                          Spiritual Master Name
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="spiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                            Spiritual Master Name
+                          </label>
+                          {renderPendingBadge('spiritualMasterName')}
+                        </div>
                         <SearchableSelect
                           options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
                           value={formData.spiritualMasterName}
+                          disabled={isFieldPending('spiritualMasterName')}
                           onChange={(value) => {
                             setFormData({ ...formData, spiritualMasterName: value });
                             if (fieldErrors.spiritualMasterName) {
@@ -2106,7 +2155,7 @@ export default function ProfilePage() {
                             }
                           }}
                           placeholder="Select Spiritual Master"
-                          triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors.spiritualMasterName
+                          triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('spiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.spiritualMasterName
                             ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
                             : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
                             }`}
@@ -2121,12 +2170,16 @@ export default function ProfilePage() {
                   {/* Aspiring Spiritual Master Name - only shown if Aspiring */}
                   {formData.initiationStatus === 'aspiring' && (
                     <div className="sm:col-span-2 lg:col-span-2">
-                      <label htmlFor="aspiringSpiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                        Aspiring Spiritual Master Name
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="aspiringSpiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Aspiring Spiritual Master Name
+                        </label>
+                        {renderPendingBadge('aspiringSpiritualMasterName')}
+                      </div>
                       <SearchableSelect
                         options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
                         value={formData.aspiringSpiritualMasterName}
+                        disabled={isFieldPending('aspiringSpiritualMasterName')}
                         onChange={(value) => {
                           setFormData({ ...formData, aspiringSpiritualMasterName: value });
                           if (fieldErrors.aspiringSpiritualMasterName) {
@@ -2138,7 +2191,7 @@ export default function ProfilePage() {
                           }
                         }}
                         placeholder="Select Aspiring Spiritual Master"
-                        triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors.aspiringSpiritualMasterName
+                        triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('aspiringSpiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.aspiringSpiritualMasterName
                           ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
                           : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
                           }`}
@@ -2160,12 +2213,16 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
                   {/* Ashram */}
                   <div>
-                    <label htmlFor="ashram" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Ashram
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="ashram" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Ashram
+                      </label>
+                      {renderPendingBadge('ashram')}
+                    </div>
                     <select
                       id="ashram"
                       value={formData.ashram}
+                      disabled={isFieldPending('ashram')}
                       onChange={(e) => {
                         const val = e.target.value;
                         const updates: any = { ashram: val };
@@ -2177,7 +2234,7 @@ export default function ProfilePage() {
                         setFormData({ ...formData, ...updates });
                       }}
                       required
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik02IDlMMTIgMTVMMTggOSIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4=')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat cursor-pointer"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('ashram') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
                     >
                       <option value="">Select Ashram</option>
                       <option value="Student and Not decided">Student and Not decided</option>
@@ -2199,19 +2256,14 @@ export default function ProfilePage() {
                       <label htmlFor="introducedToKcIn" className="block text-xs sm:text-sm font-semibold text-gray-700">
                         Introduced to KC on (Date)
                       </label>
-                      {pendingRequest?.status === 'pending' && pendingRequest.requested_changes?.introducedToKcIn && (
-                        <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Pending approval
-                        </span>
-                      )}
+                      {renderPendingBadge('introducedToKcIn')}
                     </div>
                     <div className="relative group">
                       <input
                         id="introducedToKcIn"
                         type={(formData.introducedToKcIn && formData.introducedToKcIn.length === 4) ? 'text' : 'date'}
                         value={formData.introducedToKcIn}
-                        disabled={!!userData?.hierarchy?.introducedToKcIn}
+                        disabled={!!userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn')}
                         onChange={(e) => {
                           const selectedDate = e.target.value;
                           const today = new Date().toISOString().split('T')[0];
@@ -2229,7 +2281,7 @@ export default function ProfilePage() {
                           }
                         }}
                         max={new Date().toISOString().split('T')[0]}
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.introducedToKcIn ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.introducedToKcIn
+                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.introducedToKcIn
                           ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
                           : 'border-amber-100 focus:ring-amber-500 focus:border-amber-500'
                           }`}
@@ -2239,7 +2291,7 @@ export default function ProfilePage() {
                           <Save className="w-4 h-4" />
                         </div>
                       )}
-                      {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && !userData?.hierarchy?.introducedToKcIn && (
+                      {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && !userData?.hierarchy?.introducedToKcIn && !isFieldPending('introducedToKcIn') && (
                         <button 
                           type="button"
                           onClick={() => setFormData({...formData, introducedToKcIn: ''})}
@@ -2268,18 +2320,22 @@ export default function ProfilePage() {
 
                   {/* Rounds */}
                   <div>
-                    <label htmlFor="rounds" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      No. of Rounds Chanting
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="rounds" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        No. of Rounds Chanting
+                      </label>
+                      {renderPendingBadge('rounds')}
+                    </div>
                     <input
                       id="rounds"
                       type="number"
                       min="0"
                       max="64"
+                      disabled={isFieldPending('rounds')}
                       value={formData.rounds}
                       onChange={(e) => setFormData({ ...formData, rounds: e.target.value })}
                       placeholder="e.g., 16"
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('rounds') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
                     />
                   </div>
                 </div>
@@ -2293,9 +2349,12 @@ export default function ProfilePage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
                   <div>
-                    <label htmlFor="counselor" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Counselor Name
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="counselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Counselor Name
+                      </label>
+                      {renderPendingBadge('counselor')}
+                    </div>
                     <SearchableSelect
                       options={[
                         ...counselors.map(c => ({ id: c.id, name: c.name })),
@@ -2317,22 +2376,26 @@ export default function ProfilePage() {
                         }
                       }}
                       placeholder="Select Counselor"
-                      disabled={loadingCounselors}
+                      disabled={loadingCounselors || isFieldPending('counselor')}
                     />
                   </div>
 
                   {formData.counselor === 'Other' && (
                     <div className="animate-fadeIn">
-                      <label htmlFor="otherCounselor" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                        Other Counselor Name
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="otherCounselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Other Counselor Name
+                        </label>
+                        {renderPendingBadge('otherCounselor')}
+                      </div>
                       <input
                         id="otherCounselor"
                         type="text"
+                        disabled={isFieldPending('otherCounselor')}
                         value={formData.otherCounselor}
                         onChange={(e) => setFormData({ ...formData, otherCounselor: e.target.value })}
                         placeholder="Enter counselor name"
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-emerald-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 bg-emerald-50/50 hover:bg-emerald-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md"
+                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-emerald-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 bg-emerald-50/50 hover:bg-emerald-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('otherCounselor') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
                       />
                     </div>
                   )}
@@ -2347,9 +2410,12 @@ export default function ProfilePage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
                   <div>
-                    <label htmlFor="currentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Current Temple
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="currentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Current Temple
+                      </label>
+                      {renderPendingBadge('currentTemple')}
+                    </div>
                     <SearchableSelect
                       options={[
                         ...temples.map(t => ({ id: t.name, name: t.name }))
@@ -2357,14 +2423,17 @@ export default function ProfilePage() {
                       value={formData.currentTemple}
                       onChange={(value) => setFormData({ ...formData, currentTemple: value })}
                       placeholder="Select Current Temple"
-                      disabled={loadingTemples}
+                      disabled={loadingTemples || isFieldPending('currentTemple')}
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Current Center
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Current Center
+                      </label>
+                      {renderPendingBadge('currentCenter')}
+                    </div>
                     <SearchableSelect
                       options={[
                         { id: 'None', name: 'None' },
@@ -2383,21 +2452,25 @@ export default function ProfilePage() {
                         }
                       }}
                       placeholder="Select Current Center"
-                      disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None'}
+                      disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None' || isFieldPending('currentCenter')}
                     />
                   </div>
 
                   {formData.currentCenter === 'Other' && (
                     <div className="animate-fadeIn">
-                      <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                        Other Center Name
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Other Center Name
+                        </label>
+                        {renderPendingBadge('otherCenter')}
+                      </div>
                       <input
                         id="otherCenter"
                         type="text"
+                        disabled={isFieldPending('otherCenter')}
                         value={formData.otherCenter}
                         onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border"
+                        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border ${isFieldPending('otherCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
                         placeholder="Type center name"
                       />
                     </div>
@@ -2413,9 +2486,12 @@ export default function ProfilePage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
                   <div>
-                    <label htmlFor="parentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Parent Temple
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="parentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Parent Temple
+                      </label>
+                      {renderPendingBadge('parentTemple')}
+                    </div>
                     <SearchableSelect
                       options={[
                         ...temples.map(t => ({ id: t.name, name: t.name })),
@@ -2424,7 +2500,7 @@ export default function ProfilePage() {
                       value={formData.parentTemple}
                       onChange={(value) => setFormData({ ...formData, parentTemple: value })}
                       placeholder="Select Parent Temple"
-                      disabled={loadingTemples || !!userData?.hierarchy?.parentTemple}
+                      disabled={loadingTemples || !!userData?.hierarchy?.parentTemple || isFieldPending('parentTemple')}
                     />
                     {userData?.hierarchy?.parentTemple && (
                       <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
@@ -2436,17 +2512,20 @@ export default function ProfilePage() {
 
                   {formData.parentTemple === 'Other' && (
                     <div className="animate-fadeIn">
-                      <label htmlFor="otherParentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                        Other Parent Temple Name
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="otherParentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Other Parent Temple Name
+                        </label>
+                        {renderPendingBadge('otherParentTemple')}
+                      </div>
                       <input
                         id="otherParentTemple"
                         type="text"
                         value={formData.otherParentTemple}
-                        disabled={!!userData?.hierarchy?.otherParentTemple}
+                        disabled={!!userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple')}
                         onChange={(e) => setFormData({ ...formData, otherParentTemple: e.target.value })}
                         placeholder="Enter temple name"
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentTemple ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
                       />
                       {userData?.hierarchy?.otherParentTemple && (
                         <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
@@ -2458,9 +2537,12 @@ export default function ProfilePage() {
                   )}
 
                   <div>
-                    <label htmlFor="parentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                      Parent Center
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="parentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Parent Center
+                      </label>
+                      {renderPendingBadge('parentCenter')}
+                    </div>
                     <SearchableSelect
                       options={[
                         { id: 'None', name: 'None' },
@@ -2479,7 +2561,7 @@ export default function ProfilePage() {
                         }
                       }}
                       placeholder="Select Parent Center"
-                      disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter}
+                      disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter || isFieldPending('parentCenter')}
                     />
                     {userData?.hierarchy?.parentCenter && (
                       <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
@@ -2491,17 +2573,20 @@ export default function ProfilePage() {
 
                   {formData.parentCenter === 'Other' && (
                     <div className="animate-fadeIn">
-                      <label htmlFor="otherParentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
-                        Other Parent Center Name
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="otherParentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Other Parent Center Name
+                        </label>
+                        {renderPendingBadge('otherParentCenter')}
+                      </div>
                       <input
                         id="otherParentCenter"
                         type="text"
                         value={formData.otherParentCenter}
-                        disabled={!!userData?.hierarchy?.otherParentCenter}
+                        disabled={!!userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter')}
                         onChange={(e) => setFormData({ ...formData, otherParentCenter: e.target.value })}
                         placeholder="Enter center name"
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentCenter ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
                       />
                       {userData?.hierarchy?.otherParentCenter && (
                         <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">

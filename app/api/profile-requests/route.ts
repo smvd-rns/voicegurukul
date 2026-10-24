@@ -26,6 +26,14 @@ export async function POST(request: Request) {
         requestedChanges = sanitizeObject(requestedChanges);
         currentValues = sanitizeObject(currentValues);
 
+        // Check if there is already a pending request for this user to merge with
+        const { data: existingPending } = await supabaseAdmin
+            .from('profile_update_requests')
+            .select('id, requested_changes, current_values, temple_name, center_name')
+            .eq('user_id', user.id)
+            .eq('status', 'pending')
+            .maybeSingle();
+
         // Fetch user data to get temple and center info
         const { data: userData } = await supabaseAdmin
             .from('users')
@@ -43,6 +51,51 @@ export async function POST(request: Request) {
         const reqCenter = requestedChanges?.currentCenter;
         const reqCenterName = reqCenter?.name || (typeof reqCenter === 'string' ? reqCenter : null);
         const centerName = reqCenterName || h.currentCenter?.name || (typeof h.currentCenter === 'string' ? h.currentCenter : null);
+
+        if (existingPending) {
+            // Merge new requested changes into existing pending request
+            const mergedChanges = {
+                ...(existingPending.requested_changes || {}),
+                ...requestedChanges
+            };
+            const mergedCurrent = {
+                ...(existingPending.current_values || {}),
+                ...currentValues
+            };
+
+            const updatePayload: any = {
+                requested_changes: mergedChanges,
+                current_values: mergedCurrent,
+                temple_name: templeName || existingPending.temple_name,
+                center_name: centerName || existingPending.center_name,
+                updated_at: new Date().toISOString()
+            };
+
+            let updateRes = await supabaseAdmin
+                .from('profile_update_requests')
+                .update(updatePayload)
+                .eq('id', existingPending.id)
+                .select()
+                .single();
+
+            if (updateRes.error) {
+                delete updatePayload.temple_name;
+                delete updatePayload.center_name;
+                updateRes = await supabaseAdmin
+                    .from('profile_update_requests')
+                    .update(updatePayload)
+                    .eq('id', existingPending.id)
+                    .select()
+                    .single();
+            }
+
+            if (updateRes.error) {
+                console.error('Error merging profile request:', updateRes.error);
+                return NextResponse.json({ error: 'Failed to update pending request', details: updateRes.error.message || updateRes.error }, { status: 500 });
+            }
+
+            return NextResponse.json({ success: true, data: updateRes.data, merged: true });
+        }
 
         // Try inserting with temple_name and center_name first
         let result = await supabaseAdmin
