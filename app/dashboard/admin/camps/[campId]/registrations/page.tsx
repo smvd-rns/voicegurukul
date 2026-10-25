@@ -303,6 +303,8 @@ export default function CampRegistrationsAdminPage() {
     if (selectedPayment !== 'all') {
       if (selectedPayment === 'PROCESSING') {
         if (reg.payment_status !== 'processing') return false;
+      } else if (selectedPayment === 'REFUNDED') {
+        if (!reg.is_cancelled) return false;
       } else if (selectedPayment === 'INTER_TEMPLE_TRANSFER') {
         if (reg.payment_method !== 'INTER_TEMPLE_TRANSFER' && reg.payment_method !== 'ITT') return false;
       } else if (reg.payment_method !== selectedPayment) {
@@ -312,12 +314,53 @@ export default function CampRegistrationsAdminPage() {
     return true;
   });
 
+  // Helper to get refund details (status & amount) for a specific registration
+  const getRegRefundInfo = (regId?: string) => {
+    if (!regId) return { amount: 0, status: null as 'pending' | 'refunded' | 'rejected' | null };
+    const match = refundRequests.find(r => {
+      if (r.registration_id === regId) return true;
+      if (Array.isArray(r.cancelled_registrations)) {
+        return r.cancelled_registrations.some((cr: any) => cr.reg_id === regId);
+      }
+      return false;
+    });
+    if (!match) return { amount: 0, status: null };
+
+    let amt = Number(match.refund_amount || 0);
+    if (Array.isArray(match.cancelled_registrations)) {
+      const item = match.cancelled_registrations.find((cr: any) => cr.reg_id === regId);
+      if (item && item.refund_amount != null) amt = Number(item.refund_amount);
+    }
+    return { amount: amt, status: match.status };
+  };
+
+  // Helper to get officially completed refunded amount for a specific registration
+  const getRegRefund = (regId?: string) => {
+    const info = getRegRefundInfo(regId);
+    return info.status === 'refunded' ? info.amount : 0;
+  };
+
   // Metrics
   const totalDevotees = filteredRegistrations.length;
+  const cancelledDevoteesCount = filteredRegistrations.filter((r) => r.is_cancelled).length;
+  const activeDevoteesCount = Math.max(0, totalDevotees - cancelledDevoteesCount);
+
   const grossBilledTotal = filteredRegistrations.reduce((sum, r) => sum + getRegFinancials(r).grossCost, 0);
   const totalNetReceived = filteredRegistrations.reduce((sum, r) => sum + getRegFinancials(r).netReceived, 0);
   const totalDiscounts = filteredRegistrations.reduce((sum, r) => sum + getRegFinancials(r).discount, 0);
   const totalPendingAmount = filteredRegistrations.reduce((sum, r) => sum + getRegFinancials(r).pendingAmount, 0);
+
+  const completedRefunds = refundRequests.filter(r => r.status === 'refunded');
+  const completedRefundsCount = completedRefunds.length;
+  const completedRefundAmount = completedRefunds.reduce((sum, r) => sum + Number(r.refund_amount || 0), 0);
+  const netAvailableAmount = Math.max(0, totalNetReceived - completedRefundAmount);
+
+  const pendingRefunds = refundRequests.filter(r => r.status === 'pending');
+  const pendingRefundsCount = pendingRefunds.length;
+  const pendingRefundAmount = pendingRefunds.reduce((sum, r) => sum + Number(r.refund_amount || 0), 0);
+
+  const rejectedRefunds = refundRequests.filter(r => r.status === 'rejected');
+  const rejectedRefundsCount = rejectedRefunds.length;
 
   const processingCount = filteredRegistrations.filter((r) => r.payment_status === 'processing').length;
   const ittCount = filteredRegistrations.filter((r) => r.payment_method === 'INTER_TEMPLE_TRANSFER' || r.payment_method === 'ITT').length;
@@ -348,17 +391,6 @@ export default function CampRegistrationsAdminPage() {
   const [refundSearchTerm, setRefundSearchTerm] = useState('');
   const [refundStatusFilter, setRefundStatusFilter] = useState<string>('all');
 
-  const pendingRefunds = refundRequests.filter(r => r.status === 'pending');
-  const pendingRefundsCount = pendingRefunds.length;
-  const pendingRefundAmount = pendingRefunds.reduce((sum, r) => sum + Number(r.refund_amount || 0), 0);
-
-  const completedRefunds = refundRequests.filter(r => r.status === 'refunded');
-  const completedRefundsCount = completedRefunds.length;
-  const completedRefundAmount = completedRefunds.reduce((sum, r) => sum + Number(r.refund_amount || 0), 0);
-
-  const rejectedRefunds = refundRequests.filter(r => r.status === 'rejected');
-  const rejectedRefundsCount = rejectedRefunds.length;
-
   const filteredRefundRequests = refundRequests.filter(r => {
     if (refundStatusFilter !== 'all' && r.status !== refundStatusFilter) return false;
     if (refundSearchTerm.trim()) {
@@ -383,9 +415,11 @@ export default function CampRegistrationsAdminPage() {
 
     const excelData = filteredRegistrations.map((reg, idx) => {
       const { grossCost, discount, netReceived, isProcessing, pendingAmount } = getRegFinancials(reg);
+      const regRefund = getRegRefund(reg.id);
       return {
         'S.No': idx + 1,
         'Participant Name': reg.participant_name,
+        'Registration Status': reg.is_cancelled ? 'Cancelled' : 'Active',
         'WhatsApp': reg.whatsapp,
         'Email': reg.email,
         'Gender': reg.gender,
@@ -410,6 +444,8 @@ export default function CampRegistrationsAdminPage() {
         'Gross Calculated Fee (₹)': grossCost,
         'Discount / Waived (₹)': discount,
         'Net Actual Received (₹)': netReceived,
+        'Refunded Amount (₹)': regRefund,
+        'Net Available Retained (₹)': Math.max(0, netReceived - regRefund),
         'Pending Amount (₹)': pendingAmount,
         'Payment Method': reg.payment_method,
         'Payment Status': reg.payment_status || 'completed',
@@ -525,61 +561,73 @@ export default function CampRegistrationsAdminPage() {
         {/* VIEW 1: ATTENDEE REGISTRATIONS LEDGER */}
         {activeView === 'registrations' && (
           <>
-            {/* Metrics Row: Tallying Gross vs Confirmed Received vs Pending ITT vs Discounts */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Attendees</span>
-            <span className="text-2xl font-black text-slate-900 mt-1 block">{totalDevotees}</span>
-            <span className="text-[11px] text-slate-400">
-              {razorpayCount + idtCount + ittCount} Paid • {couponFreeCount + waiverCount} Free
-            </span>
-          </div>
+            {/* Metrics Row: Tallying Gross vs Refunded vs Net Available vs Pending vs Discounts */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Attendees</span>
+                <span className="text-2xl font-black text-slate-900 mt-1 block">{totalDevotees}</span>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {activeDevoteesCount} Active • {cancelledDevoteesCount} Cancelled
+                </span>
+              </div>
 
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Confirmed Received</span>
-            <span className="text-2xl font-black text-emerald-600 mt-1 block">
-              ₹{totalNetReceived.toLocaleString('en-IN')}
-            </span>
-            <span className="text-[10px] text-slate-400 truncate block">
-              UPI: ₹{onlineReceived} • IDT: ₹{idtReceived} • ITT: ₹{ittReceived}
-            </span>
-          </div>
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
+                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Gross Received</span>
+                <span className="text-2xl font-black text-emerald-600 mt-1 block">
+                  ₹{totalNetReceived.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-slate-400 truncate block">
+                  UPI: ₹{onlineReceived} • IDT: ₹{idtReceived} • ITT: ₹{ittReceived}
+                </span>
+              </div>
 
-          <div className={`p-4 rounded-3xl border shadow-sm ${
-            processingCount > 0 ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200/80'
-          }`}>
-            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
-              <span>Pending Verification</span>
-              {processingCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
-            </span>
-            <span className="text-2xl font-black text-amber-700 mt-1 block">
-              ₹{totalPendingAmount.toLocaleString('en-IN')}
-            </span>
-            <span className="text-[11px] text-amber-800 font-semibold block">
-              {processingCount} Transfer(s) awaiting approval
-            </span>
-          </div>
+              <div className={`p-4 rounded-3xl border shadow-sm ${
+                completedRefundAmount > 0 ? 'bg-purple-50/70 border-purple-200' : 'bg-white border-slate-200/80'
+              }`}>
+                <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider block">Refunded Given</span>
+                <span className="text-2xl font-black text-purple-700 mt-1 block">
+                  ₹{completedRefundAmount.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-purple-900 font-medium block">
+                  {completedRefundsCount} Payout(s) transferred
+                </span>
+              </div>
 
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Discounts &amp; Waivers</span>
-            <span className="text-2xl font-black text-rose-600 mt-1 block">
-              ₹{totalDiscounts.toLocaleString('en-IN')}
-            </span>
-            <span className="text-[11px] text-slate-400">
-              {couponFreeCount} Coupon(s) • {waiverCount} Waiver(s)
-            </span>
-          </div>
+              <div className="p-4 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-teal-50 border-2 border-emerald-400/80 shadow-sm">
+                <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider block">Net Available</span>
+                <span className="text-2xl font-black text-emerald-700 mt-1 block">
+                  ₹{netAvailableAmount.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-emerald-800 font-semibold block">
+                  Gross (₹{totalNetReceived}) - Ref (₹{completedRefundAmount})
+                </span>
+              </div>
 
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm col-span-2 md:col-span-1">
-            <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">Gross Fee Total</span>
-            <span className="text-2xl font-black text-indigo-600 mt-1 block">
-              ₹{grossBilledTotal.toLocaleString('en-IN')}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              Rec (₹{totalNetReceived}) + Pend (₹{totalPendingAmount}) + Waived (₹{totalDiscounts})
-            </span>
-          </div>
-        </div>
+              <div className={`p-4 rounded-3xl border shadow-sm ${
+                processingCount > 0 ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200/80'
+              }`}>
+                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Pending Verify</span>
+                  {processingCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+                </span>
+                <span className="text-2xl font-black text-amber-700 mt-1 block">
+                  ₹{totalPendingAmount.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-amber-800 font-semibold block">
+                  {processingCount} Transfer(s) awaiting approval
+                </span>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
+                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Discounts &amp; Waivers</span>
+                <span className="text-2xl font-black text-rose-600 mt-1 block">
+                  ₹{totalDiscounts.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {couponFreeCount} Coupon(s) • {waiverCount} Waiver(s)
+                </span>
+              </div>
+            </div>
 
         {/* Filters & Search Bar */}
         <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
@@ -611,8 +659,9 @@ export default function CampRegistrationsAdminPage() {
               onChange={(e) => setSelectedPayment(e.target.value)}
               className="px-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
             >
-              <option value="all">All Payment Types</option>
+              <option value="all">All Payment &amp; Statuses</option>
               <option value="PROCESSING">⏳ Pending Verification ({processingCount})</option>
+              <option value="REFUNDED">💸 Refunded / Cancelled ({cancelledDevoteesCount})</option>
               <option value="INTER_TEMPLE_TRANSFER">🏛️ Inter-Temple Transfer (ITT)</option>
               <option value="RAZORPAY">Razorpay / UPI</option>
               <option value="IDT">IDT Transfer (ISKCON NVCC)</option>
@@ -660,13 +709,54 @@ export default function CampRegistrationsAdminPage() {
                     const { grossCost, discount, netReceived, isFreeMethod, isProcessing, pendingAmount } = getRegFinancials(reg);
                     const isItt = reg.payment_method === 'INTER_TEMPLE_TRANSFER' || reg.payment_method === 'ITT';
                     const couponLabel = reg.coupon_code || (reg.deduction_source && reg.deduction_source.includes('Coupon:') ? reg.deduction_source.replace('Coupon:', '').trim() : '');
+                    const regRefundInfo = getRegRefundInfo(reg.id);
+                    const isRefunded = reg.is_cancelled && regRefundInfo.status === 'refunded';
+                    const isRefundPending = reg.is_cancelled && regRefundInfo.status === 'pending';
+                    const isCancelledNoRefund = reg.is_cancelled && (!regRefundInfo.status || regRefundInfo.status === 'rejected');
+
+                    const rowHighlightClass = isRefunded
+                      ? 'bg-purple-50/40 hover:bg-purple-50/70 border-l-4 border-l-purple-500'
+                      : isRefundPending
+                      ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-500'
+                      : isCancelledNoRefund
+                      ? 'bg-rose-50/30 hover:bg-rose-50/60 border-l-4 border-l-rose-500'
+                      : isProcessing
+                      ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-500'
+                      : 'bg-white hover:bg-slate-50/70 border-l-4 border-l-emerald-500/40';
 
                     return (
-                      <tr key={reg.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={reg.id} className={`${rowHighlightClass} transition-colors`}>
                         {/* Participant */}
                         <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900">
-                            {reg.participant_name}
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                            <span>{reg.participant_name}</span>
+                            {reg.is_cancelled && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                  isRefunded
+                                    ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                                    : isRefundPending
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                }`}
+                              >
+                                {isRefunded ? (
+                                  <>
+                                    <Undo2 className="w-2.5 h-2.5" />
+                                    <span>Refunded</span>
+                                  </>
+                                ) : isRefundPending ? (
+                                  <>
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>Refund Pending</span>
+                                  </>
+                                ) : regRefundInfo.status === 'rejected' ? (
+                                  <span>Refund Rejected</span>
+                                ) : (
+                                  <span>Cancelled</span>
+                                )}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-400">
                             {reg.gender} {reg.age ? `• ${reg.age} yrs` : ''}
@@ -724,7 +814,7 @@ export default function CampRegistrationsAdminPage() {
                           </span>
                         </td>
 
-                        {/* Payment & Proof: Compact & Uniform with View Details Button */}
+                        {/* Payment & Proof */}
                         <td className="py-3 px-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span
@@ -780,42 +870,86 @@ export default function CampRegistrationsAdminPage() {
                           </div>
                         </td>
 
-                        {/* Fee & Status */}
+                        {/* Fee & Status: Prominent highlighted box per status for instant visibility */}
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           {isProcessing ? (
-                            <div>
-                              <span className="inline-block text-xs font-black text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-lg shadow-2xs">
-                                ₹{pendingAmount.toLocaleString('en-IN')} (Pending)
+                            <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-amber-50/90 border-2 border-amber-300/80 shadow-2xs">
+                              <span className="text-xs font-black text-amber-950">
+                                ₹{pendingAmount.toLocaleString('en-IN')}
                               </span>
-                              <div className="text-[10px] text-slate-400 mt-0.5">
+                              <span className="text-[10px] text-amber-800 font-bold flex items-center gap-1 mt-0.5">
+                                <Clock className="w-3 h-3 text-amber-600 animate-pulse" /> Pending Approval
+                              </span>
+                              <span className="text-[9px] text-slate-400 mt-0.5 font-medium">
                                 Fee: ₹{grossCost.toLocaleString('en-IN')}
-                              </div>
+                              </span>
                             </div>
+                          ) : reg.is_cancelled ? (
+                            isRefunded ? (
+                              <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-purple-100/70 border-2 border-purple-300 shadow-2xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-slate-400 line-through">
+                                    ₹{netReceived.toLocaleString('en-IN')}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-600 text-white text-[9px] font-black uppercase tracking-wider">
+                                    <Undo2 className="w-2.5 h-2.5" /> Refunded: ₹{regRefundInfo.amount.toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] font-black text-emerald-700 mt-1 flex items-center gap-1">
+                                  <span className="text-[10px] font-semibold text-slate-500">Net Retained:</span>
+                                  <span>₹{Math.max(0, netReceived - regRefundInfo.amount).toLocaleString('en-IN')}</span>
+                                </div>
+                              </div>
+                            ) : isRefundPending ? (
+                              <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-amber-50/90 border-2 border-amber-300 shadow-2xs">
+                                <span className="text-xs font-semibold text-slate-400 line-through">
+                                  ₹{netReceived.toLocaleString('en-IN')}
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider mt-0.5">
+                                  <Clock className="w-2.5 h-2.5" /> Refund Pending: ₹{regRefundInfo.amount.toLocaleString('en-IN')}
+                                </span>
+                                <div className="text-[10px] font-bold text-amber-800 mt-0.5">
+                                  Awaiting Transfer
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-rose-50 border-2 border-rose-300 shadow-2xs">
+                                <span className="text-xs font-semibold text-slate-400 line-through">
+                                  ₹{netReceived.toLocaleString('en-IN')}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-black uppercase tracking-wider mt-0.5">
+                                  {regRefundInfo.status === 'rejected' ? 'Refund Rejected' : 'Cancelled (No Refund)'}
+                                </span>
+                                <div className="text-[10px] font-bold text-slate-600 mt-0.5">
+                                  Retained: ₹{netReceived.toLocaleString('en-IN')}
+                                </div>
+                              </div>
+                            )
                           ) : isFreeMethod ? (
-                            <div>
-                              <span className="inline-block text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                            <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-slate-100 border-2 border-slate-300 shadow-2xs">
+                              <span className="text-xs font-black text-slate-800">
                                 ₹0 Received
                               </span>
-                              <div className="text-[10px] text-rose-600 font-bold mt-0.5">
+                              <span className="text-[10px] text-rose-600 font-bold mt-0.5">
                                 -₹{discount.toLocaleString('en-IN')} (Waived)
-                              </div>
+                              </span>
                             </div>
                           ) : discount > 0 ? (
-                            <div>
-                              <span className="text-sm font-black text-slate-900 block">
+                            <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-teal-50 border-2 border-teal-300 shadow-2xs">
+                              <span className="text-xs font-black text-teal-950">
                                 ₹{netReceived.toLocaleString('en-IN')}
                               </span>
-                              <div className="text-[10px] text-rose-600 font-bold">
+                              <span className="text-[10px] text-teal-800 font-bold mt-0.5">
                                 -₹{discount.toLocaleString('en-IN')} Discount
-                              </div>
+                              </span>
                             </div>
                           ) : (
-                            <div>
-                              <span className="text-sm font-black text-emerald-700 block">
+                            <div className="inline-flex flex-col items-end px-3 py-1.5 rounded-2xl bg-emerald-50/80 border-2 border-emerald-300 shadow-2xs">
+                              <span className="text-xs font-black text-emerald-900">
                                 ₹{netReceived.toLocaleString('en-IN')}
                               </span>
-                              <span className="text-[10px] text-emerald-600 font-bold block">
-                                Received in Full
+                              <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Received in Full
                               </span>
                             </div>
                           )}
@@ -1199,15 +1333,6 @@ export default function CampRegistrationsAdminPage() {
                               >
                                 <Eye className="w-3 h-3 text-slate-600" />
                                 <span>View Receipt</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleReopenRefund(req)}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] transition-colors cursor-pointer"
-                                title="Reopen back to pending"
-                              >
-                                <RotateCcw className="w-3 h-3 text-amber-600" />
-                                <span>Reopen</span>
                               </button>
                             </div>
                           ) : (

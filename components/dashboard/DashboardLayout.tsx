@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { logout } from '@/lib/supabase/auth';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
-import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen, Tent, Clock } from 'lucide-react';
 import ProfileCompletionModal from '@/components/auth/ProfileCompletionModal';
 import ProfileCreationLoadingModal from '@/components/auth/ProfileCreationLoadingModal';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
@@ -159,6 +159,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  const isPending = userData?.verificationStatus === 'pending';
+
   // Compute navigation based on user roles (using useMemo to avoid render-time mutations)
   const navigation = useMemo(() => {
     const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
@@ -193,31 +195,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       (typeof role === 'number' && role >= 4 && role <= 8)
     );
 
-    const baseNavigation = [
-      { name: 'Dashboard', href: '/dashboard', icon: Home },
-      { name: 'Sadhana', href: '/dashboard/sadhana', icon: BookOpen },
-      { name: 'Communications', href: '/dashboard/events', icon: Calendar },
-      { name: 'Data Center', href: '/dashboard/data-center', icon: Globe },
-      { name: 'Policies', href: '/dashboard/policies', icon: BookOpen },
-      { name: 'Donations', href: '/dashboard/donations', icon: CreditCard },
-      { name: 'Profile', href: '/dashboard/profile', icon: Settings },
-    ];
+    const baseNavigation = isPending
+      ? [
+          { name: 'Camps', href: '/dashboard/camp', icon: Tent },
+          { name: 'Profile', href: '/dashboard/profile', icon: Settings },
+        ]
+      : [
+          { name: 'Dashboard', href: '/dashboard', icon: Home },
+          { name: 'Sadhana', href: '/dashboard/sadhana', icon: BookOpen },
+          { name: 'Camps', href: '/dashboard/camp', icon: Tent },
+          { name: 'Communications', href: '/dashboard/events', icon: Calendar },
+          { name: 'Data Center', href: '/dashboard/data-center', icon: Globe },
+          { name: 'Policies', href: '/dashboard/policies', icon: BookOpen },
+          { name: 'Donations', href: '/dashboard/donations', icon: CreditCard },
+          { name: 'Profile', href: '/dashboard/profile', icon: Settings },
+        ];
 
     // Users link moved to Admin Dashboard
     // if (isSuperAdmin || hasBCVoiceManagerRole) {
     //   baseNavigation.push({ name: 'Users', href: '/dashboard/users', icon: Users });
     // }
 
-    // Add Voice Manager page if user has voice_manager role (role 3)
-    if (hasVoiceManagerRole) {
-      baseNavigation.push({ name: 'Voice Manager', href: '/dashboard/voice-manager', icon: Mic });
-    }
+    if (!isPending) {
+      // Add Voice Manager page if user has voice_manager role (role 3)
+      if (hasVoiceManagerRole) {
+        baseNavigation.push({ name: 'Voice Manager', href: '/dashboard/voice-manager', icon: Mic });
+      }
 
-    // Add counselor page if user has counselor role
-    // For Super Admins, this is accessed via Admin Dashboard, so hide it here
-    if (hasCounselorRole && !isSuperAdmin) {
-      baseNavigation.push({ name: 'Counselor', href: '/dashboard/counselor', icon: UserCheck });
-    }
+      // Add counselor page if user has counselor role
+      // For Super Admins, this is accessed via Admin Dashboard, so hide it here
+      if (hasCounselorRole && !isSuperAdmin) {
+        baseNavigation.push({ name: 'Counselor', href: '/dashboard/counselor', icon: UserCheck });
+      }
 
 
 
@@ -276,9 +285,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (isSuperAdmin) {
       baseNavigation.push({ name: 'Admin', href: '/dashboard/admin', icon: Shield });
     }
+  }
 
     return baseNavigation;
-  }, [userData]);
+  }, [userData, isPending]);
 
   return (
     <div className="t-page-bg h-screen flex overflow-hidden transition-colors duration-500">
@@ -511,7 +521,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
 
-          <div className="flex-1 lg:block hidden" />
+          <div className="flex-1 flex items-center justify-center sm:justify-start px-2 lg:px-4">
+            {isPending && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 shadow-sm animate-pulse">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Approval Pending • Camps Accessible</span>
+              </div>
+            )}
+          </div>
 
           {/* User Profile & Logout */}
           <div className="flex items-center gap-2 lg:gap-3">
@@ -600,58 +617,96 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Mobile Bottom Navigation */}
         <div className="t-gradient lg:hidden fixed bottom-0 left-0 right-0 shadow-2xl z-40 px-1 pb-2 pb-safe border-t border-white/10 transition-all duration-500">
           <div className="flex justify-around items-center h-20">
-            <Link 
-              href="/dashboard" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-            >
-              <Home className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">Home</span>
-            </Link>
-            <Link 
-              href="/dashboard/sadhana" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/sadhana' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-            >
-              <BookOpen className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">Sadhana</span>
-            </Link>
-            <Link 
-              href="/dashboard/events" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/events' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-            >
-              <Bell className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">Connect</span>
-            </Link>
-            <Link 
-              href="/dashboard/data-center" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/data-center' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-            >
-              <Database className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">Data</span>
-            </Link>
-            <Link 
-              href="/dashboard/donations" 
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/donations' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-            >
-              <Heart className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-medium">Donate</span>
-            </Link>
-             <button 
-               onClick={() => {
-                 if (!sidebarOpen) {
-                   window.location.hash = 'menu';
-                 } else {
-                   if (window.location.hash === '#menu') {
-                     window.history.back();
-                   } else {
-                     setSidebarOpen(false);
-                   }
-                 }
-               }}
-               className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${sidebarOpen ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
-             >
-               <MoreHorizontal className="h-5 w-5 mb-1" />
-               <span className="text-[10px] font-medium">More</span>
-             </button>
+            {isPending ? (
+              <>
+                <Link 
+                  href="/dashboard/camp" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname?.startsWith('/dashboard/camp') ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Tent className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Camps</span>
+                </Link>
+                <Link 
+                  href="/dashboard/profile" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/profile' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Settings className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Profile</span>
+                </Link>
+                <button 
+                  onClick={() => {
+                    if (!sidebarOpen) {
+                      window.location.hash = 'menu';
+                    } else {
+                      if (window.location.hash === '#menu') {
+                        window.history.back();
+                      } else {
+                        setSidebarOpen(false);
+                      }
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${sidebarOpen ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <MoreHorizontal className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Menu</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link 
+                  href="/dashboard" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Home className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Home</span>
+                </Link>
+                <Link 
+                  href="/dashboard/sadhana" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/sadhana' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <BookOpen className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Sadhana</span>
+                </Link>
+                <Link 
+                  href="/dashboard/camp" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname?.startsWith('/dashboard/camp') ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Tent className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Camps</span>
+                </Link>
+                <Link 
+                  href="/dashboard/events" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/events' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Bell className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Connect</span>
+                </Link>
+                <Link 
+                  href="/dashboard/donations" 
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${pathname === '/dashboard/donations' ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <Heart className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">Donate</span>
+                </Link>
+                <button 
+                  onClick={() => {
+                    if (!sidebarOpen) {
+                      window.location.hash = 'menu';
+                    } else {
+                      if (window.location.hash === '#menu') {
+                        window.history.back();
+                      } else {
+                        setSidebarOpen(false);
+                      }
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-300 ${sidebarOpen ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-white/60 hover:text-white'}`}
+                >
+                  <MoreHorizontal className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">More</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 

@@ -415,7 +415,13 @@ export async function getCampRefundRequestsAction(campId: string) {
     `;
 
     const res = await query(sql, [campId]);
-    return { success: true, requests: res.rows as CampRefundRequest[] };
+    const requests = res.rows.map((r: any) => {
+      if (r.payout_date && r.payout_date instanceof Date) {
+        r.payout_date = r.payout_date.toISOString().split('T')[0];
+      }
+      return r;
+    });
+    return { success: true, requests: requests as CampRefundRequest[] };
   } catch (error: any) {
     console.error('getCampRefundRequestsAction error:', error);
     return { success: false, error: error.message };
@@ -525,8 +531,8 @@ export async function processCampRefundAction(
  */
 export async function lookupCampRegistrationsAction(campSlugOrId: string, identifier: string) {
   try {
-    const cleanId = (identifier || '').trim();
-    if (!cleanId) {
+    const rawId = (identifier || '').trim();
+    if (!rawId) {
       return { success: false, error: 'Please enter your registered WhatsApp / Phone number or Email address.' };
     }
 
@@ -542,24 +548,38 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
 
     const camp = campRes.rows[0] as Camp;
 
-    // 2. Fetch active (non-cancelled) registrations matching identifier
+    // Check if identifier is email or phone
+    const isEmail = rawId.includes('@');
+    const digitsOnly = rawId.replace(/[^0-9]/g, '');
+    const phone10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+
+    // 2. Fetch registrations matching identifier (supports with or without country code +91)
     const regSql = `
       SELECT * FROM camp_registrations
       WHERE camp_id = $1
         AND (
-          whatsapp ILIKE $2 OR
-          poc_contact ILIKE $2 OR
-          email ILIKE $2
+          ($2 <> '' AND LOWER(email) = LOWER($2)) OR
+          ($3 <> '' AND (
+            REGEXP_REPLACE(whatsapp, '[^0-9]', '', 'g') LIKE '%' || $3 || '%' OR
+            REGEXP_REPLACE(poc_contact, '[^0-9]', '', 'g') LIKE '%' || $3 || '%'
+          )) OR
+          whatsapp ILIKE '%' || $4 || '%' OR
+          poc_contact ILIKE '%' || $4 || '%'
         )
       ORDER BY created_at ASC
     `;
 
-    const regRes = await query(regSql, [camp.id, `%${cleanId}%`]);
+    const regRes = await query(regSql, [
+      camp.id,
+      isEmail ? rawId : '',
+      phone10,
+      rawId
+    ]);
 
     if (regRes.rows.length === 0) {
       return {
         success: false,
-        error: `No registrations found for "${cleanId}" in this camp retreat. Please verify the phone number or email used during registration.`
+        error: `No registrations found for "${rawId}" in this camp retreat. Please verify the phone number or email used during registration.`
       };
     }
 
@@ -568,10 +588,11 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
     const existingRefundsRes = await query(
       `SELECT * FROM camp_refund_requests WHERE camp_id = $1 AND (
          registration_id = ANY($2::uuid[]) OR 
-         poc_contact ILIKE $3 OR 
-         email ILIKE $3
+         ($3 <> '' AND REGEXP_REPLACE(poc_contact, '[^0-9]', '', 'g') LIKE '%' || $3 || '%') OR 
+         ($4 <> '' AND LOWER(email) = LOWER($4)) OR
+         poc_contact ILIKE '%' || $5 || '%'
        ) ORDER BY created_at DESC`,
-      [camp.id, regIds, `%${cleanId}%`]
+      [camp.id, regIds, phone10, isEmail ? rawId : '', rawId]
     );
 
     return {
@@ -892,6 +913,9 @@ export async function getAllCampTransactionsAction() {
     const refundMapByGroupId = new Map<string, CampRefundRequest>();
     const refundMapByRegId = new Map<string, CampRefundRequest>();
     for (const ref of allRefunds) {
+      if (ref.payout_date && (ref.payout_date as any) instanceof Date) {
+        ref.payout_date = (ref.payout_date as unknown as Date).toISOString().split('T')[0];
+      }
       if (ref.group_id) {
         refundMapByGroupId.set(ref.group_id, ref);
       }
@@ -935,7 +959,7 @@ export async function getAllCampTransactionsAction() {
         }
       }
 
-      if (t.payment_status === 'completed') {
+      if (t.payment_status === 'completed' || t.payment_status === 'refunded') {
         totalCollected += t.total_amount;
         totalGrossFee += (t.total_meal_cost + t.total_acc_cost);
         totalDiscounts += t.total_discount;
@@ -1002,6 +1026,92 @@ export async function getAllCampRefundsAction() {
     return { success: true, refunds: res.rows as (CampRefundRequest & { camp_title: string; camp_slug: string })[] };
   } catch (error: any) {
     console.error('getAllCampRefundsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Public & User Dashboard: Fetch all currently active camps for devotee registration
+ */
+export async function getActiveCampsForUserAction() {
+  try {
+    const sql = `
+      SELECT 
+        c.*,
+        COUNT(r.id)::int AS registration_count
+      FROM camps c
+      LEFT JOIN camp_registrations r ON r.camp_id = c.id
+      WHERE c.status = 'active'
+      GROUP BY c.id
+      ORDER BY c.start_date ASC, c.created_at DESC
+    `;
+    const res = await query(sql);
+    return { success: true, camps: res.rows as (Camp & { registration_count?: number })[] };
+  } catch (error: any) {
+    console.error('getActiveCampsForUserAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * User Dashboard: Fetch camp registrations belonging to the current user (by phone or email)
+ */
+export async function getUserCampRegistrationsAction(identifier: { email?: string; phone?: string }) {
+  try {
+    const cleanEmail = (identifier.email || '').trim().toLowerCase();
+    const cleanPhone = (identifier.phone || '').trim().replace(/[^0-9]/g, '');
+
+    if (!cleanEmail && !cleanPhone) {
+      return { success: true, registrations: [] };
+    }
+
+    const sql = `
+      SELECT 
+        r.*,
+        c.title AS camp_title,
+        c.slug AS camp_slug,
+        c.venue AS camp_venue,
+        c.start_date AS camp_start_date,
+        c.end_date AS camp_end_date,
+        c.refund_config AS camp_refund_config
+      FROM camp_registrations r
+      JOIN camps c ON c.id = r.camp_id
+      WHERE (
+        ($1 <> '' AND LOWER(r.email) = $1) OR
+        ($2 <> '' AND (
+          r.poc_contact LIKE '%' || $2 || '%' OR 
+          r.whatsapp LIKE '%' || $2 || '%'
+        ))
+      )
+      ORDER BY r.created_at DESC
+    `;
+
+    const res = await query(sql, [cleanEmail, cleanPhone ? cleanPhone.slice(-10) : '']);
+    const registrations = res.rows as (CampRegistration & { camp_title: string; camp_slug: string; camp_venue: string; camp_start_date: string; camp_end_date: string; camp_refund_config?: any })[];
+
+    let refundRequests: CampRefundRequest[] = [];
+    if (registrations.length > 0) {
+      const regIds = registrations.map(r => r.id);
+      const groupIds = Array.from(new Set(registrations.map(r => r.group_id).filter(Boolean)));
+
+      const refundSql = `
+        SELECT * FROM camp_refund_requests 
+        WHERE registration_id = ANY($1) 
+           OR group_id = ANY($2)
+           OR LOWER(email) = $3
+        ORDER BY created_at DESC
+      `;
+      const refundRes = await query(refundSql, [regIds, groupIds, cleanEmail]);
+      refundRequests = refundRes.rows;
+    }
+
+    return { 
+      success: true, 
+      registrations,
+      refundRequests
+    };
+  } catch (error: any) {
+    console.error('getUserCampRegistrationsAction error:', error);
     return { success: false, error: error.message };
   }
 }

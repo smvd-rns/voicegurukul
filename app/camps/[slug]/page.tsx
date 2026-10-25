@@ -12,10 +12,11 @@ import {
   Search, FileText, CheckCircle2, HeartHandshake,
   Building, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
-  Undo2, Banknote
+  Undo2, Banknote, Ticket
 } from 'lucide-react';
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
 import { lookupCampRegistrationsAction, submitCampRefundRequestAction } from '@/app/dashboard/admin/camps/actions';
@@ -68,6 +69,14 @@ export default function PublicCampRegistrationPage() {
   const params = useParams();
   const router = useRouter();
   const slug = String(params.slug || '');
+  const { user, loading: authLoading } = useAuth();
+
+  // If user is already authenticated, redirect them directly to the authenticated camp dashboard
+  useEffect(() => {
+    if (!authLoading && user && slug) {
+      router.push(`/dashboard/camp?camp=${slug}`);
+    }
+  }, [user, authLoading, slug, router]);
 
   // Camp Data State
   const [camp, setCamp] = useState<Camp | null>(null);
@@ -1148,6 +1157,130 @@ export default function PublicCampRegistrationPage() {
                   </div>
                 )}
               </div>
+            ) : !user ? (
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-amber-200/90 p-8 sm:p-12 shadow-xl text-center space-y-6">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-orange-500/20">
+                  <Tent className="w-8 h-8" />
+                </div>
+                
+                <div className="max-w-xl mx-auto space-y-2">
+                  <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-bold text-xs uppercase tracking-wider">
+                    Account Required for Registration
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                    Sign In to Register for {camp.title}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    To ensure secure pass downloads, group bookings, verified records, and self-service cancellation / refund support, camp registration is now integrated with your devotee account.
+                  </p>
+                </div>
+
+                {/* Benefits Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto text-left text-xs">
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/60 space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Profile Auto-Fill</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Your devotee name, mobile number, email, and center are pre-filled automatically.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/60 space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Ticket className="w-4 h-4 text-amber-600" />
+                      <span>Digital Delegate Pass</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Instant entry ticket pass, payment receipt, and track details stored in your portal.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/60 space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Undo2 className="w-4 h-4 text-rose-600" />
+                      <span>Refund Security</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Cancel individual attendees or full bookings anytime with automated policy refunds.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Primary Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto pt-2">
+                  <Link
+                    href={`/auth/login?redirect=/dashboard/camp?camp=${slug}`}
+                    className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs shadow-lg shadow-orange-500/25 transition-all text-center flex items-center justify-center gap-2"
+                  >
+                    <span>Log In to Register</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    href={`/auth/register?redirect=/dashboard/camp?camp=${slug}`}
+                    className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-full bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-md transition-all text-center"
+                  >
+                    Create Devotee Account
+                  </Link>
+                </div>
+
+                <div className="max-w-lg mx-auto">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium">
+                    <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>
+                      <strong>Immediate Camp Access:</strong> Newly created accounts can register for camps immediately, even while approval for other modules is pending!
+                    </span>
+                  </div>
+                </div>
+
+                {/* Existing Registration Lookup */}
+                <div className="pt-6 border-t border-slate-100 max-w-md mx-auto space-y-3">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Already registered earlier? Retrieve your confirmed pass below:
+                  </p>
+                  <form onSubmit={handleLookupRegistration} className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={lookupQuery}
+                        onChange={(e) => setLookupQuery(e.target.value)}
+                        placeholder="WhatsApp No or Email..."
+                        className="w-full pl-10 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-900 outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={lookupLoading}
+                      className="px-5 py-2 bg-slate-800 text-white rounded-full text-xs font-bold hover:bg-slate-900 transition-all disabled:opacity-50"
+                    >
+                      {lookupLoading ? 'Searching...' : 'Find Pass'}
+                    </button>
+                  </form>
+
+                  {lookupError && (
+                    <p className="text-xs text-rose-600 font-medium">{lookupError}</p>
+                  )}
+
+                  {lookupResults && (
+                    <div className="pt-3 text-left space-y-2">
+                      {lookupResults.map((item, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs flex justify-between items-center">
+                          <div>
+                            <span className="font-bold text-slate-900 block">{item.participant_name}</span>
+                            <span className="text-[11px] text-slate-500">{item.camp_track} • {item.group_id}</span>
+                          </div>
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px]">
+                            Confirmed
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               <>
                 {/* STEP 1: POINT OF CONTACT (POC) */}
@@ -1597,7 +1730,7 @@ export default function PublicCampRegistrationPage() {
                               className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
                             >
                               <option value="Dinner Meal">Complete Dinner Meal</option>
-                              <option value="Only Milk">Only Milk &amp; Fruits</option>
+                              <option value="Only Milk">Only Milk</option>
                             </select>
                           </div>
 

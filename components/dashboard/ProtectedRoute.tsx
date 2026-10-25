@@ -24,19 +24,23 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         return;
       }
 
-      // 1. Strict verification status checks
+      // 1. Strict verification status checks: Camp registration is accessible even if approval is pending
+      const isCampPath = pathname.startsWith('/dashboard/camp') || pathname.startsWith('/dashboard/camps');
+
       if (userData?.verificationStatus === 'pending') {
-        router.push('/auth/pending');
-        return;
+        if (!isCampPath) {
+          router.push('/auth/pending');
+          return;
+        }
       } 
       
-      if (userData?.verificationStatus !== 'approved') {
+      if (userData?.verificationStatus !== 'approved' && !isCampPath) {
         router.push('/auth/complete-registration');
         return;
       }
 
       // 2. Dynamic profile completion check (15 days grace period) - Controlled by Super Admin feature switch
-      const isAllowedPath = pathname === '/dashboard/profile' || pathname === '/dashboard/donations';
+      const isAllowedPath = pathname === '/dashboard/profile' || pathname === '/dashboard/donations' || isCampPath;
 
       if (userData?.createdAt && !isAllowedPath) {
         fetchSystemConfigs().then((configs) => {
@@ -116,13 +120,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <LoadingScreen message="Redirecting to registration..." />;
   }
 
-  // Block access if verification is pending - show loading while redirect happens
-  if (userData?.verificationStatus === 'pending') {
+  const isCampPath = pathname.startsWith('/dashboard/camp') || pathname.startsWith('/dashboard/camps');
+
+  // Block access if verification is pending - show loading while redirect happens, UNLESS visiting camp pages
+  if (userData?.verificationStatus === 'pending' && !isCampPath) {
     return <LoadingScreen message="Redirecting to pending status..." />;
   }
 
-  // Block access if not approved (incomplete, unverified, rejected, etc.)
-  if (userData?.verificationStatus !== 'approved') {
+  // Block access if not approved (incomplete, unverified, rejected, etc.), UNLESS visiting camp pages
+  if (userData?.verificationStatus !== 'approved' && !isCampPath) {
     return <LoadingScreen message="Redirecting to registration..." />;
   }
 

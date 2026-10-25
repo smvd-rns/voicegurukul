@@ -163,10 +163,20 @@ export default function PendingApprovalPage() {
 
                     {/* Action Buttons */}
                     <div className="space-y-3">
+                        {/* Camp Registration is available even during pending status */}
+                        {!isAlreadyApproved && !isRejected && (
+                            <button
+                                onClick={() => router.push('/dashboard/camp')}
+                                className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ring-2 ring-orange-300 ring-offset-2"
+                            >
+                                ⛺ Browse & Register for Camps
+                            </button>
+                        )}
+
                         {/* Primary Button */}
                         <button
                             onClick={() => router.push(isAlreadyApproved ? '/dashboard' : isRejected ? '/auth/complete-registration' : '/')}
-                            className={`w-full text-white py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${isRejected ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600' : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600'}`}
+                            className={`w-full text-white py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${isRejected ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600' : 'bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-900'}`}
                         >
                             {isAlreadyApproved ? (
                                 <>

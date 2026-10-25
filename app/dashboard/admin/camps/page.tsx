@@ -10,7 +10,7 @@ import {
   Filter, Archive, Tag, Gift, Percent, Landmark, Building2, AlertTriangle,
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
-  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck
+  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -50,6 +50,26 @@ function formatDateForInput(val: any): string {
     return `${y}-${m}-${d}`;
   }
   return '';
+}
+
+function formatDisplayDate(val: any): string {
+  if (!val) return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${d}/${m}/${y}`;
+  }
+  const s = String(val).trim();
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime()) && (s.includes('-') || s.includes('/') || s.includes('T'))) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${d}/${m}/${y}`;
+  }
+  return s;
 }
 
 function getDriveFileId(url: string | null | undefined): string | null {
@@ -394,9 +414,9 @@ export default function AdminCampsPage() {
 
     // Status
     if (auditStatusFilter !== 'all') {
-      if (auditStatusFilter === 'completed' && t.payment_status !== 'completed') return false;
-      if (auditStatusFilter === 'pending' && t.payment_status !== 'pending' && !(t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at)) return false;
-      if (auditStatusFilter === 'refunded' && !t.refund && t.payment_status !== 'refunded') return false;
+      if (auditStatusFilter === 'completed' && (t.payment_status !== 'completed' || t.refund?.status === 'pending' || t.refund?.status === 'refunded')) return false;
+      if (auditStatusFilter === 'pending' && t.payment_status !== 'pending' && !(t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at) && t.refund?.status !== 'pending') return false;
+      if (auditStatusFilter === 'refunded' && t.refund?.status !== 'refunded' && t.payment_status !== 'refunded') return false;
     }
 
     // Date
@@ -495,7 +515,7 @@ export default function AdminCampsPage() {
 
       totalParticipants += count;
 
-      if (t.payment_status === 'completed') {
+      if (t.payment_status === 'completed' || t.payment_status === 'refunded') {
         totalCollected += amt;
         // True Gross Value = Net Paid + Subsidized Discounts
         totalGrossFee += (amt + disc);
@@ -1937,15 +1957,15 @@ export default function AdminCampsPage() {
                     </div>
 
                     {/* 2. Coupons & Discounts Given */}
-                    <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block flex items-center gap-1">
-                        <Tag className="w-3 h-3 text-purple-600" />
+                    <div className="p-4 rounded-2xl bg-orange-50/70 border border-orange-200/90 shadow-xs">
+                      <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider block flex items-center gap-1">
+                        <Tag className="w-3 h-3 text-orange-600" />
                         <span>Coupons / Discounts</span>
                       </span>
-                      <div className="text-xl sm:text-2xl font-black text-purple-900 mt-1">
+                      <div className="text-xl sm:text-2xl font-black text-orange-950 mt-1">
                         -₹{dynamicStats.total_discounts.toLocaleString('en-IN')}
                       </div>
-                      <span className="text-[10px] text-purple-700">
+                      <span className="text-[10px] text-orange-700">
                         {dynamicStats.total_coupons_count} {dynamicStats.total_coupons_count === 1 ? 'Batch Subsidized' : 'Batches Subsidized'}
                       </span>
                     </div>
@@ -2213,37 +2233,100 @@ export default function AdminCampsPage() {
                         </p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            <tr>
-                              <th className="py-3.5 px-4">Date &amp; Time</th>
-                              <th className="py-3.5 px-4">Camp Retreat</th>
-                              <th className="py-3.5 px-4">Payer / POC</th>
-                              <th className="py-3.5 px-4 text-center">Attendees</th>
-                              <th className="py-3.5 px-4">Payment Method &amp; Ref</th>
-                              <th className="py-3.5 px-4">Amount Paid</th>
-                              <th className="py-3.5 px-4">Status</th>
-                              <th className="py-3.5 px-4 text-right">Audit</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {(auditPageSize === 'all'
-                              ? filteredTransactions
-                              : filteredTransactions.slice((auditPage - 1) * auditPageSize, auditPage * (auditPageSize as number))
-                            ).map((t) => {
-                                const formattedDate = t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric'
-                                }) : 'N/A';
-                                const formattedTime = t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                }) : '';
+                      <>
+                        {/* Status & Method Color Guide Legend */}
+                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-semibold text-slate-700">
+                          <span className="font-bold flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-800">
+                            <Palette className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Color Guide:</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-xs border border-emerald-600"></span>
+                            <span className="text-emerald-950">Money In (Razorpay)</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-orange-500 shadow-xs border border-orange-600"></span>
+                            <span className="text-orange-950">Coupon / Discount</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-teal-500 shadow-xs border border-teal-600"></span>
+                            <span className="text-teal-950">Inter-Temple (ITT)</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-sky-500 shadow-xs border border-sky-600"></span>
+                            <span className="text-sky-950">Dept Transfer (IDT)</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-purple-500 shadow-xs border border-purple-600"></span>
+                            <span className="text-purple-950">Refunded</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-rose-500 shadow-xs border border-rose-600"></span>
+                            <span className="text-rose-950">Refund Pending</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full bg-yellow-400 shadow-xs border border-yellow-500"></span>
+                            <span className="text-yellow-950">Verification Pending</span>
+                          </span>
+                        </div>
 
-                                return (
-                                  <tr key={t.txn_id} className="hover:bg-amber-50/20 transition-colors group">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                              <tr>
+                                <th className="py-3.5 px-4">Date &amp; Time</th>
+                                <th className="py-3.5 px-4">Camp Retreat</th>
+                                <th className="py-3.5 px-4">Payer / POC</th>
+                                <th className="py-3.5 px-4 text-center">Attendees</th>
+                                <th className="py-3.5 px-4">Payment Method &amp; Ref</th>
+                                <th className="py-3.5 px-4">Amount Paid</th>
+                                <th className="py-3.5 px-4">Status</th>
+                                <th className="py-3.5 px-4 text-right">Audit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {(auditPageSize === 'all'
+                                ? filteredTransactions
+                                : filteredTransactions.slice((auditPage - 1) * auditPageSize, auditPage * (auditPageSize as number))
+                              ).map((t) => {
+                                  const formattedDate = t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  }) : 'N/A';
+                                  const formattedTime = t.created_at ? new Date(t.created_at).toLocaleTimeString('en-IN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : '';
+
+                                  // Compute distinct row shading & solid left accent bar
+                                  const isRefunded = t.refund?.status === 'refunded' || t.payment_status === 'refunded';
+                                  const isRefundPending = t.refund?.status === 'pending';
+                                  const isPendingVerification = t.payment_status === 'pending' || (t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at);
+                                  const isDiscountOrCoupon = (t.total_discount > 0 || !!t.coupon_code || ['FREE', 'COUPON', 'ROLE_WAIVER'].includes(t.payment_method));
+                                  const isItt = t.payment_method === 'INTER_TEMPLE_TRANSFER' || t.payment_method === 'ITT';
+                                  const isIdt = t.payment_method === 'IDT';
+
+                                  let rowShadeClass = '';
+                                  if (isRefunded) {
+                                    rowShadeClass = 'bg-purple-100/75 hover:bg-purple-200/85 border-l-4 border-l-purple-600 text-slate-900';
+                                  } else if (isRefundPending) {
+                                    rowShadeClass = 'bg-rose-100/70 hover:bg-rose-200/80 border-l-4 border-l-rose-600 text-slate-900';
+                                  } else if (isPendingVerification) {
+                                    rowShadeClass = 'bg-yellow-100/80 hover:bg-yellow-200/90 border-l-4 border-l-yellow-500 text-slate-900';
+                                  } else if (isDiscountOrCoupon) {
+                                    rowShadeClass = 'bg-orange-100/75 hover:bg-orange-200/85 border-l-4 border-l-orange-500 text-slate-900';
+                                  } else if (isItt) {
+                                    rowShadeClass = 'bg-teal-100/60 hover:bg-teal-200/75 border-l-4 border-l-teal-600 text-slate-900';
+                                  } else if (isIdt) {
+                                    rowShadeClass = 'bg-sky-100/60 hover:bg-sky-200/75 border-l-4 border-l-sky-600 text-slate-900';
+                                  } else {
+                                    // Razorpay / Standard Money in
+                                    rowShadeClass = 'bg-emerald-100/60 hover:bg-emerald-200/75 border-l-4 border-l-emerald-600 text-slate-900';
+                                  }
+
+                                  return (
+                                    <tr key={t.txn_id} className={`${rowShadeClass} transition-colors group`}>
                                     {/* Date & Time */}
                                     <td className="py-3.5 px-4 whitespace-nowrap">
                                       <div className="font-semibold text-slate-900">{formattedDate}</div>
@@ -2301,7 +2384,7 @@ export default function AdminCampsPage() {
                                           </span>
                                         )}
                                         {['FREE', 'COUPON', 'ROLE_WAIVER'].includes(t.payment_method) && (
-                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-orange-50 text-orange-700 border border-orange-200">
                                             {t.payment_method}
                                           </span>
                                         )}
@@ -2330,8 +2413,8 @@ export default function AdminCampsPage() {
                                         Meals: ₹{t.total_meal_cost} | Stay: ₹{t.total_acc_cost}
                                       </div>
                                       {t.total_discount > 0 && (
-                                        <div className="text-[10px] font-bold text-purple-700 flex items-center gap-1 mt-0.5">
-                                          <Tag className="w-3 h-3 text-purple-600 flex-shrink-0" />
+                                        <div className="text-[10px] font-bold text-orange-700 flex items-center gap-1 mt-0.5">
+                                          <Tag className="w-3 h-3 text-orange-600 flex-shrink-0" />
                                           <span>-₹{t.total_discount.toLocaleString('en-IN')} {t.coupon_code ? `(${t.coupon_code})` : 'Discount'}</span>
                                         </div>
                                       )}
@@ -2339,11 +2422,27 @@ export default function AdminCampsPage() {
 
                                     {/* Status */}
                                     <td className="py-3.5 px-4 whitespace-nowrap">
-                                      {t.refund ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
+                                      {t.refund?.status === 'refunded' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
                                           <Undo2 className="w-3 h-3" />
-                                          {t.refund.status === 'refunded' ? 'Refunded' : 'Refund Pending'} (₹{t.refund.refund_amount})
+                                          Refunded (₹{t.refund.refund_amount})
                                         </span>
+                                      ) : t.refund?.status === 'pending' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
+                                          <Undo2 className="w-3 h-3" />
+                                          Refund Pending (₹{t.refund.refund_amount})
+                                        </span>
+                                      ) : t.refund?.status === 'rejected' ? (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <CheckCircle className="w-3 h-3" />
+                                            Completed
+                                          </span>
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200" title={`Refund rejected${t.refund.admin_notes ? `: ${t.refund.admin_notes}` : ''}`}>
+                                            <X className="w-2.5 h-2.5 text-rose-500" />
+                                            Refund Rejected
+                                          </span>
+                                        </div>
                                       ) : t.payment_status === 'completed' ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                           <CheckCircle className="w-3 h-3" />
@@ -2374,6 +2473,7 @@ export default function AdminCampsPage() {
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
 
                     {/* Professional Pagination Bar (20, 40, 100, All) */}
@@ -2559,7 +2659,7 @@ export default function AdminCampsPage() {
                                     {r.payout_txn_ref ? (
                                       <div className="font-mono font-bold text-emerald-700 text-xs">
                                         {r.payout_txn_ref}
-                                        {r.payout_date && <div className="text-[10px] text-slate-400 font-sans">{r.payout_date}</div>}
+                                        {r.payout_date && <div className="text-[10px] text-slate-400 font-sans">{formatDisplayDate(r.payout_date)}</div>}
                                       </div>
                                     ) : (
                                       <span className="text-slate-400 italic text-[11px]">Pending transfer</span>
@@ -2787,7 +2887,7 @@ export default function AdminCampsPage() {
                     Meals: ₹{selectedTxn.total_meal_cost} | Stay: ₹{selectedTxn.total_acc_cost}
                   </div>
                   {selectedTxn.total_discount > 0 && (
-                    <div className="text-[10px] text-purple-700 font-bold">
+                    <div className="text-[10px] text-orange-700 font-bold">
                       Discount: ₹{selectedTxn.total_discount} {selectedTxn.coupon_code ? `(${selectedTxn.coupon_code})` : ''}
                     </div>
                   )}
@@ -2926,14 +3026,18 @@ export default function AdminCampsPage() {
                     Reason: {selectedTxn.refund.reason || 'Devotee cancellation request'}
                   </p>
                   <div className="text-[11px] text-rose-600 font-mono">
-                    Payout: {selectedTxn.refund.payout_type} &bull; {selectedTxn.refund.upi_id || `A/C: ${selectedTxn.refund.account_number} (${selectedTxn.refund.bank_name})`}
-                    {selectedTxn.refund.payout_txn_ref && ` &bull; UTR: ${selectedTxn.refund.payout_txn_ref}`}
+                    Payout: {selectedTxn.refund.payout_type} • {selectedTxn.refund.upi_id || `A/C: ${selectedTxn.refund.account_number} (${selectedTxn.refund.bank_name})`}
+                    {selectedTxn.refund.payout_txn_ref && ` • UTR: ${selectedTxn.refund.payout_txn_ref}`}
+                    {selectedTxn.refund.payout_date && ` • Date: ${formatDisplayDate(selectedTxn.refund.payout_date)}`}
                   </div>
                 </div>
               )}
 
-              {/* Batch Reconciliation & Direct Super Admin Approval Box */}
-              {selectedTxn.payment_status !== 'completed' ? (
+              {/* Batch Reconciliation & Direct Super Admin Approval Box (only for unverified offline payments) */}
+              {selectedTxn.payment_status !== 'completed' &&
+               selectedTxn.payment_status !== 'refunded' &&
+               selectedTxn.payment_method !== 'RAZORPAY' &&
+               !['FREE', 'COUPON', 'ROLE_WAIVER'].includes(selectedTxn.payment_method) ? (
                 <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
