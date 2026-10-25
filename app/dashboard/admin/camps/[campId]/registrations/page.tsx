@@ -10,10 +10,13 @@ import {
   Building, UserCheck, ShieldCheck, CreditCard,
   Landmark, ExternalLink, Eye, CheckCircle2, X, Image as ImageIcon,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy, Check,
-  Undo2, Banknote, AlertTriangle, CheckCheck, RotateCcw
+  Undo2, Banknote, AlertTriangle, CheckCheck, RotateCcw, Ticket, QrCode
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Camp, CampRegistration, CampRefundRequest } from '@/types';
+import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
+import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
+import CampPrasadamTab from '@/components/camps/CampPrasadamTab';
 import {
   getCampRegistrationsAction,
   verifyAndApproveCampRegistrationAction,
@@ -71,11 +74,17 @@ export default function CampRegistrationsAdminPage() {
   const [viewDetailsReg, setViewDetailsReg] = useState<CampRegistration | null>(null);
   const [copiedUtr, setCopiedUtr] = useState(false);
 
+  // Prasadam & Delegate Pass View Modal State
+  const [viewPassReg, setViewPassReg] = useState<any | null>(null);
+
+  // QR Scanner Modal State
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+
   // Full Screenshot Modal State
   const [previewScreenshotUrl, setPreviewScreenshotUrl] = useState<string | null>(null);
 
-  // Top View Switcher: 'registrations' vs 'refunds'
-  const [activeView, setActiveView] = useState<'registrations' | 'refunds'>('registrations');
+  // Top View Switcher: 'registrations' vs 'refunds' vs 'prasadam'
+  const [activeView, setActiveView] = useState<'registrations' | 'refunds' | 'prasadam'>('registrations');
   const [refundRequests, setRefundRequests] = useState<CampRefundRequest[]>([]);
   const [loadingRefunds, setLoadingRefunds] = useState(false);
 
@@ -515,6 +524,14 @@ export default function CampRegistrationsAdminPage() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
+              onClick={() => setIsQrScannerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
+            >
+              <QrCode className="w-4 h-4 text-amber-400" />
+              <span>Scan Pass</span>
+            </button>
+            <button
               onClick={handleExportExcel}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
@@ -555,6 +572,19 @@ export default function CampRegistrationsAdminPage() {
                 {pendingRefundsCount} Pending
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('prasadam')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              activeView === 'prasadam'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Utensils className="w-4 h-4" />
+            <span>Prasadam Logs & Kitchen Tally</span>
           </button>
         </div>
 
@@ -730,6 +760,22 @@ export default function CampRegistrationsAdminPage() {
                         <td className="py-3 px-4">
                           <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                             <span>{reg.participant_name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setViewPassReg({
+                                ...reg,
+                                camp_title: camp?.title,
+                                camp_venue: camp?.venue,
+                                camp_start_date: camp?.start_date,
+                                camp_end_date: camp?.end_date,
+                                camp_meal_pricing: camp?.meal_pricing
+                              })}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[9px] font-bold transition-colors cursor-pointer shadow-2xs"
+                              title="View & Print Prasadam Pass with Meal Matrix and QR Code"
+                            >
+                              <Ticket className="w-2.5 h-2.5 text-amber-700" />
+                              <span>Pass &amp; QR</span>
+                            </button>
                             {reg.is_cancelled && (
                               <span
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
@@ -1375,6 +1421,19 @@ export default function CampRegistrationsAdminPage() {
           </div>
         )}
       </div>
+    )}
+
+    {/* VIEW 3: PRASADAM LOGS & KITCHEN TALLY */}
+    {activeView === 'prasadam' && (
+      <CampPrasadamTab
+        campId={campId}
+        camp={camp}
+        onOpenScanner={() => setIsQrScannerOpen(true)}
+        onViewPass={(regId) => {
+          const found = registrations.find(r => r.id === regId);
+          if (found) setViewPassReg(found);
+        }}
+      />
     )}
   </div>
 
@@ -2023,6 +2082,25 @@ export default function CampRegistrationsAdminPage() {
           </div>
         </div>
       )}
+
+      {/* PRASADAM & DELEGATE PASS MODAL */}
+      {viewPassReg && (
+        <CampPrasadamCard
+          registration={viewPassReg}
+          onClose={() => setViewPassReg(null)}
+        />
+      )}
+
+      {/* PASS QR SCANNER MODAL */}
+      <AdminCampQrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => {
+          setIsQrScannerOpen(false);
+          loadData(); // Refresh list to reflect check-ins
+        }}
+        defaultCampId={campId}
+        defaultCampTitle={camp?.title}
+      />
     </div>
   );
 }

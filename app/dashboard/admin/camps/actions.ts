@@ -2,7 +2,8 @@
 
 import { query } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
-import { Camp, CampRegistration, CampRefundRequest, CampAuditTransaction } from '@/types';
+import { Camp, CampRegistration, CampRefundRequest, CampAuditTransaction, CampAdminAllocation } from '@/types';
+import { buildMealMatrix, sortMealDays, parseMealDayToIso } from '@/lib/camp-cost';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -27,33 +28,67 @@ async function verifyAdminAuth() {
   const isSuperAdmin = roles.includes(8) || (Array.isArray(role) && role.includes('super_admin' as any));
   const isHigherAdmin = isSuperAdmin || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 30].includes(r));
 
-  if (!isHigherAdmin) {
-    throw new Error('Forbidden: Super Admin or Camp Admin privileges required');
+  // Check assigned camp allocations
+  const allocRes = await query(
+    'SELECT camp_id, permission_type FROM camp_admin_allocations WHERE user_id = $1',
+    [user.id]
+  );
+  const campAllocations = allocRes.rows as { camp_id: string; permission_type: 'attendance' | 'refunds' | 'both' }[];
+
+  if (!isHigherAdmin && campAllocations.length === 0) {
+    throw new Error('Forbidden: Super Admin or Camp Coordinator privileges required');
   }
 
-  return { user, isSuperAdmin };
+  return { user, isSuperAdmin, campAllocations };
 }
 
 /**
  * Get all camps with summary stats (total registrations count, total revenue)
+ * Super Admins see all camps; assigned coordinators see only their allocated camps.
  */
 export async function getCampsAction() {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
 
-    const sql = `
+    let sql = `
       SELECT 
         c.*,
         COUNT(r.id)::int AS registration_count,
         COALESCE(SUM(r.total_cost), 0)::numeric AS total_revenue
       FROM camps c
       LEFT JOIN camp_registrations r ON r.camp_id = c.id
+    `;
+
+    const params: any[] = [];
+    if (!isSuperAdmin) {
+      if (campAllocations.length === 0) {
+        return { success: true, camps: [] };
+      }
+      const allowedCampIds = campAllocations.map(a => a.camp_id);
+      sql += ` WHERE c.id = ANY($1::uuid[]) `;
+      params.push(allowedCampIds);
+    }
+
+    sql += `
       GROUP BY c.id
       ORDER BY c.created_at DESC
     `;
 
-    const res = await query(sql);
-    return { success: true, camps: res.rows as (Camp & { registration_count: number; total_revenue: number })[] };
+    const res = await query(sql, params);
+
+    // Attach user permission to each camp
+    const campsWithPermissions = res.rows.map((camp: any) => {
+      if (isSuperAdmin) {
+        return { ...camp, user_permission: 'both' };
+      }
+      const alloc = campAllocations.find(a => a.camp_id === camp.id);
+      return {
+        ...camp,
+        user_permission: alloc ? alloc.permission_type : 'attendance'
+      };
+    });
+
+    return { success: true, camps: campsWithPermissions as (Camp & { registration_count: number; total_revenue: number; user_permission?: string })[] };
   } catch (error: any) {
     console.error('getCampsAction error:', error);
     return { success: false, error: error.message };
@@ -263,26 +298,48 @@ export async function getCampRegistrationsAction(campId: string, searchTerm?: st
   try {
     await verifyAdminAuth();
 
-    let sql = 'SELECT * FROM camp_registrations WHERE camp_id = $1';
+    let sql = `
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+        WHERE camp_id = $1
+      )
+      SELECT 
+        r.*, 
+        cs.serial_no,
+        u.current_center AS user_current_center,
+        u.center AS user_center,
+        u.other_center AS user_other_center,
+        u.hierarchy AS user_hierarchy
+      FROM camp_registrations r
+      JOIN camp_serials cs ON cs.id = r.id
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, hierarchy
+        FROM users
+        WHERE LOWER(email) = LOWER(r.email) AND email <> ''
+        LIMIT 1
+      ) u ON TRUE
+      WHERE r.camp_id = $1
+    `;
     const params: any[] = [campId];
 
     if (searchTerm && searchTerm.trim()) {
       params.push(`%${searchTerm.trim()}%`);
       sql += ` AND (
-        participant_name ILIKE $2 OR
-        whatsapp ILIKE $2 OR
-        email ILIKE $2 OR
-        poc_name ILIKE $2 OR
-        voice_name ILIKE $2 OR
-        parent_temple ILIKE $2 OR
-        counselor_name ILIKE $2
+        r.participant_name ILIKE $2 OR
+        r.whatsapp ILIKE $2 OR
+        r.email ILIKE $2 OR
+        r.poc_name ILIKE $2 OR
+        r.voice_name ILIKE $2 OR
+        r.parent_temple ILIKE $2 OR
+        r.counselor_name ILIKE $2
       )`;
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY r.created_at DESC';
 
     const res = await query(sql, params);
-    return { success: true, registrations: res.rows as CampRegistration[] };
+    return { success: true, registrations: res.rows as (CampRegistration & { serial_no?: number })[] };
   } catch (error: any) {
     console.error('getCampRegistrationsAction error:', error);
     return { success: false, error: error.message };
@@ -1066,28 +1123,61 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
     }
 
     const sql = `
-      SELECT 
-        r.*,
-        c.title AS camp_title,
-        c.slug AS camp_slug,
-        c.venue AS camp_venue,
-        c.start_date AS camp_start_date,
-        c.end_date AS camp_end_date,
-        c.refund_config AS camp_refund_config
-      FROM camp_registrations r
-      JOIN camps c ON c.id = r.camp_id
-      WHERE (
-        ($1 <> '' AND LOWER(r.email) = $1) OR
-        ($2 <> '' AND (
-          r.poc_contact LIKE '%' || $2 || '%' OR 
-          r.whatsapp LIKE '%' || $2 || '%'
-        ))
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+      ),
+      unique_regs AS (
+        SELECT DISTINCT ON (r.id)
+          r.*,
+          cs.serial_no,
+          c.title AS camp_title,
+          c.slug AS camp_slug,
+          c.venue AS camp_venue,
+          c.start_date AS camp_start_date,
+          c.end_date AS camp_end_date,
+          c.refund_config AS camp_refund_config,
+          c.meal_pricing AS camp_meal_pricing,
+          c.tracks AS camp_tracks,
+          u.current_center AS user_current_center,
+          u.center AS user_center,
+          u.other_center AS user_other_center,
+          u.hierarchy AS user_hierarchy
+        FROM camp_registrations r
+        JOIN camp_serials cs ON cs.id = r.id
+        JOIN camps c ON c.id = r.camp_id
+        LEFT JOIN LATERAL (
+          SELECT current_center, center, other_center, hierarchy
+          FROM users
+          WHERE (r.email <> '' AND LOWER(email) = LOWER(r.email))
+             OR ($1 <> '' AND LOWER(email) = $1)
+             OR ($2 <> '' AND phone IS NOT NULL AND phone <> '' AND (RIGHT(phone, 10) = RIGHT(r.whatsapp, 10) OR RIGHT(phone, 10) = $2))
+          LIMIT 1
+        ) u ON TRUE
+        WHERE (
+          ($1 <> '' AND LOWER(r.email) = $1) OR
+          ($2 <> '' AND (
+            r.poc_contact LIKE '%' || $2 || '%' OR 
+            r.whatsapp LIKE '%' || $2 || '%'
+          ))
+        )
       )
-      ORDER BY r.created_at DESC
+      SELECT * FROM unique_regs
+      ORDER BY created_at DESC
     `;
 
     const res = await query(sql, [cleanEmail, cleanPhone ? cleanPhone.slice(-10) : '']);
-    const registrations = res.rows as (CampRegistration & { camp_title: string; camp_slug: string; camp_venue: string; camp_start_date: string; camp_end_date: string; camp_refund_config?: any })[];
+    const registrations = res.rows as (CampRegistration & {
+      serial_no?: number;
+      camp_title: string;
+      camp_slug: string;
+      camp_venue: string;
+      camp_start_date: string;
+      camp_end_date: string;
+      camp_refund_config?: any;
+      camp_meal_pricing?: any[];
+      camp_tracks?: any[];
+    })[];
 
     let refundRequests: CampRefundRequest[] = [];
     if (registrations.length > 0) {
@@ -1115,5 +1205,1699 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Public/Admin QR Verification: Fetch a camp registration and meal validity by registration ID
+ */
+export async function verifyCampRegistrationAction(registrationId: string) {
+  try {
+    const cleanId = (registrationId || '').trim();
+    if (!cleanId) {
+      return { success: false, error: 'Invalid or missing registration ID.' };
+    }
+
+    const sql = `
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+      )
+      SELECT 
+        r.*,
+        cs.serial_no,
+        c.title AS camp_title,
+        c.slug AS camp_slug,
+        c.venue AS camp_venue,
+        c.start_date AS camp_start_date,
+        c.end_date AS camp_end_date,
+        c.meal_pricing AS camp_meal_pricing,
+        c.tracks AS camp_tracks,
+        c.status AS camp_status,
+        u.current_center AS user_current_center,
+        u.center AS user_center,
+        u.other_center AS user_other_center,
+        u.hierarchy AS user_hierarchy
+      FROM camp_registrations r
+      JOIN camp_serials cs ON cs.id = r.id
+      JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, hierarchy
+        FROM users
+        WHERE LOWER(email) = LOWER(r.email) AND email <> ''
+        LIMIT 1
+      ) u ON TRUE
+      WHERE r.id::text = $1
+    `;
+    const res = await query(sql, [cleanId]);
+    if (res.rows.length === 0) {
+      return { success: false, error: 'Registration pass not found or invalid QR code.' };
+    }
+
+    const registration = res.rows[0];
+
+    // Check for refund requests
+    const refundSql = `
+      SELECT * FROM camp_refund_requests 
+      WHERE registration_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+    const refundRes = await query(refundSql, [cleanId]);
+    const refund = refundRes.rows[0] || null;
+
+    return {
+      success: true,
+      registration,
+      refund,
+    };
+  } catch (error: any) {
+    console.error('verifyCampRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Gate Check-In & Meal Attendance punch for a devotee pass
+ */
+export async function checkInCampAttendeeAction(registrationId: string, mealKey?: string) {
+  try {
+    await verifyAdminAuth();
+    const cleanId = (registrationId || '').trim();
+    if (!cleanId) {
+      return { success: false, error: 'Registration ID required' };
+    }
+
+    if (mealKey) {
+      // Mark meal served in meals_served jsonb map
+      const sql = `
+        UPDATE camp_registrations
+        SET meals_served = jsonb_set(COALESCE(meals_served, '{}'::jsonb), ARRAY[$2], 'true'::jsonb),
+            checked_in = true,
+            checked_in_at = COALESCE(checked_in_at, NOW()),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `;
+      const res = await query(sql, [cleanId, mealKey]);
+      if (res.rows.length === 0) return { success: false, error: 'Registration not found' };
+      return { success: true, registration: res.rows[0], message: `Meal recorded: ${mealKey}` };
+    } else {
+      // Mark gate entry check-in
+      const sql = `
+        UPDATE camp_registrations
+        SET checked_in = true,
+            checked_in_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `;
+      const res = await query(sql, [cleanId]);
+      if (res.rows.length === 0) return { success: false, error: 'Registration not found' };
+      return { success: true, registration: res.rows[0], message: 'Attendee check-in recorded!' };
+    }
+  } catch (error: any) {
+    console.error('checkInCampAttendeeAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Search users to allocate as staff (Super Admin only)
+ */
+export async function searchUsersForStaffAction(searchTerm: string) {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required');
+    }
+
+    const term = `%${(searchTerm || '').trim()}%`;
+    const sql = `
+      SELECT id, name, email, phone, current_center, role
+      FROM users
+      WHERE name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1
+      ORDER BY name ASC
+      LIMIT 20
+    `;
+    const res = await query(sql, [term]);
+    return { success: true, users: res.rows };
+  } catch (error: any) {
+    console.error('searchUsersForStaffAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Fetch staff allocations for camps (Super Admin only)
+ */
+export async function getCampAllocationsAction(campId?: string) {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required');
+    }
+
+    let sql = `
+      SELECT 
+        a.*,
+        u.name AS user_name,
+        u.email AS user_email,
+        u.phone AS user_phone,
+        c.title AS camp_title
+      FROM camp_admin_allocations a
+      JOIN users u ON u.id = a.user_id
+      JOIN camps c ON c.id = a.camp_id
+    `;
+    const params: any[] = [];
+    if (campId) {
+      sql += ' WHERE a.camp_id = $1 ';
+      params.push(campId);
+    }
+    sql += ' ORDER BY a.created_at DESC ';
+
+    const res = await query(sql, params);
+    return { success: true, allocations: res.rows as CampAdminAllocation[] };
+  } catch (error: any) {
+    console.error('getCampAllocationsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Assign staff member to a camp with granular permissions (Super Admin only)
+ */
+export async function assignCampStaffAction(data: {
+  userId: string;
+  campId: string;
+  permissionType: 'attendance' | 'refunds' | 'both' | 'scan_pass';
+  notes?: string;
+}) {
+  try {
+    const { user, isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to assign staff');
+    }
+
+    const sql = `
+      INSERT INTO camp_admin_allocations (user_id, camp_id, permission_type, assigned_by, notes)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (user_id, camp_id)
+      DO UPDATE SET 
+        permission_type = EXCLUDED.permission_type,
+        notes = EXCLUDED.notes,
+        assigned_by = EXCLUDED.assigned_by,
+        updated_at = NOW()
+      RETURNING *
+    `;
+    const res = await query(sql, [
+      data.userId,
+      data.campId,
+      data.permissionType,
+      user.id,
+      data.notes || null,
+    ]);
+
+    revalidatePath('/dashboard/admin/camps');
+    return { success: true, allocation: res.rows[0] };
+  } catch (error: any) {
+    console.error('assignCampStaffAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Revoke staff member allocation from a camp (Super Admin only)
+ */
+export async function revokeCampStaffAction(allocationId: string) {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to revoke staff');
+    }
+
+    await query('DELETE FROM camp_admin_allocations WHERE id = $1', [allocationId]);
+    revalidatePath('/dashboard/admin/camps');
+    return { success: true };
+  } catch (error: any) {
+    console.error('revokeCampStaffAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get allocated camps for the currently logged-in user (Super Admin gets all active camps)
+ */
+export async function getUserAllocatedCampsAction() {
+  try {
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+
+    if (isSuperAdmin) {
+      const res = await query('SELECT * FROM camps WHERE status IN (\'active\', \'completed\', \'closed\') ORDER BY created_at DESC');
+      const camps = res.rows.map(c => ({ ...c, user_role: 'super_admin' }));
+      return { success: true, camps, isSuperAdmin: true };
+    }
+
+    if (campAllocations.length === 0) {
+      return { success: true, camps: [], isSuperAdmin: false };
+    }
+
+    const campIds = campAllocations.map(a => a.camp_id);
+    const sql = 'SELECT * FROM camps WHERE id = ANY($1::uuid[]) ORDER BY start_date DESC';
+    const res = await query(sql, [campIds]);
+
+    const campsWithRole = res.rows.map(camp => {
+      const alloc = campAllocations.find(a => a.camp_id === camp.id);
+      return {
+        ...camp,
+        user_role: alloc ? alloc.permission_type : 'scan_pass'
+      };
+    });
+
+    return { success: true, camps: campsWithRole, isSuperAdmin: false };
+  } catch (error: any) {
+    console.error('getUserAllocatedCampsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Real-time Scanner Action:
+ * Verifies scanned pass for specific Camp, Date, and Meal, preventing duplicates and automatically punching meal!
+ */
+export async function verifyAndPunchMealPassAction(data: {
+  rawPassInput: string;
+  campId: string;
+  mealDate: string;
+  mealName: string;
+}) {
+  try {
+    await verifyAdminAuth();
+
+    let cleanId = (data.rawPassInput || '').trim();
+    if (!cleanId) {
+      return { success: false, status: 'EMPTY_INPUT', message: 'No QR code or registration ID provided.' };
+    }
+
+    // 1. Extract standard UUID if present anywhere in the string (e.g. from ?id=UUID or /verify-pass?id=UUID)
+    const uuidMatch = cleanId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuidMatch) {
+      cleanId = uuidMatch[0].toLowerCase();
+    } else {
+      // Extract from URL query parameter or path if not a raw UUID
+      try {
+        if (cleanId.includes('?')) {
+          const parsedUrl = new URL(cleanId.startsWith('http') ? cleanId : `https://example.com/${cleanId}`);
+          const idParam = parsedUrl.searchParams.get('id');
+          if (idParam) cleanId = idParam.trim();
+        } else if (cleanId.startsWith('http') || cleanId.includes('/')) {
+          const parsedUrl = new URL(cleanId.startsWith('http') ? cleanId : `https://example.com/${cleanId}`);
+          const parts = parsedUrl.pathname.split('/').filter(Boolean);
+          const lastPart = parts[parts.length - 1];
+          if (lastPart) cleanId = lastPart.trim();
+        }
+      } catch {
+        // not a url
+      }
+    }
+
+    const regSql = `
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+      )
+      SELECT 
+        r.*,
+        cs.serial_no,
+        c.title AS camp_title,
+        c.venue AS camp_venue,
+        c.start_date AS camp_start_date,
+        c.end_date AS camp_end_date,
+        c.meal_pricing AS camp_meal_pricing,
+        u.current_center AS user_current_center,
+        u.center AS user_center,
+        u.other_center AS user_other_center
+      FROM camp_registrations r
+      JOIN camp_serials cs ON cs.id = r.id
+      JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center
+        FROM users
+        WHERE LOWER(email) = LOWER(r.email) AND email <> ''
+        LIMIT 1
+      ) u ON TRUE
+      WHERE r.id::text = $1 OR r.whatsapp = $1 OR r.poc_contact = $1
+      LIMIT 1
+    `;
+    const regRes = await query(regSql, [cleanId]);
+    if (regRes.rows.length === 0) {
+      return {
+        success: false,
+        status: 'NOT_FOUND',
+        message: 'Pass not found. Verify the registration ID or QR code.'
+      };
+    }
+
+    const r = regRes.rows[0];
+
+    // Check Camp Match
+    if (data.campId && r.camp_id !== data.campId) {
+      return {
+        success: false,
+        status: 'WRONG_CAMP',
+        message: `Pass belongs to "${r.camp_title}", not the selected camp!`,
+        attendee: {
+          name: r.participant_name,
+          campTitle: r.camp_title,
+          token: r.serial_no || r.id?.slice(0, 5),
+        }
+      };
+    }
+
+    // Check Cancellation / Refund
+    const refundRes = await query(
+      'SELECT status FROM camp_refund_requests WHERE registration_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [r.id]
+    );
+    const refund = refundRes.rows[0];
+    if (r.is_cancelled || r.payment_status === 'refunded' || refund?.status === 'refunded') {
+      return {
+        success: false,
+        status: 'CANCELLED',
+        message: 'Pass is CANCELLED / REFUNDED. Meal cannot be served.',
+        attendee: {
+          name: r.participant_name,
+          track: r.camp_track,
+          token: r.serial_no || r.id?.slice(0, 5)
+        }
+      };
+    }
+
+    // Check Pending Payment
+    if (r.payment_status === 'pending') {
+      return {
+        success: false,
+        status: 'PENDING_PAYMENT',
+        message: 'Payment verification pending. Please verify at Accounts Desk.',
+        attendee: {
+          name: r.participant_name,
+          track: r.camp_track,
+          token: r.serial_no || r.id?.slice(0, 5)
+        }
+      };
+    }
+
+    // Evaluate Meal Eligibility in Matrix
+    const matrix = buildMealMatrix(
+      r.camp_meal_pricing || [],
+      r.first_meal_date,
+      r.first_meal_type,
+      r.last_meal_date,
+      r.last_meal_type,
+      r.camp_start_date,
+      r.camp_end_date
+    );
+
+    const inputDate = (data.mealDate || '').trim();
+    if (!inputDate) {
+      return {
+        success: false,
+        status: 'EMPTY_DATE',
+        message: 'No meal date was selected. Please select a valid Meal Date in the desk header.',
+      };
+    }
+
+    // Helper to format date key into friendly label (e.g. "30 - Oct")
+    const getFriendlyDateLabel = (dateKey: string) => {
+      const match = (r.camp_meal_pricing || []).find((m: any) => String(m.date) === String(dateKey) || m.full_date === String(dateKey));
+      if (match?.label) return match.label;
+      if (match?.full_date) {
+        const [y, m, d] = match.full_date.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      }
+      return dateKey;
+    };
+
+    const dayCol = matrix.find(col => 
+      col.date === inputDate || 
+      (col.full_date && col.full_date === inputDate) ||
+      (inputDate.includes('-') && (
+        col.date === inputDate.split('-')[2] || 
+        col.date === String(parseInt(inputDate.split('-')[2], 10))
+      )) ||
+      (col.date.includes('-') && (
+        inputDate === col.date.split('-')[2] ||
+        inputDate === String(parseInt(col.date.split('-')[2], 10))
+      ))
+    );
+    const normMeal = data.mealName.toLowerCase();
+    let isEligible = false;
+    if (dayCol) {
+      if (normMeal.startsWith('b')) isEligible = dayCol.breakfast;
+      else if (normMeal.startsWith('l')) isEligible = dayCol.lunch;
+      else if (normMeal.startsWith('d')) isEligible = dayCol.dinner;
+    }
+
+    if (!isEligible) {
+      return {
+        success: false,
+        status: 'NOT_ELIGIBLE',
+        message: `${data.mealName} on ${dayCol?.label || dayCol?.full_date || data.mealDate} is NOT included in this devotee's pass.`,
+        attendee: {
+          name: r.participant_name,
+          track: r.camp_track,
+          token: r.serial_no || r.id?.slice(0, 5),
+          firstMeal: `${getFriendlyDateLabel(r.first_meal_date)} (${r.first_meal_type})`,
+          lastMeal: `${getFriendlyDateLabel(r.last_meal_date)} (${r.last_meal_type})`
+        }
+      };
+    }
+
+    // Check Duplicate Scan (Already Served)
+    // Key uses canonical ISO date when available, but checks day number and raw formats too
+    const canonicalDate = dayCol?.full_date || dayCol?.date || data.mealDate;
+    const mealKey = `${canonicalDate}_${data.mealName}`;
+    const altMealKey = dayCol?.date ? `${dayCol.date}_${data.mealName}` : mealKey;
+    const rawMealKey = `${data.mealDate}_${data.mealName}`;
+    const alreadyServedTime = r.meals_served?.[mealKey] || r.meals_served?.[altMealKey] || r.meals_served?.[rawMealKey];
+    if (alreadyServedTime) {
+      let timeFormatted = 'earlier today';
+      try {
+        const d = new Date(alreadyServedTime);
+        if (!isNaN(d.getTime())) {
+          timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      } catch {
+        // ignore
+      }
+
+      return {
+        success: false,
+        status: 'ALREADY_SERVED',
+        message: `DUPLICATE SCAN! Already collected ${data.mealName} at ${timeFormatted}.`,
+        servedAt: timeFormatted,
+        attendee: {
+          name: r.participant_name,
+          track: r.camp_track,
+          token: r.serial_no || r.id?.slice(0, 5),
+          center: r.user_current_center || r.user_center || 'Central VOICE',
+          whatsapp: r.whatsapp || r.poc_contact
+        }
+      };
+    }
+
+    // Automatically Punch Meal and Record Entry in DB
+    const updateSql = `
+      UPDATE camp_registrations
+      SET meals_served = jsonb_set(
+            COALESCE(meals_served, '{}'::jsonb),
+            ARRAY[$2],
+            to_jsonb(NOW()::text)
+          ),
+          checked_in = true,
+          checked_in_at = COALESCE(checked_in_at, NOW()),
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING meals_served
+    `;
+    await query(updateSql, [r.id, mealKey]);
+
+    // Count Total Meals Served in this Session
+    const countSql = `
+      SELECT COUNT(*)::int AS count 
+      FROM camp_registrations 
+      WHERE camp_id = $1 AND (
+        (meals_served->$2) IS NOT NULL OR 
+        (meals_served->$3) IS NOT NULL OR 
+        (meals_served->$4) IS NOT NULL
+      )
+    `;
+    const countRes = await query(countSql, [r.camp_id, mealKey, altMealKey, rawMealKey]);
+    const devoteeCount = countRes.rows[0]?.count || 1;
+
+    let extraServed = 0;
+    try {
+      const extraServedRes = await query(`
+        SELECT COALESCE(extra_served_count, 0) as extra_served_count
+        FROM camp_kitchen_extra_meals
+        WHERE camp_id = $1 AND (meal_date = $2 OR meal_date = $3) AND meal_name = $4
+        LIMIT 1
+      `, [r.camp_id, data.mealDate, altMealKey.split('_')[0], data.mealName]);
+      extraServed = Number(extraServedRes.rows[0]?.extra_served_count) || 0;
+    } catch (e) {
+      // fallback
+    }
+    const totalServedCount = devoteeCount + extraServed;
+
+    return {
+      success: true,
+      status: 'ALLOWED',
+      message: `MEAL ALLOWED • ${data.mealName.toUpperCase()} PUNCHED`,
+      totalServed: totalServedCount,
+      devoteeServed: devoteeCount,
+      extraServed,
+      attendee: {
+        id: r.id,
+        name: r.participant_name,
+        track: r.camp_track,
+        token: r.serial_no || r.id?.slice(0, 5),
+        center: r.user_current_center || r.user_center || 'Central VOICE',
+        whatsapp: r.whatsapp || r.poc_contact,
+        accommodation: r.accommodation === 'Yes' ? 'Provided (Included)' : 'Day Scholar'
+      }
+    };
+  } catch (error: any) {
+    console.error('verifyAndPunchMealPassAction error:', error);
+    return { success: false, status: 'ERROR', message: error.message };
+  }
+}
+
+/**
+ * Helper to resolve Devotee Center and Temple with POC fallback:
+ * 1. Checks attendee's user profile (current_center, center, other_center, current_temple, parent_temple, other_temple).
+ * 2. If attendee's center/temple is None/blank (e.g. manually entered by another devotee), fallbacks to POC profile.
+ * 3. If 'Other' was selected, displays the user-typed value in other_center / other_temple.
+ * 4. Fallbacks to registration record voice_name / parent_temple.
+ */
+function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string } {
+  const resolveField = (cur: any, oth: any, def: any): string => {
+    const c = (cur || '').trim();
+    const o = (oth || '').trim();
+    const d = (def || '').trim();
+    if (c) {
+      if (c.toLowerCase() === 'other') return o ? o : 'Other';
+      if (c.toLowerCase() === 'none') return 'None';
+      return c;
+    }
+    if (d) {
+      if (d.toLowerCase() === 'other') return o ? o : 'Other';
+      if (d.toLowerCase() === 'none') return 'None';
+      return d;
+    }
+    return '';
+  };
+
+  // 1. Try Attendee profile
+  let center = resolveField(r.user_current_center, r.user_other_center, r.user_center);
+  let temple = resolveField(r.user_current_temple, r.user_other_temple, r.user_parent_temple);
+
+  // 2. If Attendee has no center or it's None/empty, fallback to POC's profile
+  if (!center || center === 'None') {
+    const pocCenter = resolveField(r.poc_current_center, r.poc_other_center, r.poc_center);
+    if (pocCenter && pocCenter !== 'None') {
+      center = pocCenter;
+    }
+  }
+
+  // 3. If Attendee has no temple or it's None/empty, fallback to POC's profile
+  if (!temple || temple === 'None') {
+    const pocTemple = resolveField(r.poc_current_temple, r.poc_other_temple, r.poc_parent_temple);
+    if (pocTemple && pocTemple !== 'None') {
+      temple = pocTemple;
+    }
+  }
+
+  // 4. Fallback to registration record fields
+  if (!center || center === 'None') {
+    const regVoice = (r.voice_name || r.center || '').trim();
+    if (regVoice && regVoice.toLowerCase() !== 'none') {
+      center = regVoice.toLowerCase() === 'other' ? (r.other_center || 'Other') : regVoice;
+    } else if (!center) {
+      center = 'None';
+    }
+  }
+
+  if (!temple || temple === 'None') {
+    const regTemple = (r.parent_temple || '').trim();
+    if (regTemple && regTemple.toLowerCase() !== 'none') {
+      temple = regTemple.toLowerCase() === 'other' ? (r.other_temple || 'Other') : regTemple;
+    } else if (!temple) {
+      temple = 'None';
+    }
+  }
+
+  return { center, temple };
+}
+
+/**
+ * 1. Fetch comprehensive Prasadam Logs, Kitchen Headcount Tally & Attendee Status for a single camp
+ */
+export async function getCampPrasadamLogsAction(campId: string) {
+  try {
+    await verifyAdminAuth();
+
+    // Camp details
+    const campRes = await query(`
+      SELECT id, title, start_date, end_date, meal_pricing, tracks, venue
+      FROM camps
+      WHERE id = $1
+    `, [campId]);
+
+    if (campRes.rows.length === 0) {
+      return { success: false, error: 'Camp not found' };
+    }
+    const camp = campRes.rows[0];
+
+    // Registrations with attendee user AND POC user joins
+    const regSql = `
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+      )
+      SELECT 
+        r.id,
+        cs.serial_no,
+        r.participant_name,
+        r.whatsapp,
+        r.email,
+        r.camp_track,
+        r.first_meal_date,
+        r.first_meal_type,
+        r.last_meal_date,
+        r.last_meal_type,
+        r.meals_served,
+        r.parent_temple,
+        r.voice_name,
+        r.poc_name,
+        r.poc_contact,
+        r.is_cancelled,
+        u.current_center AS user_current_center,
+        u.center AS user_center,
+        u.other_center AS user_other_center,
+        u.current_temple AS user_current_temple,
+        u.other_temple AS user_other_temple,
+        u.parent_temple AS user_parent_temple,
+        poc_u.current_center AS poc_current_center,
+        poc_u.center AS poc_center,
+        poc_u.other_center AS poc_other_center,
+        poc_u.current_temple AS poc_current_temple,
+        poc_u.other_temple AS poc_other_temple,
+        poc_u.parent_temple AS poc_parent_temple
+      FROM camp_registrations r
+      JOIN camp_serials cs ON cs.id = r.id
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, current_temple, other_temple, parent_temple
+        FROM users
+        WHERE (
+          (r.email IS NOT NULL AND r.email <> '' AND LOWER(email) = LOWER(r.email))
+          OR (r.whatsapp IS NOT NULL AND r.whatsapp <> '' AND phone = r.whatsapp)
+        )
+        LIMIT 1
+      ) u ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, current_temple, other_temple, parent_temple
+        FROM users
+        WHERE (
+          (r.poc_contact IS NOT NULL AND r.poc_contact <> '' AND phone = r.poc_contact)
+        )
+        LIMIT 1
+      ) poc_u ON TRUE
+      WHERE r.camp_id = $1 AND COALESCE(r.is_cancelled, false) = false
+      ORDER BY cs.serial_no ASC
+    `;
+    const regRes = await query(regSql, [campId]);
+    const registrations = regRes.rows;
+
+    // Extra / Guest meals for kitchen
+    const extraRes = await query(`
+      SELECT meal_date, meal_name, extra_count, COALESCE(extra_served_count, 0) as extra_served_count, notes, added_by_name, updated_at
+      FROM camp_kitchen_extra_meals
+      WHERE camp_id = $1
+    `, [campId]);
+    const extrasMap = new Map<string, any>();
+    extraRes.rows.forEach((e: any) => {
+      const dStr = e.meal_date instanceof Date ? e.meal_date.toISOString().split('T')[0] : String(e.meal_date);
+      extrasMap.set(`${dStr}_${e.meal_name}`, e);
+      extrasMap.set(`${e.meal_date}_${e.meal_name}`, e);
+      const rawD = dStr.split('-').pop() || dStr;
+      extrasMap.set(`${rawD}_${e.meal_name}`, e);
+    });
+
+    const mealPricing = camp.meal_pricing || [];
+    const sortedPricing = sortMealDays(mealPricing, camp.start_date);
+
+    // Build unique schedule dates and kitchen tally
+    const kitchenTally: any[] = [];
+    const attendeeLogs: any[] = [];
+    const devotees: any[] = [];
+    const tracksSet = new Set<string>();
+    const centersSet = new Set<string>();
+    const templesSet = new Set<string>();
+    const datesSet = new Set<string>();
+
+    const centerAggMap = new Map<string, { totalDevotees: number; totalTaken: number; totalExpected: number }>();
+    const templeAggMap = new Map<string, { totalDevotees: number; totalTaken: number; totalExpected: number }>();
+
+    // Cache matrix for each registration
+    const regMatrices = new Map<string, any[]>();
+    registrations.forEach((r: any) => {
+      const m = buildMealMatrix(
+        sortedPricing,
+        r.first_meal_date,
+        r.first_meal_type,
+        r.last_meal_date,
+        r.last_meal_type,
+        camp.start_date,
+        camp.end_date
+      );
+      regMatrices.set(r.id, m);
+
+      if (r.camp_track) tracksSet.add(r.camp_track);
+
+      // Resolve center and temple with POC fallback
+      const { center, temple } = resolveDevoteeCenterAndTemple(r);
+      r._resolvedCenter = center;
+      r._resolvedTemple = temple;
+      centersSet.add(center);
+      templesSet.add(temple);
+
+      // Initialize Aggregations
+      if (!centerAggMap.has(center)) {
+        centerAggMap.set(center, { totalDevotees: 0, totalTaken: 0, totalExpected: 0 });
+      }
+      centerAggMap.get(center)!.totalDevotees++;
+
+      if (!templeAggMap.has(temple)) {
+        templeAggMap.set(temple, { totalDevotees: 0, totalTaken: 0, totalExpected: 0 });
+      }
+      templeAggMap.get(temple)!.totalDevotees++;
+    });
+
+    // 1. Build Kitchen Tally per meal session
+    sortedPricing.forEach((day: any) => {
+      let dateKey = day.full_date;
+      if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        dateKey = parseMealDayToIso(day, camp.start_date) || String(day.date);
+      }
+      const rawDate = String(day.date);
+      const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
+      datesSet.add(dateKey);
+
+      (['Breakfast', 'Lunch', 'Dinner'] as const).forEach((mealName) => {
+        let scheduledCount = 0;
+        let takenCount = 0;
+
+        registrations.forEach((r: any) => {
+          const matrix = regMatrices.get(r.id) || [];
+          const col = matrix.find((c: any) =>
+            c.full_date === dateKey ||
+            c.date === rawDate ||
+            (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
+          );
+          if (!col) return;
+
+          let isEligible = false;
+          if (mealName === 'Breakfast') isEligible = col.breakfast;
+          else if (mealName === 'Lunch') isEligible = col.lunch;
+          else if (mealName === 'Dinner') isEligible = col.dinner;
+
+          if (isEligible) {
+            scheduledCount++;
+            const mealKey = `${dateKey}_${mealName}`;
+            const altKey = `${rawDate}_${mealName}`;
+            const servedTime = r.meals_served?.[mealKey] || r.meals_served?.[altKey];
+            if (servedTime) {
+              takenCount++;
+            }
+
+            // Flat log for Excel export and granular tracking
+            attendeeLogs.push({
+              regId: r.id,
+              token: r.serial_no,
+              name: r.participant_name,
+              phone: r.whatsapp || r.poc_contact || '',
+              track: r.camp_track || 'General Track',
+              center: r._resolvedCenter,
+              temple: r._resolvedTemple,
+              date: dateKey,
+              rawDate,
+              dateLabel,
+              meal: mealName,
+              status: servedTime ? 'TAKEN' : 'NOT_TAKEN',
+              servedAt: servedTime || null,
+            });
+          }
+        });
+
+        const extraKey = `${dateKey}_${mealName}`;
+        const altExtraKey = `${rawDate}_${mealName}`;
+        const extraRec = extrasMap.get(extraKey) || extrasMap.get(altExtraKey);
+        const extraCount = Number(extraRec?.extra_count) || 0;
+        const extraServedCount = Number(extraRec?.extra_served_count) || 0;
+
+        kitchenTally.push({
+          date: dateKey,
+          rawDate,
+          dateLabel,
+          meal: mealName,
+          scheduledCount,
+          takenCount,
+          notTakenCount: Math.max(0, scheduledCount - takenCount),
+          extraCount,
+          extraServedCount,
+          totalHonored: takenCount + extraServedCount,
+          totalKitchenTarget: scheduledCount + extraCount,
+          totalServedSoFar: takenCount + extraServedCount,
+          notes: extraRec?.notes || '',
+          updatedAt: extraRec?.updated_at || null,
+          addedBy: extraRec?.added_by_name || null,
+        });
+      });
+    });
+
+    // 2. Build Devotee Matrix (1 row per devotee with BF / LN / DN columns per day)
+    registrations.forEach((r: any) => {
+      const mealsServedMap = r.meals_served || {};
+      let devEligible = 0;
+      let devTaken = 0;
+
+      const dateMatrix = sortedPricing.map((day: any) => {
+        let dateKey = day.full_date;
+        if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          dateKey = parseMealDayToIso(day, camp.start_date) || String(day.date);
+        }
+        const rawDate = String(day.date);
+        const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
+
+        const matrix = regMatrices.get(r.id) || [];
+        const col = matrix.find((c: any) =>
+          c.full_date === dateKey ||
+          c.date === rawDate ||
+          (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
+        );
+
+        const bfEligible = !!col?.breakfast;
+        const lnEligible = !!col?.lunch;
+        const dnEligible = !!col?.dinner;
+
+        const bfPunch = mealsServedMap[`${dateKey}_Breakfast`] || mealsServedMap[`${rawDate}_Breakfast`] || null;
+        const lnPunch = mealsServedMap[`${dateKey}_Lunch`] || mealsServedMap[`${rawDate}_Lunch`] || null;
+        const dnPunch = mealsServedMap[`${dateKey}_Dinner`] || mealsServedMap[`${rawDate}_Dinner`] || null;
+
+        if (bfEligible) {
+          devEligible++;
+          if (bfPunch) devTaken++;
+        }
+        if (lnEligible) {
+          devEligible++;
+          if (lnPunch) devTaken++;
+        }
+        if (dnEligible) {
+          devEligible++;
+          if (dnPunch) devTaken++;
+        }
+
+        return {
+          date: dateKey,
+          rawDate,
+          dateLabel,
+          breakfast: {
+            eligible: bfEligible,
+            punched: !!bfPunch,
+            punchedAt: bfPunch,
+          },
+          lunch: {
+            eligible: lnEligible,
+            punched: !!lnPunch,
+            punchedAt: lnPunch,
+          },
+          dinner: {
+            eligible: dnEligible,
+            punched: !!dnPunch,
+            punchedAt: dnPunch,
+          }
+        };
+      });
+
+      // Update Center & Temple Aggregates
+      const centerAgg = centerAggMap.get(r._resolvedCenter);
+      if (centerAgg) {
+        centerAgg.totalExpected += devEligible;
+        centerAgg.totalTaken += devTaken;
+      }
+      const templeAgg = templeAggMap.get(r._resolvedTemple);
+      if (templeAgg) {
+        templeAgg.totalExpected += devEligible;
+        templeAgg.totalTaken += devTaken;
+      }
+
+      devotees.push({
+        regId: r.id,
+        token: r.serial_no,
+        name: r.participant_name,
+        phone: r.whatsapp || r.poc_contact || '',
+        track: r.camp_track || 'General Track',
+        center: r._resolvedCenter,
+        temple: r._resolvedTemple,
+        pocName: r.poc_name,
+        pocContact: r.poc_contact,
+        firstMeal: `${r.first_meal_date} (${r.first_meal_type})`,
+        lastMeal: `${r.last_meal_date} (${r.last_meal_type})`,
+        eligibleCount: devEligible,
+        takenCount: devTaken,
+        dateMatrix,
+      });
+    });
+
+    const totalScheduled = kitchenTally.reduce((sum, k) => sum + k.scheduledCount, 0);
+    const totalTaken = kitchenTally.reduce((sum, k) => sum + k.takenCount, 0);
+    const totalExtraGuests = kitchenTally.reduce((sum, k) => sum + k.extraCount, 0);
+    const totalExtraServed = kitchenTally.reduce((sum, k) => sum + (k.extraServedCount || 0), 0);
+    const totalPlatesHonored = totalTaken + totalExtraServed;
+
+    const centerSummary = Array.from(centerAggMap.entries()).map(([center, val]) => ({
+      center,
+      ...val,
+      clearancePercent: val.totalExpected > 0 ? Math.round((val.totalTaken / val.totalExpected) * 100) : 0,
+    })).sort((a, b) => b.totalDevotees - a.totalDevotees);
+
+    const templeSummary = Array.from(templeAggMap.entries()).map(([temple, val]) => ({
+      temple,
+      ...val,
+      clearancePercent: val.totalExpected > 0 ? Math.round((val.totalTaken / val.totalExpected) * 100) : 0,
+    })).sort((a, b) => b.totalDevotees - a.totalDevotees);
+
+    return {
+      success: true,
+      camp: {
+        id: camp.id,
+        title: camp.title,
+        venue: camp.venue,
+        startDate: camp.start_date,
+        endDate: camp.end_date,
+      },
+      stats: {
+        totalScheduled,
+        totalTaken,
+        totalPending: Math.max(0, totalScheduled - totalTaken),
+        totalExtraGuests,
+        totalExtraServed,
+        totalPlatesHonored,
+        totalKitchenTarget: totalScheduled + totalExtraGuests,
+        clearancePercent: totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : 0,
+      },
+      kitchenTally,
+      attendeeLogs,
+      devotees,
+      centerSummary,
+      templeSummary,
+      filterOptions: {
+        dates: Array.from(datesSet).map((d) => {
+          const m = sortedPricing.find((p: any) => p.full_date === d || String(p.date) === d);
+          return { date: d, label: m?.label || d };
+        }),
+        tracks: Array.from(tracksSet).sort(),
+        centers: Array.from(centersSet).sort(),
+        temples: Array.from(templesSet).sort(),
+      },
+    };
+  } catch (error: any) {
+    console.error('getCampPrasadamLogsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 2. Save Extra / Guest Meals for Kitchen Headcount Tally
+ */
+export async function saveCampKitchenExtraMealsAction(data: {
+  campId: string;
+  mealDate: string;
+  mealName: string;
+  extraCount: number;
+  extraServedCount?: number;
+  notes?: string;
+}) {
+  try {
+    const { user } = await verifyAdminAuth();
+    let adminName = (user as any)?.name || user?.user_metadata?.name || 'Camp Admin';
+    if (user?.id) {
+      try {
+        const uRes = await query('SELECT name FROM users WHERE id = $1', [user.id]);
+        if (uRes.rows[0]?.name) {
+          adminName = uRes.rows[0].name;
+        }
+      } catch (e) {
+        // fallback to adminName
+      }
+    }
+
+    if (data.extraServedCount !== undefined) {
+      await query(`
+        INSERT INTO camp_kitchen_extra_meals (
+          camp_id, meal_date, meal_name, extra_count, extra_served_count, notes, added_by_name, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        ON CONFLICT (camp_id, meal_date, meal_name)
+        DO UPDATE SET
+          extra_count = EXCLUDED.extra_count,
+          extra_served_count = EXCLUDED.extra_served_count,
+          notes = EXCLUDED.notes,
+          added_by_name = EXCLUDED.added_by_name,
+          updated_at = NOW()
+      `, [
+        data.campId,
+        data.mealDate,
+        data.mealName,
+        Math.max(0, Number(data.extraCount) || 0),
+        Math.max(0, Number(data.extraServedCount) || 0),
+        data.notes || '',
+        adminName,
+      ]);
+    } else {
+      await query(`
+        INSERT INTO camp_kitchen_extra_meals (
+          camp_id, meal_date, meal_name, extra_count, notes, added_by_name, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        ON CONFLICT (camp_id, meal_date, meal_name)
+        DO UPDATE SET
+          extra_count = EXCLUDED.extra_count,
+          notes = EXCLUDED.notes,
+          added_by_name = EXCLUDED.added_by_name,
+          updated_at = NOW()
+      `, [
+        data.campId,
+        data.mealDate,
+        data.mealName,
+        Math.max(0, Number(data.extraCount) || 0),
+        data.notes || '',
+        adminName,
+      ]);
+    }
+
+    revalidatePath(`/dashboard/admin/camps/${data.campId}/registrations`);
+    revalidatePath(`/dashboard/admin/camps`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('saveCampKitchenExtraMealsAction error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 2b. Record Extra Guest Meals Served Directly from Scanner (Without QR)
+ */
+export async function recordExtraGuestMealPunchAction(data: {
+  campId: string;
+  mealDate: string;
+  mealName: string;
+  increment?: number;
+  setExactCount?: number;
+  notes?: string;
+}) {
+  try {
+    const { user } = await verifyAdminAuth();
+    let adminName = (user as any)?.name || user?.user_metadata?.name || 'Gate Scanner Desk';
+    if (user?.id) {
+      try {
+        const uRes = await query('SELECT name FROM users WHERE id = $1', [user.id]);
+        if (uRes.rows[0]?.name) {
+          adminName = uRes.rows[0].name;
+        }
+      } catch (e) {}
+    }
+
+    const increment = Number(data.increment) || 0;
+    let extraServedCount = 0;
+    let extraCount = 0;
+
+    if (data.setExactCount !== undefined) {
+      const exactVal = Math.max(0, Number(data.setExactCount) || 0);
+      const res = await query(`
+        INSERT INTO camp_kitchen_extra_meals (
+          camp_id, meal_date, meal_name, extra_count, extra_served_count, notes, added_by_name, updated_at
+        ) VALUES (
+          $1, $2, $3, 0, $4, $5, $6, NOW()
+        )
+        ON CONFLICT (camp_id, meal_date, meal_name)
+        DO UPDATE SET
+          extra_served_count = $4,
+          notes = CASE WHEN $5 <> '' THEN $5 ELSE camp_kitchen_extra_meals.notes END,
+          updated_at = NOW()
+        RETURNING extra_count, extra_served_count
+      `, [
+        data.campId,
+        data.mealDate,
+        data.mealName,
+        exactVal,
+        data.notes || '',
+        adminName
+      ]);
+      extraServedCount = Number(res.rows[0]?.extra_served_count) || exactVal;
+      extraCount = Number(res.rows[0]?.extra_count) || 0;
+    } else {
+      const res = await query(`
+        INSERT INTO camp_kitchen_extra_meals (
+          camp_id, meal_date, meal_name, extra_count, extra_served_count, notes, added_by_name, updated_at
+        ) VALUES (
+          $1, $2, $3, 0, GREATEST(0, $4::int), $5, $6, NOW()
+        )
+        ON CONFLICT (camp_id, meal_date, meal_name)
+        DO UPDATE SET
+          extra_served_count = GREATEST(0, camp_kitchen_extra_meals.extra_served_count + $4::int),
+          notes = CASE WHEN $5 <> '' THEN $5 ELSE camp_kitchen_extra_meals.notes END,
+          updated_at = NOW()
+        RETURNING extra_count, extra_served_count
+      `, [
+        data.campId,
+        data.mealDate,
+        data.mealName,
+        increment,
+        data.notes || '',
+        adminName
+      ]);
+      extraServedCount = Number(res.rows[0]?.extra_served_count) || 0;
+      extraCount = Number(res.rows[0]?.extra_count) || 0;
+    }
+
+    // Calculate total devotees punched for this session
+    const mealKey = `${data.mealDate}_${data.mealName}`;
+    let altMealKey = mealKey;
+    if (data.mealDate.includes('-')) {
+      try {
+        const [y, m, d] = data.mealDate.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        altMealKey = `${dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}_${data.mealName}`;
+      } catch {}
+    }
+    const rawMealKey = `${data.mealDate.split('-').slice(1).join('-')}_${data.mealName}`;
+
+    const countSql = `
+      SELECT COUNT(*)::int AS count 
+      FROM camp_registrations 
+      WHERE camp_id = $1 
+        AND COALESCE(is_cancelled, false) = false
+        AND (
+          (meals_served->$2) IS NOT NULL OR 
+          (meals_served->$3) IS NOT NULL OR 
+          (meals_served->$4) IS NOT NULL
+        )
+    `;
+    const countRes = await query(countSql, [data.campId, mealKey, altMealKey, rawMealKey]);
+    const devoteeServedCount = countRes.rows[0]?.count || 0;
+
+    revalidatePath(`/dashboard/admin/camps/${data.campId}/registrations`);
+    revalidatePath(`/dashboard/admin/camps`);
+
+    return {
+      success: true,
+      extraServedCount,
+      extraCount,
+      devoteeServedCount,
+      totalServedCount: devoteeServedCount + extraServedCount,
+      message: increment > 0 
+        ? `Added +${increment} Extra Guest Plate(s) without QR.` 
+        : increment < 0 
+        ? `Reverted 1 Extra Guest Plate.` 
+        : `Updated Extra Guest count to ${extraServedCount}.`
+    };
+  } catch (err: any) {
+    console.error('recordExtraGuestMealPunchAction error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 2c. Get Live Session Meal Stats for Scanner Desk
+ */
+export async function getSessionMealStatsAction(data: {
+  campId: string;
+  mealDate: string;
+  mealName: string;
+}) {
+  try {
+    await verifyAdminAuth();
+    if (!data.campId || !data.mealDate || !data.mealName) {
+      return { success: false, error: 'Missing parameters' };
+    }
+
+    const extraRes = await query(`
+      SELECT extra_count, COALESCE(extra_served_count, 0) as extra_served_count, notes
+      FROM camp_kitchen_extra_meals
+      WHERE camp_id = $1 AND meal_date = $2 AND meal_name = $3
+      LIMIT 1
+    `, [data.campId, data.mealDate, data.mealName]);
+    const extraRec = extraRes.rows[0];
+    const extraServedCount = Number(extraRec?.extra_served_count) || 0;
+    const extraCount = Number(extraRec?.extra_count) || 0;
+
+    const mealKey = `${data.mealDate}_${data.mealName}`;
+    let altMealKey = mealKey;
+    if (data.mealDate.includes('-')) {
+      try {
+        const [y, m, d] = data.mealDate.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        altMealKey = `${dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}_${data.mealName}`;
+      } catch {}
+    }
+    const rawMealKey = `${data.mealDate.split('-').slice(1).join('-')}_${data.mealName}`;
+
+    const countSql = `
+      SELECT COUNT(*)::int AS count 
+      FROM camp_registrations 
+      WHERE camp_id = $1 
+        AND COALESCE(is_cancelled, false) = false
+        AND (
+          (meals_served->$2) IS NOT NULL OR 
+          (meals_served->$3) IS NOT NULL OR 
+          (meals_served->$4) IS NOT NULL
+        )
+    `;
+    const countRes = await query(countSql, [data.campId, mealKey, altMealKey, rawMealKey]);
+    const devoteeServedCount = countRes.rows[0]?.count || 0;
+
+    return {
+      success: true,
+      devoteeServedCount,
+      extraServedCount,
+      extraCount,
+      totalServedCount: devoteeServedCount + extraServedCount,
+      notes: extraRec?.notes || ''
+    };
+  } catch (err: any) {
+    console.error('getSessionMealStatsAction error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 3. Quick Manual Toggle Punch / Unpunch for a Devotee
+ */
+export async function toggleManualDevoteeMealPunchAction(
+  regId: string,
+  mealDate: string,
+  mealName: string,
+  shouldPunch: boolean
+) {
+  try {
+    await verifyAdminAuth();
+
+    const regRes = await query(`SELECT id, camp_id, meals_served FROM camp_registrations WHERE id = $1`, [regId]);
+    if (regRes.rows.length === 0) return { success: false, error: 'Registration not found' };
+
+    const reg = regRes.rows[0];
+    const mealsServed = { ...(reg.meals_served || {}) };
+    const key = `${mealDate}_${mealName}`;
+
+    if (shouldPunch) {
+      mealsServed[key] = new Date().toISOString();
+    } else {
+      delete mealsServed[key];
+    }
+
+    await query(
+      `UPDATE camp_registrations SET meals_served = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(mealsServed), regId]
+    );
+
+    revalidatePath(`/dashboard/admin/camps/${reg.camp_id}/registrations`);
+    return { success: true, mealsServed };
+  } catch (error: any) {
+    console.error('toggleManualDevoteeMealPunchAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 4. Super Admin Global Prasadam Audit across ALL camps
+ */
+export async function getGlobalPrasadamAuditAction() {
+  try {
+    await verifyAdminAuth();
+
+    // Fetch all camps
+    const campsRes = await query(`
+      SELECT id, title, start_date, end_date, meal_pricing, tracks, venue, status
+      FROM camps
+      ORDER BY created_at DESC
+    `);
+    const camps = campsRes.rows;
+
+    // Fetch all kitchen extra meals across camps
+    const extraRes = await query(`
+      SELECT camp_id, meal_date, meal_name, extra_count, COALESCE(extra_served_count, 0) as extra_served_count, notes, added_by_name, updated_at
+      FROM camp_kitchen_extra_meals
+    `);
+    const allExtras = extraRes.rows;
+    const extrasMap = new Map<string, any>();
+    allExtras.forEach((e: any) => {
+      const dStr = e.meal_date instanceof Date ? e.meal_date.toISOString().split('T')[0] : String(e.meal_date);
+      extrasMap.set(`${e.camp_id}_${dStr}_${e.meal_name}`, e);
+      extrasMap.set(`${e.camp_id}_${e.meal_date}_${e.meal_name}`, e);
+      const rawD = dStr.split('-').pop() || dStr;
+      extrasMap.set(`${e.camp_id}_${rawD}_${e.meal_name}`, e);
+    });
+
+    // Fetch all active registrations with attendee and POC user details
+    const regSql = `
+      WITH camp_serials AS (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
+        FROM camp_registrations
+      )
+      SELECT 
+        r.id,
+        r.camp_id,
+        cs.serial_no,
+        r.participant_name,
+        r.whatsapp,
+        r.email,
+        r.camp_track,
+        r.first_meal_date,
+        r.first_meal_type,
+        r.last_meal_date,
+        r.last_meal_type,
+        r.meals_served,
+        r.parent_temple,
+        r.voice_name,
+        r.poc_name,
+        r.poc_contact,
+        c.title AS camp_title,
+        u.current_center AS user_current_center,
+        u.center AS user_center,
+        u.other_center AS user_other_center,
+        u.current_temple AS user_current_temple,
+        u.other_temple AS user_other_temple,
+        u.parent_temple AS user_parent_temple,
+        poc_u.current_center AS poc_current_center,
+        poc_u.center AS poc_center,
+        poc_u.other_center AS poc_other_center,
+        poc_u.current_temple AS poc_current_temple,
+        poc_u.other_temple AS poc_other_temple,
+        poc_u.parent_temple AS poc_parent_temple
+      FROM camp_registrations r
+      JOIN camp_serials cs ON cs.id = r.id
+      JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, current_temple, other_temple, parent_temple
+        FROM users
+        WHERE (
+          (r.email IS NOT NULL AND r.email <> '' AND LOWER(email) = LOWER(r.email))
+          OR (r.whatsapp IS NOT NULL AND r.whatsapp <> '' AND phone = r.whatsapp)
+        )
+        LIMIT 1
+      ) u ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT current_center, center, other_center, current_temple, other_temple, parent_temple
+        FROM users
+        WHERE (
+          (r.poc_contact IS NOT NULL AND r.poc_contact <> '' AND phone = r.poc_contact)
+        )
+        LIMIT 1
+      ) poc_u ON TRUE
+      WHERE COALESCE(r.is_cancelled, false) = false
+      ORDER BY c.created_at DESC, cs.serial_no ASC
+    `;
+    const regRes = await query(regSql);
+    const registrations = regRes.rows;
+
+    const campSummaries: any[] = [];
+    const allAttendeeLogs: any[] = [];
+    const allDevotees: any[] = [];
+    const globalKitchenTally: any[] = [];
+    const campsList = camps.map((c: any) => ({ id: c.id, title: c.title, status: c.status }));
+    const tracksSet = new Set<string>();
+    const centersSet = new Set<string>();
+    const templesSet = new Set<string>();
+    const datesSet = new Set<string>();
+
+    const centerAggMap = new Map<string, { totalDevotees: number; totalTaken: number; totalExpected: number }>();
+    const templeAggMap = new Map<string, { totalDevotees: number; totalTaken: number; totalExpected: number }>();
+
+    let totalGlobalScheduled = 0;
+    let totalGlobalTaken = 0;
+    let totalGlobalExtras = 0;
+    let totalGlobalExtraServed = 0;
+
+    camps.forEach((camp: any) => {
+      const campRegs = registrations.filter((r: any) => r.camp_id === camp.id);
+      const mealPricing = camp.meal_pricing || [];
+      const sortedPricing = sortMealDays(mealPricing, camp.start_date);
+
+      let campScheduled = 0;
+      let campTaken = 0;
+      let campExtras = 0;
+      let campExtraServed = 0;
+
+      // Cache matrix for each registration in this camp
+      const regMatrices = new Map<string, any[]>();
+      campRegs.forEach((r: any) => {
+        const m = buildMealMatrix(
+          sortedPricing,
+          r.first_meal_date,
+          r.first_meal_type,
+          r.last_meal_date,
+          r.last_meal_type,
+          camp.start_date,
+          camp.end_date
+        );
+        regMatrices.set(r.id, m);
+
+        if (r.camp_track) tracksSet.add(r.camp_track);
+        const { center, temple } = resolveDevoteeCenterAndTemple(r);
+        r._resolvedCenter = center;
+        r._resolvedTemple = temple;
+        centersSet.add(center);
+        templesSet.add(temple);
+
+        if (!centerAggMap.has(center)) {
+          centerAggMap.set(center, { totalDevotees: 0, totalTaken: 0, totalExpected: 0 });
+        }
+        centerAggMap.get(center)!.totalDevotees++;
+
+        if (!templeAggMap.has(temple)) {
+          templeAggMap.set(temple, { totalDevotees: 0, totalTaken: 0, totalExpected: 0 });
+        }
+        templeAggMap.get(temple)!.totalDevotees++;
+      });
+
+      sortedPricing.forEach((day: any) => {
+        let dateKey = day.full_date;
+        if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          dateKey = parseMealDayToIso(day, camp.start_date) || String(day.date);
+        }
+        const rawDate = String(day.date);
+        const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
+        datesSet.add(dateKey);
+
+        (['Breakfast', 'Lunch', 'Dinner'] as const).forEach((mealName) => {
+          let scheduledCount = 0;
+          let takenCount = 0;
+
+          campRegs.forEach((r: any) => {
+            const matrix = regMatrices.get(r.id) || [];
+            const col = matrix.find((c: any) =>
+              c.full_date === dateKey ||
+              c.date === rawDate ||
+              (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
+            );
+            if (!col) return;
+
+            let isEligible = false;
+            if (mealName === 'Breakfast') isEligible = col.breakfast;
+            else if (mealName === 'Lunch') isEligible = col.lunch;
+            else if (mealName === 'Dinner') isEligible = col.dinner;
+
+            if (isEligible) {
+              scheduledCount++;
+              const mealKey = `${dateKey}_${mealName}`;
+              const altKey = `${rawDate}_${mealName}`;
+              const servedTime = r.meals_served?.[mealKey] || r.meals_served?.[altKey];
+              if (servedTime) {
+                takenCount++;
+              }
+
+              allAttendeeLogs.push({
+                campId: camp.id,
+                campTitle: camp.title,
+                regId: r.id,
+                token: r.serial_no,
+                name: r.participant_name,
+                phone: r.whatsapp || r.poc_contact || '',
+                track: r.camp_track || 'General Track',
+                center: r._resolvedCenter,
+                temple: r._resolvedTemple,
+                date: dateKey,
+                dateLabel,
+                meal: mealName,
+                status: servedTime ? 'TAKEN' : 'NOT_TAKEN',
+                servedAt: servedTime || null,
+              });
+            }
+          });
+
+          const extraKey = `${camp.id}_${dateKey}_${mealName}`;
+          const altExtraKey = `${camp.id}_${rawDate}_${mealName}`;
+          const extraRec = extrasMap.get(extraKey) || extrasMap.get(altExtraKey);
+          const extraCount = Number(extraRec?.extra_count) || 0;
+          const extraServedCount = Number(extraRec?.extra_served_count) || 0;
+
+          campScheduled += scheduledCount;
+          campTaken += takenCount;
+          campExtras += extraCount;
+          campExtraServed += extraServedCount;
+
+          globalKitchenTally.push({
+            campId: camp.id,
+            campTitle: camp.title,
+            date: dateKey,
+            rawDate,
+            dateLabel,
+            meal: mealName,
+            scheduledCount,
+            takenCount,
+            notTakenCount: Math.max(0, scheduledCount - takenCount),
+            extraCount,
+            extraServedCount,
+            totalHonored: takenCount + extraServedCount,
+            totalKitchenTarget: scheduledCount + extraCount,
+            totalServedSoFar: takenCount + extraServedCount,
+            notes: extraRec?.notes || '',
+          });
+        });
+      });
+
+      // Build devotee-level matrix for this camp
+      campRegs.forEach((r: any) => {
+        const mealsServedMap = r.meals_served || {};
+        let devEligible = 0;
+        let devTaken = 0;
+
+        const dateMatrix = sortedPricing.map((day: any) => {
+          let dateKey = day.full_date;
+          if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            dateKey = parseMealDayToIso(day, camp.start_date) || String(day.date);
+          }
+          const rawDate = String(day.date);
+          const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
+
+          const matrix = regMatrices.get(r.id) || [];
+          const col = matrix.find((c: any) =>
+            c.full_date === dateKey ||
+            c.date === rawDate ||
+            (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
+          );
+
+          const bfEligible = !!col?.breakfast;
+          const lnEligible = !!col?.lunch;
+          const dnEligible = !!col?.dinner;
+
+          const bfPunch = mealsServedMap[`${dateKey}_Breakfast`] || mealsServedMap[`${rawDate}_Breakfast`] || null;
+          const lnPunch = mealsServedMap[`${dateKey}_Lunch`] || mealsServedMap[`${rawDate}_Lunch`] || null;
+          const dnPunch = mealsServedMap[`${dateKey}_Dinner`] || mealsServedMap[`${rawDate}_Dinner`] || null;
+
+          if (bfEligible) {
+            devEligible++;
+            if (bfPunch) devTaken++;
+          }
+          if (lnEligible) {
+            devEligible++;
+            if (lnPunch) devTaken++;
+          }
+          if (dnEligible) {
+            devEligible++;
+            if (dnPunch) devTaken++;
+          }
+
+          return {
+            date: dateKey,
+            rawDate,
+            dateLabel,
+            breakfast: { eligible: bfEligible, punched: !!bfPunch, punchedAt: bfPunch },
+            lunch: { eligible: lnEligible, punched: !!lnPunch, punchedAt: lnPunch },
+            dinner: { eligible: dnEligible, punched: !!dnPunch, punchedAt: dnPunch }
+          };
+        });
+
+        const centerAgg = centerAggMap.get(r._resolvedCenter);
+        if (centerAgg) {
+          centerAgg.totalExpected += devEligible;
+          centerAgg.totalTaken += devTaken;
+        }
+        const templeAgg = templeAggMap.get(r._resolvedTemple);
+        if (templeAgg) {
+          templeAgg.totalExpected += devEligible;
+          templeAgg.totalTaken += devTaken;
+        }
+
+        allDevotees.push({
+          campId: camp.id,
+          campTitle: camp.title,
+          regId: r.id,
+          token: r.serial_no,
+          name: r.participant_name,
+          phone: r.whatsapp || r.poc_contact || '',
+          track: r.camp_track || 'General Track',
+          center: r._resolvedCenter,
+          temple: r._resolvedTemple,
+          pocName: r.poc_name,
+          pocContact: r.poc_contact,
+          eligibleCount: devEligible,
+          takenCount: devTaken,
+          dateMatrix,
+        });
+      });
+
+      totalGlobalScheduled += campScheduled;
+      totalGlobalTaken += campTaken;
+      totalGlobalExtras += campExtras;
+      totalGlobalExtraServed += campExtraServed;
+
+      campSummaries.push({
+        id: camp.id,
+        title: camp.title,
+        status: camp.status,
+        attendeesCount: campRegs.length,
+        scheduledMeals: campScheduled,
+        takenMeals: campTaken,
+        extraMeals: campExtras,
+        extraServedMeals: campExtraServed,
+        totalHonoredMeals: campTaken + campExtraServed,
+        clearancePercent: campScheduled > 0 ? Math.round((campTaken / campScheduled) * 100) : 0,
+      });
+    });
+
+    const centerSummary = Array.from(centerAggMap.entries()).map(([center, val]) => ({
+      center,
+      ...val,
+      clearancePercent: val.totalExpected > 0 ? Math.round((val.totalTaken / val.totalExpected) * 100) : 0,
+    })).sort((a, b) => b.totalDevotees - a.totalDevotees);
+
+    const templeSummary = Array.from(templeAggMap.entries()).map(([temple, val]) => ({
+      temple,
+      ...val,
+      clearancePercent: val.totalExpected > 0 ? Math.round((val.totalTaken / val.totalExpected) * 100) : 0,
+    })).sort((a, b) => b.totalDevotees - a.totalDevotees);
+
+    return {
+      success: true,
+      stats: {
+        totalGlobalScheduled,
+        totalGlobalTaken,
+        totalGlobalPending: Math.max(0, totalGlobalScheduled - totalGlobalTaken),
+        totalGlobalExtras,
+        totalGlobalExtraServed,
+        totalGlobalPlatesHonored: totalGlobalTaken + totalGlobalExtraServed,
+        overallClearancePercent: totalGlobalScheduled > 0 ? Math.round((totalGlobalTaken / totalGlobalScheduled) * 100) : 0,
+      },
+      campSummaries,
+      globalKitchenTally,
+      allAttendeeLogs,
+      allDevotees,
+      centerSummary,
+      templeSummary,
+      filterOptions: {
+        camps: campsList,
+        tracks: Array.from(tracksSet).sort(),
+        centers: Array.from(centersSet).sort(),
+        temples: Array.from(templesSet).sort(),
+        dates: Array.from(datesSet).sort(),
+      },
+    };
+  } catch (error: any) {
+    console.error('getGlobalPrasadamAuditAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+
+
 
 

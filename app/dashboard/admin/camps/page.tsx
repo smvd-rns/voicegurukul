@@ -10,10 +10,13 @@ import {
   Filter, Archive, Tag, Gift, Percent, Landmark, Building2, AlertTriangle,
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
-  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette
+  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette, QrCode
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/providers/AuthProvider';
+import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
+import CampStaffRoleManagementModal from '@/components/camps/CampStaffRoleManagementModal';
+import AdminGlobalPrasadamAuditTab from '@/components/camps/AdminGlobalPrasadamAuditTab';
 import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest } from '@/types';
 import {
   getCampsAction,
@@ -171,8 +174,8 @@ export default function AdminCampsPage() {
   const currentUserRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
   const isSuperAdmin = currentUserRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
 
-  // Main Page View: 'camps' vs 'audit'
-  const [mainView, setMainView] = useState<'camps' | 'audit'>('camps');
+  // Main Page View: 'camps' vs 'audit' vs 'prasadam'
+  const [mainView, setMainView] = useState<'camps' | 'audit' | 'prasadam'>('camps');
 
   // Audit state
   const [transactions, setTransactions] = useState<CampAuditTransaction[]>([]);
@@ -246,6 +249,10 @@ export default function AdminCampsPage() {
     campTitle: '',
     deleting: false
   });
+
+  // QR Scanner & Staff Role Management Modals
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -1514,7 +1521,30 @@ export default function AdminCampsPage() {
             >
               <RefreshCw className={`w-4 h-4 ${(loading || auditLoading) ? 'animate-spin' : ''}`} />
             </button>
-            {mainView === 'camps' && (
+
+            {/* QR Code Pass Scanner Button */}
+            <button
+              onClick={() => setIsQrScannerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
+            >
+              <QrCode className="w-4 h-4 text-amber-400" />
+              <span>Scan Pass</span>
+            </button>
+
+            {/* Super Admin Staff & Role Management */}
+            {isSuperAdmin && (
+              <button
+                onClick={() => setIsStaffModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-full text-xs shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                title="Assign camp staff and custom privileges"
+              >
+                <Users className="w-4 h-4 text-amber-600" />
+                <span>Camp Staff &amp; Roles</span>
+              </button>
+            )}
+
+            {mainView === 'camps' && isSuperAdmin && (
               <button
                 onClick={openCreateModal}
                 className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full text-xs shadow-md shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
@@ -1563,6 +1593,23 @@ export default function AdminCampsPage() {
                     {auditStats.pending_verifications + auditStats.pending_refunds}
                   </span>
                 )}
+              </button>
+            )}
+
+            {isSuperAdmin && (
+              <button
+                onClick={() => setMainView('prasadam')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  mainView === 'prasadam'
+                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/25'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Utensils className="w-4 h-4 text-amber-300" />
+                <span>Prasadam Audit &amp; Kitchen Ledger</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Super Admin
+                </span>
               </button>
             )}
           </div>
@@ -2788,6 +2835,13 @@ export default function AdminCampsPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* VIEW 3: SUPER ADMIN PRASADAM AUDIT & KITCHEN LEDGER */}
+        {mainView === 'prasadam' && (
+          <AdminGlobalPrasadamAuditTab
+            onOpenScanner={() => setIsQrScannerOpen(true)}
+          />
         )}
       </div>
 
@@ -5057,6 +5111,21 @@ export default function AdminCampsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* QR Code Pass Scanner Modal */}
+      <AdminCampQrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => setIsQrScannerOpen(false)}
+      />
+
+      {/* Super Admin Staff Role & Allocation Modal */}
+      {isSuperAdmin && (
+        <CampStaffRoleManagementModal
+          isOpen={isStaffModalOpen}
+          onClose={() => setIsStaffModalOpen(false)}
+          camps={camps}
+        />
       )}
     </div>
   );

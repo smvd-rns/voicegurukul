@@ -24,6 +24,7 @@ import {
   submitCampRefundRequestAction,
   lookupCampRegistrationsAction
 } from '@/app/dashboard/admin/camps/actions';
+import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 
 function formatMealOptionLabel(m?: CampMealConfig | null, campStartDate?: string): string {
   if (!m) return '';
@@ -205,7 +206,13 @@ function CampDashboardContent() {
         phone: userData?.phone || undefined,
       });
       if (res.success && res.registrations) {
-        setUserRegistrations(res.registrations);
+        const seen = new Set<string>();
+        const unique = res.registrations.filter((r: any) => {
+          if (seen.has(r.id)) return false;
+          seen.add(r.id);
+          return true;
+        });
+        setUserRegistrations(unique);
         setUserRefunds(res.refundRequests || []);
       }
     } catch (err: any) {
@@ -260,13 +267,28 @@ function CampDashboardContent() {
     const userDob = userData?.birthDate || (userData as any)?.birth_date || userData?.hierarchy?.birthDate;
     const calculatedAge = calculateAgeFromBirthDate(userDob);
 
+    const resolvedUserCenter = (() => {
+      const cur = (userData?.hierarchy?.currentCenter || (userData as any)?.current_center || '').trim();
+      const oth = (userData?.hierarchy?.otherCenter || (userData as any)?.other_center || '').trim();
+      if (cur) {
+        if (cur.toLowerCase() === 'other') return oth || 'Other';
+        return cur;
+      }
+      const cen = (userData?.hierarchy?.center || (userData as any)?.center || '').trim();
+      if (cen) {
+        if (cen.toLowerCase() === 'other') return oth || 'Other';
+        return cen;
+      }
+      return 'None';
+    })();
+
     // Auto-populate Attendee #1 with devotee profile from DB!
     const initialFormData = {
       participantName: userData?.name || '',
       whatsapp: userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '',
-      parentTemple: userData?.hierarchy?.center || '',
+      parentTemple: userData?.hierarchy?.parentTemple || (userData as any)?.parent_temple || 'ISKCON NVCC • PUNE',
       counselorName: userData?.hierarchy?.brahmachariCounselor || '',
-      voiceName: userData?.hierarchy?.center || '',
+      voiceName: resolvedUserCenter,
       campTrack: initialTrack,
       firstMealDate: firstMeal,
       firstMealType: 'Breakfast',
@@ -1394,8 +1416,13 @@ function CampDashboardContent() {
                       {/* Pass Action Buttons */}
                       <div className="flex items-center gap-2 pt-4 border-t border-gray-100 mt-4">
                         <button
-                          onClick={() => setViewTicketReg(reg)}
-                          className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5"
+                          onClick={() => setViewTicketReg({
+                            ...reg,
+                            center: (reg.voice_name && !['none', 'null', 'undefined', 'n/a', '-'].includes(reg.voice_name.toLowerCase()))
+                              ? reg.voice_name
+                              : (userData?.hierarchy?.center || (userData as any)?.center || '')
+                          })}
+                          className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Ticket className="w-3.5 h-3.5" />
                           <span>View Ticket Pass</span>
@@ -2400,67 +2427,13 @@ function CampDashboardContent() {
         </div>
       )}
 
-      {/* VIEW TICKET PASS MODAL */}
+      {/* VIEW TICKET & PRASADAM PASS MODAL */}
       {viewTicketReg && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-amber-600" />
-                <h3 className="text-base font-black text-gray-900">Camp Entry Pass</h3>
-              </div>
-              <button
-                onClick={() => setViewTicketReg(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 text-white space-y-2">
-              <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2 py-0.5 rounded">
-                Official Delegate Pass
-              </span>
-              <h4 className="text-lg font-black">{viewTicketReg.camp_title}</h4>
-              <p className="text-xs text-white/90">Venue: {viewTicketReg.camp_venue}</p>
-            </div>
-
-            <div className="space-y-2 text-xs border border-gray-100 rounded-xl p-4 bg-gray-50">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Attendee Name:</span>
-                <span className="font-bold text-gray-800">{viewTicketReg.participant_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Track:</span>
-                <span className="font-bold text-amber-700">{viewTicketReg.camp_track || 'Standard'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">WhatsApp:</span>
-                <span className="font-mono text-gray-700">{viewTicketReg.whatsapp || viewTicketReg.poc_contact}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Booking Group:</span>
-                <span className="font-mono font-bold text-gray-800">{viewTicketReg.group_id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Accommodation:</span>
-                <span className="font-medium text-gray-800">{viewTicketReg.accommodation === 'Yes' ? 'Provided' : 'Day Scholar'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Payment Status:</span>
-                <span className="font-bold text-emerald-700 uppercase">{viewTicketReg.payment_status}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => window.print()}
-              className="w-full py-2.5 bg-gray-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Print / Save Pass</span>
-            </button>
-          </div>
-        </div>
+        <CampPrasadamCard
+          registration={viewTicketReg}
+          userProfile={userData}
+          onClose={() => setViewTicketReg(null)}
+        />
       )}
 
       {/* CANCELLATION & REFUND MODAL */}

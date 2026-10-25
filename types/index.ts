@@ -643,10 +643,26 @@ export interface CampRegistration {
   payment_date?: string;
   is_cancelled?: boolean;
   cancellation_id?: string;
-  cancelled_at?: string;
-  cancellation_reason?: string;
+  checked_in?: boolean;
+  checked_in_at?: string;
+  meals_served?: Record<string, boolean>;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface CampAdminAllocation {
+  id: string;
+  user_id: string;
+  camp_id: string;
+  permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass';
+  assigned_by?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  user_name?: string;
+  user_email?: string;
+  user_phone?: string;
+  camp_title?: string;
 }
 
 export interface CampAuditTransaction {

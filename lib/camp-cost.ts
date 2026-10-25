@@ -245,3 +245,250 @@ export function calculateDynamicCampCost(
     mealCount,
   };
 }
+
+export const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function parseMealDayToIso(day: CampMealConfig, campStartDate?: string): string {
+  if (day.full_date && /^\d{4}-\d{2}-\d{2}$/.test(day.full_date)) {
+    return day.full_date;
+  }
+  const raw = `${day.label || ''} ${day.date || ''}`.trim();
+  const match = raw.match(/(\d{1,2})\s*[-/]?\s*([A-Za-z]{3,9})/i);
+  let year = new Date().getFullYear();
+  if (campStartDate) {
+    const cd = new Date(campStartDate);
+    if (!isNaN(cd.getTime())) {
+      year = cd.getFullYear();
+    }
+  }
+
+  if (match) {
+    const dNum = parseInt(match[1], 10);
+    const mPrefix = match[2].slice(0, 3).toLowerCase();
+    const mIdx = MONTH_NAMES_SHORT.findIndex((m) => m.toLowerCase() === mPrefix);
+    if (mIdx >= 0) {
+      if (campStartDate) {
+        const cd = new Date(campStartDate);
+        if (!isNaN(cd.getTime()) && cd.getMonth() > 9 && mIdx < 3) {
+          year += 1;
+        }
+      }
+      return `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+    }
+  }
+
+  const numOnly = parseInt(String(day.date), 10);
+  if (!isNaN(numOnly) && campStartDate) {
+    const cd = new Date(campStartDate);
+    if (!isNaN(cd.getTime())) {
+      const mIdx = cd.getMonth();
+      return `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(numOnly).padStart(2, '0')}`;
+    }
+  }
+
+  return '';
+}
+
+export function getMealTimestamp(day: CampMealConfig, campStartDate?: string): number {
+  const iso = parseMealDayToIso(day, campStartDate);
+  if (iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    if (!isNaN(dt.getTime())) return dt.getTime();
+  }
+  const n = parseInt(String(day.date), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+export function sortMealDays(days: CampMealConfig[], campStartDate?: string): CampMealConfig[] {
+  return [...days].sort((a, b) => {
+    const tA = getMealTimestamp(a, campStartDate);
+    const tB = getMealTimestamp(b, campStartDate);
+    return tA - tB;
+  });
+}
+
+export interface MealMatrixColumn {
+  date: string;
+  full_date?: string;
+  label: string; // e.g. "24-Dec"
+  breakfast: boolean;
+  lunch: boolean;
+  dinner: boolean;
+}
+
+export function buildMealMatrix(
+  mealPricing: CampMealConfig[] = [],
+  firstMealDate?: string,
+  firstMealType?: string,
+  lastMealDate?: string,
+  lastMealType?: string,
+  campStartDate?: string,
+  campEndDate?: string
+): MealMatrixColumn[] {
+  let pricing = Array.isArray(mealPricing) && mealPricing.length > 0 ? mealPricing : [];
+  
+  if (pricing.length === 0 && campStartDate && campEndDate) {
+    const startDt = new Date(campStartDate);
+    const endDt = new Date(campEndDate);
+    const curr = new Date(startDt.getFullYear(), startDt.getMonth(), startDt.getDate());
+    const stop = new Date(endDt.getFullYear(), endDt.getMonth(), endDt.getDate());
+    while (curr <= stop) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, '0');
+      const d = String(curr.getDate()).padStart(2, '0');
+      const dStr = `${y}-${m}-${d}`;
+      pricing.push({
+        date: dStr,
+        full_date: dStr,
+        breakfast: 0,
+        lunch: 0,
+        dinner: 0,
+        label: curr.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      });
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
+
+  if (pricing.length === 0) return [];
+
+  interface FlatMeal {
+    sn: number;
+    date: string;
+    mealType: 'Breakfast' | 'Lunch' | 'Dinner';
+  }
+
+  const flatMeals: FlatMeal[] = [];
+  let snCounter = 1;
+
+  pricing.forEach((day) => {
+    flatMeals.push({ sn: snCounter++, date: String(day.date), mealType: 'Breakfast' });
+    flatMeals.push({ sn: snCounter++, date: String(day.date), mealType: 'Lunch' });
+    flatMeals.push({ sn: snCounter++, date: String(day.date), mealType: 'Dinner' });
+  });
+
+  const normType = (t?: string): 'Breakfast' | 'Lunch' | 'Dinner' => {
+    const lower = (t || '').toLowerCase();
+    if (lower.startsWith('b')) return 'Breakfast';
+    if (lower.startsWith('l')) return 'Lunch';
+    return 'Dinner';
+  };
+
+  const firstType = normType(firstMealType || 'Breakfast');
+  const lastType = normType(lastMealType || 'Dinner');
+  const firstDateStr = String(firstMealDate || pricing[0]?.date || '');
+  const lastDateStr = String(lastMealDate || pricing[pricing.length - 1]?.date || '');
+
+  const firstMeal = flatMeals.find((m) => m.date === firstDateStr && m.mealType === firstType);
+  const lastMeal = flatMeals.find((m) => m.date === lastDateStr && m.mealType === lastType);
+
+  const startSn = firstMeal ? firstMeal.sn : 1;
+  const endSn = lastMeal ? lastMeal.sn : flatMeals.length;
+
+  const validSet = new Set<number>();
+  for (let i = startSn; i <= endSn; i++) {
+    validSet.add(i);
+  }
+
+  return pricing.map((day) => {
+    const dStr = String(day.date);
+    const mB = flatMeals.find((m) => m.date === dStr && m.mealType === 'Breakfast');
+    const mL = flatMeals.find((m) => m.date === dStr && m.mealType === 'Lunch');
+    const mD = flatMeals.find((m) => m.date === dStr && m.mealType === 'Dinner');
+
+    let fullDate = day.full_date;
+    if (!fullDate || !/^\d{4}-\d{2}-\d{2}$/.test(fullDate)) {
+      fullDate = parseMealDayToIso(day, campStartDate);
+    }
+
+    let label = (day.label || '').trim();
+    if (!label || label.toLowerCase().includes('date') || /^\d+$/.test(label)) {
+      const parsed = new Date(dStr);
+      if (!isNaN(parsed.getTime())) {
+        label = parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).replace(/\s+/g, '-');
+      } else {
+        label = dStr;
+      }
+    } else {
+      label = label.replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
+    }
+
+    return {
+      date: dStr,
+      full_date: fullDate,
+      label,
+      breakfast: mB ? validSet.has(mB.sn) : false,
+      lunch: mL ? validSet.has(mL.sn) : false,
+      dinner: mD ? validSet.has(mD.sn) : false,
+    };
+  });
+}
+
+export function checkCurrentMealEligibility(
+  matrix: MealMatrixColumn[],
+  now: Date = new Date()
+): {
+  currentSlot: 'Breakfast' | 'Lunch' | 'Dinner' | 'Outside Meal Hours';
+  slotDateStr: string;
+  isEligible: boolean;
+  message: string;
+} {
+  if (matrix.length === 0) {
+    return {
+      currentSlot: 'Outside Meal Hours',
+      slotDateStr: '',
+      isEligible: false,
+      message: 'No meal schedule configured for this camp.',
+    };
+  }
+
+  // Format today's date YYYY-MM-DD
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  // Time in hours
+  const hours = now.getHours() + now.getMinutes() / 60;
+
+  let currentSlot: 'Breakfast' | 'Lunch' | 'Dinner' | 'Outside Meal Hours' = 'Outside Meal Hours';
+  if (hours >= 5 && hours <= 10.75) {
+    currentSlot = 'Breakfast';
+  } else if (hours > 10.75 && hours <= 15.75) {
+    currentSlot = 'Lunch';
+  } else if (hours > 17 && hours <= 22.75) {
+    currentSlot = 'Dinner';
+  } else if (hours > 15.75 && hours <= 17) {
+    currentSlot = 'Dinner'; // Upcoming dinner window
+  } else {
+    currentSlot = 'Breakfast'; // Morning upcoming
+  }
+
+  // Find column matching today's date or closest date
+  const todayCol = matrix.find((m) => m.date === todayStr);
+
+  if (!todayCol) {
+    return {
+      currentSlot,
+      slotDateStr: todayStr,
+      isEligible: false,
+      message: `Today (${todayStr}) is not within the scheduled camp meal dates.`,
+    };
+  }
+
+  const isEligible =
+    currentSlot === 'Breakfast'
+      ? todayCol.breakfast
+      : currentSlot === 'Lunch'
+      ? todayCol.lunch
+      : todayCol.dinner;
+
+  return {
+    currentSlot,
+    slotDateStr: todayStr,
+    isEligible,
+    message: isEligible
+      ? `Devotee is eligible for ${currentSlot} Prasadam today!`
+      : `Devotee's pass does NOT include ${currentSlot} on ${todayCol.label}.`,
+  };
+}
