@@ -33,7 +33,7 @@ async function verifyAdminAuth() {
     'SELECT camp_id, permission_type FROM camp_admin_allocations WHERE user_id = $1',
     [user.id]
   );
-  const campAllocations = allocRes.rows as { camp_id: string; permission_type: 'attendance' | 'refunds' | 'both' }[];
+  const campAllocations = allocRes.rows as { camp_id: string; permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' }[];
 
   if (!isHigherAdmin && campAllocations.length === 0) {
     throw new Error('Forbidden: Super Admin or Camp Coordinator privileges required');
@@ -76,19 +76,31 @@ export async function getCampsAction() {
 
     const res = await query(sql, params);
 
-    // Attach user permission to each camp
+    // Attach user permissions to each camp (supporting multiple concurrent roles)
     const campsWithPermissions = res.rows.map((camp: any) => {
       if (isSuperAdmin) {
-        return { ...camp, user_permission: 'both' };
+        return {
+          ...camp,
+          user_permission: 'both',
+          user_permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both']
+        };
       }
-      const alloc = campAllocations.find(a => a.camp_id === camp.id);
+      const allocs = campAllocations.filter(a => a.camp_id === camp.id);
+      const perms = allocs.map(a => a.permission_type);
+      const primary = perms.includes('both')
+        ? 'both'
+        : (perms.includes('attendance') && perms.includes('refunds'))
+        ? 'both'
+        : perms[0] || 'attendance';
+
       return {
         ...camp,
-        user_permission: alloc ? alloc.permission_type : 'attendance'
+        user_permission: primary,
+        user_permissions: perms.length > 0 ? perms : [primary]
       };
     });
 
-    return { success: true, camps: campsWithPermissions as (Camp & { registration_count: number; total_revenue: number; user_permission?: string })[] };
+    return { success: true, camps: campsWithPermissions as (Camp & { registration_count: number; total_revenue: number; user_permission?: string; user_permissions?: string[] })[] };
   } catch (error: any) {
     console.error('getCampsAction error:', error);
     return { success: false, error: error.message };
@@ -296,7 +308,15 @@ export async function deleteCampAction(id: string) {
  */
 export async function getCampRegistrationsAction(campId: string, searchTerm?: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+
+    // Enforce role isolation: Non-superadmins must have 'attendance' or 'both' permission for this camp
+    if (!isSuperAdmin) {
+      const alloc = campAllocations.find((a) => a.camp_id === campId);
+      if (!alloc || !['attendance', 'both'].includes(alloc.permission_type)) {
+        return { success: true, registrations: [], error: 'Forbidden: Attendance desk permission required' };
+      }
+    }
 
     let sql = `
       WITH camp_serials AS (
@@ -459,7 +479,15 @@ export async function verifyAndApproveCampBatchAction(
  */
 export async function getCampRefundRequestsAction(campId: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+
+    // Enforce role isolation: Non-superadmins must have 'refunds' or 'both' permission for this camp
+    if (!isSuperAdmin) {
+      const alloc = campAllocations.find((a) => a.camp_id === campId);
+      if (!alloc || !['refunds', 'both'].includes(alloc.permission_type)) {
+        return { success: true, requests: [], error: 'Forbidden: Refunds desk permission required' };
+      }
+    }
 
     const sql = `
       SELECT r.*, 
@@ -1211,6 +1239,8 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
  */
 export async function verifyCampRegistrationAction(registrationId: string) {
   try {
+    await verifyAdminAuth();
+
     const cleanId = (registrationId || '').trim();
     if (!cleanId) {
       return { success: false, error: 'Invalid or missing registration ID.' };
@@ -1388,7 +1418,8 @@ export async function getCampAllocationsAction(campId?: string) {
 export async function assignCampStaffAction(data: {
   userId: string;
   campId: string;
-  permissionType: 'attendance' | 'refunds' | 'both' | 'scan_pass';
+  permissionType?: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam';
+  permissionTypes?: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[];
   notes?: string;
 }) {
   try {
@@ -1397,27 +1428,37 @@ export async function assignCampStaffAction(data: {
       throw new Error('Forbidden: Super Admin privileges required to assign staff');
     }
 
-    const sql = `
-      INSERT INTO camp_admin_allocations (user_id, camp_id, permission_type, assigned_by, notes)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (user_id, camp_id)
-      DO UPDATE SET 
-        permission_type = EXCLUDED.permission_type,
-        notes = EXCLUDED.notes,
-        assigned_by = EXCLUDED.assigned_by,
-        updated_at = NOW()
-      RETURNING *
-    `;
-    const res = await query(sql, [
-      data.userId,
-      data.campId,
-      data.permissionType,
-      user.id,
-      data.notes || null,
-    ]);
+    const typesToAssign: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[] =
+      data.permissionTypes && data.permissionTypes.length > 0
+        ? data.permissionTypes
+        : data.permissionType
+        ? [data.permissionType]
+        : ['attendance'];
+
+    const insertedRows = [];
+    for (const pType of typesToAssign) {
+      const sql = `
+        INSERT INTO camp_admin_allocations (user_id, camp_id, permission_type, assigned_by, notes)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id, camp_id, permission_type)
+        DO UPDATE SET 
+          notes = EXCLUDED.notes,
+          assigned_by = EXCLUDED.assigned_by,
+          updated_at = NOW()
+        RETURNING *
+      `;
+      const res = await query(sql, [
+        data.userId,
+        data.campId,
+        pType,
+        user.id,
+        data.notes || null,
+      ]);
+      if (res.rows[0]) insertedRows.push(res.rows[0]);
+    }
 
     revalidatePath('/dashboard/admin/camps');
-    return { success: true, allocation: res.rows[0] };
+    return { success: true, allocations: insertedRows, allocation: insertedRows[0] };
   } catch (error: any) {
     console.error('assignCampStaffAction error:', error);
     return { success: false, error: error.message };
@@ -1434,7 +1475,18 @@ export async function revokeCampStaffAction(allocationId: string) {
       throw new Error('Forbidden: Super Admin privileges required to revoke staff');
     }
 
-    await query('DELETE FROM camp_admin_allocations WHERE id = $1', [allocationId]);
+    // Check if row exists and delete any duplicate matching rows for this (user_id, camp_id, permission_type)
+    const findRes = await query('SELECT user_id, camp_id, permission_type FROM camp_admin_allocations WHERE id = $1', [allocationId]);
+    if (findRes.rows.length > 0) {
+      const { user_id, camp_id, permission_type } = findRes.rows[0];
+      await query(
+        'DELETE FROM camp_admin_allocations WHERE user_id = $1 AND camp_id = $2 AND permission_type = $3',
+        [user_id, camp_id, permission_type]
+      );
+    } else {
+      await query('DELETE FROM camp_admin_allocations WHERE id = $1', [allocationId]);
+    }
+
     revalidatePath('/dashboard/admin/camps');
     return { success: true };
   } catch (error: any) {
@@ -1444,38 +1496,145 @@ export async function revokeCampStaffAction(allocationId: string) {
 }
 
 /**
+ * Revoke ALL staff roles for a specific user in a camp (Super Admin only)
+ */
+export async function revokeCampStaffUserAction(userId: string, campId: string) {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to revoke staff');
+    }
+
+    await query('DELETE FROM camp_admin_allocations WHERE user_id = $1 AND camp_id = $2', [userId, campId]);
+    revalidatePath('/dashboard/admin/camps');
+    return { success: true };
+  } catch (error: any) {
+    console.error('revokeCampStaffUserAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get allocated camps for the currently logged-in user (Super Admin gets all active camps)
+ * Groups multiple role allocations per camp into user_roles array.
  */
 export async function getUserAllocatedCampsAction() {
   try {
-    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    const user = await getAuthUserFromCookies();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const uRes = await query('SELECT role FROM users WHERE id = $1', [user.id]);
+    const role = uRes.rows[0]?.role;
+    const roles = (Array.isArray(role) ? role : [role])
+      .map((r: any) => Number(r))
+      .filter((r: number) => !isNaN(r));
+    const isSuperAdmin = roles.includes(8) || (Array.isArray(role) && role.includes('super_admin' as any));
 
     if (isSuperAdmin) {
       const res = await query('SELECT * FROM camps WHERE status IN (\'active\', \'completed\', \'closed\') ORDER BY created_at DESC');
-      const camps = res.rows.map(c => ({ ...c, user_role: 'super_admin' }));
+      const camps = res.rows.map(c => ({
+        ...c,
+        user_role: 'super_admin',
+        user_roles: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both'],
+      }));
       return { success: true, camps, isSuperAdmin: true };
     }
 
-    if (campAllocations.length === 0) {
-      return { success: true, camps: [], isSuperAdmin: false };
+    const allocRes = await query(
+      `SELECT a.permission_type, a.notes AS staff_notes, c.*
+       FROM camp_admin_allocations a
+       JOIN camps c ON c.id = a.camp_id
+       WHERE a.user_id = $1
+       ORDER BY c.start_date DESC`,
+      [user.id]
+    );
+
+    // Group allocations by camp ID so a devotee assigned multiple roles sees all their privileges
+    const campMap = new Map<string, any>();
+    for (const row of allocRes.rows) {
+      const cid = row.id;
+      if (!campMap.has(cid)) {
+        campMap.set(cid, {
+          ...row,
+          user_role: row.permission_type || 'scan_pass',
+          user_roles: [row.permission_type || 'scan_pass'],
+        });
+      } else {
+        const existing = campMap.get(cid);
+        if (!existing.user_roles.includes(row.permission_type)) {
+          existing.user_roles.push(row.permission_type);
+        }
+        // If has both attendance and refunds, or has 'both', promote primary user_role
+        if (existing.user_roles.includes('both') || (existing.user_roles.includes('attendance') && existing.user_roles.includes('refunds'))) {
+          existing.user_role = 'both';
+        }
+      }
     }
 
-    const campIds = campAllocations.map(a => a.camp_id);
-    const sql = 'SELECT * FROM camps WHERE id = ANY($1::uuid[]) ORDER BY start_date DESC';
-    const res = await query(sql, [campIds]);
-
-    const campsWithRole = res.rows.map(camp => {
-      const alloc = campAllocations.find(a => a.camp_id === camp.id);
-      return {
-        ...camp,
-        user_role: alloc ? alloc.permission_type : 'scan_pass'
-      };
-    });
-
-    return { success: true, camps: campsWithRole, isSuperAdmin: false };
+    return { success: true, camps: Array.from(campMap.values()), isSuperAdmin: false };
   } catch (error: any) {
     console.error('getUserAllocatedCampsAction error:', error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check logged-in user's exact permissions for a specific camp:
+ * Supports multiple roles assigned to the same user for this camp.
+ */
+export async function getCampUserAccessAction(campId: string) {
+  try {
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    if (isSuperAdmin) {
+      return {
+        success: true,
+        isSuperAdmin: true,
+        permission: 'super_admin' as const,
+        permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both'] as string[],
+        canAttendance: true,
+        canRefunds: true,
+        canPrasadam: true,
+        canScan: true,
+      };
+    }
+
+    const matching = campAllocations.filter((a) => a.camp_id === campId);
+    const permissions = matching.map((a) => a.permission_type);
+
+    const hasBoth = permissions.includes('both') || (permissions.includes('attendance') && permissions.includes('refunds'));
+    const canAttendance = isSuperAdmin || hasBoth || permissions.includes('attendance');
+    const canRefunds = isSuperAdmin || hasBoth || permissions.includes('refunds');
+    const canPrasadam = isSuperAdmin || hasBoth || permissions.includes('prasadam') || permissions.includes('attendance');
+    const canScan = isSuperAdmin || hasBoth || permissions.includes('scan_pass') || permissions.includes('attendance') || permissions.includes('prasadam');
+
+    const primaryPermission = hasBoth
+      ? 'both'
+      : (permissions[0] as 'attendance' | 'refunds' | 'prasadam' | 'scan_pass' | null) || null;
+
+    return {
+      success: true,
+      isSuperAdmin: false,
+      permission: primaryPermission,
+      permissions,
+      canAttendance,
+      canRefunds,
+      canPrasadam,
+      canScan,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message,
+      isSuperAdmin: false,
+      permission: null,
+      permissions: [],
+      canAttendance: false,
+      canRefunds: false,
+      canPrasadam: false,
+      canScan: false,
+    };
   }
 }
 
@@ -1534,12 +1693,13 @@ export async function verifyAndPunchMealPassAction(data: {
         c.meal_pricing AS camp_meal_pricing,
         u.current_center AS user_current_center,
         u.center AS user_center,
-        u.other_center AS user_other_center
+        u.other_center AS user_other_center,
+        u.profile_image AS user_profile_image
       FROM camp_registrations r
       JOIN camp_serials cs ON cs.id = r.id
       JOIN camps c ON c.id = r.camp_id
       LEFT JOIN LATERAL (
-        SELECT current_center, center, other_center
+        SELECT current_center, center, other_center, profile_image
         FROM users
         WHERE LOWER(email) = LOWER(r.email) AND email <> ''
         LIMIT 1
@@ -1681,31 +1841,58 @@ export async function verifyAndPunchMealPassAction(data: {
     const alreadyServedTime = r.meals_served?.[mealKey] || r.meals_served?.[altMealKey] || r.meals_served?.[rawMealKey];
     if (alreadyServedTime) {
       let timeFormatted = 'earlier today';
+      let secondsAgo = 9999;
       try {
         const d = new Date(alreadyServedTime);
         if (!isNaN(d.getTime())) {
           timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          secondsAgo = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
         }
       } catch {
         // ignore
       }
 
+      // If scanned within the last 15 seconds, it is the exact same attendee still standing at the camera.
+      // Reassure volunteer that the pass was successfully cleared just seconds ago!
+      if (secondsAgo <= 15) {
+        return {
+          success: true,
+          status: 'JUST_PUNCHED',
+          message: `PASS ALREADY CLEARED (${secondsAgo}s ago) • ALLOW DEVOTEE TO PROCEED`,
+          servedAt: timeFormatted,
+          secondsAgo,
+          attendee: {
+            id: r.id,
+            name: r.participant_name,
+            track: r.camp_track,
+            token: r.serial_no || r.id?.slice(0, 5),
+            center: r.voice_name || r.user_current_center || r.user_center || 'Central VOICE',
+            whatsapp: r.whatsapp || r.poc_contact,
+            profileImage: r.user_profile_image || null,
+          }
+        };
+      }
+
+      const timeAgoDesc = secondsAgo < 60 ? `${secondsAgo}s ago` : `${Math.floor(secondsAgo / 60)} min ago`;
       return {
         success: false,
         status: 'ALREADY_SERVED',
-        message: `DUPLICATE SCAN! Already collected ${data.mealName} at ${timeFormatted}.`,
+        message: `DUPLICATE SCAN! Already collected ${data.mealName} at ${timeFormatted} (${timeAgoDesc}).`,
         servedAt: timeFormatted,
+        secondsAgo,
         attendee: {
+          id: r.id,
           name: r.participant_name,
           track: r.camp_track,
           token: r.serial_no || r.id?.slice(0, 5),
-          center: r.user_current_center || r.user_center || 'Central VOICE',
-          whatsapp: r.whatsapp || r.poc_contact
+          center: r.voice_name || r.user_current_center || r.user_center || 'Central VOICE',
+          whatsapp: r.whatsapp || r.poc_contact,
+          profileImage: r.user_profile_image || null,
         }
       };
     }
 
-    // Automatically Punch Meal and Record Entry in DB
+    // Automatically Punch Meal with ACID Concurrency Lock (prevents friends double-scanning at different counters)
     const updateSql = `
       UPDATE camp_registrations
       SET meals_served = jsonb_set(
@@ -1716,10 +1903,33 @@ export async function verifyAndPunchMealPassAction(data: {
           checked_in = true,
           checked_in_at = COALESCE(checked_in_at, NOW()),
           updated_at = NOW()
-      WHERE id = $1
+      WHERE id = $1 AND (
+        (meals_served->$2) IS NULL AND 
+        (meals_served->$3) IS NULL AND 
+        (meals_served->$4) IS NULL
+      )
       RETURNING meals_served
     `;
-    await query(updateSql, [r.id, mealKey]);
+    const updateRes = await query(updateSql, [r.id, mealKey, altMealKey, rawMealKey]);
+    if (updateRes.rows.length === 0) {
+      // Concurrency protection: Another volunteer at Counter B punched this pass in the exact same fraction of a second!
+      return {
+        success: false,
+        status: 'ALREADY_SERVED',
+        message: `DUPLICATE SCAN! Another counter just punched ${data.mealName} for this pass!`,
+        servedAt: 'just now',
+        secondsAgo: 1,
+        attendee: {
+          id: r.id,
+          name: r.participant_name,
+          track: r.camp_track,
+          token: r.serial_no || r.id?.slice(0, 5),
+          center: r.voice_name || r.user_current_center || r.user_center || 'Central VOICE',
+          whatsapp: r.whatsapp || r.poc_contact,
+          profileImage: r.user_profile_image || null,
+        }
+      };
+    }
 
     // Count Total Meals Served in this Session
     const countSql = `
@@ -1760,9 +1970,10 @@ export async function verifyAndPunchMealPassAction(data: {
         name: r.participant_name,
         track: r.camp_track,
         token: r.serial_no || r.id?.slice(0, 5),
-        center: r.user_current_center || r.user_center || 'Central VOICE',
+        center: r.voice_name || r.user_current_center || r.user_center || 'Central VOICE',
         whatsapp: r.whatsapp || r.poc_contact,
-        accommodation: r.accommodation === 'Yes' ? 'Provided (Included)' : 'Day Scholar'
+        accommodation: r.accommodation === 'Yes' ? 'Provided (Included)' : 'Day Scholar',
+        profileImage: r.user_profile_image || null,
       }
     };
   } catch (error: any) {
@@ -1772,11 +1983,11 @@ export async function verifyAndPunchMealPassAction(data: {
 }
 
 /**
- * Helper to resolve Devotee Center and Temple with POC fallback:
- * 1. Checks attendee's user profile (current_center, center, other_center, current_temple, parent_temple, other_temple).
- * 2. If attendee's center/temple is None/blank (e.g. manually entered by another devotee), fallbacks to POC profile.
- * 3. If 'Other' was selected, displays the user-typed value in other_center / other_temple.
- * 4. Fallbacks to registration record voice_name / parent_temple.
+ * Helper to resolve Devotee Center and Temple with historical snapshot priority:
+ * 1. Priority 1 (Audit Snapshot): Registration record fields (voice_name / parent_temple)
+ *    frozen at the time of registration so that 2+ years later history does not mutate.
+ * 2. Fallback (Old/Blank records): Attendee's live user profile (current_center, center, other_center, current_temple, parent_temple).
+ * 3. Fallback: POC profile if attendee profile is blank or None.
  */
 function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string } {
   const resolveField = (cur: any, oth: any, def: any): string => {
@@ -1796,11 +2007,35 @@ function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string
     return '';
   };
 
-  // 1. Try Attendee profile
-  let center = resolveField(r.user_current_center, r.user_other_center, r.user_center);
-  let temple = resolveField(r.user_current_temple, r.user_other_temple, r.user_parent_temple);
+  // 1. Priority 1: Frozen Registration Record Snapshots
+  let center = '';
+  const regVoice = (r.voice_name || r.center || '').trim();
+  if (regVoice && regVoice.toLowerCase() !== 'none') {
+    center = regVoice.toLowerCase() === 'other' ? (r.other_center || 'Other') : regVoice;
+  }
 
-  // 2. If Attendee has no center or it's None/empty, fallback to POC's profile
+  let temple = '';
+  const regTemple = (r.parent_temple || '').trim();
+  if (regTemple && regTemple.toLowerCase() !== 'none') {
+    temple = regTemple.toLowerCase() === 'other' ? (r.other_temple || 'Other') : regTemple;
+  }
+
+  // 2. Fallback: Attendee live profile if registration snapshot is missing
+  if (!center || center === 'None') {
+    const attCenter = resolveField(r.user_current_center, r.user_other_center, r.user_center);
+    if (attCenter && attCenter !== 'None') {
+      center = attCenter;
+    }
+  }
+
+  if (!temple || temple === 'None') {
+    const attTemple = resolveField(r.user_current_temple, r.user_other_temple, r.user_parent_temple);
+    if (attTemple && attTemple !== 'None') {
+      temple = attTemple;
+    }
+  }
+
+  // 3. Fallback: POC's profile if attendee has no center or temple
   if (!center || center === 'None') {
     const pocCenter = resolveField(r.poc_current_center, r.poc_other_center, r.poc_center);
     if (pocCenter && pocCenter !== 'None') {
@@ -1808,7 +2043,6 @@ function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string
     }
   }
 
-  // 3. If Attendee has no temple or it's None/empty, fallback to POC's profile
   if (!temple || temple === 'None') {
     const pocTemple = resolveField(r.poc_current_temple, r.poc_other_temple, r.poc_parent_temple);
     if (pocTemple && pocTemple !== 'None') {
@@ -1816,24 +2050,8 @@ function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string
     }
   }
 
-  // 4. Fallback to registration record fields
-  if (!center || center === 'None') {
-    const regVoice = (r.voice_name || r.center || '').trim();
-    if (regVoice && regVoice.toLowerCase() !== 'none') {
-      center = regVoice.toLowerCase() === 'other' ? (r.other_center || 'Other') : regVoice;
-    } else if (!center) {
-      center = 'None';
-    }
-  }
-
-  if (!temple || temple === 'None') {
-    const regTemple = (r.parent_temple || '').trim();
-    if (regTemple && regTemple.toLowerCase() !== 'none') {
-      temple = regTemple.toLowerCase() === 'other' ? (r.other_temple || 'Other') : regTemple;
-    } else if (!temple) {
-      temple = 'None';
-    }
-  }
+  if (!center) center = 'None';
+  if (!temple) temple = 'None';
 
   return { center, temple };
 }

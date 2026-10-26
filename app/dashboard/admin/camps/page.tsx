@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Tent, Plus, Calendar, MapPin, Users, DollarSign,
   ExternalLink, Edit, Trash2, ArrowLeft, CheckCircle,
@@ -169,10 +170,19 @@ export default function AdminCampsPage() {
   // Status Filter Tab (All, Active, Past / Completed, Drafts, Archived)
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'completed' | 'draft' | 'archived'>('all');
 
+  const router = useRouter();
+
   // Auth state for Super Admin check
   const { userData, loading: authLoading } = useAuth();
   const currentUserRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
   const isSuperAdmin = currentUserRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+  // Protect Admin Console: non-superadmin staff must never access master Admin Camps page
+  useEffect(() => {
+    if (!authLoading && userData && !isSuperAdmin) {
+      router.replace('/dashboard/camp?tab=staff');
+    }
+  }, [authLoading, userData, isSuperAdmin, router]);
 
   // Main Page View: 'camps' vs 'audit' vs 'prasadam'
   const [mainView, setMainView] = useState<'camps' | 'audit' | 'prasadam'>('camps');
@@ -1485,50 +1495,66 @@ export default function AdminCampsPage() {
     return c.status !== 'archived';
   });
 
+  if (!authLoading && (!userData || !isSuperAdmin)) {
+    return (
+      <div className="min-h-screen bg-[#fafcff] flex items-center justify-center p-6">
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-lg space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+            <Loader2 className="w-8 h-8 animate-spin" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">Redirecting to Camp Staff Portal...</h2>
+          <p className="text-xs text-slate-500">
+            You do not have master Super Admin privileges. Redirecting you to your assigned camp duty desk.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#fafcff] p-4 sm:p-6 lg:p-8 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#fafcff] p-3 sm:p-6 lg:p-8 text-slate-800">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+        {/* Top Header: Compact on Mobile */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-200/80">
           <div>
             <Link
               href="/dashboard/admin"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-600 mb-1.5 transition-colors font-semibold"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-600 mb-1 transition-colors font-semibold"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Admin Center
             </Link>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20">
-                <Tent className="w-6 h-6" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2 sm:gap-3">
+              <span className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20">
+                <Tent className="w-5 h-5 sm:w-6 sm:h-6" />
               </span>
               Camp &amp; Retreat Management
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">
               Host new camps, dynamically customize meal rates, room stay charges, IDT keys &amp; access historical attendee data.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
             <button
               onClick={() => {
                 if (mainView === 'camps') loadCamps();
                 else loadAuditData();
               }}
-              className="p-2.5 text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+              className="p-1.5 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-lg sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer"
               title="Refresh"
             >
-              <RefreshCw className={`w-4 h-4 ${(loading || auditLoading) ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${(loading || auditLoading) ? 'animate-spin' : ''}`} />
             </button>
 
             {/* QR Code Pass Scanner Button */}
             <button
               onClick={() => setIsQrScannerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
             >
-              <QrCode className="w-4 h-4 text-amber-400" />
+              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
               <span>Scan Pass</span>
             </button>
 
@@ -1536,38 +1562,39 @@ export default function AdminCampsPage() {
             {isSuperAdmin && (
               <button
                 onClick={() => setIsStaffModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-full text-xs shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 title="Assign camp staff and custom privileges"
               >
-                <Users className="w-4 h-4 text-amber-600" />
-                <span>Camp Staff &amp; Roles</span>
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                <span className="hidden sm:inline">Camp Staff &amp; Roles</span>
+                <span className="sm:hidden">Staff</span>
               </button>
             )}
 
             {mainView === 'camps' && isSuperAdmin && (
               <button
                 onClick={openCreateModal}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full text-xs shadow-md shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                className="inline-flex items-center gap-1 sm:gap-2 px-3.5 sm:px-6 py-1.5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full text-xs shadow-md shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                Host New Camp
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Host Camp</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Primary View Navigation Switcher */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm">
-          <div className="flex items-center gap-2">
+        {/* Primary View Navigation Switcher: Compact on Mobile */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto pb-1 lg:pb-0">
             <button
               onClick={() => setMainView('camps')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 mainView === 'camps'
-                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/25'
+                  ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Tent className="w-4 h-4" />
+              <Tent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>Camp Retreats ({totalCamps})</span>
             </button>
 
@@ -1577,19 +1604,19 @@ export default function AdminCampsPage() {
                   setMainView('audit');
                   if (transactions.length === 0) loadAuditData();
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   mainView === 'audit'
-                    ? 'bg-slate-900 text-white shadow-sm shadow-slate-900/25'
+                    ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <CreditCard className="w-4 h-4 text-amber-400" />
+                <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                 <span>Financial Audit &amp; Transactions</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   Super Admin
                 </span>
                 {auditStats && (auditStats.pending_verifications > 0 || auditStats.pending_refunds > 0) && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
                     {auditStats.pending_verifications + auditStats.pending_refunds}
                   </span>
                 )}
@@ -1599,15 +1626,15 @@ export default function AdminCampsPage() {
             {isSuperAdmin && (
               <button
                 onClick={() => setMainView('prasadam')}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   mainView === 'prasadam'
-                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/25'
+                    ? 'bg-amber-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Utensils className="w-4 h-4 text-amber-300" />
+                <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300" />
                 <span>Prasadam Audit &amp; Kitchen Ledger</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   Super Admin
                 </span>
               </button>
@@ -1615,11 +1642,11 @@ export default function AdminCampsPage() {
           </div>
 
           {mainView === 'audit' && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 onClick={loadAuditData}
                 disabled={auditLoading}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg sm:rounded-xl transition-all cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${auditLoading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
@@ -1627,7 +1654,7 @@ export default function AdminCampsPage() {
               <button
                 onClick={() => auditSubView === 'transactions' ? handleExportTransactions('xlsx') : handleExportRefunds('xlsx')}
                 disabled={auditSubView === 'transactions' ? filteredTransactions.length === 0 : filteredRefunds.length === 0}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 title="Export filtered records as Microsoft Excel (.xlsx)"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1636,7 +1663,7 @@ export default function AdminCampsPage() {
               <button
                 onClick={() => auditSubView === 'transactions' ? handleExportTransactions('csv') : handleExportRefunds('csv')}
                 disabled={auditSubView === 'transactions' ? filteredTransactions.length === 0 : filteredRefunds.length === 0}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 title="Export filtered records as CSV (.csv)"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -1650,55 +1677,55 @@ export default function AdminCampsPage() {
         {mainView === 'camps' && (
           <>
 
-        {/* Stats Row: Matching Voicegurukul Theme */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+        {/* Stats Row: Compact on Mobile */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
               <span>All Camps</span>
-              <Tent className="w-4 h-4 text-amber-600" />
+              <Tent className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900 mt-2">{totalCamps}</div>
-            <span className="text-[11px] text-slate-400">Total Hosted Retreats</span>
+            <div className="text-lg sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2">{totalCamps}</div>
+            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Total Hosted Retreats</span>
           </div>
 
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
               <span>Active Camps</span>
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-emerald-600 mt-2">{activeCamps}</div>
-            <span className="text-[11px] text-slate-400">Accepting Registrations</span>
+            <div className="text-lg sm:text-2xl font-black text-emerald-600 mt-1 sm:mt-2">{activeCamps}</div>
+            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Accepting Registrations</span>
           </div>
 
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
               <span>Devotees Registered</span>
-              <Users className="w-4 h-4 text-indigo-600" />
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900 mt-2">{totalRegistrations}</div>
-            <span className="text-[11px] text-slate-400">Across All Camps</span>
+            <div className="text-lg sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2">{totalRegistrations}</div>
+            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Across All Camps</span>
           </div>
 
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
               <span>Total Laxmi</span>
-              <DollarSign className="w-4 h-4 text-amber-600" />
+              <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
             </div>
-            <div className="text-2xl font-black text-amber-600 mt-2">
+            <div className="text-lg sm:text-2xl font-black text-amber-600 mt-1 sm:mt-2 truncate">
               ₹{Number(totalRevenue).toLocaleString('en-IN')}
             </div>
-            <span className="text-[11px] text-slate-400">Collected Camp Laxmi</span>
+            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Collected Camp Laxmi</span>
           </div>
         </div>
 
         {/* STATUS FILTER TABS: Always access active & past camps */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-1.5 p-1 bg-white border border-slate-200/90 rounded-full shadow-sm text-xs font-bold">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-1 sm:pt-2">
+          <div className="flex items-center gap-1 sm:gap-1.5 p-1 bg-white border border-slate-200/90 rounded-xl sm:rounded-full shadow-xs text-xs font-bold overflow-x-auto no-scrollbar max-w-full">
             <button
               onClick={() => setFilterTab('all')}
-              className={`px-4 py-1.5 rounded-full transition-all ${
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
                 filterTab === 'all'
-                  ? 'bg-amber-500 text-white shadow-sm'
+                  ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -1706,9 +1733,9 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('active')}
-              className={`px-4 py-1.5 rounded-full transition-all ${
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
                 filterTab === 'active'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -1716,9 +1743,9 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('completed')}
-              className={`px-4 py-1.5 rounded-full transition-all ${
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
                 filterTab === 'completed'
-                  ? 'bg-slate-800 text-white shadow-sm'
+                  ? 'bg-slate-800 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -1726,9 +1753,9 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('draft')}
-              className={`px-4 py-1.5 rounded-full transition-all ${
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
                 filterTab === 'draft'
-                  ? 'bg-amber-600 text-white shadow-sm'
+                  ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -1736,9 +1763,9 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('archived')}
-              className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full transition-all ${
+              className={`inline-flex items-center gap-1 px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
                 filterTab === 'archived'
-                  ? 'bg-rose-900 text-white shadow-sm'
+                  ? 'bg-rose-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -1747,7 +1774,7 @@ export default function AdminCampsPage() {
             </button>
           </div>
 
-          <span className="text-xs text-slate-400 font-medium">
+          <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
             {filterTab === 'archived'
               ? 'Archived camps are kept here safely. You can restore them or permanently delete them.'
               : 'Past and concluded camps remain permanently accessible for reports & Excel downloads.'}
@@ -1787,7 +1814,7 @@ export default function AdminCampsPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {filteredCamps.map((camp) => {
               const startDateStr = camp.start_date ? new Date(camp.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
               const endDateStr = camp.end_date ? new Date(camp.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -1796,17 +1823,17 @@ export default function AdminCampsPage() {
               return (
                 <div
                   key={camp.id}
-                  className={`rounded-3xl border p-6 flex flex-col justify-between transition-all hover:shadow-lg ${
+                  className={`rounded-2xl sm:rounded-3xl border p-3.5 sm:p-6 flex flex-col justify-between transition-all hover:shadow-md ${
                     isPastCamp
                       ? 'bg-slate-50/70 border-slate-200'
-                      : 'bg-white border-slate-200/90 shadow-sm'
+                      : 'bg-white border-slate-200/90 shadow-xs'
                   }`}
                 >
                   <div>
                     {/* Header: Status Badge & Actions */}
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2 sm:mb-3">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide ${
+                        className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wide ${
                           camp.status === 'active'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                             : camp.status === 'draft'
@@ -1828,80 +1855,80 @@ export default function AdminCampsPage() {
                         {camp.status.toUpperCase()}
                       </span>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 sm:gap-1.5">
                         {camp.status === 'archived' ? (
                           <>
                             <button
                               onClick={() => handleUnarchiveCamp(camp.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors shadow-2xs"
                               title="Restore Camp from Archive"
                             >
-                              <RefreshCw className="w-3 h-3 text-slate-500" />
+                              <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-500" />
                               <span>Restore</span>
                             </button>
                             <button
                               onClick={() => openEditModal(camp)}
-                              className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Edit Camp Config"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                             {/* In Archive: Keep Delete Option */}
                             <button
                               onClick={() => openDeleteModal(camp.id, camp.title)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                              className="p-1 sm:p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
                               title="Permanently Delete Camp"
                             >
-                              <Trash2 className="w-4 h-4 text-rose-500" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" />
                             </button>
                           </>
                         ) : (
                           <>
                             <button
                               onClick={() => handleToggleStatus(camp.id, camp.status)}
-                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
+                              className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
                               title="Toggle Active/Closed"
                             >
                               {camp.status === 'active' ? 'Close' : 'Reactivate'}
                             </button>
                             <button
                               onClick={() => openEditModal(camp)}
-                              className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Edit Camp Config"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                             {/* Regular Cards: Show Archive instead of Delete */}
                             <button
                               onClick={() => handleArchiveCamp(camp.id)}
-                              className="p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Archive Camp"
                             >
-                              <Archive className="w-4 h-4" />
+                              <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           </>
                         )}
                       </div>
                     </div>
 
-                    <h2 className="text-lg font-black text-slate-900 mb-1.5 line-clamp-1">
+                    <h2 className="text-base sm:text-lg font-black text-slate-900 mb-1 sm:mb-1.5 line-clamp-1">
                       {camp.title}
                     </h2>
-                    <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
+                    <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-2 mb-2.5 sm:mb-4 leading-relaxed">
                       {camp.description || 'Spiritual retreat and youth development camp.'}
                     </p>
 
-                    <div className="space-y-1.5 text-xs text-slate-600 mb-6 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 font-medium">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                        <span>{startDateStr} &mdash; {endDateStr}</span>
+                    <div className="space-y-1 sm:space-y-1.5 text-[11px] sm:text-xs text-slate-600 mb-3 sm:mb-6 bg-slate-50 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 font-medium">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="truncate">{startDateStr} &mdash; {endDateStr}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                        <span>{camp.venue || 'Central VOICE, Pune'}</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span className="truncate">{camp.venue || 'Central VOICE, Pune'}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Utensils className="w-3.5 h-3.5 text-indigo-500" />
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Utensils className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                         <span>{(camp.meal_pricing || []).length} Scheduled Meal Days</span>
                       </div>
                     </div>
@@ -1909,37 +1936,37 @@ export default function AdminCampsPage() {
 
                   <div>
                     {/* Devotee Count & Collections: Permanent Records */}
-                    <div className="flex items-center justify-between py-3 border-t border-slate-100 text-xs mb-4">
+                    <div className="flex items-center justify-between py-2 sm:py-3 border-t border-slate-100 text-xs mb-2.5 sm:mb-4">
                       <div>
-                        <span className="text-slate-400 block text-[11px] font-semibold">Registered Attendees</span>
-                        <span className="text-lg font-black text-slate-900">
+                        <span className="text-slate-400 block text-[10px] sm:text-[11px] font-semibold">Attendees</span>
+                        <span className="text-base sm:text-lg font-black text-slate-900">
                           {camp.registration_count || 0}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-slate-400 block text-[11px] font-semibold">Camp Collections</span>
-                        <span className="text-lg font-black text-emerald-600">
+                        <span className="text-slate-400 block text-[10px] sm:text-[11px] font-semibold">Collections</span>
+                        <span className="text-base sm:text-lg font-black text-emerald-600">
                           ₹{Number(camp.total_revenue || 0).toLocaleString('en-IN')}
                         </span>
                       </div>
                     </div>
 
                     {/* Action Links */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                       <Link
                         href={`/dashboard/admin/camps/${camp.id}/registrations`}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
+                        className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
                       >
                         <Users className="w-3.5 h-3.5" />
-                        <span>Attendees &amp; Excel</span>
+                        <span>Attendees</span>
                       </Link>
                       <Link
                         href={`/camps/${camp.slug}`}
                         target="_blank"
-                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
-                        <span>{isPastCamp ? 'Lookup Portal' : 'Public Portal'}</span>
+                        <span>{isPastCamp ? 'Lookup' : 'Public Portal'}</span>
                       </Link>
                     </div>
                   </div>
@@ -3305,33 +3332,33 @@ export default function AdminCampsPage() {
 
       {/* Host / Edit Camp Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-5xl w-full max-h-[96vh] sm:max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <span className="p-2 rounded-2xl bg-amber-500/10 text-amber-600">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <span className="p-2 rounded-2xl bg-amber-500/10 text-amber-600 shrink-0">
                   <Tent className="w-5 h-5" />
                 </span>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
                     {editingCamp ? 'Edit Camp Configuration' : 'Host New Camp'}
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[11px] sm:text-xs text-slate-500 truncate">
                     Set up retreat schedules, custom meal rates, room stay charges, and IDT keys.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Navigation Tabs */}
-            <div className="flex border-b border-slate-100 px-6 gap-2 overflow-x-auto bg-slate-50/30 text-xs font-bold">
+            <div className="flex border-b border-slate-100 px-3 sm:px-6 gap-1 sm:gap-2 overflow-x-auto no-scrollbar bg-slate-50/30 text-xs font-bold shrink-0">
               {[
                 { id: 'basic', label: '1. Basic Info', icon: Calendar },
                 { id: 'tracks', label: '2. Camps', icon: Tent },
@@ -3347,21 +3374,21 @@ export default function AdminCampsPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-1.5 py-3.5 px-3 border-b-2 transition-all whitespace-nowrap ${
+                    className={`flex items-center gap-1.5 py-3 sm:py-3.5 px-2.5 sm:px-3 border-b-2 transition-all whitespace-nowrap shrink-0 ${
                       isActive
                         ? 'border-amber-600 text-amber-600'
                         : 'border-transparent text-slate-500 hover:text-slate-800'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    {tab.label}
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{tab.label}</span>
                   </button>
                 );
               })}
             </div>
 
             {/* Modal Body Form */}
-            <form onSubmit={handleSaveCamp} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form onSubmit={handleSaveCamp} className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6">
               {/* TAB 1: BASIC INFO */}
               {activeTab === 'basic' && (
                 <div className="space-y-4">
@@ -5001,16 +5028,16 @@ export default function AdminCampsPage() {
               )}
 
               {/* Modal Footer */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-3 sm:pt-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-full transition-colors text-center"
                 >
                   Cancel
                 </button>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
                   {activeTab !== 'refund' ? (
                     <button
                       type="button"
@@ -5019,7 +5046,7 @@ export default function AdminCampsPage() {
                         const nextIdx = tabs.indexOf(activeTab) + 1;
                         if (nextIdx < tabs.length) setActiveTab(tabs[nextIdx]);
                       }}
-                      className="px-6 py-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors cursor-pointer"
+                      className="px-6 py-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors cursor-pointer text-center"
                     >
                       Next Step &rarr;
                     </button>
@@ -5028,10 +5055,10 @@ export default function AdminCampsPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-7 py-2.5 text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-full shadow-md shadow-orange-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className="px-7 py-2.5 text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-full shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
-                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {editingCamp ? 'Update Camp Config' : 'Save & Publish Camp'}
+                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
+                    <span>{editingCamp ? 'Update Camp Config' : 'Save & Publish Camp'}</span>
                   </button>
                 </div>
               </div>

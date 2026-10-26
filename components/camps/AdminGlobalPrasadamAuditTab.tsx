@@ -642,82 +642,82 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Banner / Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-xl shadow-amber-600/20">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-wider">
-            <Utensils className="w-3.5 h-3.5 text-amber-200" />
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-200">
+      {/* Top Banner / Actions: Compact on Mobile */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-lg shadow-amber-600/15">
+        <div className="space-y-0.5 sm:space-y-1">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[9px] sm:text-[11px] font-black uppercase tracking-wider">
+            <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-200" />
             <span>Super Admin &bull; Prasadam &amp; Kitchen Audit</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+          <h2 className="text-base sm:text-xl md:text-2xl font-black tracking-tight text-white leading-tight">
             Global Kitchen Headcount &amp; Devotee Meal Ledger
           </h2>
-          <p className="text-xs sm:text-sm text-amber-100 max-w-2xl">
+          <p className="text-[11px] sm:text-xs text-amber-100 max-w-2xl hidden sm:block">
             Tally expected meals across all retreats, audit which devotees took prasadam at what time,
             and monitor extra guest buffers with center, temple, and track filters.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
           {onOpenScanner && (
             <button
               onClick={onOpenScanner}
               type="button"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md transition-all hover:scale-[1.02] cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
               title="Launch QR Pass Scanner"
             >
-              <QrCode className="w-4 h-4 text-amber-400" />
-              <span>Gate &amp; Meal Scanner</span>
+              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+              <span>Gate Scanner</span>
             </button>
           )}
 
           <button
             onClick={loadData}
             type="button"
-            className="p-2.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-2xl transition-all shadow-sm cursor-pointer"
+            className="p-1.5 sm:p-2.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl sm:rounded-2xl transition-all shadow-xs cursor-pointer"
             title="Refresh Audit Data"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           <button
             onClick={handleExportExcel}
             type="button"
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-lg shadow-emerald-700/25 transition-all hover:scale-[1.02] cursor-pointer"
+            className="inline-flex items-center gap-1 px-3 sm:px-5 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Export Audit (.xlsx)</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Export (.xlsx)</span>
           </button>
         </div>
       </div>
 
-      {/* DISTINCT 2 SECTIONS SWITCHER (As Requested by User) */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-3 gap-3 flex-wrap">
-        <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+      {/* DISTINCT 2 SECTIONS SWITCHER: Compact on Mobile */}
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-3 gap-2 sm:gap-3 flex-wrap">
+        <div className="flex items-center bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
           <button
             type="button"
             onClick={() => setActiveSection('devotees')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeSection === 'devotees'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/25'
+                ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Users className="w-4 h-4" />
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span>Devotee Prasadam Attendance</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSection('kitchen')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeSection === 'kitchen'
-                ? 'bg-slate-900 text-white shadow-md shadow-slate-900/25'
+                ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Utensils className="w-4 h-4 text-amber-400" />
+            <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
             <span>Daily Kitchen Headcount &amp; Tally</span>
           </button>
         </div>
@@ -727,18 +727,18 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
       {/* SECTION 1: DAILY KITCHEN HEADCOUNT & TALLY               */}
       {/* ======================================================== */}
       {activeSection === 'kitchen' && (
-        <div className="space-y-5 animate-in fade-in duration-150">
+        <div className="space-y-3.5 sm:space-y-5 animate-in fade-in duration-150">
           {/* Kitchen Filter Bar with Camp, Meal Session and Dynamic Date Pills */}
-          <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+          <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-3xl border border-slate-200/90 shadow-xs space-y-2 sm:space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 text-xs">
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   Camp Title
                 </label>
                 <select
                   value={campFilter}
                   onChange={(e) => setCampFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Camps ({filterOptions.camps.length})</option>
                   {filterOptions.camps.map((c) => (
@@ -750,13 +750,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   Meal Session
                 </label>
                 <select
                   value={mealFilter}
                   onChange={(e) => setMealFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Meals (BF, LN, DN)</option>
                   <option value="Breakfast">Breakfast</option>
@@ -770,7 +770,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   <button
                     onClick={resetFilters}
                     type="button"
-                    className="px-3.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer"
                   >
                     Reset Filters
                   </button>
@@ -779,14 +779,14 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
 
             {/* Dynamic Meal Date Pills below other filters */}
-            <div className="pt-2.5 border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto py-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
                 Meal Date:
               </span>
               <button
                 type="button"
                 onClick={() => setDateFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   dateFilter === 'all'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -799,7 +799,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   key={d}
                   type="button"
                   onClick={() => setDateFilter(d)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     dateFilter === d
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -811,94 +811,94 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
           </div>
 
-          {/* Kitchen Stats Cards (Dynamic to Selected Filters) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm transition-all hover:border-slate-300">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          {/* Kitchen Stats Cards: Compact on Mobile */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3.5">
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs transition-all hover:border-slate-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Scheduled Meals
               </span>
-              <div className="text-2xl font-black text-slate-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
                 {activeKitchenStats.totalScheduled.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-slate-500 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block">
                 {activeKitchenStats.dateLabel}
               </span>
             </div>
 
-            <div className="p-4 rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-sm transition-all hover:border-emerald-300">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
                 <span>Honored / Taken</span>
               </span>
-              <div className="text-2xl font-black text-emerald-800 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-emerald-800 mt-0.5 sm:mt-1">
                 {activeKitchenStats.totalPlatesHonored.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-emerald-700 font-medium truncate block">
-                {activeKitchenStats.totalTaken} QR + {activeKitchenStats.totalExtraServed} Guests (No QR)
+              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-medium truncate block">
+                {activeKitchenStats.totalTaken} QR + {activeKitchenStats.totalExtraServed} Guests
               </span>
             </div>
 
-            <div className="p-4 rounded-3xl bg-amber-50/70 border border-amber-200/80 shadow-sm transition-all hover:border-amber-300">
-              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-amber-50/70 border border-amber-200/80 shadow-xs transition-all hover:border-amber-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
+                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                 <span>Pending / Missed</span>
               </span>
-              <div className="text-2xl font-black text-amber-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-amber-900 mt-0.5 sm:mt-1">
                 {activeKitchenStats.totalNotTaken.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-amber-700 font-medium">
+              <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate block">
                 {activeKitchenStats.notTakenPercent}% not yet punched
               </span>
             </div>
 
-            <div className="p-4 rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-sm transition-all hover:border-indigo-300">
-              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
-                <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Guests Honored (No QR)</span>
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-xs transition-all hover:border-indigo-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
+                <PlusCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+                <span>Guests Honored</span>
               </span>
-              <div className="text-2xl font-black text-indigo-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-indigo-900 mt-0.5 sm:mt-1">
                 +{activeKitchenStats.totalExtraServed.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-indigo-700 font-medium truncate block">
-                Target buffer: +{activeKitchenStats.totalExtraGuests.toLocaleString('en-IN')}
+              <span className="text-[9px] sm:text-[10px] text-indigo-700 font-medium truncate block">
+                Buffer: +{activeKitchenStats.totalExtraGuests.toLocaleString('en-IN')}
               </span>
             </div>
 
-            <div className="p-4 rounded-3xl bg-slate-900 text-white shadow-sm border border-slate-800 transition-all hover:border-slate-700">
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                Kitchen Target Prep
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-slate-900 text-white shadow-xs border border-slate-800 transition-all hover:border-slate-700">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                Target Prep
               </span>
-              <div className="text-2xl font-black text-white mt-1">
+              <div className="text-lg sm:text-2xl font-black text-white mt-0.5 sm:mt-1">
                 {activeKitchenStats.totalKitchenTarget.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-slate-400">Total plates required</span>
+              <span className="text-[9px] sm:text-[10px] text-slate-400 truncate block">Total plates needed</span>
             </div>
 
-            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm transition-all hover:border-slate-300">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Active Camp Retreats
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs transition-all hover:border-slate-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Camp Retreats
               </span>
-              <div className="text-2xl font-black text-slate-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
                 {campFilter !== 'all' ? 1 : campSummaries.length}
               </div>
-              <span className="text-[10px] text-slate-500 font-medium">
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block">
                 {campFilter !== 'all' ? 'Single Camp' : 'Under tracking'}
               </span>
             </div>
           </div>
 
-          {/* Share WhatsApp Slip Action */}
-          <div className="flex items-center justify-between p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-2xl">
+          {/* Share WhatsApp Slip Action: Compact on Mobile */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 p-2.5 sm:p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-xl sm:rounded-2xl">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-amber-500 text-white">
-                <Share2 className="w-4 h-4" />
+              <span className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500 text-white">
+                <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </span>
               <div>
                 <span className="text-xs font-bold text-slate-800 block">
                   Kitchen WhatsApp Headcount Slip
                 </span>
-                <span className="text-[11px] text-slate-500">
-                  Copy aggregated kitchen targets for {dateFilter !== 'all' ? dateFilter : 'All Dates'} to send to kitchen heads.
+                <span className="text-[10px] sm:text-[11px] text-slate-500">
+                  Copy aggregated kitchen targets for {dateFilter !== 'all' ? dateFilter : 'All Dates'}.
                 </span>
               </div>
             </div>
@@ -906,50 +906,50 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             <button
               type="button"
               onClick={handleCopyKitchenSlip}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
-              {copiedSlip ? <CheckCheck className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+              {copiedSlip ? <CheckCheck className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedSlip ? 'Slip Copied!' : 'Copy Kitchen Slip'}</span>
             </button>
           </div>
 
-          {/* Kitchen Headcount Table */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          {/* Kitchen Headcount Table: Compact on Mobile */}
+          <div className="bg-white rounded-xl sm:rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="px-3 sm:px-5 py-2.5 sm:py-4 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
               <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-amber-500 text-white shadow-xs">
-                  <Utensils className="w-4 h-4" />
+                <span className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500 text-white shadow-xs">
+                  <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </span>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">
+                  <h3 className="text-xs sm:text-sm font-black text-slate-900">
                     Cross-Camp Kitchen Headcount &amp; Target Prepared Tally
                   </h3>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[10px] sm:text-[11px] text-slate-500">
                     Expected attendee count based on registrations, actual punches recorded, and extra guest buffers per meal.
                   </p>
                 </div>
               </div>
 
-              <span className="px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-bold">
+              <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-200 text-slate-700 text-[10px] sm:text-xs font-bold self-start sm:self-auto">
                 {filteredKitchenTally.length} Meal Session(s)
               </span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse min-w-[950px]">
-                <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <thead className="bg-slate-50 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Camp Title</th>
-                    <th className="py-3 px-3">Date &amp; Label</th>
-                    <th className="py-3 px-3">Meal Session</th>
-                    <th className="py-3 px-3 text-right">Registered</th>
-                    <th className="py-3 px-3 text-right">Punched (QR)</th>
-                    <th className="py-3 px-3 text-right">Not Taken</th>
-                    <th className="py-3 px-3 text-right">Guests (No QR)</th>
-                    <th className="py-3 px-3 text-right">Total Honored</th>
-                    <th className="py-3 px-3 text-right">Buffer Planned</th>
-                    <th className="py-3 px-4 text-right">Kitchen Target</th>
-                    <th className="py-3 px-4 text-center">Action / Notes</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">Camp Title</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Date &amp; Label</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Meal Session</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Registered</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Punched (QR)</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Not Taken</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Guests</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Total Honored</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Buffer</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-right">Target</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-center">Action / Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1079,19 +1079,19 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
       {/* SECTION 2: DEVOTEE PRASADAM ATTENDANCE (1 ROW PER USER) */}
       {/* ======================================================== */}
       {activeSection === 'devotees' && (
-        <div className="space-y-5 animate-in fade-in duration-150">
-          {/* 1. MULTI-FILTER BAR WITH CENTER, TEMPLE & DYNAMIC MEAL DATE PILLS (FIRST) */}
-          <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm space-y-3">
+        <div className="space-y-3.5 sm:space-y-5 animate-in fade-in duration-150">
+          {/* 1. MULTI-FILTER BAR WITH CENTER, TEMPLE & DYNAMIC MEAL DATE PILLS */}
+          <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-3xl border border-slate-200/90 shadow-xs space-y-2 sm:space-y-3">
             {/* Search Bar + Reset */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search devotee name, phone, pass token, center, temple, or track..."
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs outline-none focus:border-amber-500 focus:bg-white transition-all font-medium"
+                  className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-2xl text-xs outline-none focus:border-amber-500 focus:bg-white transition-all font-medium"
                 />
                 {searchQuery && (
                   <button
@@ -1107,24 +1107,24 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                 <button
                   onClick={resetFilters}
                   type="button"
-                  className="px-3.5 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer"
                 >
                   Reset Filters
                 </button>
               )}
             </div>
 
-            {/* Dropdowns Row: Camp Title -> Camp Track -> Current Temple -> VOICE Center -> Meal Session -> Punch Status */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+            {/* Dropdowns Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-1.5 sm:gap-2.5 pt-2 border-t border-slate-100 text-xs">
               {/* Camp Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   Camp Title
                 </label>
                 <select
                   value={campFilter}
                   onChange={(e) => setCampFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Camps ({filterOptions.camps.length})</option>
                   {filterOptions.camps.map((c) => (
@@ -1137,13 +1137,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
               {/* Sub-Camp Track Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   Camp Track
                 </label>
                 <select
                   value={trackFilter}
                   onChange={(e) => setTrackFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Tracks ({filterOptions.tracks.length})</option>
                   {filterOptions.tracks.map((t) => (
@@ -1156,13 +1156,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
               {/* Current Temple Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   Current Temple
                 </label>
                 <select
                   value={templeFilter}
                   onChange={(e) => setTempleFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Temples ({filterOptions.temples.length})</option>
                   {filterOptions.temples.map((t) => (
@@ -1175,13 +1175,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
               {/* VOICE Center Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   VOICE Center
                 </label>
                 <select
                   value={centerFilter}
                   onChange={(e) => setCenterFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Centers ({availableCenters.length})</option>
                   {availableCenters.map((c) => (
@@ -1194,13 +1194,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
               {/* Meal Session Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   Meal Session
                 </label>
                 <select
                   value={mealFilter}
                   onChange={(e) => setMealFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Meals (BF, LN, DN)</option>
                   <option value="Breakfast">Breakfast</option>
@@ -1211,13 +1211,13 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
               {/* Punch Status Filter */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1">
                   Punch Status
                 </label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Statuses</option>
                   <option value="TAKEN">TAKEN (Honored)</option>
@@ -1226,15 +1226,15 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               </div>
             </div>
 
-            {/* DYNAMIC MEAL DATE PILLS (LOCATED BELOW SEARCH & FILTERS AS REQUESTED) */}
-            <div className="pt-2.5 border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto py-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
+            {/* DYNAMIC MEAL DATE PILLS */}
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
                 Meal Date:
               </span>
               <button
                 type="button"
                 onClick={() => setDateFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   dateFilter === 'all'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -1247,7 +1247,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   key={d}
                   type="button"
                   onClick={() => setDateFilter(d)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     dateFilter === d
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -1259,89 +1259,89 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
           </div>
 
-          {/* 2. DYNAMIC DEVOTEE SUMMARY CARDS (Includes Devotees & Extra Guests) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* 2. DYNAMIC DEVOTEE SUMMARY CARDS: Compact on Mobile */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5">
             {/* Card 1: Total Expected Meals */}
-            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm transition-all hover:border-slate-300">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs transition-all hover:border-slate-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Total Meals Scheduled
               </span>
-              <div className="text-2xl font-black text-slate-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
                 {devoteeStats.totalScheduledMeals.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-slate-500 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block">
                 {devoteeStats.devoteeCount} Devotees &bull; {devoteeStats.dateLabel}
               </span>
             </div>
 
-            {/* Card 2: Prasadam Taken (Honored Devotees + Extra Guests) */}
-            <div className="p-4 rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-sm transition-all hover:border-emerald-300">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            {/* Card 2: Prasadam Taken */}
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
                 <span>Prasadam Taken</span>
               </span>
-              <div className="text-2xl font-black text-emerald-800 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-emerald-800 mt-0.5 sm:mt-1">
                 {(devoteeStats.totalTakenMeals + guestCountForScope).toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-emerald-700 font-medium truncate block">
-                {devoteeStats.totalTakenMeals} Devotees + {guestCountForScope} Guests (No QR)
+              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-medium truncate block">
+                {devoteeStats.totalTakenMeals} Devotees + {guestCountForScope} Guests
               </span>
             </div>
 
-            {/* Card 3: Guests Honored (No QR) - ADDED FOR BOTH SECTIONS */}
-            <div className="p-4 rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-sm transition-all hover:border-indigo-300">
-              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
-                <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Guests Honored (No QR)</span>
+            {/* Card 3: Guests Honored (No QR) */}
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-xs transition-all hover:border-indigo-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
+                <PlusCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+                <span>Guests Honored</span>
               </span>
-              <div className="text-2xl font-black text-indigo-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-indigo-900 mt-0.5 sm:mt-1">
                 +{guestCountForScope}
               </div>
-              <span className="text-[10px] text-indigo-700 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-indigo-700 font-medium truncate block">
                 Walk-ins, drivers &amp; VIPs honored
               </span>
             </div>
 
             {/* Card 4: Remaining / Pending */}
-            <div className="p-4 rounded-3xl bg-amber-50/80 border border-amber-200/80 shadow-sm transition-all hover:border-amber-300">
-              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-amber-50/80 border border-amber-200/80 shadow-xs transition-all hover:border-amber-300">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
+                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                 <span>Remaining / Pending</span>
               </span>
-              <div className="text-2xl font-black text-amber-900 mt-1">
+              <div className="text-lg sm:text-2xl font-black text-amber-900 mt-0.5 sm:mt-1">
                 {devoteeStats.totalRemainingMeals.toLocaleString('en-IN')}
               </div>
-              <span className="text-[10px] text-amber-700 font-medium">
+              <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate block">
                 {devoteeStats.pendingRate}% pending honoring
               </span>
             </div>
 
             {/* Card 5: Session Breakdown */}
-            <div className="p-4 rounded-3xl bg-slate-900 text-white shadow-sm border border-slate-800 transition-all hover:border-slate-700 flex flex-col justify-between">
+            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-slate-900 text-white shadow-xs border border-slate-800 transition-all hover:border-slate-700 flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
                   Session Headcounts
                 </span>
-                <span className="text-[9px] text-slate-400 font-mono">
+                <span className="text-[8px] sm:text-[9px] text-slate-400 font-mono">
                   {devoteeStats.dateLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center mt-2 pt-2 border-t border-slate-800">
+              <div className="grid grid-cols-3 gap-1.5 text-center mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-slate-800">
                 <div>
-                  <span className="text-[9px] font-bold text-amber-300 uppercase block">BF</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
+                  <span className="text-[8px] sm:text-[9px] font-bold text-amber-300 uppercase block">BF</span>
+                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
                     {devoteeStats.bf.taken + guestByMeal.bf}/{devoteeStats.bf.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[9px] font-bold text-orange-300 uppercase block">LN</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
+                  <span className="text-[8px] sm:text-[9px] font-bold text-orange-300 uppercase block">LN</span>
+                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
                     {devoteeStats.ln.taken + guestByMeal.ln}/{devoteeStats.ln.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[9px] font-bold text-indigo-300 uppercase block">DN</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
+                  <span className="text-[8px] sm:text-[9px] font-bold text-indigo-300 uppercase block">DN</span>
+                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
                     {devoteeStats.dn.taken + guestByMeal.dn}/{devoteeStats.dn.eligible}
                   </span>
                 </div>
@@ -1349,33 +1349,33 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
           </div>
 
-          {/* ATTENDEE PRASADAM LEDGER: EXACTLY 1 ROW PER DEVOTEE */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+          {/* ATTENDEE PRASADAM LEDGER: Compact on Mobile */}
+          <div className="bg-white rounded-xl sm:rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-amber-600" />
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Devotee Prasadam Attendance Matrix &bull; {dateFilter !== 'all' ? dateFilter : 'All Dates'}
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                <span className="text-[11px] sm:text-xs font-black text-slate-800 uppercase tracking-wider">
+                  Devotee Prasadam Matrix &bull; {dateFilter !== 'all' ? dateFilter : 'All Dates'}
                 </span>
               </div>
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500">
                 {filteredDevotees.length} Devotees Listed
               </span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse min-w-[950px]">
-                <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <thead className="bg-slate-50 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-3 text-center">Token #</th>
-                    <th className="py-3 px-4">Devotee Details</th>
-                    <th className="py-3 px-3">Camp Title</th>
-                    <th className="py-3 px-3">Sub-Camp Track</th>
-                    <th className="py-3 px-3">Center &amp; Temple</th>
-                    <th className="py-3 px-3 text-center">Breakfast</th>
-                    <th className="py-3 px-3 text-center">Lunch</th>
-                    <th className="py-3 px-3 text-center">Dinner</th>
-                    <th className="py-3 px-3 text-right">Camp Total</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Token #</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">Devotee Details</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Camp Title</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Sub-Camp Track</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Center &amp; Temple</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Breakfast</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Lunch</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Dinner</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Camp Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

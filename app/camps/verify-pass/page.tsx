@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ShieldCheck, AlertCircle, CheckCircle2, XCircle,
@@ -13,8 +13,11 @@ import PublicFooter from '@/components/layout/PublicFooter';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import { verifyCampRegistrationAction } from '@/app/dashboard/admin/camps/actions';
 import { buildMealMatrix, checkCurrentMealEligibility } from '@/lib/camp-cost';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 function VerifyPassContent() {
+  const router = useRouter();
+  const { user, userData, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const passId = searchParams.get('id') || '';
 
@@ -25,6 +28,22 @@ function VerifyPassContent() {
     refund: any;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Check admin authorization: non-admins scanning with normal phone camera are redirected to home page
+  const roles = (Array.isArray(userData?.role) ? userData.role : [userData?.role])
+    .map((r: any) => Number(r))
+    .filter((r: number) => !isNaN(r));
+  const isSuperAdmin = roles.includes(8) || (Array.isArray(userData?.role) && (userData?.role as any).includes('super_admin'));
+  const isAuthorizedAdmin = isSuperAdmin || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 30].includes(r));
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user || !isAuthorizedAdmin) {
+        // Automatically redirect unauthorized / normal phone scans to home page
+        router.replace('/');
+      }
+    }
+  }, [authLoading, user, isAuthorizedAdmin, router]);
 
   const fetchPass = async (idToFetch: string) => {
     const clean = (idToFetch || '').trim();
@@ -52,11 +71,11 @@ function VerifyPassContent() {
   };
 
   useEffect(() => {
-    if (passId) {
+    if (passId && user && isAuthorizedAdmin) {
       setSearchId(passId);
       fetchPass(passId);
     }
-  }, [passId]);
+  }, [passId, user, isAuthorizedAdmin]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +106,18 @@ function VerifyPassContent() {
   const isRefundPending = refund?.status === 'pending';
   const isCancelled = reg?.is_cancelled || isRefunded;
   const isPaymentPending = reg?.payment_status === 'pending';
+
+  if (authLoading || !user || !isAuthorizedAdmin) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-24 text-center space-y-4">
+        <RefreshCw className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
+        <h2 className="text-base font-bold text-slate-800">Redirecting to Home...</h2>
+        <p className="text-xs text-slate-500">
+          Official delegate verification is restricted to authorized camp administrators.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
@@ -183,24 +214,24 @@ function VerifyPassContent() {
             </div>
           ) : mealEvaluation ? (
             <div
-              className={`p-4 sm:p-5 rounded-2xl border-2 space-y-2 ${
+              className={`p-3.5 sm:p-5 rounded-2xl border-2 space-y-2 ${
                 mealEvaluation.isEligible
                   ? 'bg-emerald-50 border-emerald-400 text-emerald-950'
                   : 'bg-amber-50 border-amber-300 text-amber-950'
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   {mealEvaluation.isEligible ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+                    <CheckCircle2 className="w-5 sm:w-6 h-5 sm:h-6 text-emerald-600 shrink-0" />
                   ) : (
-                    <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+                    <AlertCircle className="w-5 sm:w-6 h-5 sm:h-6 text-amber-600 shrink-0" />
                   )}
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-wider block opacity-75">
                       Current Meal Window • {mealEvaluation.currentSlot}
                     </span>
-                    <h3 className="text-base sm:text-lg font-black">
+                    <h3 className="text-sm sm:text-lg font-black leading-tight">
                       {mealEvaluation.isEligible
                         ? `ELIGIBLE FOR ${mealEvaluation.currentSlot.toUpperCase()} PRASADAM ✅`
                         : `NOT INCLUDED IN PASS ❌`}
@@ -209,7 +240,7 @@ function VerifyPassContent() {
                 </div>
 
                 <span
-                  className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                  className={`self-start sm:self-auto px-3 py-1 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-wider shrink-0 ${
                     mealEvaluation.isEligible
                       ? 'bg-emerald-200 text-emerald-900 border border-emerald-300'
                       : 'bg-amber-200 text-amber-900 border border-amber-300'
@@ -218,7 +249,7 @@ function VerifyPassContent() {
                   {mealEvaluation.isEligible ? 'SERVE MEAL' : 'CHECK PASS'}
                 </span>
               </div>
-              <p className="text-xs opacity-90 pl-8">{mealEvaluation.message}</p>
+              <p className="text-xs opacity-90 pl-0 sm:pl-8">{mealEvaluation.message}</p>
             </div>
           ) : null}
 
@@ -273,7 +304,7 @@ function VerifyPassContent() {
               <Utensils className="w-4 h-4 text-amber-600" />
               <span>Full Meal Schedule Pass</span>
             </h3>
-            <CampPrasadamCard registration={reg} standalone={true} />
+            <CampPrasadamCard registration={reg} standalone={true} hideActions={true} />
           </div>
         </div>
       )}

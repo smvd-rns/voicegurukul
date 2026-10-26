@@ -47,7 +47,7 @@ export default async function CampsDirectoryPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               {allCamps.map((camp: any) => {
                 const startStr = new Date(camp.start_date).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -64,7 +64,7 @@ export default async function CampsDirectoryPage() {
                 return (
                   <div
                     key={camp.id}
-                    className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm flex flex-col justify-between hover:shadow-lg transition-all"
+                    className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 shadow-sm flex flex-col justify-between hover:shadow-lg transition-all"
                   >
                     <div>
                       <span

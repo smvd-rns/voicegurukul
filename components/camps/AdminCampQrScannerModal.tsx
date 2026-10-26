@@ -117,9 +117,21 @@ export default function AdminCampQrScannerModal({
     attendee?: any;
     totalServed?: number;
     rawRegistration?: any;
+    secondsAgo?: number;
   } | null>(null);
 
-  // Recent scans feed for high-speed POS mode
+  // Mobile Session Bar Expansion & Result Card Auto-scroll Ref
+  const [isMobileSessionExpanded, setIsMobileSessionExpanded] = useState(false);
+  const mobileResultRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll on mobile when a new scan result arrives so volunteer never has to scroll manually
+  useEffect(() => {
+    if (scanResult && mobileResultRef.current) {
+      mobileResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [scanResult]);
+
+  // Recent scans feed for high-speed POS mode with device persistence
   const [recentScans, setRecentScans] = useState<{
     id: string;
     name: string;
@@ -129,7 +141,30 @@ export default function AdminCampQrScannerModal({
     meal: string;
     time: string;
     status: 'ALLOWED' | 'ALREADY_SERVED' | 'NOT_ELIGIBLE' | 'ERROR';
+    profileImage?: string;
   }[]>([]);
+
+  // Synchronize recent scans with localStorage so volunteer can scroll back & doesn't lose device history on refresh
+  const sessionFeedStorageKey = selectedCampId && selectedDate && selectedMeal
+    ? `voice_camp_feed_${selectedCampId}_${selectedDate}_${selectedMeal}`
+    : '';
+
+  useEffect(() => {
+    if (!sessionFeedStorageKey || typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(sessionFeedStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setRecentScans(parsed);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setRecentScans([]);
+  }, [sessionFeedStorageKey]);
 
   // Viewfinder flash status
   const [scanStatusFlash, setScanStatusFlash] = useState<'success' | 'warning' | 'error' | null>(null);
@@ -696,9 +731,9 @@ export default function AdminCampQrScannerModal({
     if (isProcessingRef.current) return;
 
     const now = Date.now();
-    // Same pass debounce: only wait if the EXACT same pass is held continuously (1.2s cooldown)
+    // Same pass debounce: wait 5s if the EXACT same pass is held continuously in front of camera
     // If a different devotee's pass is presented, it executes IMMEDIATELY (0ms wait)
-    if (lastScannedCodeRef.current === cleanInput && (now - lastScannedAtRef.current < 1200)) {
+    if (lastScannedCodeRef.current === cleanInput && (now - lastScannedAtRef.current < 5000)) {
       return;
     }
 
@@ -744,23 +779,36 @@ export default function AdminCampQrScannerModal({
         }
 
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setRecentScans((prev) => [
-          {
-            id: res.attendee?.id || Math.random().toString(),
-            name: res.attendee?.name || 'Devotee Attendee',
-            token: res.attendee?.token,
-            track: res.attendee?.track,
-            center: res.attendee?.center,
-            meal: activeMeal,
-            time: timeStr,
-            status: 'ALLOWED',
-          },
-          ...prev.slice(0, 4),
-        ]);
+        const newEntry = {
+          id: res.attendee?.id || Math.random().toString(),
+          name: res.attendee?.name || 'Devotee Attendee',
+          token: res.attendee?.token,
+          track: res.attendee?.track,
+          center: res.attendee?.center,
+          meal: activeMeal,
+          time: timeStr,
+          status: 'ALLOWED' as const,
+          profileImage: res.attendee?.profileImage || undefined,
+        };
+        setRecentScans((prev) => {
+          const filtered = prev.filter(p => !(p.token && p.token === newEntry.token && p.meal === newEntry.meal));
+          const updated = [newEntry, ...filtered].slice(0, 100);
+          if (typeof window !== 'undefined' && sessionFeedStorageKey) {
+            try {
+              localStorage.setItem(sessionFeedStorageKey, JSON.stringify(updated));
+            } catch {}
+          }
+          return updated;
+        });
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('camp-attendance-updated'));
         }
+      } else if (res.status === 'JUST_PUNCHED') {
+        // Pass was literally just punched seconds ago (camera held too long)
+        // Reassure volunteer with a gentle success chime and green flash
+        playVerificationSound('success');
+        triggerStatusFlash('success');
       } else if (res.status === 'ALREADY_SERVED') {
         playVerificationSound('warning');
         triggerStatusFlash('warning');
@@ -900,6 +948,220 @@ export default function AdminCampQrScannerModal({
     }
   };
 
+  // Render Active Scan Result Card (Used on mobile directly beneath camera, and on desktop in right column)
+  const renderActiveScanResult = () => {
+    if (!scanResult) return null;
+    return (
+      <div className="space-y-3 animate-fadeIn">
+        {/* JUST PUNCHED (< 15s cooldown reassurance for inattentive volunteers) */}
+        {scanResult.status === 'JUST_PUNCHED' && (
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-emerald-400/40 animate-fadeIn">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-200" />
+                <span>Pass Already Cleared ({scanResult.secondsAgo || 2}s ago)</span>
+              </div>
+              {scanResult.attendee?.token && (
+                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                  Token #{scanResult.attendee.token}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {scanResult.attendee?.profileImage ? (
+                <img
+                  src={scanResult.attendee.profileImage}
+                  alt=""
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                  {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                  {scanResult.attendee?.name || 'Devotee Attendee'}
+                </h2>
+                <p className="text-emerald-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                  {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-emerald-100 text-xs font-bold flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping shrink-0" />
+                <span className="break-words">Devotee was punched right now. Please allow to proceed!</span>
+              </div>
+              <span className="font-bold bg-white text-emerald-900 px-2 py-0.5 rounded-full shadow-sm text-[10px] sm:text-[11px] shrink-0">
+                ✓ Cleared
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ALLOWED */}
+        {scanResult.status === 'ALLOWED' && (
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-emerald-400/40">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-200" />
+                <span>Meal Allowed • Punched</span>
+              </div>
+              {scanResult.attendee?.token && (
+                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                  Token #{scanResult.attendee.token}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {scanResult.attendee?.profileImage ? (
+                <img
+                  src={scanResult.attendee.profileImage}
+                  alt=""
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                  {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                  {scanResult.attendee?.name || 'Devotee Attendee'}
+                </h2>
+                <p className="text-emerald-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                  {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/20 flex items-center justify-between text-xs text-emerald-50">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+                <span>Meal: <strong>{selectedMeal}</strong> ({selectedDate})</span>
+              </div>
+              <span className="font-bold bg-white text-emerald-900 px-2 py-0.5 rounded-full shadow-sm text-[10px] sm:text-[11px]">
+                ⚡ Next pass ready
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ALREADY SERVED (DUPLICATE) */}
+        {scanResult.status === 'ALREADY_SERVED' && (
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-amber-400/40">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
+                <span>Duplicate Scan • Already Collected</span>
+              </div>
+              {scanResult.attendee?.token && (
+                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                  Token #{scanResult.attendee.token}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {scanResult.attendee?.profileImage ? (
+                <img
+                  src={scanResult.attendee.profileImage}
+                  alt=""
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                  {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                  {scanResult.attendee?.name || 'Devotee Attendee'}
+                </h2>
+                <p className="text-amber-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                  {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-amber-50 text-xs font-bold flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-300 shrink-0" />
+              <span className="break-words">Already collected {selectedMeal} at {scanResult.servedAt}.</span>
+            </div>
+          </div>
+        )}
+
+        {/* NOT ELIGIBLE */}
+        {scanResult.status === 'NOT_ELIGIBLE' && (
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-600 to-red-700 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-rose-400/40">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-200" />
+                <span>Meal Not Included in Pass</span>
+              </div>
+              {scanResult.attendee?.token && (
+                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                  Token #{scanResult.attendee.token}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                {scanResult.attendee?.name || 'Devotee Attendee'}
+              </h2>
+              <p className="text-rose-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                {scanResult.attendee?.track || 'Standard Track'}
+              </p>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-rose-50 text-xs space-y-1">
+              <p className="font-bold">{scanResult.message}</p>
+              {scanResult.attendee?.firstMeal && (
+                <p className="text-[11px] text-rose-200">
+                  Registered Meal Window: {scanResult.attendee.firstMeal} to {scanResult.attendee.lastMeal}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* WRONG CAMP / CANCELLED / OTHER ERRORS */}
+        {['WRONG_CAMP', 'CANCELLED', 'PENDING_PAYMENT', 'NOT_FOUND', 'EMPTY_DATE', 'ERROR'].includes(scanResult.status) && (
+          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-slate-700">
+            <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] sm:text-[11px] font-black tracking-wider uppercase w-fit">
+              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
+              <span>Pass Rejected</span>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-black text-white break-words leading-tight">
+                {scanResult.attendee?.name || 'Invalid Pass'}
+              </h2>
+              <p className="text-slate-300 text-xs font-medium mt-1 break-words">
+                {scanResult.message}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleClearHUD}
+            className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer py-1"
+          >
+            Dismiss / Ready for Next
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Lifecycle
   useEffect(() => {
     if (isOpen) {
@@ -942,130 +1204,168 @@ export default function AdminCampQrScannerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-2xl lg:max-w-4xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[95vh]">
+      <div className="relative w-full max-w-2xl lg:max-w-5xl xl:max-w-6xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] sm:max-h-[92vh]">
         {/* Top Header Bar */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-900 text-white border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 bg-slate-900 text-white border-b border-slate-800">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
               <QrCode className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-sm sm:text-base text-white tracking-tight">
-                  Pass Scanner &amp; Prasadam Punch Desk
+                <h3 className="font-black text-sm sm:text-base text-white tracking-tight truncate">
+                  Pass Scanner &amp; Prasadam Desk
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
-                  Live Counter
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider shrink-0">
+                  Live
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Automatic meal punch • Duplicate pass prevention • High-speed attendee queue clearance
+              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
+                Automatic meal punch • Duplicate prevention • Fast queue clearance
               </p>
             </div>
           </div>
           <button
             onClick={handleCloseModal}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* SESSION CONFIGURATION BAR: Camp Selector + Date + Meal Slot */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 sm:px-6 py-3 space-y-2.5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {/* Control 1: Select Camp */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5 text-amber-600" />
-                <span>1. Active Camp</span>
-              </label>
-              <select
-                value={selectedCampId}
-                onChange={(e) => {
-                  setSelectedCampId(e.target.value);
-                  setScanResult(null);
-                }}
-                disabled={loadingCamps || allocatedCamps.length <= 1}
-                className="w-full py-1.5 px-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 outline-none"
-              >
-                {allocatedCamps.map((camp) => (
-                  <option key={camp.id} value={camp.id}>
-                    {camp.title} ({camp.user_role === 'super_admin' ? 'Master' : camp.user_role?.replace('_', ' ')})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Control 2: Select Date */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                <span>2. Meal Date</span>
-              </label>
-              <select
-                value={selectedDate}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setScanResult(null);
-                }}
-                className="w-full py-1.5 px-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 outline-none"
-              >
-                {campDates.map((d) => (
-                  <option key={d.date} value={d.date}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Control 3: Select Meal Session */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                <Utensils className="w-3.5 h-3.5 text-emerald-600" />
-                <span>3. Meal Session</span>
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['Breakfast', 'Lunch', 'Dinner'] as const).map((meal) => (
-                  <button
-                    key={meal}
-                    type="button"
-                    onClick={() => {
-                      setSelectedMeal(meal);
-                      setScanResult(null);
-                    }}
-                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center truncate ${
-                      selectedMeal === meal
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {meal}
-                  </button>
-                ))}
+        {/* SESSION CONFIGURATION BAR: Camp Selector + Date + Meal Slot (Collapsible on mobile) */}
+        <div className="bg-slate-50 border-b border-slate-200 px-3.5 sm:px-6 py-2 sm:py-3 space-y-2">
+          {/* Mobile Collapsed Session Summary Bar (< sm) */}
+          <div className="sm:hidden flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800 truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">{currentCamp?.title || 'Camp'}</span>
+                <span className="text-slate-400">•</span>
+                <span className="text-amber-700 font-bold shrink-0">{selectedMeal}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold mt-0.5 truncate">
+                <span>{campDates.find((d) => d.date === selectedDate)?.displayDate || selectedDate}</span>
+                <span>•</span>
+                <span className="text-emerald-700 font-bold font-mono">{sessionServedCount} Served</span>
+                <span className="text-slate-400">({devoteeServedCount} QR + {extraGuestsServed} Guests)</span>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileSessionExpanded(!isMobileSessionExpanded)}
+              className="px-2.5 py-1 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-[11px] shadow-2xs hover:bg-slate-50 shrink-0 cursor-pointer flex items-center gap-1"
+            >
+              <span>{isMobileSessionExpanded ? 'Done' : 'Change'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isMobileSessionExpanded ? 'rotate-180' : ''}`} />
+            </button>
           </div>
 
-          {/* Active Session Status Strip */}
-          <div className="flex flex-wrap items-center justify-between text-xs pt-1.5 border-t border-slate-200/80 gap-2">
-            <div className="flex items-center gap-2 text-slate-600 font-medium">
-              <span>Scanning for:</span>
-              <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                {currentCamp?.title || 'Camp'} • {selectedDate} • {selectedMeal}
-              </span>
+          {/* Full Selectors: Collapsible on mobile (< sm), always visible on desktop (sm:) */}
+          <div className={`${isMobileSessionExpanded ? 'block' : 'hidden sm:block'} space-y-2 pt-1 sm:pt-0`}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
+              {/* Control 1: Select Camp */}
+              <div className="col-span-1 sm:col-span-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                  <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+                  <span className="truncate">1. Camp</span>
+                </label>
+                <select
+                  value={selectedCampId}
+                  onChange={(e) => {
+                    setSelectedCampId(e.target.value);
+                    setScanResult(null);
+                  }}
+                  disabled={loadingCamps || allocatedCamps.length <= 1}
+                  className="w-full py-1.5 px-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 outline-none truncate"
+                >
+                  {allocatedCamps.map((camp) => (
+                    <option key={camp.id} value={camp.id}>
+                      {camp.title} ({camp.user_role === 'super_admin' ? 'Master' : camp.user_role?.replace('_', ' ')})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Control 2: Select Date */}
+              <div className="col-span-1 sm:col-span-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-600 shrink-0" />
+                  <span className="truncate">2. Date</span>
+                </label>
+                <select
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setScanResult(null);
+                  }}
+                  className="w-full py-1.5 px-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 outline-none truncate"
+                >
+                  {campDates.map((d) => (
+                    <option key={d.date} value={d.date}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Control 3: Select Meal Session */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                  <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
+                  <span>3. Meal Session</span>
+                </label>
+                <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
+                  {(['Breakfast', 'Lunch', 'Dinner'] as const).map((meal) => (
+                    <button
+                      key={meal}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMeal(meal);
+                        setScanResult(null);
+                      }}
+                      className={`py-1.5 px-1 sm:px-2 rounded-xl text-xs font-bold transition-all text-center truncate ${
+                        selectedMeal === meal
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {meal}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-slate-600 bg-white px-2.5 py-0.5 rounded-full border border-slate-200 text-[11px]">
-                Devotees (QR): <strong className="text-emerald-700 font-black">{devoteeServedCount}</strong>
-              </span>
-              <span className="font-mono text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 text-[11px]">
-                Guests (No QR): <strong className="text-indigo-900 font-black">{extraGuestsServed}</strong>
-              </span>
-              <span className="font-mono font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 text-[11px]">
-                Total Served: {sessionServedCount}
-              </span>
+            {/* Active Session Status & Responsive Metric Ribbon */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pt-2 border-t border-slate-200/80 gap-2">
+              <div className="flex items-center gap-1.5 text-slate-600 font-medium min-w-0">
+                <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Scanning:</span>
+                <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] sm:text-xs truncate">
+                  {currentCamp?.title || 'Camp'} • {selectedDate} • {selectedMeal}
+                </span>
+              </div>
+
+              {/* 3-METRIC STAT RIBBON: Compact cards on mobile, inline pills on desktop */}
+              <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2">
+                <div className="bg-white px-2 py-1 sm:px-2.5 sm:py-0.5 rounded-xl sm:rounded-full border border-slate-200 text-center sm:text-left shadow-2xs">
+                  <span className="block sm:inline text-[9px] sm:text-[11px] text-slate-500 font-semibold">Devotees</span>
+                  <span className="hidden sm:inline text-[11px] text-slate-400"> (QR): </span>
+                  <strong className="text-xs sm:text-[11px] font-black text-emerald-700 font-mono block sm:inline">{devoteeServedCount}</strong>
+                </div>
+
+                <div className="bg-indigo-50/90 px-2 py-1 sm:px-2.5 sm:py-0.5 rounded-xl sm:rounded-full border border-indigo-200 text-center sm:text-left shadow-2xs">
+                  <span className="block sm:inline text-[9px] sm:text-[11px] text-indigo-700 font-semibold">Guests</span>
+                  <span className="hidden sm:inline text-[11px] text-indigo-400"> (No QR): </span>
+                  <strong className="text-xs sm:text-[11px] font-black text-indigo-950 font-mono block sm:inline">{extraGuestsServed}</strong>
+                </div>
+
+                <div className="bg-emerald-100 px-2 py-1 sm:px-2.5 sm:py-0.5 rounded-xl sm:rounded-full border border-emerald-300 text-center sm:text-left shadow-2xs">
+                  <span className="block sm:inline text-[9px] sm:text-[11px] text-emerald-800 font-bold">Total</span>
+                  <span className="hidden sm:inline text-[11px] text-emerald-700"> Served: </span>
+                  <strong className="text-xs sm:text-[11px] font-black text-emerald-950 font-mono block sm:inline">{sessionServedCount}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1123,7 +1423,7 @@ export default function AdminCampQrScannerModal({
 
               {/* Floating Dark Popup Menu */}
               {isCameraMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#282a2d] border border-[#3c4043] rounded-2xl shadow-2xl p-1.5 z-50 text-white animate-fadeIn">
+                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[calc(100vw-36px)] sm:w-80 max-w-[300px] bg-[#282a2d] border border-[#3c4043] rounded-2xl shadow-2xl p-1.5 z-50 text-white animate-fadeIn">
                   <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-[#3c4043]/70 pb-2 mb-1">
                     <span>Available Cameras ({cameras.length})</span>
                     <button
@@ -1191,7 +1491,7 @@ export default function AdminCampQrScannerModal({
         </div>
 
         {/* MODAL MAIN CONTENT: CONTINUOUS POS BILLING COUNTER VIEW */}
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+        <div className="p-3 sm:p-5 overflow-y-auto overflow-x-hidden flex-1 space-y-3 min-w-0">
           {/* CAMERA PERMISSION REQUIRED SCREEN */}
           {activeInputMode === 'camera' && cameraPermissionGranted === false && (
             <div className="py-10 px-4 text-center space-y-4 max-w-sm mx-auto">
@@ -1217,11 +1517,11 @@ export default function AdminCampQrScannerModal({
 
           {/* MAIN TWO-COLUMN SPLIT: SCANNER (LEFT) & LIVE PUNCH HUD (RIGHT) */}
           {(activeInputMode === 'manual' || cameraPermissionGranted !== false) && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start min-w-0 w-full">
               {/* LEFT COLUMN: CONTINUOUS VIEWFINDER (5 COLS ON LG) */}
-              <div className="lg:col-span-5 space-y-3">
+              <div className="lg:col-span-5 space-y-2.5 min-w-0 w-full">
                 {activeInputMode === 'camera' ? (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 min-w-0 w-full">
                     {/* Scoped CSS to ensure webcam video fills container seamlessly with no letterboxing */}
                     <style
                       dangerouslySetInnerHTML={{
@@ -1232,8 +1532,8 @@ export default function AdminCampQrScannerModal({
                           #admin-qr-reader-viewport img {
                             width: 100% !important;
                             height: 100% !important;
-                            max-width: none !important;
-                            max-height: none !important;
+                            max-width: 100% !important;
+                            max-height: 100% !important;
                             border: none !important;
                             border-radius: 0 !important;
                           }
@@ -1241,10 +1541,16 @@ export default function AdminCampQrScannerModal({
                             position: absolute !important;
                             inset: 0 !important;
                             overflow: hidden !important;
+                            width: 100% !important;
+                            height: 100% !important;
+                            max-width: 100% !important;
                           }
                           #admin-qr-reader-viewport video {
                             object-fit: cover !important;
                             transform: none !important;
+                            width: 100% !important;
+                            height: 100% !important;
+                            max-width: 100% !important;
                           }
                           #admin-qr-reader-viewport canvas {
                             display: none !important;
@@ -1253,9 +1559,9 @@ export default function AdminCampQrScannerModal({
                       }}
                     />
 
-                    {/* Viewport with reactive LED glow ring (Natural 4:3 webcam aspect ratio) */}
+                    {/* Viewport with reactive LED glow ring (Natural 4:3 webcam aspect ratio, responsive width) */}
                     <div
-                      className={`relative mx-auto w-full max-w-[340px] aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden transition-all duration-300 ${
+                      className={`relative mx-auto w-full max-w-[280px] xs:max-w-[320px] sm:max-w-[340px] aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden transition-all duration-300 ${
                         scanStatusFlash === 'success'
                           ? 'ring-4 ring-emerald-500 shadow-2xl shadow-emerald-500/50'
                           : scanStatusFlash === 'warning'
@@ -1306,6 +1612,77 @@ export default function AdminCampQrScannerModal({
                           )}
                         </div>
                       )}
+
+                      {/* IN-VIEWFINDER INSTANT SCAN NOTIFICATION HUD */}
+                      {scanResult && isScanning && (
+                        <div className="absolute inset-x-2 bottom-2 z-30 animate-fadeIn pointer-events-auto">
+                          <div
+                            className={`p-2 sm:p-2.5 rounded-xl shadow-2xl backdrop-blur-md border text-white flex items-center justify-between gap-2 ${
+                              scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
+                                ? 'bg-emerald-950/90 border-emerald-400/80 ring-2 ring-emerald-500/60'
+                                : scanResult.status === 'ALREADY_SERVED'
+                                ? 'bg-amber-950/90 border-amber-400/80 ring-2 ring-amber-500/60'
+                                : 'bg-rose-950/90 border-rose-400/80 ring-2 ring-rose-500/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED' ? (
+                                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                  <CheckCircle2 className="w-5 h-5" />
+                                </div>
+                              ) : scanResult.status === 'ALREADY_SERVED' ? (
+                                <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                  <AlertTriangle className="w-5 h-5" />
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                  <XCircle className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                      scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
+                                        ? 'bg-emerald-400 text-emerald-950 font-black'
+                                        : scanResult.status === 'ALREADY_SERVED'
+                                        ? 'bg-amber-400 text-amber-950 font-black'
+                                        : 'bg-rose-400 text-rose-950 font-black'
+                                    }`}
+                                  >
+                                    {scanResult.status === 'ALLOWED'
+                                      ? 'ALLOW DEVOTEE'
+                                      : scanResult.status === 'JUST_PUNCHED'
+                                      ? 'ALREADY CLEARED'
+                                      : scanResult.status === 'ALREADY_SERVED'
+                                      ? 'ALREADY PUNCHED'
+                                      : 'NOT ALLOWED'}
+                                  </span>
+                                  {scanResult.attendee?.token && (
+                                    <span className="text-[10px] sm:text-[11px] font-mono font-black text-white bg-black/50 px-1 rounded border border-white/20">
+                                      #{scanResult.attendee.token}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs sm:text-sm font-black text-white truncate mt-0.5">
+                                  {scanResult.attendee?.name || scanResult.message || 'Pass Scanned'}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleClearHUD();
+                              }}
+                              className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/20 shrink-0 cursor-pointer"
+                              title="Dismiss"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Continuous Scan Indicator */}
@@ -1316,6 +1693,13 @@ export default function AdminCampQrScannerModal({
                       </span>
                       <span>360° Omnidirectional Fast Scan • Any Angle / Tilt</span>
                     </div>
+
+                    {/* MOBILE SCAN RESULT CARD (DIRECTLY UNDER CAMERA TO ELIMINATE SCROLLING) */}
+                    {scanResult && (
+                      <div ref={mobileResultRef} className="lg:hidden w-full scroll-mt-4 pt-1.5 animate-fadeIn">
+                        {renderActiveScanResult()}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* USB / BARCODE GUN MODE */
@@ -1356,36 +1740,53 @@ export default function AdminCampQrScannerModal({
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       💡 Barcode gun auto-submits on trigger. Keep input focused and scan passes continuously.
                     </p>
+
+                    {/* MOBILE SCAN RESULT CARD IN USB MODE */}
+                    {scanResult && (
+                      <div ref={mobileResultRef} className="lg:hidden w-full scroll-mt-4 pt-1.5 animate-fadeIn">
+                        {renderActiveScanResult()}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* COMPACT & ERGONOMIC NON-QR EXTRA GUEST MEAL COUNTER */}
-                <div className="px-3.5 py-2.5 rounded-2xl bg-indigo-50/80 border border-indigo-200/90 shadow-2xs flex items-center justify-between gap-3 mt-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                      <UserPlus className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-xs font-black text-indigo-950 truncate">
-                          Walk-in Guest (No QR)
-                        </h4>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-indigo-200/80 text-indigo-900 border border-indigo-300/50">
-                          {extraGuestsServed} {extraGuestsServed === 1 ? 'plate' : 'plates'}
-                        </span>
+                <div className="p-3 sm:px-3.5 sm:py-2.5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-indigo-50/60 to-purple-50/80 border border-indigo-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-2 transition-all">
+                  {/* Left: Info & Plate Count */}
+                  <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                        <UserPlus className="w-4 h-4" />
                       </div>
-                      <p className="text-[10px] text-indigo-700/80 font-medium truncate">
-                        Visitors, drivers &amp; VIPs without pass
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-black text-indigo-950 whitespace-nowrap">
+                            Walk-in Guest Meal
+                          </h4>
+                          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-indigo-200/90 text-indigo-900 border border-indigo-300/60">
+                            {extraGuestsServed} {extraGuestsServed === 1 ? 'plate' : 'plates'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-indigo-700/90 font-medium truncate">
+                          Visitors, drivers &amp; VIPs (No QR Pass)
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Mobile-only Plate Count Badge */}
+                    <div className="sm:hidden px-2.5 py-1 rounded-xl bg-indigo-200/90 border border-indigo-300/70 text-right shrink-0">
+                      <span className="block text-[9px] uppercase font-bold text-indigo-800 leading-none">Plates</span>
+                      <span className="text-sm font-black text-indigo-950 font-mono leading-tight">{extraGuestsServed}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Right / Bottom: Action Buttons */}
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                     <button
                       type="button"
                       onClick={() => handlePunchExtraGuest(1)}
                       disabled={savingGuestMeal || !selectedDate}
-                      className="py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                      className="flex-1 sm:flex-initial py-2 sm:py-1.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                       title="Add 1 Extra Guest Plate without QR scanner"
                     >
                       {savingGuestMeal ? (
@@ -1401,11 +1802,11 @@ export default function AdminCampQrScannerModal({
                         type="button"
                         onClick={() => handlePunchExtraGuest(-1)}
                         disabled={savingGuestMeal || !selectedDate}
-                        className="py-1.5 px-2.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-300 hover:border-rose-300 text-slate-600 hover:text-rose-700 font-bold text-xs flex items-center justify-center gap-0.5 transition-all disabled:opacity-50 cursor-pointer"
+                        className="py-2 sm:py-1.5 px-3 rounded-xl bg-white hover:bg-rose-50 border border-slate-300 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-bold text-xs flex items-center justify-center gap-1 transition-all disabled:opacity-50 cursor-pointer shrink-0 shadow-2xs"
                         title="Revert 1 Guest Plate"
                       >
-                        <Minus className="w-3 h-3" />
-                        <span className="text-[10px]">Undo</span>
+                        <Minus className="w-3 h-3 text-rose-600" />
+                        <span className="text-[11px]">Undo</span>
                       </button>
                     )}
                   </div>
@@ -1414,163 +1815,34 @@ export default function AdminCampQrScannerModal({
 
               {/* RIGHT COLUMN: LIVE PUNCH HUD & RECENT ATTENDEES (7 COLS ON LG) */}
               <div className="lg:col-span-7 space-y-4">
-                {/* 1. ACTIVE RESULT CARD (OR IDLE STANDBY HUD) */}
-                {scanResult ? (
-                  <div className="space-y-3 animate-fadeIn">
-                    {/* ALLOWED */}
-                    {scanResult.status === 'ALLOWED' && (
-                      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-xl space-y-3 border border-emerald-400/40">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-black tracking-wider uppercase">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                            <span>Meal Allowed • Punched</span>
-                          </div>
-                          {scanResult.attendee?.token && (
-                            <div className="px-3 py-1 rounded-full bg-black/25 text-white text-xs font-mono font-black border border-white/20">
-                              Token #{scanResult.attendee.token}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <h2 className="text-2xl font-black text-white tracking-tight">
-                            {scanResult.attendee?.name || 'Devotee Attendee'}
-                          </h2>
-                          <p className="text-emerald-100 text-xs font-medium mt-0.5">
-                            {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
-                          </p>
-                        </div>
-
-                        <div className="pt-2 border-t border-white/20 flex items-center justify-between text-xs text-emerald-50">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-                            <span>Meal: <strong>{selectedMeal}</strong> ({selectedDate})</span>
-                          </div>
-                          <span className="font-bold bg-white text-emerald-900 px-2.5 py-0.5 rounded-full shadow-sm text-[11px]">
-                            ⚡ Next pass ready
+                {/* 1. ACTIVE RESULT CARD (OR IDLE STANDBY HUD) — DESKTOP VIEW */}
+                <div className="hidden lg:block">
+                  {scanResult ? (
+                    renderActiveScanResult()
+                  ) : (
+                    /* IDLE STANDBY HUD */
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 text-white border border-slate-800 shadow-xl space-y-2 text-center sm:text-left flex flex-col sm:flex-row items-center gap-3.5">
+                      <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                        <Zap className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
+                      </div>
+                      <div className="space-y-0.5 flex-1">
+                        <div className="flex items-center gap-2 justify-center sm:justify-start">
+                          <h4 className="font-black text-sm sm:text-base text-white tracking-tight">
+                            Billing Counter Mode Active
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            &lt; 0.5s SPEED
                           </span>
                         </div>
+                        <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed">
+                          Hold devotee pass in front of camera. Each attendee is verified and meal-punched automatically with zero lag.
+                        </p>
                       </div>
-                    )}
-
-                    {/* ALREADY SERVED (DUPLICATE) */}
-                    {scanResult.status === 'ALREADY_SERVED' && (
-                      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl space-y-3 border border-amber-400/40">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-black tracking-wider uppercase">
-                            <AlertTriangle className="w-4 h-4 text-amber-200" />
-                            <span>Duplicate Scan • Already Collected</span>
-                          </div>
-                          {scanResult.attendee?.token && (
-                            <div className="px-3 py-1 rounded-full bg-black/25 text-white text-xs font-mono font-black border border-white/20">
-                              Token #{scanResult.attendee.token}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <h2 className="text-2xl font-black text-white tracking-tight">
-                            {scanResult.attendee?.name || 'Devotee Attendee'}
-                          </h2>
-                          <p className="text-amber-100 text-xs font-medium mt-0.5">
-                            {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
-                          </p>
-                        </div>
-
-                        <div className="p-2.5 rounded-xl bg-black/20 text-amber-50 text-xs font-bold flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-amber-300 shrink-0" />
-                          <span>Already collected {selectedMeal} at {scanResult.servedAt}.</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* NOT ELIGIBLE */}
-                    {scanResult.status === 'NOT_ELIGIBLE' && (
-                      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-600 to-red-700 text-white shadow-xl space-y-3 border border-rose-400/40">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-black tracking-wider uppercase">
-                            <XCircle className="w-4 h-4 text-rose-200" />
-                            <span>Meal Not Included in Pass</span>
-                          </div>
-                          {scanResult.attendee?.token && (
-                            <div className="px-3 py-1 rounded-full bg-black/25 text-white text-xs font-mono font-black border border-white/20">
-                              Token #{scanResult.attendee.token}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <h2 className="text-2xl font-black text-white tracking-tight">
-                            {scanResult.attendee?.name || 'Devotee Attendee'}
-                          </h2>
-                          <p className="text-rose-100 text-xs font-medium mt-0.5">
-                            {scanResult.attendee?.track || 'Standard Track'}
-                          </p>
-                        </div>
-
-                        <div className="p-2.5 rounded-xl bg-black/20 text-rose-50 text-xs space-y-1">
-                          <p className="font-bold">{scanResult.message}</p>
-                          {scanResult.attendee?.firstMeal && (
-                            <p className="text-[11px] text-rose-200">
-                              Registered Meal Window: {scanResult.attendee.firstMeal} to {scanResult.attendee.lastMeal}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* WRONG CAMP / CANCELLED / OTHER ERRORS */}
-                    {['WRONG_CAMP', 'CANCELLED', 'PENDING_PAYMENT', 'NOT_FOUND', 'EMPTY_DATE', 'ERROR'].includes(scanResult.status) && (
-                      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-xl space-y-3 border border-slate-700">
-                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[11px] font-black tracking-wider uppercase w-fit">
-                          <XCircle className="w-4 h-4 text-red-400" />
-                          <span>Pass Rejected</span>
-                        </div>
-
-                        <div>
-                          <h2 className="text-xl font-black text-white">
-                            {scanResult.attendee?.name || 'Invalid Pass'}
-                          </h2>
-                          <p className="text-slate-300 text-xs font-medium mt-1">
-                            {scanResult.message}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={handleClearHUD}
-                        className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline"
-                      >
-                        Dismiss / Ready for Next
-                      </button>
                     </div>
-                  </div>
-                ) : (
-                  /* IDLE STANDBY HUD */
-                  <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 text-white border border-slate-800 shadow-xl space-y-3 text-center sm:text-left flex flex-col sm:flex-row items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                      <Zap className="w-7 h-7 animate-pulse" />
-                    </div>
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2 justify-center sm:justify-start">
-                        <h4 className="font-black text-base text-white tracking-tight">
-                          Billing Counter Mode Active
-                        </h4>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          &lt; 0.5s SPEED
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Hold devotee pass in front of camera. Each attendee is verified and meal-punched automatically with zero lag.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* 2. RECENT PUNCHES LIVE STREAM */}
+                {/* 2. RECENT PUNCHES LIVE STREAM WITH FULL SCROLLABLE HISTORY */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between text-xs text-slate-600 font-bold px-1">
                     <div className="flex items-center gap-1.5">
@@ -1580,8 +1852,16 @@ export default function AdminCampQrScannerModal({
                     {recentScans.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setRecentScans([])}
-                        className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors font-medium"
+                        onClick={() => {
+                          setRecentScans([]);
+                          if (typeof window !== 'undefined' && sessionFeedStorageKey) {
+                            try {
+                              localStorage.removeItem(sessionFeedStorageKey);
+                            } catch {}
+                          }
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors font-medium cursor-pointer"
+                        title="Clear local feed on this machine"
                       >
                         Clear Feed
                       </button>
@@ -1590,38 +1870,60 @@ export default function AdminCampQrScannerModal({
 
                   {recentScans.length === 0 ? (
                     <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-400">
-                      Waiting for scans... Punched devotees will appear here in real time.
+                      Waiting for scans... Punched devotees on this device will appear here in real time.
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                       {recentScans.map((item, idx) => (
                         <div
-                          key={item.id + idx}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs text-xs animate-fadeIn"
+                          key={item.id + (item.token || '') + idx}
+                          className="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs text-xs animate-fadeIn hover:border-slate-300 transition-colors space-y-1.5"
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                            {item.token && (
-                              <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded shrink-0 text-[11px]">
-                                #{item.token}
+                          {/* Row 1: Avatar + Token # + Full Devotee Name (Full width, no truncation) + Punched Badge */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {item.profileImage ? (
+                                <img
+                                  src={item.profileImage}
+                                  alt=""
+                                  className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                                />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 shadow-2xs">
+                                  {(item.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                                </div>
+                              )}
+
+                              {item.token && (
+                                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded shrink-0 text-[10px] border border-slate-200">
+                                  #{item.token}
+                                </span>
+                              )}
+
+                              <span className="font-black text-slate-900 text-xs sm:text-sm break-words leading-tight flex-1 min-w-0">
+                                {item.name}
                               </span>
-                            )}
-                            <span className="font-bold text-slate-900 truncate">
-                              {item.name}
-                            </span>
-                            {item.track && (
-                              <span className="text-[11px] text-slate-400 truncate hidden sm:inline">
-                                • {item.track}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[11px] font-mono text-slate-500">
-                              {item.time}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            </div>
+
+                            {/* Status Pill */}
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
                               ✓ Punched
                             </span>
+                          </div>
+
+                          {/* Row 2: Devotee Track/Center + Session Meal + Time */}
+                          <div className="flex items-center justify-between gap-2 pl-9 text-[11px] text-slate-500">
+                            <span className="truncate flex-1">
+                              {item.center || item.track || 'Devotee'}
+                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+                                {item.meal}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-400">
+                                {item.time}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       ))}

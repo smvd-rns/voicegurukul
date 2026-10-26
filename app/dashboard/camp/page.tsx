@@ -13,7 +13,8 @@ import {
   Building, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
   Undo2, Banknote, RefreshCw, Ticket, Download,
-  ExternalLink, ArrowLeft, Info
+  ExternalLink, ArrowLeft, Info, Shield, QrCode,
+  Users, FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
@@ -22,9 +23,11 @@ import {
   getActiveCampsForUserAction,
   getUserCampRegistrationsAction,
   submitCampRefundRequestAction,
-  lookupCampRegistrationsAction
+  lookupCampRegistrationsAction,
+  getUserAllocatedCampsAction
 } from '@/app/dashboard/admin/camps/actions';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
+import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 
 function formatMealOptionLabel(m?: CampMealConfig | null, campStartDate?: string): string {
   if (!m) return '';
@@ -74,8 +77,119 @@ function CampDashboardContent() {
   const { user, userData, loading: authLoading } = useAuth();
   const isPending = userData?.verificationStatus === 'pending';
 
-  // Navigation Tabs: 'camps' | 'registrations' | 'register'
-  const [activeTab, setActiveTab] = useState<'camps' | 'registrations' | 'register'>('camps');
+  // Navigation Tabs: 'camps' | 'registrations' | 'register' | 'staff'
+  const [activeTab, setActiveTab] = useState<'camps' | 'registrations' | 'register' | 'staff'>('camps');
+
+  // Staff & Coordinator Allocation State
+  const [allocatedCamps, setAllocatedCamps] = useState<(Camp & { user_role: string; staff_notes?: string })[]>([]);
+  const [allocationsLoading, setAllocationsLoading] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerCampId, setScannerCampId] = useState<string>('');
+  const [scannerCampTitle, setScannerCampTitle] = useState<string>('');
+
+  const getStaffRoleMeta = (role: string, roles?: string[]) => {
+    const allRoles = roles && roles.length > 0 ? roles : [role];
+    const isSuper = role === 'super_admin';
+    const isBoth = isSuper || allRoles.includes('both') || (allRoles.includes('attendance') && allRoles.includes('refunds'));
+
+    const canScan = isSuper || isBoth || allRoles.includes('scan_pass') || allRoles.includes('attendance') || allRoles.includes('prasadam');
+    const canAttendance = isSuper || isBoth || allRoles.includes('attendance');
+    const canRefunds = isSuper || isBoth || allRoles.includes('refunds');
+    const canPrasadam = isSuper || isBoth || allRoles.includes('prasadam') || allRoles.includes('attendance');
+
+    if (isBoth) {
+      return {
+        title: 'Full Camp Coordinator',
+        pill: 'Full Coordinator',
+        badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+        desc: 'Complete operational management: QR pass scanning, attendee ledger, kitchen tally & refunds.',
+        canScan: true,
+        canAttendance: true,
+        canRefunds: true,
+        canPrasadam: true,
+      };
+    }
+
+    if (allRoles.length > 1) {
+      const labels: string[] = [];
+      if (canAttendance) labels.push('Attendance');
+      if (allRoles.includes('prasadam') && !labels.includes('Prasadam')) labels.push('Prasadam');
+      if (canRefunds) labels.push('Refunds');
+      if (allRoles.includes('scan_pass') && !canAttendance && !canPrasadam) labels.push('Scanner');
+
+      const pillText = labels.length > 0 ? labels.join(' & ') : 'Multi-Role Staff';
+      return {
+        title: `Multi-Duty: ${pillText}`,
+        pill: pillText,
+        badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+        desc: 'You have been assigned multiple operational roles for this camp. Access all your permitted desks below.',
+        canScan,
+        canAttendance,
+        canRefunds,
+        canPrasadam,
+      };
+    }
+
+    switch (role) {
+      case 'scan_pass':
+        return {
+          title: 'Pass Scanner & Meal Punch',
+          pill: 'Pass Scanner Only',
+          badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+          desc: 'Gate entry & prasadam serving counter role. Verify delegate passes and punch meal coupons in real-time.',
+          canScan: true,
+          canAttendance: false,
+          canRefunds: false,
+          canPrasadam: false
+        };
+      case 'attendance':
+        return {
+          title: 'Attendance & Registrations',
+          pill: 'Attendance Manager',
+          badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          desc: 'Full attendee ledger access, Excel export, ITT payment verification, and meal counters.',
+          canScan: true,
+          canAttendance: true,
+          canRefunds: false,
+          canPrasadam: true
+        };
+      case 'refunds':
+        return {
+          title: 'Refunds Desk Coordinator',
+          pill: 'Refunds Desk Only',
+          badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+          desc: 'Inspect cancellation requests, approve refund payouts, and financial return logs.',
+          canScan: false,
+          canAttendance: false,
+          canRefunds: true,
+          canPrasadam: false
+        };
+      case 'prasadam':
+        return {
+          title: 'Prasadam & Kitchen Coordinator',
+          pill: 'Prasadam Desk Only',
+          badgeClass: 'bg-orange-100 text-orange-800 border-orange-200',
+          desc: 'Audit kitchen headcounts, meal tallies, prasad distribution logs, and scan pass coupons.',
+          canScan: true,
+          canAttendance: false,
+          canRefunds: false,
+          canPrasadam: true
+        };
+      case 'both':
+      case 'super_admin':
+      default:
+        return {
+          title: 'Full Camp Coordinator',
+          pill: 'Full Coordinator',
+          badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+          desc: 'Complete operational management: QR pass scanning, attendee ledger, kitchen tally & refunds.',
+          canScan: true,
+          canAttendance: true,
+          canRefunds: true,
+          canPrasadam: true
+        };
+    }
+  };
 
   // Camp Data State
   const [activeCamps, setActiveCamps] = useState<(Camp & { registration_count?: number })[]>([]);
@@ -222,6 +336,20 @@ function CampDashboardContent() {
     }
   };
 
+  const fetchAllocatedCamps = async () => {
+    setAllocationsLoading(true);
+    try {
+      const res = await getUserAllocatedCampsAction();
+      if (res.success && res.camps) {
+        setAllocatedCamps(res.camps);
+      }
+    } catch (err: any) {
+      console.error('Error fetching allocated staff camps:', err);
+    } finally {
+      setAllocationsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchActiveCamps();
   }, [campParam]);
@@ -229,6 +357,7 @@ function CampDashboardContent() {
   useEffect(() => {
     if (user || userData) {
       fetchUserRegistrations();
+      fetchAllocatedCamps();
     }
   }, [user, userData]);
 
@@ -242,9 +371,9 @@ function CampDashboardContent() {
         age: prev.age || calculatedAge || '',
         participantName: prev.participantName || userData.name || '',
         whatsapp: prev.whatsapp || (userData.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : ''),
-        parentTemple: prev.parentTemple || userData.hierarchy?.center || '',
-        counselorName: prev.counselorName || userData.hierarchy?.brahmachariCounselor || '',
-        voiceName: prev.voiceName || userData.hierarchy?.center || '',
+        parentTemple: prev.parentTemple || userData.hierarchy?.parentTemple || (userData as any)?.parent_temple || 'ISKCON NVCC • PUNE',
+        counselorName: prev.counselorName || userData.hierarchy?.brahmachariCounselor || (userData as any)?.brahmachari_counselor || '',
+        voiceName: prev.voiceName || userData.hierarchy?.currentCenter || (userData as any)?.current_center || userData.hierarchy?.center || (userData as any)?.center || '',
       }));
     }
   }, [userData]);
@@ -270,24 +399,39 @@ function CampDashboardContent() {
     const resolvedUserCenter = (() => {
       const cur = (userData?.hierarchy?.currentCenter || (userData as any)?.current_center || '').trim();
       const oth = (userData?.hierarchy?.otherCenter || (userData as any)?.other_center || '').trim();
-      if (cur) {
+      if (cur && cur.toLowerCase() !== 'none') {
         if (cur.toLowerCase() === 'other') return oth || 'Other';
         return cur;
       }
       const cen = (userData?.hierarchy?.center || (userData as any)?.center || '').trim();
-      if (cen) {
+      if (cen && cen.toLowerCase() !== 'none') {
         if (cen.toLowerCase() === 'other') return oth || 'Other';
         return cen;
       }
-      return 'None';
+      return 'Central VOICE';
+    })();
+
+    const resolvedUserTemple = (() => {
+      const curT = ((userData as any)?.current_temple || userData?.hierarchy?.currentTemple || '').trim();
+      const othT = ((userData as any)?.other_temple || userData?.hierarchy?.otherTemple || '').trim();
+      if (curT && curT.toLowerCase() !== 'none') {
+        if (curT.toLowerCase() === 'other') return othT || 'Other';
+        return curT;
+      }
+      const parT = ((userData as any)?.parent_temple || userData?.hierarchy?.parentTemple || '').trim();
+      if (parT && parT.toLowerCase() !== 'none') {
+        if (parT.toLowerCase() === 'other') return othT || 'Other';
+        return parT;
+      }
+      return 'ISKCON NVCC • PUNE';
     })();
 
     // Auto-populate Attendee #1 with devotee profile from DB!
     const initialFormData = {
       participantName: userData?.name || '',
       whatsapp: userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '',
-      parentTemple: userData?.hierarchy?.parentTemple || (userData as any)?.parent_temple || 'ISKCON NVCC • PUNE',
-      counselorName: userData?.hierarchy?.brahmachariCounselor || '',
+      parentTemple: resolvedUserTemple,
+      counselorName: userData?.hierarchy?.brahmachariCounselor || (userData as any)?.brahmachari_counselor || '',
       voiceName: resolvedUserCenter,
       campTrack: initialTrack,
       firstMealDate: firstMeal,
@@ -406,6 +550,12 @@ function CampDashboardContent() {
 
     const newEntry = {
       ...formData,
+      current_center: formData.voiceName,
+      currentCenter: formData.voiceName,
+      current_temple: formData.parentTemple,
+      currentTemple: formData.parentTemple,
+      voice_name: formData.voiceName,
+      parent_temple: formData.parentTemple,
       firstMealDate: formData.firstMealDate,
       firstMealType: formData.firstMealType,
       lastMealDate: formData.lastMealDate,
@@ -1033,38 +1183,57 @@ function CampDashboardContent() {
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-28 sm:pb-12">
         {/* Header Greeting Banner */}
-        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
           <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-semibold mb-3 border border-white/20">
-                <Tent className="w-3.5 h-3.5 text-amber-200" />
-                <span>Devotee Camp & Retreat Portal</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[11px] font-semibold mb-2 border border-white/20">
+                <Tent className="w-3 h-3 text-amber-200" />
+                <span>Devotee Camp Portal</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Camp Retreats & Registrations
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                Camp Retreats &amp; Registrations
               </h1>
-              <p className="text-white/90 text-sm mt-1 max-w-xl">
-                Hare Krishna, <span className="font-bold underline decoration-amber-300">{userData?.name || user?.email}</span>! Explore upcoming youth & sadhaka camps, register passes, and manage your booked retreats.
+              <p className="text-white/90 text-xs sm:text-sm mt-1 max-w-xl">
+                Hare Krishna, <span className="font-bold underline decoration-amber-300">{userData?.name || user?.email}</span>! Explore upcoming youth camps, register passes, and manage your booked retreats.
               </p>
+
+              {allocatedCamps.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/25 text-amber-200 text-[11px] font-bold border border-white/20">
+                    <Shield className="w-3 h-3 text-amber-300 shrink-0" />
+                    <span>Delegated Staff ({allocatedCamps.length} Camp{allocatedCamps.length > 1 ? 's' : ''})</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('staff');
+                      setSelectedCamp(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-white text-slate-900 text-[11px] font-black hover:bg-amber-50 shadow-md transition-all cursor-pointer"
+                  >
+                    <span>Open Staff Desk &rarr;</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Quick Profile Pill */}
-            <div className="bg-black/20 backdrop-blur-md p-4 rounded-xl border border-white/15 text-xs space-y-1">
-              <div className="flex items-center gap-2 text-white/80">
-                <UserCheck className="w-4 h-4 text-amber-300" />
-                <span className="font-semibold text-white">{userData?.name || 'Devotee'}</span>
+            {/* Quick Profile Pill: Compact on mobile */}
+            <div className="bg-black/20 backdrop-blur-md p-2.5 sm:p-4 rounded-xl border border-white/15 text-xs flex flex-wrap md:flex-col items-center md:items-start gap-x-3 gap-y-1 w-full md:w-auto shrink-0">
+              <div className="flex items-center gap-1.5 text-white/90">
+                <UserCheck className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span className="font-semibold text-white truncate text-[11px] sm:text-xs">{userData?.name || 'Devotee'}</span>
               </div>
-              <div className="flex items-center gap-2 text-white/80">
-                <Phone className="w-3.5 h-3.5 text-amber-300" />
-                <span>{userData?.phone || 'No phone set'}</span>
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span className="truncate text-[11px] sm:text-xs">{userData?.phone || 'No phone set'}</span>
               </div>
               {userData?.hierarchy?.center && (
-                <div className="flex items-center gap-2 text-white/80">
-                  <Building className="w-3.5 h-3.5 text-amber-300" />
-                  <span>{userData.hierarchy.center}</span>
+                <div className="flex items-center gap-1.5 text-white/80">
+                  <Building className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <span className="truncate text-[11px] sm:text-xs">{userData.hierarchy.center}</span>
                 </div>
               )}
             </div>
@@ -1077,27 +1246,27 @@ function CampDashboardContent() {
             <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-amber-900 leading-relaxed">
               <span className="font-bold text-amber-950">Notice for Devotees: </span>
-              Your general account approval is currently under review by temple administrators, but your <strong>Camps & Retreats access is fully active</strong>. You can register for all active camps, book group passes, and review bookings seamlessly.
+              Your general account approval is currently under review by temple administrators, but your <strong>Camps &amp; Retreats access is fully active</strong>. You can register for all active camps, book group passes, and review bookings seamlessly.
             </div>
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+        {/* Tab Navigation: Compact & Responsive for Mobile */}
+        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-gray-200 pb-2.5 overflow-x-auto no-scrollbar">
           <button
             onClick={() => {
               setActiveTab('camps');
               setSelectedCamp(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'camps'
                 ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
                 : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
             }`}
           >
-            <Tent className="w-4 h-4" />
+            <Tent className="w-3.5 h-3.5 shrink-0" />
             <span>Active Camps</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
               activeTab === 'camps' ? 'bg-amber-700 text-white' : 'bg-gray-100 text-gray-600'
             }`}>
               {activeCamps.length}
@@ -1105,32 +1274,59 @@ function CampDashboardContent() {
           </button>
 
           <button
-            onClick={() => setActiveTab('registrations')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+            onClick={() => {
+              setActiveTab('registrations');
+              setSelectedCamp(null);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'registrations'
                 ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
                 : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
             }`}
           >
-            <Ticket className="w-4 h-4" />
-            <span>My Bookings & Passes</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+            <Ticket className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">My Bookings &amp; Passes</span>
+            <span className="sm:hidden">My Passes</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
               activeTab === 'registrations' ? 'bg-amber-700 text-white' : 'bg-gray-100 text-gray-600'
             }`}>
               {userRegistrations.length}
             </span>
           </button>
 
+          {allocatedCamps.length > 0 && (
+            <button
+              onClick={() => {
+                setActiveTab('staff');
+                setSelectedCamp(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
+                activeTab === 'staff'
+                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 ring-1 ring-amber-400/40'
+                  : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="hidden sm:inline">Staff &amp; Coordinator Duty</span>
+              <span className="sm:hidden">Staff Duty</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                activeTab === 'staff' ? 'bg-amber-500 text-slate-950' : 'bg-amber-200 text-amber-950'
+              }`}>
+                {allocatedCamps.length}
+              </span>
+            </button>
+          )}
+
           {selectedCamp && (
             <button
               onClick={() => setActiveTab('register')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
                 activeTab === 'register'
                   ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
                   : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
               }`}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 shrink-0" />
               <span>Registering: {selectedCamp.title.slice(0, 18)}...</span>
             </button>
           )}
@@ -1175,21 +1371,21 @@ function CampDashboardContent() {
                       className="bg-white rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
                     >
                       <div>
-                        {/* Camp Header / Banner */}
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-5 text-white relative">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold tracking-wider uppercase mb-2 border border-white/20">
+                        {/* Camp Header / Banner: Compact on Mobile */}
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-3.5 sm:p-5 text-white relative">
+                          <span className="inline-block px-2 sm:px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] sm:text-[10px] font-bold tracking-wider uppercase mb-1 sm:mb-2 border border-white/20">
                             Active Camp
                           </span>
-                          <h3 className="text-lg font-black tracking-tight leading-snug line-clamp-2">
+                          <h3 className="text-base sm:text-lg font-black tracking-tight leading-snug line-clamp-2">
                             {camp.title}
                           </h3>
                         </div>
 
-                        {/* Camp Details */}
-                        <div className="p-5 space-y-3.5 text-xs text-gray-600">
+                        {/* Camp Details: Compact on Mobile */}
+                        <div className="p-3.5 sm:p-5 space-y-2.5 sm:space-y-3.5 text-xs text-gray-600">
                           {/* Dates */}
-                          <div className="flex items-start gap-2.5">
-                            <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex items-start gap-2 sm:gap-2.5">
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <div>
                               <p className="font-semibold text-gray-900">
                                 {new Date(camp.start_date).toLocaleDateString('en-IN', {
@@ -1204,13 +1400,13 @@ function CampDashboardContent() {
                                   year: 'numeric',
                                 })}
                               </p>
-                              <p className="text-[11px] text-gray-500">Camp Duration</p>
+                              <p className="text-[10px] sm:text-[11px] text-gray-500">Camp Duration</p>
                             </div>
                           </div>
 
                           {/* Venue */}
-                          <div className="flex items-start gap-2.5">
-                            <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex items-start gap-2 sm:gap-2.5">
+                            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <div>
                               <p className="font-semibold text-gray-900 line-clamp-1">{camp.venue || 'Camp Location'}</p>
                             </div>
@@ -1218,14 +1414,14 @@ function CampDashboardContent() {
 
                           {/* Tracks */}
                           {camp.tracks && camp.tracks.length > 0 && (
-                            <div className="flex items-start gap-2.5">
-                              <Award className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex items-start gap-2 sm:gap-2.5">
+                              <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                               <div>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
                                   {camp.tracks.map((t) => (
                                     <span
                                       key={t}
-                                      className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-medium"
+                                      className="px-1.5 sm:px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9px] sm:text-[10px] font-medium"
                                     >
                                       {t}
                                     </span>
@@ -1236,16 +1432,16 @@ function CampDashboardContent() {
                           )}
 
                           {/* Base Fee & Cost Preview */}
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                            <span className="text-[11px] text-gray-500">Base Registration Fee:</span>
-                            <span className="text-sm font-black text-amber-700">
+                          <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex items-center justify-between">
+                            <span className="text-[10px] sm:text-[11px] text-gray-500">Base Registration Fee:</span>
+                            <span className="text-xs sm:text-sm font-black text-amber-700">
                               {Number(camp.special_waivers?.base_registration_fee) > 0 ? `₹${Number(camp.special_waivers?.base_registration_fee).toLocaleString('en-IN')}` : 'Included in meals'}
                             </span>
                           </div>
 
                           {/* Registration Deadline */}
                           {camp.registration_deadline && (
-                            <div className="flex items-center justify-between text-[11px] text-gray-500">
+                            <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-gray-500">
                               <span>Deadline:</span>
                               <span className={deadlinePassed ? 'text-red-600 font-bold' : 'text-gray-700 font-medium'}>
                                 {new Date(camp.registration_deadline).toLocaleDateString('en-IN', {
@@ -1257,6 +1453,80 @@ function CampDashboardContent() {
                           )}
                         </div>
                       </div>
+
+                      {/* Staff Duty Section on Card if user is assigned */}
+                      {(() => {
+                        const staffAlloc = allocatedCamps.find((a) => a.id === camp.id);
+                        if (!staffAlloc) return null;
+                        const meta = getStaffRoleMeta(staffAlloc.user_role, (staffAlloc as any).user_roles);
+                        return (
+                          <div className="px-3.5 sm:px-5 pb-3">
+                            <div className="bg-slate-900 border border-amber-500/30 rounded-xl p-2.5 sm:p-3 text-white shadow-xs space-y-1.5 sm:space-y-2">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                  <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 truncate">
+                                    Duty: {meta.pill}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-bold shrink-0">
+                                  Assigned
+                                </span>
+                              </div>
+
+                              <p className="text-[11px] text-slate-300 leading-tight line-clamp-2">
+                                {meta.desc}
+                              </p>
+
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {meta.canScan && (
+                                  <button
+                                    onClick={() => {
+                                      setScannerCampId(camp.id);
+                                      setScannerCampTitle(camp.title);
+                                      setIsScannerOpen(true);
+                                    }}
+                                    className="flex-1 min-w-[120px] py-1.5 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg text-[11px] flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Pass Scanner</span>
+                                  </button>
+                                )}
+
+                                {meta.canAttendance && (
+                                  <Link
+                                    href={`/dashboard/admin/camps/${camp.id}/registrations`}
+                                    className="py-1.5 px-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 border border-white/20 transition-all"
+                                  >
+                                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                    <span>Attendees &amp; Excel</span>
+                                  </Link>
+                                )}
+
+                                {meta.canPrasadam && (
+                                  <Link
+                                    href={`/dashboard/admin/camps/${camp.id}/registrations?view=prasadam`}
+                                    className="py-1.5 px-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 border border-white/20 transition-all"
+                                  >
+                                    <Utensils className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                                    <span>Kitchen Tally</span>
+                                  </Link>
+                                )}
+
+                                {meta.canRefunds && (
+                                  <Link
+                                    href={`/dashboard/admin/camps/${camp.id}/registrations?view=refunds`}
+                                    className="py-1.5 px-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 border border-white/20 transition-all"
+                                  >
+                                    <Undo2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                    <span>Refunds Desk</span>
+                                  </Link>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Card Action */}
                       <div className="p-5 pt-0">
@@ -1345,18 +1615,18 @@ function CampDashboardContent() {
                   return (
                     <div
                       key={reg.id}
-                      className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                      className="bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
                     >
-                      <div className="space-y-3">
+                      <div className="space-y-2 sm:space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="inline-block px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold uppercase tracking-wider mb-1">
+                            <span className="inline-block px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider mb-0.5 sm:mb-1">
                               {reg.camp_track || 'Camp Attendee'}
                             </span>
-                            <h3 className="text-base font-black text-gray-900 leading-snug">
+                            <h3 className="text-sm sm:text-base font-black text-gray-900 leading-snug">
                               {reg.camp_title}
                             </h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
                               Attendee: <span className="font-semibold text-gray-800">{reg.participant_name}</span>
                             </p>
                           </div>
@@ -1364,27 +1634,27 @@ function CampDashboardContent() {
                           {/* Status Badge */}
                           <div className="text-right flex-shrink-0">
                             {refund?.status === 'refunded' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                                 <Check className="w-3 h-3" />
                                 Refunded (₹{refund.refund_amount})
                               </span>
                             ) : refund?.status === 'pending' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
                                 <Clock className="w-3 h-3" />
                                 Refund Pending
                               </span>
                             ) : reg.is_cancelled ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
                                 <X className="w-3 h-3" />
                                 Cancelled
                               </span>
                             ) : reg.payment_status === 'completed' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                 <CheckCircle className="w-3 h-3" />
                                 Confirmed
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                 <Clock className="w-3 h-3" />
                                 Verification Pending
                               </span>
@@ -1392,15 +1662,15 @@ function CampDashboardContent() {
                           </div>
                         </div>
 
-                        {/* Details grid */}
-                        <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-1.5 border border-gray-100">
+                        {/* Details grid: Compact on Mobile */}
+                        <div className="bg-gray-50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 text-[11px] sm:text-xs space-y-1 sm:space-y-1.5 border border-gray-100">
                           <div className="flex justify-between">
                             <span className="text-gray-500">Booking Group:</span>
                             <span className="font-mono font-bold text-gray-700">{reg.group_id}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-500">Venue & City:</span>
-                            <span className="font-medium text-gray-800">{reg.camp_venue}</span>
+                            <span className="font-medium text-gray-800 truncate max-w-[180px]">{reg.camp_venue}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-500">Accommodation:</span>
@@ -1414,7 +1684,7 @@ function CampDashboardContent() {
                       </div>
 
                       {/* Pass Action Buttons */}
-                      <div className="flex items-center gap-2 pt-4 border-t border-gray-100 mt-4">
+                      <div className="flex items-center gap-1.5 sm:gap-2 pt-2.5 sm:pt-4 border-t border-gray-100 mt-2.5 sm:mt-4">
                         <button
                           onClick={() => setViewTicketReg({
                             ...reg,
@@ -1422,7 +1692,7 @@ function CampDashboardContent() {
                               ? reg.voice_name
                               : (userData?.hierarchy?.center || (userData as any)?.center || '')
                           })}
-                          className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="flex-1 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                         >
                           <Ticket className="w-3.5 h-3.5" />
                           <span>View Ticket Pass</span>
@@ -1431,12 +1701,189 @@ function CampDashboardContent() {
                         {!reg.is_cancelled && (!refund || refund.status === 'rejected') && (
                           <button
                             onClick={() => handleOpenCancelModal(reg)}
-                            className="py-2 px-3 bg-white hover:bg-rose-50 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            className="py-1.5 sm:py-2 px-2.5 sm:px-3 bg-white hover:bg-rose-50 text-rose-700 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-rose-200 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
                           >
                             <Undo2 className="w-3.5 h-3.5" />
                             <span>Cancel</span>
                           </button>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: STAFF & COORDINATOR DUTY */}
+        {activeTab === 'staff' && (
+          <div className="space-y-4 sm:space-y-6">
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-7 text-white shadow-xl border border-slate-800">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center sm:items-start gap-2.5 sm:gap-3.5">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center shrink-0 text-amber-400">
+                    <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-2xl font-black tracking-tight text-white leading-tight">Staff &amp; Coordinator Duty</h2>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10px] sm:text-[11px] font-bold">
+                        {allocatedCamps.length} Active {allocatedCamps.length === 1 ? 'Camp' : 'Camps'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-sm text-slate-300 mt-0.5 sm:mt-1 max-w-2xl leading-relaxed">
+                      Access your assigned operational desks below to verify attendee passes and manage registrations.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={fetchAllocatedCamps}
+                  className="w-full sm:w-auto px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${allocationsLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Duties</span>
+                </button>
+              </div>
+            </div>
+
+            {allocationsLoading ? (
+              <div className="bg-white rounded-2xl p-10 text-center border border-gray-200">
+                <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto mb-3" />
+                <p className="text-sm font-semibold text-gray-700">Loading your delegated staff duties...</p>
+              </div>
+            ) : allocatedCamps.length === 0 ? (
+              <div className="bg-white rounded-2xl p-10 text-center border border-gray-200">
+                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-gray-800">No Camp Staff Allocations</h3>
+                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                  You are not currently delegated as a staff member or coordinator for any camp. Contact your temple camp administrator or super admin to assign your roles.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                {allocatedCamps.map((camp) => {
+                  const meta = getStaffRoleMeta(camp.user_role, (camp as any).user_roles);
+                  return (
+                    <div
+                      key={camp.id}
+                      className="bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-lg transition-all overflow-hidden flex flex-col justify-between"
+                    >
+                      <div>
+                        {/* Camp Header */}
+                        <div className="bg-slate-900 p-4 sm:p-5 text-white flex items-start justify-between gap-3 border-b border-slate-800">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${meta.badgeClass}`}>
+                                {meta.pill}
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                Status: {camp.status?.toUpperCase() || 'ACTIVE'}
+                              </span>
+                            </div>
+                            <h3 className="text-base sm:text-lg font-black text-white tracking-tight leading-snug">
+                              {camp.title}
+                            </h3>
+                          </div>
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
+                            <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="p-4 sm:p-5 space-y-3 text-xs text-gray-600">
+                          {/* Role Scope Banner */}
+                          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3">
+                            <div className="flex items-center gap-1.5 text-amber-900 font-bold text-xs mb-1">
+                              <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span>{meta.title}</span>
+                            </div>
+                            <p className="text-[11px] sm:text-[11.5px] text-amber-950 leading-relaxed">
+                              {meta.desc}
+                            </p>
+                            {camp.staff_notes && (
+                              <p className="text-[10.5px] text-amber-800/80 mt-1.5 pt-1.5 border-t border-amber-200/60 italic">
+                                Note: &ldquo;{camp.staff_notes}&rdquo;
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Camp Date & Venue */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                            <div className="flex items-start gap-2">
+                              <Calendar className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold text-gray-900">
+                                  {new Date(camp.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                  {' - '}
+                                  {new Date(camp.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                                <p className="text-[10px] text-gray-500">Camp Dates</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-2">
+                              <MapPin className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold text-gray-900 line-clamp-1">{camp.venue || 'Camp Venue'}</p>
+                                <p className="text-[10px] text-gray-500">Location</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Tools / Counters */}
+                      <div className="p-4 sm:p-5 pt-0 border-t border-slate-100 bg-slate-50/50 mt-2">
+                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 pt-3">
+                          Authorized Action Desks:
+                        </p>
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                          {meta.canScan && (
+                            <button
+                              onClick={() => {
+                                setScannerCampId(camp.id);
+                                setScannerCampTitle(camp.title);
+                                setIsScannerOpen(true);
+                              }}
+                              className="w-full sm:w-auto flex-1 py-2.5 px-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 active:scale-[0.98] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-600/20 transition-all cursor-pointer"
+                            >
+                              <QrCode className="w-4 h-4 shrink-0" />
+                              <span>Open Pass Scanner</span>
+                            </button>
+                          )}
+
+                          {meta.canAttendance && (
+                            <Link
+                              href={`/dashboard/admin/camps/${camp.id}/registrations`}
+                              className="w-full sm:w-auto py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-300 shadow-sm transition-all text-center"
+                            >
+                              <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Attendees &amp; Excel</span>
+                            </Link>
+                          )}
+
+                          {meta.canPrasadam && (
+                            <Link
+                              href={`/dashboard/admin/camps/${camp.id}/registrations?view=prasadam`}
+                              className="w-full sm:w-auto py-2.5 px-4 bg-white hover:bg-orange-50 text-orange-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-orange-200 shadow-sm transition-all text-center"
+                            >
+                              <Utensils className="w-4 h-4 text-orange-600 shrink-0" />
+                              <span>Prasadam &amp; Kitchen Tally</span>
+                            </Link>
+                          )}
+
+                          {meta.canRefunds && (
+                            <Link
+                              href={`/dashboard/admin/camps/${camp.id}/registrations?view=refunds`}
+                              className="w-full sm:w-auto py-2.5 px-4 bg-white hover:bg-rose-50 text-rose-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-rose-200 shadow-sm transition-all text-center"
+                            >
+                              <Undo2 className="w-4 h-4 text-rose-600 shrink-0" />
+                              <span>Refunds Desk</span>
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -3002,6 +3449,14 @@ function CampDashboardContent() {
           </div>
         </div>
       )}
+
+      {/* Staff & Admin QR Pass Scanner Modal */}
+      <AdminCampQrScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        defaultCampId={scannerCampId}
+        defaultCampTitle={scannerCampTitle}
+      />
     </>
   );
 }

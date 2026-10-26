@@ -654,7 +654,7 @@ export interface CampAdminAllocation {
   id: string;
   user_id: string;
   camp_id: string;
-  permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass';
+  permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam';
   assigned_by?: string;
   notes?: string;
   created_at?: string;

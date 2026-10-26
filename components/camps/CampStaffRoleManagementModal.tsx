@@ -10,6 +10,7 @@ import {
   getCampAllocationsAction,
   assignCampStaffAction,
   revokeCampStaffAction,
+  revokeCampStaffUserAction,
   searchUsersForStaffAction
 } from '@/app/dashboard/admin/camps/actions';
 import { Camp, CampAdminAllocation } from '@/types';
@@ -37,10 +38,26 @@ export default function CampStaffRoleManagementModal({
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
 
   const [selectedCampId, setSelectedCampId] = useState<string>(camps[0]?.id || '');
-  const [permissionType, setPermissionType] = useState<'attendance' | 'refunds' | 'both' | 'scan_pass'>('scan_pass');
+  const [selectedPermissions, setSelectedPermissions] = useState<('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[]>(['attendance']);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const togglePermission = (type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam') => {
+    if (type === 'both') {
+      if (selectedPermissions.includes('both')) {
+        setSelectedPermissions(['attendance']);
+      } else {
+        setSelectedPermissions(['both', 'attendance', 'refunds', 'prasadam', 'scan_pass']);
+      }
+      return;
+    }
+    setSelectedPermissions((prev) => {
+      const exists = prev.includes(type);
+      const next = exists ? prev.filter((p) => p !== type && p !== 'both') : [...prev, type];
+      return next.length > 0 ? next : [type];
+    });
+  };
 
   // Load allocations
   const loadAllocations = async () => {
@@ -94,11 +111,28 @@ export default function CampStaffRoleManagementModal({
     return () => clearTimeout(timer);
   }, [userQuery]);
 
-  // Handle assign staff
+  // Sync existing user roles when selected devotee or camp changes
+  useEffect(() => {
+    if (selectedUser && selectedCampId) {
+      const existing = allocations
+        .filter((a) => a.user_id === selectedUser.id && a.camp_id === selectedCampId)
+        .map((a) => a.permission_type);
+      if (existing.length > 0) {
+        setSelectedPermissions(existing as any);
+      }
+    }
+  }, [selectedUser, selectedCampId, allocations]);
+
+  // Handle assign staff (supports multi-role selection without overwriting)
   const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser?.id || !selectedCampId) {
       setError('Please select both a devotee and a camp.');
+      return;
+    }
+
+    if (selectedPermissions.length === 0) {
+      setError('Please select at least one access permission role.');
       return;
     }
 
@@ -110,12 +144,12 @@ export default function CampStaffRoleManagementModal({
       const res = await assignCampStaffAction({
         userId: selectedUser.id,
         campId: selectedCampId,
-        permissionType,
+        permissionTypes: selectedPermissions,
         notes: notes.trim() || undefined,
       });
 
       if (res.success) {
-        setSuccessMsg(`Successfully granted ${permissionType.toUpperCase()} access to ${selectedUser.name}!`);
+        setSuccessMsg(`Successfully granted ${selectedPermissions.map(p => p.toUpperCase()).join(' & ')} access to ${selectedUser.name}!`);
         setSelectedUser(null);
         setUserQuery('');
         setNotes('');
@@ -155,36 +189,164 @@ export default function CampStaffRoleManagementModal({
     }
   };
 
+  // Handle revoke ALL roles for user in camp
+  const handleRevokeAllUserCampAccess = async (userId: string, campId: string, devoteeName: string, campTitle: string) => {
+    if (!window.confirm(`Are you sure you want to revoke ALL delegated access for ${devoteeName} in ${campTitle}?`)) {
+      return;
+    }
+
+    const key = `${userId}_${campId}`;
+    setRevokingId(key);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await revokeCampStaffUserAction(userId, campId);
+      if (res.success) {
+        setSuccessMsg(`Revoked all camp permissions for ${devoteeName}.`);
+        loadAllocations();
+      } else {
+        setError(res.error || 'Failed to revoke permissions.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error revoking access.');
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  // Group allocations by user and camp so one devotee has all their roles together
+  const groupedStaff = React.useMemo(() => {
+    const userMap = new Map<
+      string,
+      {
+        user_id: string;
+        user_name: string;
+        user_email: string;
+        user_phone: string;
+        camps: Map<
+          string,
+          {
+            camp_id: string;
+            camp_title: string;
+            notes?: string;
+            roles: {
+              id: string;
+              permission_type: string;
+            }[];
+          }
+        >;
+      }
+    >();
+
+    for (const alloc of allocations) {
+      if (!userMap.has(alloc.user_id)) {
+        userMap.set(alloc.user_id, {
+          user_id: alloc.user_id,
+          user_name: alloc.user_name || 'Staff Member',
+          user_email: alloc.user_email || '',
+          user_phone: alloc.user_phone || '',
+          camps: new Map(),
+        });
+      }
+
+      const u = userMap.get(alloc.user_id)!;
+      if (!u.camps.has(alloc.camp_id)) {
+        u.camps.set(alloc.camp_id, {
+          camp_id: alloc.camp_id,
+          camp_title: alloc.camp_title || 'Camp',
+          notes: alloc.notes,
+          roles: [],
+        });
+      }
+
+      const c = u.camps.get(alloc.camp_id)!;
+      // Deduplicate identical permission types
+      if (!c.roles.some((r) => r.permission_type === alloc.permission_type)) {
+        c.roles.push({
+          id: alloc.id,
+          permission_type: alloc.permission_type,
+        });
+      }
+    }
+
+    return Array.from(userMap.values()).map((u) => ({
+      ...u,
+      camps: Array.from(u.camps.values()),
+    }));
+  }, [allocations]);
+
+  const getRoleBadgeConfig = (permissionType: string) => {
+    switch (permissionType) {
+      case 'scan_pass':
+        return {
+          label: 'Pass Scanner Only',
+          bg: 'bg-blue-50',
+          text: 'text-blue-800',
+          border: 'border-blue-200',
+        };
+      case 'attendance':
+        return {
+          label: 'Attendance Only',
+          bg: 'bg-emerald-50',
+          text: 'text-emerald-800',
+          border: 'border-emerald-200',
+        };
+      case 'prasadam':
+        return {
+          label: 'Prasadam Desk Only',
+          bg: 'bg-orange-50',
+          text: 'text-orange-900',
+          border: 'border-orange-200',
+        };
+      case 'refunds':
+        return {
+          label: 'Refunds Desk Only',
+          bg: 'bg-purple-50',
+          text: 'text-purple-800',
+          border: 'border-purple-200',
+        };
+      case 'both':
+      default:
+        return {
+          label: 'Full Coordinator',
+          bg: 'bg-amber-50',
+          text: 'text-amber-800',
+          border: 'border-amber-200',
+        };
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] sm:max-h-[92vh]">
         {/* Modal Top Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white border-b border-slate-700 gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 sm:w-10 h-9 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
               <Shield className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="font-black text-base text-white tracking-tight flex items-center gap-2">
+            <div className="min-w-0">
+              <h3 className="font-black text-sm sm:text-base text-white tracking-tight truncate">
                 <span>Camp Staff &amp; Role Delegations</span>
               </h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-[11px] sm:text-xs text-slate-300 truncate">
                 Grant volunteers &amp; coordinators access to specific camps with custom privileges
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Scrollable Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-3.5 sm:p-6 overflow-y-auto flex-1 space-y-4 sm:space-y-6">
           {/* Notifications */}
           {error && (
             <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 animate-fadeIn">
@@ -307,103 +469,142 @@ export default function CampStaffRoleManagementModal({
                 </div>
               </div>
 
-              {/* Step C: Permission Level Pills */}
+              {/* Step C: Permission Level Pills (Multi-Role Allowed) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  3. Select Access &amp; Permission Level
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    3. Select Access &amp; Permission Levels (Assign 1 or Many Roles)
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-black bg-amber-100/70 px-2 py-0.5 rounded-full border border-amber-300">
+                    {selectedPermissions.includes('both') ? 'All Roles (Full Access)' : `${selectedPermissions.length} Role(s) Selected`}
+                  </span>
+                </div>
+
+                {selectedUser && (
+                  <div className="mb-2 text-[11px] bg-amber-50/80 border border-amber-200 text-amber-900 rounded-lg p-2 flex items-center justify-between">
+                    <span>
+                      Current roles for this camp: <strong>{allocations.filter(a => a.user_id === selectedUser.id && a.camp_id === selectedCampId).map(a => a.permission_type.toUpperCase()).join(', ') || 'None yet'}</strong>
+                    </span>
+                    <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full font-bold">
+                      Multi-Role Ready
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Option 0: Pass Scanner Only (Focused single-action role) */}
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all ${
-                      permissionType === 'scan_pass'
+                  {/* Option 0: Pass Scanner Only */}
+                  <div
+                    onClick={() => togglePermission('scan_pass')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none ${
+                      selectedPermissions.includes('scan_pass') || selectedPermissions.includes('both')
                         ? 'border-blue-600 bg-blue-50 text-blue-950 shadow-sm ring-1 ring-blue-600'
                         : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-black text-xs">
+                    <div className="flex items-center gap-2 font-black text-xs">
                       <input
-                        type="radio"
-                        name="permission"
-                        checked={permissionType === 'scan_pass'}
-                        onChange={() => setPermissionType('scan_pass')}
-                        className="text-blue-600 focus:ring-blue-500"
+                        type="checkbox"
+                        checked={selectedPermissions.includes('scan_pass') || selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer pointer-events-none"
                       />
-                      <span>Pass Scanner &amp; Meal Punch Only</span>
+                      <span>Pass Scanner &amp; Meal Punch</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                      Single-action counter role. Only opens the scanner to verify passes &amp; punch meals.
+                      Single-action counter role. Only opens scanner to verify passes &amp; punch meals.
                     </p>
-                  </label>
+                  </div>
 
-                  {/* Option 1: Attendance Only */}
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all ${
-                      permissionType === 'attendance'
+                  {/* Option 1: Attendance & Registrations */}
+                  <div
+                    onClick={() => togglePermission('attendance')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none ${
+                      selectedPermissions.includes('attendance') || selectedPermissions.includes('both')
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-950 shadow-sm ring-1 ring-emerald-600'
                         : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-black text-xs">
+                    <div className="flex items-center gap-2 font-black text-xs">
                       <input
-                        type="radio"
-                        name="permission"
-                        checked={permissionType === 'attendance'}
-                        onChange={() => setPermissionType('attendance')}
-                        className="text-emerald-600 focus:ring-emerald-500"
+                        type="checkbox"
+                        checked={selectedPermissions.includes('attendance') || selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer pointer-events-none"
                       />
                       <span>Attendance &amp; Registrations</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                      Can view attendee ledger, download Excel, scan QR passes &amp; punch meals.
+                      Can view attendee ledger, download Excel, scan passes &amp; coordinate check-ins.
                     </p>
-                  </label>
+                  </div>
 
-                  {/* Option 2: Refunds Only */}
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all ${
-                      permissionType === 'refunds'
+                  {/* Option 2: Prasadam & Kitchen Tally */}
+                  <div
+                    onClick={() => togglePermission('prasadam')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none ${
+                      selectedPermissions.includes('prasadam') || selectedPermissions.includes('both')
+                        ? 'border-orange-600 bg-orange-50 text-orange-950 shadow-sm ring-1 ring-orange-600'
+                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermissions.includes('prasadam') || selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 cursor-pointer pointer-events-none"
+                      />
+                      <span>Prasadam Logs &amp; Kitchen Tally</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Kitchen desk. View live meal matrix tallies, consumption counts per slot, and scan passes.
+                    </p>
+                  </div>
+
+                  {/* Option 3: Refunds Desk */}
+                  <div
+                    onClick={() => togglePermission('refunds')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none ${
+                      selectedPermissions.includes('refunds') || selectedPermissions.includes('both')
                         ? 'border-purple-600 bg-purple-50 text-purple-950 shadow-sm ring-1 ring-purple-600'
                         : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-black text-xs">
+                    <div className="flex items-center gap-2 font-black text-xs">
                       <input
-                        type="radio"
-                        name="permission"
-                        checked={permissionType === 'refunds'}
-                        onChange={() => setPermissionType('refunds')}
-                        className="text-purple-600 focus:ring-purple-500"
+                        type="checkbox"
+                        checked={selectedPermissions.includes('refunds') || selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer pointer-events-none"
                       />
                       <span>Refunds Desk Only</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-snug">
                       Can view devotee refund requests &amp; process payout approvals.
                     </p>
-                  </label>
+                  </div>
 
-                  {/* Option 3: Both (Full Coordinator) */}
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all ${
-                      permissionType === 'both'
+                  {/* Option 4: Full Camp Coordinator */}
+                  <div
+                    onClick={() => togglePermission('both')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none sm:col-span-2 ${
+                      selectedPermissions.includes('both')
                         ? 'border-amber-600 bg-amber-50 text-amber-950 shadow-sm ring-1 ring-amber-600'
                         : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-black text-xs">
+                    <div className="flex items-center gap-2 font-black text-xs">
                       <input
-                        type="radio"
-                        name="permission"
-                        checked={permissionType === 'both'}
-                        onChange={() => setPermissionType('both')}
-                        className="text-amber-600 focus:ring-amber-500"
+                        type="checkbox"
+                        checked={selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer pointer-events-none"
                       />
-                      <span>Full Camp Coordinator</span>
+                      <span>Full Camp Coordinator (All Desks Access)</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                      Full operational access (attendance/registrations, scanning, and refunds).
+                      Full operational access across attendance ledger, prasadam kitchen, scanning, and refunds.
                     </p>
-                  </label>
+                  </div>
                 </div>
               </div>
 
@@ -443,64 +644,120 @@ export default function CampStaffRoleManagementModal({
               <div className="py-8 flex justify-center text-slate-400 text-xs">
                 <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
               </div>
-            ) : allocations.length === 0 ? (
+            ) : groupedStaff.length === 0 ? (
               <div className="p-6 rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500">
                 No staff members currently delegated. Super Admins currently have master access.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                {allocations.map((alloc) => (
+              <div className="space-y-3">
+                {groupedStaff.map((staff) => (
                   <div
-                    key={alloc.id}
-                    className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
+                    key={staff.user_id}
+                    className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all space-y-3"
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-xs">{alloc.user_name || 'Staff Member'}</span>
-                        <span className="text-[11px] text-slate-500 font-mono">({alloc.user_email || alloc.user_phone})</span>
+                    {/* Devotee Header */}
+                    <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                          {staff.user_name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="font-black text-xs sm:text-sm text-slate-900 truncate">
+                            {staff.user_name}
+                          </h5>
+                          <p className="text-[11px] text-slate-500 font-mono truncate">
+                            {staff.user_email || staff.user_phone || 'No contact provided'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-600">
-                        <span className="font-medium text-slate-800">Camp: <strong className="text-blue-900">{alloc.camp_title}</strong></span>
-                        {alloc.notes && <span className="text-slate-400">• {alloc.notes}</span>}
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2.5 self-end sm:self-center">
-                      {/* Permission Badge */}
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          alloc.permission_type === 'scan_pass'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : alloc.permission_type === 'attendance'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : alloc.permission_type === 'refunds'
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : 'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}
-                      >
-                        {alloc.permission_type === 'scan_pass'
-                          ? 'Pass Scanner Only'
-                          : alloc.permission_type === 'attendance'
-                          ? 'Attendance Only'
-                          : alloc.permission_type === 'refunds'
-                          ? 'Refunds Only'
-                          : 'Full Coordinator'}
-                      </span>
-
-                      {/* Revoke Button */}
                       <button
                         type="button"
-                        onClick={() => handleRevokeStaff(alloc.id, alloc.user_name || 'Staff')}
-                        disabled={revokingId === alloc.id}
-                        title="Revoke access"
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        onClick={() => {
+                          setSelectedUser({
+                            id: staff.user_id,
+                            name: staff.user_name,
+                            email: staff.user_email,
+                            phone: staff.user_phone,
+                          });
+                          setUserQuery(staff.user_name);
+                          const modalScroll = document.querySelector('.overflow-y-auto');
+                          modalScroll?.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                        title="Add or edit roles for this devotee"
                       >
-                        {revokingId === alloc.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-red-600" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
+                        <Plus className="w-3 h-3 text-amber-700" />
+                        <span>Add Role</span>
                       </button>
+                    </div>
+
+                    {/* Camps & Roles Assigned */}
+                    <div className="space-y-2.5">
+                      {staff.camps.map((camp) => (
+                        <div
+                          key={camp.camp_id}
+                          className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[11px] font-bold text-slate-500">Camp:</span>
+                              <span className="font-black text-xs text-blue-900 truncate">
+                                {camp.camp_title}
+                              </span>
+                              {camp.notes && (
+                                <span className="text-[10px] text-slate-400 truncate hidden sm:inline">
+                                  • {camp.notes}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Revoke All roles for this camp */}
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeAllUserCampAccess(staff.user_id, camp.camp_id, staff.user_name, camp.camp_title)}
+                              disabled={revokingId === `${staff.user_id}_${camp.camp_id}`}
+                              title={`Revoke all roles for ${staff.user_name} in ${camp.camp_title}`}
+                              className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+                            >
+                              {revokingId === `${staff.user_id}_${camp.camp_id}` ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-600" />
+                              ) : (
+                                <Trash2 className="w-3 h-3 text-rose-500" />
+                              )}
+                              <span>Revoke All</span>
+                            </button>
+                          </div>
+
+                          {/* List of Role Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {camp.roles.map((r) => {
+                              const config = getRoleBadgeConfig(r.permission_type);
+                              return (
+                                <span
+                                  key={r.id}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${config.bg} ${config.text} ${config.border}`}
+                                >
+                                  <span>{config.label}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevokeStaff(r.id, `${staff.user_name} (${config.label})`)}
+                                    disabled={revokingId === r.id}
+                                    title={`Remove ${config.label}`}
+                                    className="hover:opacity-75 cursor-pointer ml-0.5 rounded-full p-0.5 hover:bg-black/10 transition-colors"
+                                  >
+                                    {revokingId === r.id ? (
+                                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                    ) : (
+                                      <X className="w-2.5 h-2.5 stroke-[3]" />
+                                    )}
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

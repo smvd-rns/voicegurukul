@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Search, Download, Users, DollarSign,
   Filter, Phone, Mail, CheckCircle, Clock, Utensils,
@@ -21,7 +21,8 @@ import {
   getCampRegistrationsAction,
   verifyAndApproveCampRegistrationAction,
   getCampRefundRequestsAction,
-  processCampRefundAction
+  processCampRefundAction,
+  getCampUserAccessAction
 } from '../../actions';
 
 function formatDisplayDate(val: any): string {
@@ -47,11 +48,35 @@ function formatDisplayDate(val: any): string {
 export default function CampRegistrationsAdminPage() {
   const params = useParams();
   const campId = String(params.campId || '');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialViewParam = searchParams.get('view');
 
   const [camp, setCamp] = useState<Camp | null>(null);
   const [registrations, setRegistrations] = useState<CampRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // User Access & Role Permissions for this specific camp
+  const [userAccess, setUserAccess] = useState<{
+    loaded: boolean;
+    isSuperAdmin: boolean;
+    permission: 'super_admin' | 'attendance' | 'refunds' | 'prasadam' | 'both' | 'scan_pass' | null;
+    permissions: string[];
+    canAttendance: boolean;
+    canRefunds: boolean;
+    canPrasadam: boolean;
+    canScan: boolean;
+  }>({
+    loaded: false,
+    isSuperAdmin: false,
+    permission: null,
+    permissions: [],
+    canAttendance: false,
+    canRefunds: false,
+    canPrasadam: false,
+    canScan: false,
+  });
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,15 +142,7 @@ export default function CampRegistrationsAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch Registrations
-      const res = await getCampRegistrationsAction(campId, searchTerm);
-      if (res.success && res.registrations) {
-        setRegistrations(res.registrations);
-      } else {
-        setError(res.error || 'Failed to fetch registrations');
-      }
-
-      // 2. Fetch Camp details
+      // 1. Fetch Camp details
       const campRes = await fetch(`/api/db-proxy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,10 +158,65 @@ export default function CampRegistrationsAdminPage() {
         setCamp(campJson.data);
       }
 
-      // 3. Fetch Refund Requests
-      const refundRes = await getCampRefundRequestsAction(campId);
-      if (refundRes.success && refundRes.requests) {
-        setRefundRequests(refundRes.requests);
+      // 2. Fetch User Access Permission for this camp
+      const accessRes = await getCampUserAccessAction(campId);
+      const isSuper = !!accessRes.isSuperAdmin;
+      const perm = accessRes.permission;
+      const canAttendance = isSuper || !!accessRes.canAttendance;
+      const canRefunds = isSuper || !!accessRes.canRefunds;
+      const canPrasadam = isSuper || !!accessRes.canPrasadam;
+      const canScan = isSuper || !!accessRes.canScan;
+
+      setUserAccess({
+        loaded: true,
+        isSuperAdmin: isSuper,
+        permission: (perm as any) || null,
+        permissions: accessRes.permissions || [],
+        canAttendance,
+        canRefunds,
+        canPrasadam,
+        canScan,
+      });
+
+      // If user has no access or only scan_pass, redirect to staff duty desk
+      if (!isSuper && !canAttendance && !canRefunds && !canPrasadam) {
+        router.replace('/dashboard/camp?tab=staff');
+        return;
+      }
+
+      // Automatically initialize allowed activeView
+      if (initialViewParam === 'prasadam' && canPrasadam) {
+        setActiveView('prasadam');
+      } else if (initialViewParam === 'refunds' && canRefunds) {
+        setActiveView('refunds');
+      } else if (initialViewParam === 'registrations' && canAttendance) {
+        setActiveView('registrations');
+      } else if (canAttendance) {
+        setActiveView('registrations');
+      } else if (canPrasadam) {
+        setActiveView('prasadam');
+      } else if (canRefunds) {
+        setActiveView('refunds');
+      } else {
+        setActiveView('registrations');
+      }
+
+      // 3. Fetch Registrations (only if super admin or attendance permission)
+      if (canAttendance) {
+        const res = await getCampRegistrationsAction(campId, searchTerm);
+        if (res.success && res.registrations) {
+          setRegistrations(res.registrations);
+        } else if (res.error) {
+          setError(res.error);
+        }
+      }
+
+      // 4. Fetch Refund Requests (only if super admin or refunds permission)
+      if (canRefunds) {
+        const refundRes = await getCampRefundRequestsAction(campId);
+        if (refundRes.success && refundRes.requests) {
+          setRefundRequests(refundRes.requests);
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Error loading registration records');
@@ -377,6 +449,7 @@ export default function CampRegistrationsAdminPage() {
   const waiverCount = filteredRegistrations.filter((r) => r.payment_method === 'ROLE_WAIVER' || r.payment_method === 'FREE').length;
   const idtCount = filteredRegistrations.filter((r) => r.payment_method === 'IDT').length;
   const razorpayCount = filteredRegistrations.filter((r) => r.payment_method === 'RAZORPAY').length;
+  const accommodationCount = filteredRegistrations.filter((r) => !r.is_cancelled && r.accommodation && r.accommodation.toLowerCase() !== 'no').length;
 
   const onlineReceived = filteredRegistrations
     .filter((r) => r.payment_method === 'RAZORPAY' && r.payment_status !== 'processing')
@@ -415,17 +488,19 @@ export default function CampRegistrationsAdminPage() {
     return true;
   });
 
-  // Export to Excel
+  // Export to Excel (attendance role is protected from sensitive financials)
   const handleExportExcel = () => {
     if (filteredRegistrations.length === 0) {
       alert('No registrations available to export.');
       return;
     }
 
+    const isAttendanceOnly = !userAccess.isSuperAdmin && !userAccess.canRefunds;
+
     const excelData = filteredRegistrations.map((reg, idx) => {
       const { grossCost, discount, netReceived, isProcessing, pendingAmount } = getRegFinancials(reg);
       const regRefund = getRegRefund(reg.id);
-      return {
+      const row: Record<string, any> = {
         'S.No': idx + 1,
         'Participant Name': reg.participant_name,
         'Registration Status': reg.is_cancelled ? 'Cancelled' : 'Active',
@@ -445,31 +520,31 @@ export default function CampRegistrationsAdminPage() {
         'Last Meal': `${reg.last_meal_date} - ${reg.last_meal_type}`,
         'Dinner Type': reg.dinner_type ?? 'Dinner Meal',
         'Accommodation': reg.accommodation,
-        'Meals Cost (₹)': reg.meal_cost,
-        'Stay Cost (₹)': reg.acc_cost,
-        'AC Charges (₹)': reg.ac_cost,
-        'Base / Material Fee (₹)': (reg as any).base_cost ?? 0,
-        'Late Fee (₹)': reg.late_fee,
-        'Gross Calculated Fee (₹)': grossCost,
-        'Discount / Waived (₹)': discount,
-        'Net Actual Received (₹)': netReceived,
-        'Refunded Amount (₹)': regRefund,
-        'Net Available Retained (₹)': Math.max(0, netReceived - regRefund),
-        'Pending Amount (₹)': pendingAmount,
-        'Payment Method': reg.payment_method,
-        'Payment Status': reg.payment_status || 'completed',
-        'Coupon / Promo Code': reg.coupon_code || (reg.deduction_source?.includes('Coupon:') ? reg.deduction_source : ''),
-        'Payment ID / Ref': reg.payment_id ?? '',
-        'Transaction UTR': reg.transaction_ref ?? '',
-        'Payment Date': formatDisplayDate(reg.payment_date),
-        'Verified At': reg.verified_at ? new Date(reg.verified_at).toLocaleString('en-IN') : '',
-        'Verified By': reg.verified_by ?? '',
-        'Transferring Temple': (reg.payment_method === 'INTER_TEMPLE_TRANSFER' || reg.payment_method === 'ITT') ? (reg.deduction_source ?? '') : '',
-        'IDT Deduction Voice': reg.payment_method === 'IDT' ? (reg.deduction_source ?? '') : '',
-        'IDT Passcode': reg.passcode ?? '',
-        'Screenshot URL': reg.payment_screenshot_url ?? '',
-        'Registered At': reg.created_at ? new Date(reg.created_at).toLocaleString('en-IN') : ''
       };
+
+      // Only Super Admins and Full Coordinators see financial rupee totals
+      if (!isAttendanceOnly) {
+        row['Meals Cost (₹)'] = reg.meal_cost;
+        row['Stay Cost (₹)'] = reg.acc_cost;
+        row['AC Charges (₹)'] = reg.ac_cost;
+        row['Base / Material Fee (₹)'] = (reg as any).base_cost ?? 0;
+        row['Late Fee (₹)'] = reg.late_fee;
+        row['Gross Calculated Fee (₹)'] = grossCost;
+        row['Discount / Waived (₹)'] = discount;
+        row['Net Actual Received (₹)'] = netReceived;
+        row['Refunded Amount (₹)'] = regRefund;
+        row['Net Available Retained (₹)'] = Math.max(0, netReceived - regRefund);
+        row['Pending Amount (₹)'] = pendingAmount;
+      }
+
+      row['Payment Method'] = reg.payment_method;
+      row['Payment Status'] = reg.payment_status || 'completed';
+      row['Payment ID / Ref'] = reg.payment_id ?? '';
+      row['Transaction UTR'] = reg.transaction_ref ?? '';
+      row['Payment Date'] = formatDisplayDate(reg.payment_date);
+      row['Registered At'] = reg.created_at ? new Date(reg.created_at).toLocaleString('en-IN') : '';
+
+      return row;
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -487,22 +562,22 @@ export default function CampRegistrationsAdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafcff] p-4 sm:p-6 lg:p-8 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#fafcff] p-3 sm:p-6 lg:p-8 text-slate-800">
+      <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-6">
         
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+        {/* Header: Compact on Mobile */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-200/80">
           <div>
             <Link
-              href="/dashboard/admin/camps"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-600 mb-1.5 transition-colors font-semibold"
+              href={userAccess.isSuperAdmin ? "/dashboard/admin/camps" : "/dashboard/camp?tab=staff"}
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-slate-500 hover:text-amber-600 mb-1 transition-colors font-semibold"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Camps
+              <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              {userAccess.isSuperAdmin ? 'Back to Camps' : 'Back to Camp Staff Duty'}
             </Link>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-3">
               <span>{camp?.title || 'Camp Attendees'}</span>
-              <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+              <span className={`text-[9px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full uppercase tracking-wider ${
                 camp?.status === 'active'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : 'bg-slate-200 text-slate-700'
@@ -510,173 +585,231 @@ export default function CampRegistrationsAdminPage() {
                 {camp?.status || 'Active'}
               </span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <p className="text-[11px] sm:text-sm text-slate-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
               Complete attendee ledger, Inter-Temple Transfer verification, fee contributions, and Excel (.xlsx) export.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
             <button
               onClick={loadData}
-              className="p-2.5 text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+              className="p-2 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-xl sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer shrink-0"
               title="Refresh Records"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button
-              onClick={() => setIsQrScannerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
-            >
-              <QrCode className="w-4 h-4 text-amber-400" />
-              <span>Scan Pass</span>
-            </button>
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Export to Excel (.xlsx)
-            </button>
+            {(userAccess.isSuperAdmin || userAccess.canScan) && (
+              <button
+                onClick={() => setIsQrScannerOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
+              >
+                <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                <span>Scan Pass</span>
+              </button>
+            )}
+            {(userAccess.isSuperAdmin || userAccess.canAttendance) && (
+              <button
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-6 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Export Excel</span>
+                <span className="hidden sm:inline">(.xlsx)</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* View Switcher: Registrations Ledger vs Refund Requests */}
-        <div className="flex items-center gap-2 border-b border-slate-200/90 pb-2">
-          <button
-            type="button"
-            onClick={() => setActiveView('registrations')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              activeView === 'registrations'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Attendee Ledger ({registrations.length})</span>
-          </button>
+        {/* View Switcher: Registrations Ledger vs Refund Requests vs Prasadam Logs (Filtered by assigned role) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/90 pb-2 overflow-x-auto no-scrollbar">
+          {(userAccess.isSuperAdmin || userAccess.canAttendance) && (
+            <button
+              type="button"
+              onClick={() => setActiveView('registrations')}
+              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeView === 'registrations'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Attendee Ledger ({registrations.length})</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveView('refunds')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer relative ${
-              activeView === 'refunds'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Undo2 className="w-4 h-4" />
-            <span>Refund Requests ({refundRequests.length})</span>
-            {pendingRefundsCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-pulse">
-                {pendingRefundsCount} Pending
-              </span>
-            )}
-          </button>
+          {(userAccess.isSuperAdmin || userAccess.canRefunds) && (
+            <button
+              type="button"
+              onClick={() => setActiveView('refunds')}
+              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer relative whitespace-nowrap shrink-0 ${
+                activeView === 'refunds'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Refund Requests ({refundRequests.length})</span>
+              {pendingRefundsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] sm:text-[10px] font-black animate-pulse">
+                  {pendingRefundsCount}
+                </span>
+              )}
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveView('prasadam')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              activeView === 'prasadam'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Utensils className="w-4 h-4" />
-            <span>Prasadam Logs & Kitchen Tally</span>
-          </button>
+          {(userAccess.isSuperAdmin || userAccess.canPrasadam) && (
+            <button
+              type="button"
+              onClick={() => setActiveView('prasadam')}
+              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeView === 'prasadam'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Prasadam Logs &amp; Kitchen Tally</span>
+            </button>
+          )}
         </div>
 
         {/* VIEW 1: ATTENDEE REGISTRATIONS LEDGER */}
-        {activeView === 'registrations' && (
+        {activeView === 'registrations' && (userAccess.isSuperAdmin || userAccess.canAttendance) && (
           <>
-            {/* Metrics Row: Tallying Gross vs Refunded vs Net Available vs Pending vs Discounts */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Attendees</span>
-                <span className="text-2xl font-black text-slate-900 mt-1 block">{totalDevotees}</span>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {activeDevoteesCount} Active • {cancelledDevoteesCount} Cancelled
-                </span>
-              </div>
+            {/* Metrics Row: Role-aware data viewing protection */}
+            {!userAccess.canRefunds && !userAccess.isSuperAdmin ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3.5">
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Attendees</span>
+                  <span className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1 block">{totalDevotees}</span>
+                  <span className="text-[9px] sm:text-[11px] text-slate-500 font-medium truncate block">
+                    {activeDevoteesCount} Active • {cancelledDevoteesCount} Cancelled
+                  </span>
+                </div>
 
-              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Gross Received</span>
-                <span className="text-2xl font-black text-emerald-600 mt-1 block">
-                  ₹{totalNetReceived.toLocaleString('en-IN')}
-                </span>
-                <span className="text-[10px] text-slate-400 truncate block">
-                  UPI: ₹{onlineReceived} • IDT: ₹{idtReceived} • ITT: ₹{ittReceived}
-                </span>
-              </div>
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Active Devotees</span>
+                  <span className="text-lg sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1 block">{activeDevoteesCount}</span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 truncate block">Confirmed &amp; Attending</span>
+                </div>
 
-              <div className={`p-4 rounded-3xl border shadow-sm ${
-                completedRefundAmount > 0 ? 'bg-purple-50/70 border-purple-200' : 'bg-white border-slate-200/80'
-              }`}>
-                <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider block">Refunded Given</span>
-                <span className="text-2xl font-black text-purple-700 mt-1 block">
-                  ₹{completedRefundAmount.toLocaleString('en-IN')}
-                </span>
-                <span className="text-[10px] text-purple-900 font-medium block">
-                  {completedRefundsCount} Payout(s) transferred
-                </span>
-              </div>
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Accommodation</span>
+                  <span className="text-lg sm:text-2xl font-black text-blue-600 mt-0.5 sm:mt-1 block">{accommodationCount}</span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 block truncate">CV Stay / Room Required</span>
+                </div>
 
-              <div className="p-4 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-teal-50 border-2 border-emerald-400/80 shadow-sm">
-                <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider block">Net Available</span>
-                <span className="text-2xl font-black text-emerald-700 mt-1 block">
-                  ₹{netAvailableAmount.toLocaleString('en-IN')}
-                </span>
-                <span className="text-[10px] text-emerald-800 font-semibold block">
-                  Gross (₹{totalNetReceived}) - Ref (₹{completedRefundAmount})
-                </span>
-              </div>
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">Inter-Temple ITT</span>
+                  <span className="text-lg sm:text-2xl font-black text-indigo-600 mt-0.5 sm:mt-1 block">{ittCount}</span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 block truncate">Temple Transfer Entries</span>
+                </div>
 
-              <div className={`p-4 rounded-3xl border shadow-sm ${
-                processingCount > 0 ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200/80'
-              }`}>
-                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
-                  <span>Pending Verify</span>
-                  {processingCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
-                </span>
-                <span className="text-2xl font-black text-amber-700 mt-1 block">
-                  ₹{totalPendingAmount.toLocaleString('en-IN')}
-                </span>
-                <span className="text-[10px] text-amber-800 font-semibold block">
-                  {processingCount} Transfer(s) awaiting approval
-                </span>
-              </div>
+                <div className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs ${
+                  processingCount > 0 ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200/80'
+                }`}>
+                  <span className="text-[9px] sm:text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
+                    <span>Pending Verify</span>
+                    {processingCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                  </span>
+                  <span className="text-lg sm:text-2xl font-black text-amber-700 mt-0.5 sm:mt-1 block">{processingCount}</span>
+                  <span className="text-[8px] sm:text-[10px] text-amber-800 font-semibold block truncate">Awaiting UTR Check</span>
+                </div>
 
-              <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Discounts &amp; Waivers</span>
-                <span className="text-2xl font-black text-rose-600 mt-1 block">
-                  ₹{totalDiscounts.toLocaleString('en-IN')}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  {couponFreeCount} Coupon(s) • {waiverCount} Waiver(s)
-                </span>
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Cancelled Passes</span>
+                  <span className="text-lg sm:text-2xl font-black text-rose-600 mt-0.5 sm:mt-1 block">{cancelledDevoteesCount}</span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 block truncate">Withdrawn from camp</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3.5">
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Attendees</span>
+                  <span className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1 block">{totalDevotees}</span>
+                  <span className="text-[9px] sm:text-[11px] text-slate-500 font-medium truncate block">
+                    {activeDevoteesCount} Active • {cancelledDevoteesCount} Cancelled
+                  </span>
+                </div>
 
-        {/* Filters & Search Bar */}
-        <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Gross Received</span>
+                  <span className="text-lg sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1 block truncate">
+                    ₹{totalNetReceived.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 truncate block">
+                    UPI: ₹{onlineReceived} • IDT: ₹{idtReceived}
+                  </span>
+                </div>
+
+                <div className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs ${
+                  completedRefundAmount > 0 ? 'bg-purple-50/70 border-purple-200' : 'bg-white border-slate-200/80'
+                }`}>
+                  <span className="text-[9px] sm:text-[11px] font-bold text-purple-800 uppercase tracking-wider block">Refunded Given</span>
+                  <span className="text-lg sm:text-2xl font-black text-purple-700 mt-0.5 sm:mt-1 block truncate">
+                    ₹{completedRefundAmount.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[8px] sm:text-[10px] text-purple-900 font-medium block truncate">
+                    {completedRefundsCount} Payout(s) sent
+                  </span>
+                </div>
+
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-teal-50 border sm:border-2 border-emerald-400/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-emerald-900 uppercase tracking-wider block">Net Available</span>
+                  <span className="text-lg sm:text-2xl font-black text-emerald-700 mt-0.5 sm:mt-1 block truncate">
+                    ₹{netAvailableAmount.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[8px] sm:text-[10px] text-emerald-800 font-semibold block truncate">
+                    Gross - Refunded
+                  </span>
+                </div>
+
+                <div className={`p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs ${
+                  processingCount > 0 ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200/80'
+                }`}>
+                  <span className="text-[9px] sm:text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
+                    <span>Pending Verify</span>
+                    {processingCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                  </span>
+                  <span className="text-lg sm:text-2xl font-black text-amber-700 mt-0.5 sm:mt-1 block truncate">
+                    ₹{totalPendingAmount.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[8px] sm:text-[10px] text-amber-800 font-semibold block truncate">
+                    {processingCount} Transfer(s) pending
+                  </span>
+                </div>
+
+                <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Discounts</span>
+                  <span className="text-lg sm:text-2xl font-black text-rose-600 mt-0.5 sm:mt-1 block truncate">
+                    ₹{totalDiscounts.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-[8px] sm:text-[10px] text-slate-400 block truncate">
+                    {couponFreeCount} Coupon • {waiverCount} Waiver
+                  </span>
+                </div>
+              </div>
+            )}
+
+        {/* Filters & Search Bar: Compact on Mobile */}
+        <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col md:flex-row gap-2 sm:gap-3 items-stretch md:items-center justify-between">
           <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by devotee name, phone, email, counselor, or temple..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 shadow-2xs hover:border-amber-400"
+              placeholder="Search devotee name, phone, email, counselor, temple..."
+              className="w-full pl-9 pr-3 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 shadow-2xs hover:border-amber-400"
             />
           </form>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 w-full md:w-auto">
             <select
               value={selectedTrack}
               onChange={(e) => setSelectedTrack(e.target.value)}
-              className="px-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
+              className="w-full sm:w-auto px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
             >
               <option value="all">All Tracks</option>
               {camp?.tracks?.map((t) => (
@@ -687,7 +820,7 @@ export default function CampRegistrationsAdminPage() {
             <select
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
-              className="px-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
+              className="w-full sm:w-auto px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
             >
               <option value="all">All Payment &amp; Statuses</option>
               <option value="PROCESSING">⏳ Pending Verification ({processingCount})</option>
@@ -703,35 +836,35 @@ export default function CampRegistrationsAdminPage() {
 
         {/* Table View: Clean, Uniform Row Heights */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <Loader2 className="w-8 h-8 text-amber-600 animate-spin mb-3" />
+          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs">
+            <Loader2 className="w-7 h-7 text-amber-600 animate-spin mb-2" />
             <p className="text-xs text-slate-500 font-medium">Loading attendee records...</p>
           </div>
         ) : filteredRegistrations.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800">No Registrations Found</h3>
-            <p className="text-xs text-slate-500 mt-1">
+          <div className="text-center py-12 sm:py-16 bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs">
+            <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <h3 className="text-sm sm:text-base font-bold text-slate-800">No Registrations Found</h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
               {searchTerm || selectedTrack !== 'all' || selectedPayment !== 'all'
                 ? 'Try adjusting your search criteria or filters.'
                 : 'No attendees have registered for this camp yet.'}
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Participant</th>
-                    <th className="py-3 px-3">Contact</th>
-                    <th className="py-3 px-3">Temple &amp; VOICE</th>
-                    <th className="py-3 px-3">Counselor</th>
-                    <th className="py-3 px-3">Camp Track</th>
-                    <th className="py-3 px-3">Itinerary</th>
-                    <th className="py-3 px-3 text-center">Acc.</th>
-                    <th className="py-3 px-4 whitespace-nowrap">Payment</th>
-                    <th className="py-3 px-4 text-right whitespace-nowrap">Fee &amp; Status (₹)</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider">Participant</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Contact</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Temple &amp; VOICE</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Counselor</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Camp Track</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Itinerary</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider text-center">Acc.</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider whitespace-nowrap">Payment</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider text-right whitespace-nowrap">Fee &amp; Status (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -757,7 +890,7 @@ export default function CampRegistrationsAdminPage() {
                     return (
                       <tr key={reg.id} className={`${rowHighlightClass} transition-colors`}>
                         {/* Participant */}
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3 sm:py-3 sm:px-4">
                           <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                             <span>{reg.participant_name}</span>
                             <button
@@ -778,7 +911,7 @@ export default function CampRegistrationsAdminPage() {
                             </button>
                             {reg.is_cancelled && (
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider ${
                                   isRefunded
                                     ? 'bg-purple-100 text-purple-900 border border-purple-300'
                                     : isRefundPending
@@ -804,53 +937,53 @@ export default function CampRegistrationsAdminPage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[10px] sm:text-[11px] text-slate-400">
                             {reg.gender} {reg.age ? `• ${reg.age} yrs` : ''}
                           </div>
                         </td>
 
                         {/* Contact */}
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3">
+                          <div className="flex items-center gap-1 text-slate-800 font-medium">
                             <Phone className="w-3 h-3 text-slate-400" />
                             <span>{reg.whatsapp}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 truncate max-w-[150px]">
+                          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-400 truncate max-w-[140px]">
                             <Mail className="w-3 h-3 text-slate-400" />
                             <span title={reg.email}>{reg.email}</span>
                           </div>
                         </td>
 
                         {/* Temple & VOICE */}
-                        <td className="py-3 px-3 text-slate-700">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-slate-700">
                           <div className="font-semibold text-slate-900">{reg.voice_name || '—'}</div>
-                          <div className="text-[11px] text-slate-400">{reg.parent_temple || '—'}</div>
+                          <div className="text-[10px] sm:text-[11px] text-slate-400">{reg.parent_temple || '—'}</div>
                         </td>
 
                         {/* Counselor */}
-                        <td className="py-3 px-3 text-slate-700">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-slate-700">
                           <div className="font-semibold text-slate-900">{reg.counselor_name || '—'}</div>
-                          <div className="text-[11px] text-slate-400">POC: {reg.poc_name}</div>
+                          <div className="text-[10px] sm:text-[11px] text-slate-400">POC: {reg.poc_name}</div>
                         </td>
 
                         {/* Camp Track */}
-                        <td className="py-3 px-3">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold whitespace-nowrap">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3">
+                          <span className="inline-block px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
                             {reg.camp_track}
                           </span>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{reg.participant_type}</div>
+                          <div className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5">{reg.participant_type}</div>
                         </td>
 
                         {/* Meal Span */}
-                        <td className="py-3 px-3 text-[11px] text-slate-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-[11px] text-slate-600 whitespace-nowrap">
                           <div>Arr: {reg.first_meal_date} ({reg.first_meal_type})</div>
                           <div>Dep: {reg.last_meal_date} ({reg.last_meal_type})</div>
                         </td>
 
                         {/* Accommodation */}
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            className={`px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold ${
                               reg.accommodation === 'Yes'
                                 ? 'bg-blue-50 text-blue-700'
                                 : 'bg-slate-100 text-slate-500'
@@ -861,7 +994,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Payment & Proof */}
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        <td className="py-2.5 px-3 sm:py-3 sm:px-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wide whitespace-nowrap ${
@@ -1106,73 +1239,77 @@ export default function CampRegistrationsAdminPage() {
       </>
     )}
 
-    {/* VIEW 2: REFUND REQUESTS */}
-    {activeView === 'refunds' && (
-      <div className="space-y-5 animate-in fade-in duration-200">
-        {/* Refund Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Refund Requests</span>
-            <span className="text-2xl font-black text-slate-900 mt-1 block">{refundRequests.length}</span>
-            <span className="text-[11px] text-slate-400">
-              {completedRefundsCount} Transferred • {pendingRefundsCount} Pending{rejectedRefundsCount > 0 ? ` • ${rejectedRefundsCount} Rejected` : ''}
+    {/* VIEW 2: REFUND REQUESTS: Compact on Mobile */}
+    {activeView === 'refunds' && (userAccess.isSuperAdmin || userAccess.canRefunds) && (
+      <div className="space-y-3.5 sm:space-y-5 animate-in fade-in duration-200">
+        {/* Refund Metrics: Compact on Mobile */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
+          <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Total Refund Requests
+            </span>
+            <span className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1 block">
+              {refundRequests.length}
+            </span>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate">
+              {completedRefundsCount} Transferred • {pendingRefundsCount} Pending
             </span>
           </div>
 
-          <div className="p-4 rounded-3xl bg-amber-50/50 border border-amber-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              Pending Payout Amount
+          <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-amber-50/50 border border-amber-200/80 shadow-xs">
+            <span className="text-[9px] sm:text-[10px] font-bold text-amber-800 uppercase tracking-wider block flex items-center gap-1">
+              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+              <span className="truncate">Pending Payout</span>
             </span>
-            <span className="text-2xl font-black text-amber-700 mt-1 block">
+            <span className="text-lg sm:text-2xl font-black text-amber-700 mt-0.5 sm:mt-1 block">
               ₹{pendingRefundAmount.toLocaleString('en-IN')}
             </span>
-            <span className="text-[11px] text-amber-800 font-semibold block">
-              {pendingRefundsCount} Devotee(s) awaiting transfer
+            <span className="text-[9px] sm:text-[10px] text-amber-800 font-semibold block truncate">
+              {pendingRefundsCount} Devotee(s) awaiting
             </span>
           </div>
 
-          <div className="p-4 rounded-3xl bg-emerald-50/50 border border-emerald-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block flex items-center gap-1.5">
-              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-              Refunded / Given Back
+          <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50/50 border border-emerald-200/80 shadow-xs">
+            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-wider block flex items-center gap-1">
+              <CheckCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">Refunded / Paid</span>
             </span>
-            <span className="text-2xl font-black text-emerald-700 mt-1 block">
+            <span className="text-lg sm:text-2xl font-black text-emerald-700 mt-0.5 sm:mt-1 block">
               ₹{completedRefundAmount.toLocaleString('en-IN')}
             </span>
-            <span className="text-[11px] text-emerald-800 font-semibold block">
+            <span className="text-[9px] sm:text-[10px] text-emerald-800 font-semibold block truncate">
               {completedRefundsCount} Payout(s) transferred
             </span>
           </div>
 
-          <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block flex items-center gap-1.5">
-              <Banknote className="w-3.5 h-3.5 text-amber-600" />
-              Real Amount Calculation
+          <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block flex items-center gap-1">
+              <Banknote className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+              <span className="truncate">Policy Calculation</span>
             </span>
-            <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-              Refunds are computed on base fee, meals &amp; accommodation. Payment gateway fees (2%) are non-refundable.
+            <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 leading-snug line-clamp-2 sm:line-clamp-none">
+              Computed on base fee, meals &amp; accommodation. Gateway fees (2%) are non-refundable.
             </p>
           </div>
         </div>
 
-        {/* Search & Status Filter */}
-        <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+        {/* Search & Status Filter: Compact on Mobile */}
+        <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row gap-2 sm:gap-3 items-center justify-between">
           <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={refundSearchTerm}
               onChange={(e) => setRefundSearchTerm(e.target.value)}
               placeholder="Search refunds by devotee name, phone, email, or UPI..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 shadow-2xs hover:border-amber-400"
+              className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 shadow-2xs hover:border-amber-400"
             />
           </div>
 
           <select
             value={refundStatusFilter}
             onChange={(e) => setRefundStatusFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all w-full sm:w-auto"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all w-full sm:w-auto"
           >
             <option value="all">All Statuses ({refundRequests.length})</option>
             <option value="pending">⏳ Pending Payout ({pendingRefundsCount})</option>
@@ -1181,30 +1318,30 @@ export default function CampRegistrationsAdminPage() {
           </select>
         </div>
 
-        {/* Refunds Table */}
+        {/* Refunds Table: Compact on Mobile */}
         {filteredRefundRequests.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <Undo2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800">No Refund Requests</h3>
-            <p className="text-xs text-slate-500 mt-1">
+          <div className="text-center py-12 bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs">
+            <Undo2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <h3 className="text-sm sm:text-base font-bold text-slate-800">No Refund Requests</h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
               {refundSearchTerm || refundStatusFilter !== 'all'
                 ? 'No requests match your search criteria.'
                 : 'No devotees have requested cancellations or refunds for this camp retreat.'}
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[9px] sm:text-[10px] uppercase tracking-wider">
                   <tr>
-                    <th className="py-3 px-4">Devotee / POC</th>
-                    <th className="py-3 px-3">Cancellation Details</th>
-                    <th className="py-3 px-3">Reason</th>
-                    <th className="py-3 px-3">Payout Target</th>
-                    <th className="py-3 px-4 text-right">Refund Due (₹)</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-4">Devotee / POC</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-3">Cancellation Details</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-3">Reason</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-3">Payout Target</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-right">Refund Due (₹)</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-center">Status</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1221,7 +1358,7 @@ export default function CampRegistrationsAdminPage() {
                     return (
                       <tr key={req.id} className="hover:bg-slate-50/70 transition-colors">
                         {/* Devotee / POC */}
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-4">
                           <div className="font-bold text-slate-900">{req.poc_name}</div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                             <Phone className="w-3 h-3 text-slate-400" />
@@ -1233,8 +1370,8 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Cancellation Details */}
-                        <td className="py-3 px-3">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200 text-[11px] font-bold whitespace-nowrap mb-1">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3">
+                          <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200 text-[10px] sm:text-[11px] font-bold whitespace-nowrap mb-0.5">
                             {req.cancellation_type === 'PARTIAL_ATTENDEES'
                               ? `${attendeeCount} Batch Devotee(s)`
                               : req.cancellation_type === 'PARTIAL_DAYS'
@@ -1247,7 +1384,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Reason */}
-                        <td className="py-3 px-3">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3">
                           <div className="text-[11px] text-slate-700 italic max-w-[180px] truncate" title={req.reason || 'No reason provided'}>
                             {req.reason || '—'}
                           </div>
@@ -1263,7 +1400,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Payout Target */}
-                        <td className="py-3 px-3">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3">
                           {req.payout_type === 'UPI' ? (
                             <div className="space-y-0.5">
                               <div className="flex items-center gap-1.5">
@@ -1311,7 +1448,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Refund Amount */}
-                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-right whitespace-nowrap">
                           <span className="text-sm font-black text-amber-700 block">
                             ₹{Number(req.refund_amount || 0).toLocaleString('en-IN')}
                           </span>
@@ -1321,7 +1458,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Status */}
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-center whitespace-nowrap">
                           {isPending ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 font-bold text-[10px]">
                               <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
@@ -1348,7 +1485,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Action Buttons */}
-                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-4 text-right whitespace-nowrap">
                           {isPending ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <button
@@ -1424,7 +1561,7 @@ export default function CampRegistrationsAdminPage() {
     )}
 
     {/* VIEW 3: PRASADAM LOGS & KITCHEN TALLY */}
-    {activeView === 'prasadam' && (
+    {activeView === 'prasadam' && (userAccess.isSuperAdmin || userAccess.canPrasadam) && (
       <CampPrasadamTab
         campId={campId}
         camp={camp}
@@ -1881,8 +2018,8 @@ export default function CampRegistrationsAdminPage() {
 
       {/* VERIFY & APPROVE ITT MODAL */}
       {verifyingReg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[94vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
@@ -2017,11 +2154,11 @@ export default function CampRegistrationsAdminPage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex gap-2 pt-3 border-t border-slate-100">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setVerifyingReg(null)}
-                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer text-center"
               >
                 Cancel
               </button>
@@ -2029,10 +2166,10 @@ export default function CampRegistrationsAdminPage() {
                 type="button"
                 disabled={isApproving}
                 onClick={handleConfirmApproval}
-                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer text-center"
               >
                 {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Confirm &amp; Approve Payment Received
+                <span>Confirm &amp; Approve Payment Received</span>
               </button>
             </div>
           </div>

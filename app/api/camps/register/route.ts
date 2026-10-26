@@ -130,9 +130,63 @@ export async function POST(req: NextRequest) {
       const entryEmail = entry.email || email || body.email || '';
       const entryParticipantName = entry.participant_name || entry.participantName || entryPocName;
       const entryWhatsapp = entry.whatsapp || entry.phone || entryPocContact;
-      const entryParentTemple = entry.parent_temple || entry.parentTemple || null;
-      const entryVoiceName = entry.voice_name || entry.voiceName || null;
-      const entryCounselorName = entry.counselor_name || entry.counselorName || null;
+      let entryParentTemple = entry.current_temple || entry.currentTemple || entry.parent_temple || entry.parentTemple || null;
+      let entryVoiceName = entry.current_center || entry.currentCenter || entry.voice_name || entry.voiceName || null;
+      let entryCounselorName = entry.counselor_name || entry.counselorName || null;
+
+      // Ensure historical audit immutability: Snapshot devotee's current center, temple, and counselor at registration time
+      const needsCenter = !entryVoiceName || entryVoiceName.toLowerCase() === 'none';
+      const needsTemple = !entryParentTemple || entryParentTemple.toLowerCase() === 'none';
+      if (needsCenter || needsTemple || !entryCounselorName) {
+        try {
+          const userLookup = await query(
+            `SELECT current_center, center, other_center, current_temple, parent_temple, other_temple, brahmachari_counselor, grihastha_counselor, hierarchy 
+             FROM users 
+             WHERE (email IS NOT NULL AND email <> '' AND LOWER(email) = LOWER($1))
+                OR (phone IS NOT NULL AND phone <> '' AND (RIGHT(phone, 10) = RIGHT($2, 10)))
+             LIMIT 1`,
+            [entryEmail, entryWhatsapp]
+          );
+          if (userLookup.rows.length > 0) {
+            const u = userLookup.rows[0];
+            if (needsCenter) {
+              const cur = (u.current_center || '').trim();
+              const oth = (u.other_center || '').trim();
+              const cen = (u.center || '').trim();
+              if (cur && cur.toLowerCase() !== 'none') {
+                entryVoiceName = cur.toLowerCase() === 'other' ? (oth || 'Other') : cur;
+              } else if (cen && cen.toLowerCase() !== 'none') {
+                entryVoiceName = cen.toLowerCase() === 'other' ? (oth || 'Other') : cen;
+              } else if (u.hierarchy?.currentCenter) {
+                entryVoiceName = u.hierarchy.currentCenter;
+              } else if (u.hierarchy?.center) {
+                entryVoiceName = u.hierarchy.center;
+              }
+            }
+            if (needsTemple) {
+              const curT = (u.current_temple || '').trim();
+              const parT = (u.parent_temple || '').trim();
+              const othT = (u.other_temple || '').trim();
+              if (curT && curT.toLowerCase() !== 'none') {
+                entryParentTemple = curT.toLowerCase() === 'other' ? (othT || 'Other') : curT;
+              } else if (parT && parT.toLowerCase() !== 'none') {
+                entryParentTemple = parT.toLowerCase() === 'other' ? (othT || 'Other') : parT;
+              } else if (u.hierarchy?.parentTemple) {
+                entryParentTemple = u.hierarchy.parentTemple;
+              }
+            }
+            if (!entryCounselorName) {
+              entryCounselorName = u.brahmachari_counselor || u.grihastha_counselor || u.hierarchy?.brahmachariCounselor || null;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not auto-snapshot user center/temple at registration:', e);
+        }
+      }
+
+      const entryCurrentCenter = entryVoiceName || 'Central VOICE';
+      const entryCurrentTemple = entryParentTemple || 'ISKCON NVCC • PUNE';
+
       const entryGender = entry.gender || 'Male - Bachelor';
       const entryAge = entry.age ? Number(entry.age) : null;
       const entryMarriedYear = (entry.married_since_year || entry.marriedSinceYear) ? Number(entry.married_since_year || entry.marriedSinceYear) : null;
@@ -162,7 +216,8 @@ export async function POST(req: NextRequest) {
       const sql = `
         INSERT INTO camp_registrations (
           camp_id, group_id, poc_name, poc_contact, email,
-          parent_temple, voice_name, participant_name, whatsapp, counselor_name,
+          parent_temple, voice_name, current_temple, current_center,
+          participant_name, whatsapp, counselor_name,
           gender, age, married_since_year, camp_track, participant_type,
           first_meal_date, first_meal_type, last_meal_date, last_meal_type,
           dinner_type, accommodation,
@@ -172,14 +227,15 @@ export async function POST(req: NextRequest) {
           payment_screenshot_url, transaction_ref
         ) VALUES (
           $1, $2, $3, $4, $5,
-          $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15,
-          $16, $17, $18, $19,
-          $20, $21,
-          $22, $23, $24, $25, $26, $27,
-          $28, $29,
-          $30, $31, $32, $33, $34, $35,
-          $36, $37
+          $6, $7, $8, $9,
+          $10, $11, $12,
+          $13, $14, $15, $16, $17,
+          $18, $19, $20, $21,
+          $22, $23,
+          $24, $25, $26, $27, $28, $29,
+          $30, $31,
+          $32, $33, $34, $35, $36, $37,
+          $38, $39
         ) RETURNING *
       `;
 
@@ -191,6 +247,8 @@ export async function POST(req: NextRequest) {
         entryEmail,
         entryParentTemple,
         entryVoiceName,
+        entryCurrentTemple,
+        entryCurrentCenter,
         entryParticipantName,
         entryWhatsapp,
         entryCounselorName,

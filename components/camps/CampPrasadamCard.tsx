@@ -16,6 +16,8 @@ interface CampPrasadamCardProps {
   onClose?: () => void;
   // If true, shows standalone without modal wrapper
   standalone?: boolean;
+  // If true, hides print and download action buttons
+  hideActions?: boolean;
 }
 
 export default function CampPrasadamCard({
@@ -23,6 +25,7 @@ export default function CampPrasadamCard({
   userProfile,
   onClose,
   standalone = false,
+  hideActions = false,
 }: CampPrasadamCardProps) {
   const [activeTab, setActiveTab] = useState<'meal_card' | 'delegate_pass'>('meal_card');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -33,90 +36,36 @@ export default function CampPrasadamCard({
   const campStartDate = reg.camp_start_date;
   const campEndDate = reg.camp_end_date;
 
-  // Resolve user's actual center strictly from user profile, joined user record, or registration
+  // Resolve user's center strictly from the frozen registration snapshot record!
+  // It NEVER reads live profile state, ensuring complete audit immutability over years.
   const resolvedUserCenter = React.useMemo(() => {
-    // 1. Priority 1: Logged-in Devotee's Profile passed as prop
-    const profHierarchy = userProfile?.hierarchy || {};
-    const profCur = (
-      profHierarchy.currentCenter ||
-      userProfile?.currentCenter ||
-      userProfile?.current_center ||
-      ''
-    ).trim();
-
-    const profOther = (
-      profHierarchy.otherCenter ||
-      userProfile?.otherCenter ||
-      userProfile?.other_center ||
-      ''
-    ).trim();
-
-    if (profCur) {
-      if (profCur.toLowerCase() === 'other') return profOther || 'Other';
-      if (profCur.toLowerCase() === 'none') return 'None';
-      return profCur;
+    const rawCenter = (reg.current_center || reg.voice_name || reg.center || '').trim();
+    if (rawCenter && !['none', 'null', 'undefined', 'n/a', '-'].includes(rawCenter.toLowerCase())) {
+      const regOther = (reg.other_center || '').trim();
+      if (rawCenter.toLowerCase() === 'other') return regOther || 'Other';
+      return rawCenter;
     }
 
-    const profCen = (
-      profHierarchy.center ||
-      userProfile?.center ||
-      ''
-    ).trim();
-
-    if (profCen) {
-      if (profCen.toLowerCase() === 'other') return profOther || 'Other';
-      if (profCen.toLowerCase() === 'none') return 'None';
-      return profCen;
-    }
-
-    // 2. Priority 2: Joined User columns from database attached to registration record
+    // Only if registration has no center saved at all (very old legacy test rows)
     const dbHierarchy = reg.user_hierarchy || {};
-    const dbCur = (
-      reg.user_current_center ||
-      dbHierarchy.currentCenter ||
-      ''
-    ).trim();
-
-    const dbOther = (
-      reg.user_other_center ||
-      dbHierarchy.otherCenter ||
-      reg.other_center ||
-      ''
-    ).trim();
-
-    if (dbCur) {
-      if (dbCur.toLowerCase() === 'other') return dbOther || 'Other';
-      if (dbCur.toLowerCase() === 'none') return 'None';
-      return dbCur;
+    const dbCenter = (reg.user_current_center || reg.user_center || dbHierarchy.currentCenter || dbHierarchy.center || '').trim();
+    if (dbCenter && !['none', 'null', 'undefined', 'n/a', '-'].includes(dbCenter.toLowerCase())) {
+      return dbCenter;
     }
 
-    const dbCen = (
-      reg.user_center ||
-      dbHierarchy.center ||
-      ''
-    ).trim();
+    return 'Central VOICE';
+  }, [reg]);
 
-    if (dbCen) {
-      if (dbCen.toLowerCase() === 'other') return dbOther || 'Other';
-      if (dbCen.toLowerCase() === 'none') return 'None';
-      return dbCen;
+  // Temple / Center Banner for header: strictly from registration record snapshot (current_temple / parent_temple)
+  const templeBanner = React.useMemo(() => {
+    const rawTemple = (reg.current_temple || reg.parent_temple || '').trim();
+    if (rawTemple && !['none', 'null', 'undefined', 'n/a', '-'].includes(rawTemple.toLowerCase())) {
+      const regOther = (reg.other_temple || '').trim();
+      if (rawTemple.toLowerCase() === 'other') return regOther || 'Other';
+      return rawTemple;
     }
-
-    // 3. Priority 3: Registration record voice_name
-    const regVoice = (reg.voice_name || reg.center || '').trim();
-    if (regVoice) {
-      if (regVoice.toLowerCase() === 'other') return (reg.other_center || dbOther || 'Other').trim();
-      if (regVoice.toLowerCase() === 'none') return 'None';
-      return regVoice;
-    }
-
-    return 'None';
-  }, [reg, userProfile]);
-
-  // Temple / Center Banner for header
-  const templeBanner = (reg.parent_temple && !['none', 'null', 'undefined', 'n/a', '-'].includes(reg.parent_temple.toLowerCase()))
-    ? reg.parent_temple.trim()
-    : 'ISKCON NVCC • PUNE';
+    return 'ISKCON NVCC • PUNE';
+  }, [reg]);
 
   // Sequential Token Number: use true serial_no (e.g. 1, 2, 651), fallback to token_no or 1
   const displayToken = String(reg.serial_no || reg.token_no || 1);
@@ -699,10 +648,10 @@ export default function CampPrasadamCard({
 
       {/* VIEW 1: PRASADAM COUPON CARD (Unrestricted print height, left-aligned title, prominent QR) */}
       {activeTab === 'meal_card' && (
-        <div className="flex justify-center">
+        <div className="flex justify-center px-1">
           <div
             id="prasadam-card-print-target"
-            className="w-[370px] sm:w-[390px] bg-white border-2 border-slate-900 rounded-xl p-2.5 shadow-sm font-sans text-slate-900 select-none space-y-1.5"
+            className="w-full max-w-[390px] bg-white border-2 border-slate-900 rounded-xl p-2 sm:p-2.5 shadow-sm font-sans text-slate-900 select-none space-y-1.5 mx-auto"
           >
             {/* Top Section: Left (Token + Camp Title + Devotee + Center) | Right (Dedicated Big Scannable QR) */}
             <div className="flex items-start justify-between gap-2 border-b border-slate-300 pb-2">
@@ -959,8 +908,8 @@ export default function CampPrasadamCard({
             <p className="text-xs text-white/90">Venue: {reg.camp_venue || 'Central VOICE, Pune'}</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 items-center border border-gray-100 rounded-xl p-4 bg-gray-50">
-            <div className="col-span-2 space-y-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center border border-gray-100 rounded-xl p-3 sm:p-4 bg-gray-50">
+            <div className="col-span-1 sm:col-span-2 space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Attendee Name:</span>
                 <span className="font-bold text-gray-800">{reg.participant_name}</span>
@@ -1009,39 +958,41 @@ export default function CampPrasadamCard({
       )}
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 print:hidden">
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="flex-1 min-w-[140px] py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-        >
-          <Printer className="w-3.5 h-3.5" />
-          <span>Print / Save Pass</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleDownloadHdPass}
-          disabled={downloading}
-          className="flex-1 min-w-[150px] py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-          title="Download razor-sharp, high-resolution pass image (300 DPI PNG)"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>{downloading ? 'Generating...' : 'Download Pass (HD)'}</span>
-        </button>
-
-        {qrDataUrl && (
-          <a
-            href={qrDataUrl}
-            download={`Camp-QR-${displayToken}.png`}
-            className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-1"
-            title="Download QR code image only"
+      {!hideActions && (
+        <div className="flex flex-wrap items-center gap-2 pt-2 print:hidden">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex-1 min-w-[140px] py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
           >
-            <QrIcon className="w-3.5 h-3.5" />
-            <span className="text-[11px]">QR</span>
-          </a>
-        )}
-      </div>
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print / Save Pass</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadHdPass}
+            disabled={downloading}
+            className="flex-1 min-w-[150px] py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            title="Download razor-sharp, high-resolution pass image (300 DPI PNG)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{downloading ? 'Generating...' : 'Download Pass (HD)'}</span>
+          </button>
+
+          {qrDataUrl && (
+            <a
+              href={qrDataUrl}
+              download={`Camp-QR-${displayToken}.png`}
+              className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-1"
+              title="Download QR code image only"
+            >
+              <QrIcon className="w-3.5 h-3.5" />
+              <span className="text-[11px]">QR</span>
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 
