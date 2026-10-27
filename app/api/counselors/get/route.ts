@@ -12,18 +12,27 @@ export async function GET(request: Request) {
 
     const supabase = createClient();
 
-    // Check if user is authenticated to decide whether to show sensitive details
+    // Check if user is authenticated and has administrative/counselor privileges
     const user = await getAuthUserFromRequest(request);
-    const isAuthenticated = !!user;
+    let canViewContactPII = false;
 
-    // Select fields based on auth status
-    // Public: Hide PII (email, mobile)
-    // Auth: Show everything (admins might need it, or logged in users)
-    // For now, we'll hide PII for everyone except maybe if we add role checks later.
-    // But to be safe for public registration page, we MUST hide email/mobile.
-    const selectFields = isAuthenticated
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      const roles = Array.isArray(profile?.role) ? profile.role : [profile?.role];
+      const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+      canViewContactPII = numRoles.some((r: number) => [2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 21].includes(r)) ||
+        roles.includes('super_admin') || roles.includes('counselor') || roles.includes('managing_director');
+    }
+
+    // Public / Regular Student: Hide PII (mobile, email)
+    // Authorized Leadership / Counselors: Show full contact info
+    const selectFields = canViewContactPII
       ? 'id, name, mobile, email, city, ashram, user_id'
-      : 'id, name, city, ashram, user_id'; // Exclude mobile and email for public
+      : 'id, name, city, ashram, user_id';
 
     let query = supabase
       .from('counselors')

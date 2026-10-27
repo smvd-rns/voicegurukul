@@ -101,6 +101,23 @@ export async function POST(req: NextRequest) {
 
     // ─── 6. Access Control & Authorization Policies ────────────
     if (!isInternalServer) {
+      // Default-Deny Table Allowlist: Block access to internal/sensitive tables
+      const ALLOWED_CLIENT_TABLES = new Set([
+        'users', 'donations', 'sadhana_reports', 'user_profile_details',
+        'camp_registrations', 'camp_refund_requests', 'camp_admin_allocations',
+        'camp_audit_transactions', 'messages', 'temples', 'centers', 'cities',
+        'states', 'spiritual_masters', 'policies', 'stories', 'app_configs',
+        'camps', 'counselors', 'event_admin_allocations', 'user_centers',
+        'membership_cards', 'membership_ids', 'platform_settings', 'profile_update_requests',
+        'counselor_requests', 'voice_manager_requests', 'bc_voice_manager_requests',
+        'event_responses', 'events', 'event_materials', 'rate_limits',
+        'camp_kitchen_extra_meals'
+      ]);
+
+      if (!ALLOWED_CLIENT_TABLES.has(table)) {
+        return NextResponse.json({ data: null, error: 'Forbidden: Table not accessible' }, { status: 403 });
+      }
+
       // Rule A: Donations Table Protection
       if (table === 'donations') {
         if (method !== 'select') {
@@ -112,6 +129,24 @@ export async function POST(req: NextRequest) {
 
         if (!session) {
           return NextResponse.json({ data: null, error: 'Unauthorized: Login required to view donations' }, { status: 401 });
+        }
+      }
+
+      // Rule A-2: Camp Registrations, Refunds & Allocations Protection
+      const campFinancialTables = ['camp_registrations', 'camp_refund_requests', 'camp_admin_allocations', 'camp_audit_transactions'];
+      if (campFinancialTables.includes(table)) {
+        if (method !== 'select') {
+          return NextResponse.json({
+            data: null,
+            error: 'Forbidden: Direct mutation of camp registrations and refund records is blocked. Please use official camp registration and approval endpoints.'
+          }, { status: 403 });
+        }
+
+        // Only admins can query camp registrations, refund requests, allocations, and audit transactions via db-proxy
+        if (['camp_registrations', 'camp_refund_requests', 'camp_admin_allocations', 'camp_audit_transactions'].includes(table)) {
+          if (!isSuperAdmin && !isHigherAdmin) {
+            return NextResponse.json({ data: null, error: 'Forbidden: Administrative privileges required' }, { status: 403 });
+          }
         }
       }
 

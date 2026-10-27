@@ -36,13 +36,26 @@ export async function POST(request: Request) {
         const isLeadershipOrCounselor = numRoles.some((r: number) => [2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 21, 31].includes(r)) ||
             roles.includes('super_admin') || roles.includes('counselor') || roles.includes('managing_director');
 
+        // Validate date format (YYYY-MM-DD)
+        const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+        if (typeof from !== 'string' || typeof to !== 'string' || !DATE_REGEX.test(from) || !DATE_REGEX.test(to)) {
+            return NextResponse.json({ error: 'Invalid date format (expected YYYY-MM-DD)' }, { status: 400 });
+        }
+
         let targetUserIds = userIds;
         if (!isLeadershipOrCounselor) {
             // Normal students are scoped strictly to their own ID
             targetUserIds = [requester.id];
         }
 
-        const reports = await getBulkSadhanaReportsByRange(targetUserIds, from, to);
+        // Validate UUIDs to prevent malformed queries
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const validUserIds = targetUserIds.filter((id: any) => typeof id === 'string' && UUID_REGEX.test(id));
+        if (validUserIds.length === 0) {
+            return NextResponse.json({ success: true, data: [] });
+        }
+
+        const reports = await getBulkSadhanaReportsByRange(validUserIds, from, to);
 
         return NextResponse.json({ success: true, data: reports });
 

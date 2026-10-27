@@ -202,14 +202,14 @@ function LoginContent() {
           }
         }} className="space-y-4 mb-6">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Email Address</label>
+            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Email or Mobile Number</label>
             <div className="relative">
               <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 name="email"
-                type="email"
+                type="text"
                 required
-                placeholder="name@domain.com"
+                placeholder="name@domain.com or 10-digit mobile"
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm text-gray-800"
               />
             </div>
@@ -234,9 +234,9 @@ function LoginContent() {
           </div>
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold py-3 rounded-xl shadow-md hover:from-amber-700 hover:to-orange-700 transition-all text-sm sm:text-base"
+            className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold py-3 rounded-xl shadow-md hover:from-amber-700 hover:to-orange-700 transition-all text-sm sm:text-base cursor-pointer"
           >
-            Sign In with Email
+            Sign In with Email / Mobile
           </button>
         </form>
 

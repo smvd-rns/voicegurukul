@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {  createClient  } from '@/lib/supabase/server-db';
+import { createClient } from '@/lib/supabase/server-db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 
 // Initialize Supabase client with service role key
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const user = await getAuthUserFromRequest(request);
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
+        }
+
         const supabaseAdmin = createClient();
 
         // Get unique values for filters

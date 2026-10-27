@@ -98,14 +98,12 @@ export default function AdminCampQrScannerModal({
   const [savingGuestMeal, setSavingGuestMeal] = useState<boolean>(false);
 
   // Scanner Mode & Camera Devices
-  const [activeInputMode, setActiveInputMode] = useState<'camera' | 'manual'>('camera');
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isCameraMenuOpen, setIsCameraMenuOpen] = useState(false);
   const cameraMenuRef = useRef<HTMLDivElement | null>(null);
-  const [manualInput, setManualInput] = useState('');
   const [scanError, setScanError] = useState<string | null>(null);
 
   // Scan Result State
@@ -170,7 +168,6 @@ export default function AdminCampQrScannerModal({
   const [scanStatusFlash, setScanStatusFlash] = useState<'success' | 'warning' | 'error' | null>(null);
   const flashTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingRef = useRef(false);
-  const manualInputRef = useRef<HTMLInputElement | null>(null);
 
   // View full pass modal
   const [fullPassReg, setFullPassReg] = useState<any | null>(null);
@@ -508,16 +505,14 @@ export default function AdminCampQrScannerModal({
         setSelectedCameraId(targetCamId);
 
         // Small delay to ensure the scanner DOM element has been rendered before starting
-        if (activeInputMode === 'camera') {
-          await new Promise<void>((resolve) => setTimeout(resolve, 200));
-          await startCamera(targetCamId);
-        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 200));
+        await startCamera(targetCamId);
       } else {
         // 0 cameras returned — most likely no camera present or permission was fully blocked
         // Show the "Allow Camera Access" button (don't force the full permission-denied screen)
         setCameraPermissionGranted(true); // keep UI in camera mode so user can click Allow
         setScanError(
-          'No cameras detected. Click "Allow Camera Access" in the top-right camera menu to grant access, or switch to USB / Barcode mode.'
+          'No cameras detected. Click "Allow Camera Access" in the top camera menu to grant access.'
         );
       }
     } catch (err: any) {
@@ -941,61 +936,57 @@ export default function AdminCampQrScannerModal({
   const handleClearHUD = () => {
     setScanResult(null);
     lastScannedCodeRef.current = null;
-    setManualInput('');
     setScanError(null);
-    if (activeInputMode === 'manual') {
-      manualInputRef.current?.focus();
-    }
   };
 
-  // Render Active Scan Result Card (Used on mobile directly beneath camera, and on desktop in right column)
+  // Render Active Scan Result Card (Compact, tight styling for mobile & desktop)
   const renderActiveScanResult = () => {
     if (!scanResult) return null;
     return (
-      <div className="space-y-3 animate-fadeIn">
+      <div className="space-y-1.5 sm:space-y-2 animate-fadeIn">
         {/* JUST PUNCHED (< 15s cooldown reassurance for inattentive volunteers) */}
         {scanResult.status === 'JUST_PUNCHED' && (
-          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-emerald-400/40 animate-fadeIn">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-200" />
-                <span>Pass Already Cleared ({scanResult.secondsAgo || 2}s ago)</span>
+          <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg space-y-1.5 border border-emerald-400/40 animate-fadeIn">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[9px] sm:text-[10px] font-black tracking-wider uppercase">
+                <CheckCircle2 className="w-3 h-3 text-emerald-200" />
+                <span>Cleared ({scanResult.secondsAgo || 2}s ago)</span>
               </div>
               {scanResult.attendee?.token && (
-                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                <div className="px-2 py-0.5 rounded-full bg-black/30 text-white text-[10px] sm:text-[11px] font-mono font-black border border-white/20">
                   Token #{scanResult.attendee.token}
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               {scanResult.attendee?.profileImage ? (
                 <img
                   src={scanResult.attendee.profileImage}
                   alt=""
-                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-white/40 shadow-xs shrink-0"
                 />
               ) : (
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 text-white font-black text-xs flex items-center justify-center shrink-0 border border-white/30 shadow-xs">
                   {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                <h2 className="text-sm sm:text-base font-black text-white tracking-tight break-words leading-tight">
                   {scanResult.attendee?.name || 'Devotee Attendee'}
                 </h2>
-                <p className="text-emerald-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                <p className="text-emerald-100 text-[10px] sm:text-[11px] font-medium break-words leading-tight">
                   {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
                 </p>
               </div>
             </div>
 
-            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-emerald-100 text-xs font-bold flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping shrink-0" />
-                <span className="break-words">Devotee was punched right now. Please allow to proceed!</span>
+            <div className="p-1.5 rounded-lg bg-black/20 text-emerald-100 text-[10px] sm:text-xs font-bold flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping shrink-0" />
+                <span className="truncate">Devotee punched. Please proceed!</span>
               </div>
-              <span className="font-bold bg-white text-emerald-900 px-2 py-0.5 rounded-full shadow-sm text-[10px] sm:text-[11px] shrink-0">
+              <span className="font-bold bg-white text-emerald-900 px-1.5 py-0.2 rounded-full shadow-xs text-[9px] shrink-0">
                 ✓ Cleared
               </span>
             </div>
@@ -1004,47 +995,47 @@ export default function AdminCampQrScannerModal({
 
         {/* ALLOWED */}
         {scanResult.status === 'ALLOWED' && (
-          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-emerald-400/40">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-200" />
+          <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-lg space-y-1.5 border border-emerald-400/40">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[9px] sm:text-[10px] font-black tracking-wider uppercase">
+                <CheckCircle2 className="w-3 h-3 text-emerald-200" />
                 <span>Meal Allowed • Punched</span>
               </div>
               {scanResult.attendee?.token && (
-                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                <div className="px-2 py-0.5 rounded-full bg-black/30 text-white text-[10px] sm:text-[11px] font-mono font-black border border-white/20">
                   Token #{scanResult.attendee.token}
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               {scanResult.attendee?.profileImage ? (
                 <img
                   src={scanResult.attendee.profileImage}
                   alt=""
-                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-white/40 shadow-xs shrink-0"
                 />
               ) : (
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 text-white font-black text-xs flex items-center justify-center shrink-0 border border-white/30 shadow-xs">
                   {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                <h2 className="text-sm sm:text-base font-black text-white tracking-tight break-words leading-tight">
                   {scanResult.attendee?.name || 'Devotee Attendee'}
                 </h2>
-                <p className="text-emerald-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                <p className="text-emerald-100 text-[10px] sm:text-[11px] font-medium break-words leading-tight">
                   {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
                 </p>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-white/20 flex items-center justify-between text-xs text-emerald-50">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+            <div className="pt-1 border-t border-white/20 flex items-center justify-between text-[10px] sm:text-xs text-emerald-50">
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
                 <span>Meal: <strong>{selectedMeal}</strong> ({selectedDate})</span>
               </div>
-              <span className="font-bold bg-white text-emerald-900 px-2 py-0.5 rounded-full shadow-sm text-[10px] sm:text-[11px]">
+              <span className="font-bold bg-white text-emerald-900 px-1.5 py-0.2 rounded-full shadow-xs text-[9px]">
                 ⚡ Next pass ready
               </span>
             </div>
@@ -1053,43 +1044,43 @@ export default function AdminCampQrScannerModal({
 
         {/* ALREADY SERVED (DUPLICATE) */}
         {scanResult.status === 'ALREADY_SERVED' && (
-          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-amber-400/40">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
+          <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg space-y-1.5 border border-amber-400/40">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[9px] sm:text-[10px] font-black tracking-wider uppercase">
+                <AlertTriangle className="w-3 h-3 text-amber-200" />
                 <span>Duplicate Scan • Already Collected</span>
               </div>
               {scanResult.attendee?.token && (
-                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                <div className="px-2 py-0.5 rounded-full bg-black/30 text-white text-[10px] sm:text-[11px] font-mono font-black border border-white/20">
                   Token #{scanResult.attendee.token}
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               {scanResult.attendee?.profileImage ? (
                 <img
                   src={scanResult.attendee.profileImage}
                   alt=""
-                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white/40 shadow-sm shrink-0"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-white/40 shadow-xs shrink-0"
                 />
               ) : (
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/20 text-white font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 text-white font-black text-xs flex items-center justify-center shrink-0 border border-white/30 shadow-xs">
                   {(scanResult.attendee?.name || 'D').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+                <h2 className="text-sm sm:text-base font-black text-white tracking-tight break-words leading-tight">
                   {scanResult.attendee?.name || 'Devotee Attendee'}
                 </h2>
-                <p className="text-amber-100 text-xs font-medium mt-0.5 break-words leading-snug">
+                <p className="text-amber-100 text-[10px] sm:text-[11px] font-medium break-words leading-tight">
                   {scanResult.attendee?.track || 'Standard Track'} • {scanResult.attendee?.center || 'Center'}
                 </p>
               </div>
             </div>
 
-            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-amber-50 text-xs font-bold flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-300 shrink-0" />
+            <div className="p-1.5 rounded-lg bg-black/20 text-amber-50 text-[10px] sm:text-xs font-bold flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
               <span className="break-words">Already collected {selectedMeal} at {scanResult.servedAt}.</span>
             </div>
           </div>
@@ -1097,33 +1088,33 @@ export default function AdminCampQrScannerModal({
 
         {/* NOT ELIGIBLE */}
         {scanResult.status === 'NOT_ELIGIBLE' && (
-          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-600 to-red-700 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-rose-400/40">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/20 text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-200" />
+          <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-rose-600 to-red-700 text-white shadow-lg space-y-1.5 border border-rose-400/40">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[9px] sm:text-[10px] font-black tracking-wider uppercase">
+                <XCircle className="w-3 h-3 text-rose-200" />
                 <span>Meal Not Included in Pass</span>
               </div>
               {scanResult.attendee?.token && (
-                <div className="px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] sm:text-xs font-mono font-black border border-white/20">
+                <div className="px-2 py-0.5 rounded-full bg-black/30 text-white text-[10px] sm:text-[11px] font-mono font-black border border-white/20">
                   Token #{scanResult.attendee.token}
                 </div>
               )}
             </div>
 
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight break-words leading-tight">
+              <h2 className="text-sm sm:text-base font-black text-white tracking-tight break-words leading-tight">
                 {scanResult.attendee?.name || 'Devotee Attendee'}
               </h2>
-              <p className="text-rose-100 text-xs font-medium mt-0.5 break-words leading-snug">
+              <p className="text-rose-100 text-[10px] sm:text-[11px] font-medium break-words leading-tight">
                 {scanResult.attendee?.track || 'Standard Track'}
               </p>
             </div>
 
-            <div className="p-2 sm:p-2.5 rounded-xl bg-black/20 text-rose-50 text-xs space-y-1">
+            <div className="p-1.5 rounded-lg bg-black/20 text-rose-50 text-[10px] sm:text-xs space-y-0.5">
               <p className="font-bold">{scanResult.message}</p>
               {scanResult.attendee?.firstMeal && (
-                <p className="text-[11px] text-rose-200">
-                  Registered Meal Window: {scanResult.attendee.firstMeal} to {scanResult.attendee.lastMeal}
+                <p className="text-[10px] text-rose-200">
+                  Meal Window: {scanResult.attendee.firstMeal} to {scanResult.attendee.lastMeal}
                 </p>
               )}
             </div>
@@ -1132,17 +1123,17 @@ export default function AdminCampQrScannerModal({
 
         {/* WRONG CAMP / CANCELLED / OTHER ERRORS */}
         {['WRONG_CAMP', 'CANCELLED', 'PENDING_PAYMENT', 'NOT_FOUND', 'EMPTY_DATE', 'ERROR'].includes(scanResult.status) && (
-          <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-xl space-y-2.5 sm:space-y-3 border border-slate-700">
-            <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] sm:text-[11px] font-black tracking-wider uppercase w-fit">
-              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
+          <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-lg space-y-1.5 border border-slate-700">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[9px] sm:text-[10px] font-black tracking-wider uppercase w-fit">
+              <XCircle className="w-3 h-3 text-red-400" />
               <span>Pass Rejected</span>
             </div>
 
             <div>
-              <h2 className="text-xl font-black text-white break-words leading-tight">
+              <h2 className="text-sm sm:text-base font-black text-white break-words leading-tight">
                 {scanResult.attendee?.name || 'Invalid Pass'}
               </h2>
-              <p className="text-slate-300 text-xs font-medium mt-1 break-words">
+              <p className="text-slate-300 text-[10px] sm:text-xs font-medium break-words">
                 {scanResult.message}
               </p>
             </div>
@@ -1153,7 +1144,7 @@ export default function AdminCampQrScannerModal({
           <button
             type="button"
             onClick={handleClearHUD}
-            className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer py-1"
+            className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer py-0.5"
           >
             Dismiss / Ready for Next
           </button>
@@ -1190,51 +1181,128 @@ export default function AdminCampQrScannerModal({
     };
   }, [isOpen]);
 
-  // Only re-trigger camera when user explicitly switches between Camera / Manual mode
-  useEffect(() => {
-    if (!isOpen) return;
-    if (activeInputMode === 'manual') {
-      stopCamera();
-    }
-    // When switching TO camera mode: cameras already initialized by initCameras -> startCamera flow
-    // selectedCameraId change is handled by handleCameraChange directly
-  }, [activeInputMode]);
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-2xl lg:max-w-5xl xl:max-w-6xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] sm:max-h-[92vh]">
+    <div className="fixed inset-x-0 top-[max(env(safe-area-inset-top,0px)+0.25rem,3.75rem)] bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:top-0 lg:bottom-0 z-30 lg:z-50 flex items-center justify-center p-1.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full h-full sm:h-auto max-w-2xl lg:max-w-5xl xl:max-w-6xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-full sm:max-h-[92vh]">
         {/* Top Header Bar */}
-        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 bg-slate-900 text-white border-b border-slate-800">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <QrCode className="w-5 h-5" />
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 bg-slate-900 text-white border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <QrCode className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-sm sm:text-base text-white tracking-tight truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h3 className="font-black text-xs sm:text-base text-white tracking-tight truncate">
                   Pass Scanner &amp; Prasadam Desk
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider shrink-0">
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider shrink-0">
                   Live
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
-                Automatic meal punch • Duplicate prevention • Fast queue clearance
+              <p className="hidden xs:block text-[9px] sm:text-[11px] text-slate-400 truncate">
+                Automatic meal punch • Duplicate prevention
               </p>
             </div>
           </div>
-          <button
-            onClick={handleCloseModal}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* Top Actions: Camera Device Switcher (Moved above) & Close Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Camera Device Selector Dropdown */}
+            <div className="relative" ref={cameraMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsCameraMenuOpen(!isCameraMenuOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[11px] sm:text-xs font-semibold shadow-sm transition-all border border-slate-700 cursor-pointer"
+                title="Select Camera"
+              >
+                <Camera className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="max-w-[70px] xs:max-w-[120px] sm:max-w-[180px] truncate font-medium">
+                  {cameras.find((c) => c.id === selectedCameraId)?.label || (cameras.length > 0 ? 'Camera' : 'Camera')}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isCameraMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Floating Dark Popup Menu */}
+              {isCameraMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-[280px] sm:max-w-[320px] bg-[#282a2d] border border-[#3c4043] rounded-2xl shadow-2xl p-1.5 z-50 text-white animate-fadeIn">
+                  <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-[#3c4043]/70 pb-2 mb-1">
+                    <span>Available Cameras ({cameras.length})</span>
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (cameras.length === 0 || cameraPermissionGranted === false) {
+                          await requestCameraPermission();
+                        } else {
+                          await initCameras();
+                        }
+                      }}
+                      className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px] cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto py-0.5 space-y-1">
+                    {cameras.length === 0 ? (
+                      <div className="p-4 text-xs text-slate-300 text-center space-y-2">
+                        <p>No video devices detected.</p>
+                        <button
+                          type="button"
+                          onClick={() => requestCameraPermission()}
+                          className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold shadow cursor-pointer"
+                        >
+                          Allow Camera Access
+                        </button>
+                      </div>
+                    ) : (
+                      cameras.map((cam) => {
+                        const isSelected = cam.id === selectedCameraId;
+                        return (
+                          <button
+                            key={cam.id}
+                            type="button"
+                            onClick={() => {
+                              void handleCameraChange(cam.id);
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#3c4043] font-bold text-white shadow-inner'
+                                : 'hover:bg-[#3c4043]/60 text-slate-300'
+                            }`}
+                          >
+                            <div className="w-4 flex items-center justify-center shrink-0">
+                              {isSelected ? (
+                                <Check className="w-4 h-4 text-amber-400 font-black" />
+                              ) : (
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                              )}
+                            </div>
+                            <span className="truncate">{cam.label}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleCloseModal}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+              title="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* SESSION CONFIGURATION BAR: Camp Selector + Date + Meal Slot (Collapsible on mobile) */}
-        <div className="bg-slate-50 border-b border-slate-200 px-3.5 sm:px-6 py-2 sm:py-3 space-y-2">
+        <div className="bg-slate-50 border-b border-slate-200 px-3.5 sm:px-6 py-2 sm:py-3 space-y-2 shrink-0">
           {/* Mobile Collapsed Session Summary Bar (< sm) */}
           <div className="sm:hidden flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -1370,144 +1438,24 @@ export default function AdminCampQrScannerModal({
           </div>
         </div>
 
-        {/* CAMERA SELECTION & PERMISSION TOOLBAR (Zoom / Meet Style) */}
-        <div className="bg-slate-100 px-4 sm:px-6 py-2 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          {/* Input Mode Toggle */}
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            <button
-              onClick={() => {
-                setActiveInputMode('camera');
-                setScanError(null);
-              }}
-              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                activeInputMode === 'camera'
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Camera className="w-3.5 h-3.5 text-amber-600" />
-              <span>Camera</span>
-            </button>
-            <button
-              onClick={() => {
-                stopCamera();
-                setActiveInputMode('manual');
-                setScanError(null);
-              }}
-              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                activeInputMode === 'manual'
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Ticket className="w-3.5 h-3.5 text-blue-600" />
-              <span>USB / Barcode Gun</span>
-            </button>
-          </div>
-
-          {/* Google Meet-Style Camera Device Selector Popover Menu */}
-          {activeInputMode === 'camera' && (
-            <div className="relative" ref={cameraMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsCameraMenuOpen(!isCameraMenuOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition-all border border-slate-700"
-                title="Select Camera (Zoom / Google Meet Style)"
-              >
-                <Camera className="w-3.5 h-3.5 text-amber-400" />
-                <span className="max-w-[170px] sm:max-w-[240px] truncate font-medium">
-                  {cameras.find((c) => c.id === selectedCameraId)?.label || (cameras.length > 0 ? 'Select Camera' : 'Camera')}
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isCameraMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Floating Dark Popup Menu */}
-              {isCameraMenuOpen && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[calc(100vw-36px)] sm:w-80 max-w-[300px] bg-[#282a2d] border border-[#3c4043] rounded-2xl shadow-2xl p-1.5 z-50 text-white animate-fadeIn">
-                  <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-[#3c4043]/70 pb-2 mb-1">
-                    <span>Available Cameras ({cameras.length})</span>
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (cameras.length === 0 || cameraPermissionGranted === false) {
-                          await requestCameraPermission();
-                        } else {
-                          await initCameras();
-                        }
-                      }}
-                      className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px]"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Refresh</span>
-                    </button>
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto py-0.5 space-y-1">
-                    {cameras.length === 0 ? (
-                      <div className="p-4 text-xs text-slate-300 text-center space-y-2">
-                        <p>No video devices detected.</p>
-                        <button
-                          type="button"
-                          onClick={() => requestCameraPermission()}
-                          className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold shadow"
-                        >
-                          Allow Camera Access
-                        </button>
-                      </div>
-                    ) : (
-                      cameras.map((cam) => {
-                        const isSelected = cam.id === selectedCameraId;
-                        return (
-                          <button
-                            key={cam.id}
-                            type="button"
-                            onClick={() => {
-                              void handleCameraChange(cam.id);
-                            }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs transition-colors ${
-                              isSelected
-                                ? 'bg-[#3c4043] font-bold text-white shadow-inner'
-                                : 'hover:bg-[#3c4043]/60 text-slate-300'
-                            }`}
-                          >
-                            <div className="w-4 flex items-center justify-center shrink-0">
-                              {isSelected ? (
-                                <Check className="w-4 h-4 text-blue-400 font-black" />
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                              )}
-                            </div>
-                            <span className="truncate">{cam.label}</span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* MODAL MAIN CONTENT: CONTINUOUS POS BILLING COUNTER VIEW */}
-        <div className="p-3 sm:p-5 overflow-y-auto overflow-x-hidden flex-1 space-y-3 min-w-0">
+        <div className="p-2.5 sm:p-5 overflow-y-auto overflow-x-hidden flex-1 space-y-2.5 sm:space-y-3 min-w-0">
           {/* CAMERA PERMISSION REQUIRED SCREEN */}
-          {activeInputMode === 'camera' && cameraPermissionGranted === false && (
-            <div className="py-10 px-4 text-center space-y-4 max-w-sm mx-auto">
-              <div className="w-16 h-16 rounded-3xl bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-amber-700 mx-auto shadow-inner">
-                <Camera className="w-8 h-8" />
+          {cameraPermissionGranted === false && (
+            <div className="py-8 px-4 text-center space-y-3 max-w-sm mx-auto">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-amber-700 mx-auto shadow-inner">
+                <Camera className="w-7 h-7" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-base font-black text-slate-900">Camera Permission Required</h4>
+                <h4 className="text-sm font-black text-slate-900">Camera Permission Required</h4>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  To scan devotee pass QR codes with your laptop or phone camera, please allow camera access.
+                  To scan devotee pass QR codes with your device camera, please allow camera access.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={requestCameraPermission}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-xs rounded-full shadow-md shadow-orange-500/25 hover:scale-105 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-xs rounded-full shadow-md shadow-orange-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
                 <span>Allow Camera Access</span>
@@ -1516,239 +1464,181 @@ export default function AdminCampQrScannerModal({
           )}
 
           {/* MAIN TWO-COLUMN SPLIT: SCANNER (LEFT) & LIVE PUNCH HUD (RIGHT) */}
-          {(activeInputMode === 'manual' || cameraPermissionGranted !== false) && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start min-w-0 w-full">
+          {cameraPermissionGranted !== false && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:gap-5 items-start min-w-0 w-full">
               {/* LEFT COLUMN: CONTINUOUS VIEWFINDER (5 COLS ON LG) */}
-              <div className="lg:col-span-5 space-y-2.5 min-w-0 w-full">
-                {activeInputMode === 'camera' ? (
-                  <div className="space-y-2.5 min-w-0 w-full">
-                    {/* Scoped CSS to ensure webcam video fills container seamlessly with no letterboxing */}
-                    <style
-                      dangerouslySetInnerHTML={{
-                        __html: `
-                          #admin-qr-reader-viewport,
-                          #admin-qr-reader-viewport > div,
-                          #admin-qr-reader-viewport video,
-                          #admin-qr-reader-viewport img {
-                            width: 100% !important;
-                            height: 100% !important;
-                            max-width: 100% !important;
-                            max-height: 100% !important;
-                            border: none !important;
-                            border-radius: 0 !important;
-                          }
-                          #admin-qr-reader-viewport {
-                            position: absolute !important;
-                            inset: 0 !important;
-                            overflow: hidden !important;
-                            width: 100% !important;
-                            height: 100% !important;
-                            max-width: 100% !important;
-                          }
-                          #admin-qr-reader-viewport video {
-                            object-fit: cover !important;
-                            transform: none !important;
-                            width: 100% !important;
-                            height: 100% !important;
-                            max-width: 100% !important;
-                          }
-                          #admin-qr-reader-viewport canvas {
-                            display: none !important;
-                          }
-                        `,
-                      }}
-                    />
+              <div className="lg:col-span-5 space-y-2 min-w-0 w-full">
+                <div className="space-y-2 min-w-0 w-full">
+                  {/* Scoped CSS to ensure webcam video fills container seamlessly with no letterboxing */}
+                  <style
+                    dangerouslySetInnerHTML={{
+                      __html: `
+                        #admin-qr-reader-viewport,
+                        #admin-qr-reader-viewport > div,
+                        #admin-qr-reader-viewport video,
+                        #admin-qr-reader-viewport img {
+                          width: 100% !important;
+                          height: 100% !important;
+                          max-width: 100% !important;
+                          max-height: 100% !important;
+                          border: none !important;
+                          border-radius: 0 !important;
+                        }
+                        #admin-qr-reader-viewport {
+                          position: absolute !important;
+                          inset: 0 !important;
+                          overflow: hidden !important;
+                          width: 100% !important;
+                          height: 100% !important;
+                          max-width: 100% !important;
+                        }
+                        #admin-qr-reader-viewport video {
+                          object-fit: cover !important;
+                          transform: none !important;
+                          width: 100% !important;
+                          height: 100% !important;
+                          max-width: 100% !important;
+                        }
+                        #admin-qr-reader-viewport canvas {
+                          display: none !important;
+                        }
+                      `,
+                    }}
+                  />
 
-                    {/* Viewport with reactive LED glow ring (Natural 4:3 webcam aspect ratio, responsive width) */}
-                    <div
-                      className={`relative mx-auto w-full max-w-[280px] xs:max-w-[320px] sm:max-w-[340px] aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden transition-all duration-300 ${
-                        scanStatusFlash === 'success'
-                          ? 'ring-4 ring-emerald-500 shadow-2xl shadow-emerald-500/50'
-                          : scanStatusFlash === 'warning'
-                          ? 'ring-4 ring-amber-500 shadow-2xl shadow-amber-500/50'
-                          : scanStatusFlash === 'error'
-                          ? 'ring-4 ring-rose-500 shadow-2xl shadow-rose-500/50'
-                          : 'border-2 border-slate-800 shadow-xl'
-                      }`}
-                    >
-                      <div id={scannerContainerId} className="absolute inset-0 w-full h-full" />
+                  {/* Viewport with reactive LED glow ring (Compact & responsive) */}
+                  <div
+                    className={`relative mx-auto w-full max-w-[210px] xs:max-w-[240px] sm:max-w-[340px] aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden transition-all duration-300 ${
+                      scanStatusFlash === 'success'
+                        ? 'ring-4 ring-emerald-500 shadow-2xl shadow-emerald-500/50'
+                        : scanStatusFlash === 'warning'
+                        ? 'ring-4 ring-amber-500 shadow-2xl shadow-amber-500/50'
+                        : scanStatusFlash === 'error'
+                        ? 'ring-4 ring-rose-500 shadow-2xl shadow-rose-500/50'
+                        : 'border-2 border-slate-800 shadow-xl'
+                    }`}
+                  >
+                    <div id={scannerContainerId} className="absolute inset-0 w-full h-full" />
 
-                      {/* Viewfinder Target Laser — Proportionally adjusted to fit camera feed */}
-                      {isScanning && (
-                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 p-3">
-                          <div className="w-[74%] max-w-[220px] aspect-square border-2 border-amber-400/90 rounded-2xl relative shadow-lg">
-                            <div className="absolute -top-1 -left-1 w-5 h-5 border-t-4 border-l-4 border-amber-500 rounded-tl-lg" />
-                            <div className="absolute -top-1 -right-1 w-5 h-5 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
-                            <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
-                            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent absolute top-1/2 -translate-y-1/2 animate-pulse shadow-md" />
-                          </div>
+                    {/* Viewfinder Target Laser — Proportionally adjusted to fit camera feed */}
+                    {isScanning && (
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 p-3">
+                        <div className="w-[74%] max-w-[220px] aspect-square border-2 border-amber-400/90 rounded-2xl relative shadow-lg">
+                          <div className="absolute -top-1 -left-1 w-5 h-5 border-t-4 border-l-4 border-amber-500 rounded-tl-lg" />
+                          <div className="absolute -top-1 -right-1 w-5 h-5 border-t-4 border-r-4 border-amber-500 rounded-tr-lg" />
+                          <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-4 border-l-4 border-amber-500 rounded-bl-lg" />
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-4 border-r-4 border-amber-500 rounded-br-lg" />
+                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent absolute top-1/2 -translate-y-1/2 animate-pulse shadow-md" />
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {!isScanning && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs bg-slate-950/80 p-4 text-center">
-                          {scanError ? (
-                            <>
-                              <div className="w-10 h-10 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
-                                <Camera className="w-5 h-5" />
-                              </div>
-                              <span className="text-rose-300 font-semibold text-xs leading-tight">
-                                Camera feed not active
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => startCamera(selectedCameraId)}
-                                className="mt-2 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow transition-all"
-                              >
-                                Retry Camera
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <Loader2 className="w-7 h-7 animate-spin text-amber-500" />
-                              <span>Connecting camera feed...</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {/* IN-VIEWFINDER INSTANT SCAN NOTIFICATION HUD */}
-                      {scanResult && isScanning && (
-                        <div className="absolute inset-x-2 bottom-2 z-30 animate-fadeIn pointer-events-auto">
-                          <div
-                            className={`p-2 sm:p-2.5 rounded-xl shadow-2xl backdrop-blur-md border text-white flex items-center justify-between gap-2 ${
-                              scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
-                                ? 'bg-emerald-950/90 border-emerald-400/80 ring-2 ring-emerald-500/60'
-                                : scanResult.status === 'ALREADY_SERVED'
-                                ? 'bg-amber-950/90 border-amber-400/80 ring-2 ring-amber-500/60'
-                                : 'bg-rose-950/90 border-rose-400/80 ring-2 ring-rose-500/60'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED' ? (
-                                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
-                                  <CheckCircle2 className="w-5 h-5" />
-                                </div>
-                              ) : scanResult.status === 'ALREADY_SERVED' ? (
-                                <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
-                                  <AlertTriangle className="w-5 h-5" />
-                                </div>
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
-                                  <XCircle className="w-5 h-5" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span
-                                    className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                                      scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
-                                        ? 'bg-emerald-400 text-emerald-950 font-black'
-                                        : scanResult.status === 'ALREADY_SERVED'
-                                        ? 'bg-amber-400 text-amber-950 font-black'
-                                        : 'bg-rose-400 text-rose-950 font-black'
-                                    }`}
-                                  >
-                                    {scanResult.status === 'ALLOWED'
-                                      ? 'ALLOW DEVOTEE'
-                                      : scanResult.status === 'JUST_PUNCHED'
-                                      ? 'ALREADY CLEARED'
-                                      : scanResult.status === 'ALREADY_SERVED'
-                                      ? 'ALREADY PUNCHED'
-                                      : 'NOT ALLOWED'}
-                                  </span>
-                                  {scanResult.attendee?.token && (
-                                    <span className="text-[10px] sm:text-[11px] font-mono font-black text-white bg-black/50 px-1 rounded border border-white/20">
-                                      #{scanResult.attendee.token}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs sm:text-sm font-black text-white truncate mt-0.5">
-                                  {scanResult.attendee?.name || scanResult.message || 'Pass Scanned'}
-                                </p>
-                              </div>
+                    {!isScanning && (
+                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs bg-slate-950/80 p-4 text-center">
+                        {scanError ? (
+                          <>
+                            <div className="w-9 h-9 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                              <Camera className="w-4 h-4" />
                             </div>
+                            <span className="text-rose-300 font-semibold text-xs leading-tight">
+                              Camera feed not active
+                            </span>
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClearHUD();
-                              }}
-                              className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/20 shrink-0 cursor-pointer"
-                              title="Dismiss"
+                              onClick={() => startCamera(selectedCameraId)}
+                              className="mt-1 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow transition-all cursor-pointer"
                             >
-                              <X className="w-4 h-4" />
+                              Retry Camera
                             </button>
+                          </>
+                        ) : (
+                          <>
+                            <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                            <span className="text-xs">Connecting camera feed...</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* IN-VIEWFINDER INSTANT SCAN NOTIFICATION HUD */}
+                    {scanResult && isScanning && (
+                      <div className="absolute inset-x-2 bottom-2 z-30 animate-fadeIn pointer-events-auto">
+                        <div
+                          className={`p-2 sm:p-2.5 rounded-xl shadow-2xl backdrop-blur-md border text-white flex items-center justify-between gap-2 ${
+                            scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
+                              ? 'bg-emerald-950/90 border-emerald-400/80 ring-2 ring-emerald-500/60'
+                              : scanResult.status === 'ALREADY_SERVED'
+                              ? 'bg-amber-950/90 border-amber-400/80 ring-2 ring-amber-500/60'
+                              : 'bg-rose-950/90 border-rose-400/80 ring-2 ring-rose-500/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED' ? (
+                              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                <CheckCircle2 className="w-4 h-4" />
+                              </div>
+                            ) : scanResult.status === 'ALREADY_SERVED' ? (
+                              <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                <AlertTriangle className="w-4 h-4" />
+                              </div>
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 font-bold shadow">
+                                <XCircle className="w-4 h-4" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`text-[8px] sm:text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                    scanResult.status === 'ALLOWED' || scanResult.status === 'JUST_PUNCHED'
+                                      ? 'bg-emerald-400 text-emerald-950 font-black'
+                                      : scanResult.status === 'ALREADY_SERVED'
+                                      ? 'bg-amber-400 text-amber-950 font-black'
+                                      : 'bg-rose-400 text-rose-950 font-black'
+                                  }`}
+                                >
+                                  {scanResult.status === 'ALLOWED'
+                                    ? 'ALLOW DEVOTEE'
+                                    : scanResult.status === 'JUST_PUNCHED'
+                                    ? 'ALREADY CLEARED'
+                                    : scanResult.status === 'ALREADY_SERVED'
+                                    ? 'ALREADY PUNCHED'
+                                    : 'NOT ALLOWED'}
+                                </span>
+                                {scanResult.attendee?.token && (
+                                  <span className="text-[9px] sm:text-[10px] font-mono font-black text-white bg-black/50 px-1 rounded border border-white/20">
+                                    #{scanResult.attendee.token}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs sm:text-sm font-black text-white truncate mt-0.5">
+                                {scanResult.attendee?.name || scanResult.message || 'Pass Scanned'}
+                              </p>
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearHUD();
+                            }}
+                            className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/20 shrink-0 cursor-pointer"
+                            title="Dismiss"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Continuous Scan Indicator */}
-                    <div className="flex items-center justify-center gap-2 text-[11px] text-slate-600 font-semibold bg-slate-100 py-1.5 px-3 rounded-xl border border-slate-200">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
-                      <span>360° Omnidirectional Fast Scan • Any Angle / Tilt</span>
-                    </div>
-
-                    {/* MOBILE SCAN RESULT CARD (DIRECTLY UNDER CAMERA TO ELIMINATE SCROLLING) */}
-                    {scanResult && (
-                      <div ref={mobileResultRef} className="lg:hidden w-full scroll-mt-4 pt-1.5 animate-fadeIn">
-                        {renderActiveScanResult()}
                       </div>
                     )}
                   </div>
-                ) : (
-                  /* USB / BARCODE GUN MODE */
-                  <div className="space-y-3 p-4 rounded-2xl bg-slate-100 border border-slate-200">
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (manualInput.trim()) {
-                          const val = manualInput.trim();
-                          setManualInput('');
-                          void handleExecuteScan(val);
-                          manualInputRef.current?.focus();
-                        }
-                      }}
-                      className="space-y-3"
-                    >
-                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <Ticket className="w-4 h-4 text-blue-600" />
-                        <span>Handheld USB Scanner Gun</span>
-                      </label>
-                      <input
-                        ref={manualInputRef}
-                        type="text"
-                        autoFocus
-                        value={manualInput}
-                        onChange={(e) => setManualInput(e.target.value)}
-                        placeholder="Pull trigger on pass QR code..."
-                        className="w-full px-3 py-3 rounded-xl border-2 border-slate-300 text-sm font-mono focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
-                      />
-                      <button
-                        type="submit"
-                        disabled={processingScan || !manualInput.trim()}
-                        className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shadow-sm"
-                      >
-                        {processingScan ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Verify Pass</span>}
-                      </button>
-                    </form>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      💡 Barcode gun auto-submits on trigger. Keep input focused and scan passes continuously.
-                    </p>
 
-                    {/* MOBILE SCAN RESULT CARD IN USB MODE */}
-                    {scanResult && (
-                      <div ref={mobileResultRef} className="lg:hidden w-full scroll-mt-4 pt-1.5 animate-fadeIn">
-                        {renderActiveScanResult()}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  {/* MOBILE SCAN RESULT CARD (DIRECTLY UNDER CAMERA, COMPACT) */}
+                  {scanResult && (
+                    <div ref={mobileResultRef} className="lg:hidden w-full scroll-mt-2 pt-0.5 animate-fadeIn">
+                      {renderActiveScanResult()}
+                    </div>
+                  )}
+                </div>
 
                 {/* COMPACT & ERGONOMIC NON-QR EXTRA GUEST MEAL COUNTER */}
                 <div className="p-3 sm:px-3.5 sm:py-2.5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-indigo-50/60 to-purple-50/80 border border-indigo-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-2 transition-all">
@@ -1946,15 +1836,15 @@ export default function AdminCampQrScannerModal({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="bg-slate-100 px-4 sm:px-6 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="font-semibold text-slate-700">Billing Counter Auto-Punch Active</span>
+        <div className="bg-slate-100 px-3.5 sm:px-6 py-2 sm:py-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 shrink-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <span className="font-semibold text-slate-700 text-[11px] sm:text-xs truncate">Billing Counter Auto-Punch Active</span>
           </div>
           <button
             type="button"
             onClick={handleCloseModal}
-            className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer shrink-0"
           >
             Done / Close Desk
           </button>

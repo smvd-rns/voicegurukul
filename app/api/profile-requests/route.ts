@@ -161,7 +161,7 @@ export async function GET(request: Request) {
         const adminUser = await getAuthUserFromRequest(request);
         if (!adminUser) {
             log('Authentication error: User not found');
-            return NextResponse.json({ error: 'Unauthorized', debug: debugLogs }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         // Verify admin role (Role 8 or Role 11)
@@ -195,7 +195,7 @@ export async function GET(request: Request) {
         );
 
         if (!isSuperAdmin && !isGlobalAdmin && !isTempleAdmin && !isProjectAdmin && !isCounselor) {
-            return NextResponse.json({ error: 'Unauthorized', debug: debugLogs }, { status: 403 });
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const { searchParams } = new URL(request.url);

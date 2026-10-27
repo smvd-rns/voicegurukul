@@ -82,14 +82,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No screenshot file provided' }, { status: 400 });
     }
 
+    // Security Check: Enforce maximum file size (5MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File size exceeds limit (maximum 5MB allowed)' }, { status: 400 });
+    }
+
+    // Security Check: Enforce allowed extensions & MIME types (images & PDF only)
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+    if (!allowedExtensions.includes(ext) || (file.type && !allowedMimeTypes.includes(file.type.toLowerCase()))) {
+      return NextResponse.json({ error: 'Invalid file type. Only JPG, PNG, WEBP, and PDF files are allowed.' }, { status: 400 });
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Clean names
-    const safeCampName = campTitle.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'General Camp';
+    // Clean names to prevent path traversal
+    const safeCampName = campTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '_').trim().substring(0, 50) || 'General_Camp';
     const safeDevoteeName = devoteeName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `Payment_${Date.now()}_${safeDevoteeName}.${ext}`;
+    const safeExt = allowedExtensions.includes(ext) ? ext : 'jpg';
+    const fileName = `Payment_${Date.now()}_${safeDevoteeName}.${safeExt}`;
 
     // Try Google Drive upload first
     try {

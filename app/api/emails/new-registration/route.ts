@@ -1,14 +1,31 @@
 import { NextResponse } from 'next/server';
 import { query as dbQuery } from '@/lib/db';
+import { getAuthUserFromRequest } from '@/lib/supabase/admin';
 import { sendRegistrationNotification, sendDevoteeRegistrationConfirmation } from '@/lib/utils/email';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
     try {
+        const requester = await getAuthUserFromRequest(request);
+        if (!requester || !requester.id) {
+            return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
+        }
+
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+        }
+
+        // Security check: Only the user themselves or an admin can trigger this notification
+        if (requester.id !== userId) {
+            const adminCheck = await dbQuery('SELECT role FROM users WHERE id = $1', [requester.id]);
+            const roles = adminCheck.rows[0]?.role || [];
+            const roleArr = Array.isArray(roles) ? roles : [roles];
+            const isAdmin = roleArr.some((r: any) => [8, 9, 10, 11, 12, 13].includes(Number(r)));
+            if (!isAdmin) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
         }
         
         // Fetch the new user directly from Droplet DB

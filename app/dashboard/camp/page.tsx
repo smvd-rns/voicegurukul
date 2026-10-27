@@ -14,7 +14,7 @@ import {
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
   Undo2, Banknote, RefreshCw, Ticket, Download,
   ExternalLink, ArrowLeft, Info, Shield, QrCode,
-  Users, FileSpreadsheet
+  Users, FileSpreadsheet, Ban
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
@@ -1685,20 +1685,32 @@ function CampDashboardContent() {
 
                       {/* Pass Action Buttons */}
                       <div className="flex items-center gap-1.5 sm:gap-2 pt-2.5 sm:pt-4 border-t border-gray-100 mt-2.5 sm:mt-4">
-                        <button
-                          onClick={() => setViewTicketReg({
-                            ...reg,
-                            center: (reg.voice_name && !['none', 'null', 'undefined', 'n/a', '-'].includes(reg.voice_name.toLowerCase()))
-                              ? reg.voice_name
-                              : (userData?.hierarchy?.center || (userData as any)?.center || '')
-                          })}
-                          className="flex-1 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                          <Ticket className="w-3.5 h-3.5" />
-                          <span>View Ticket Pass</span>
-                        </button>
+                        {reg.is_cancelled || reg.payment_status === 'refunded' || refund?.status === 'refunded' ? (
+                          <div className="flex-1 py-1.5 sm:py-2 px-3 bg-rose-50/70 text-rose-700 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-rose-200/80 flex items-center justify-center gap-1.5 select-none shadow-2xs">
+                            <Ban className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Pass Cancelled &bull; Download Disabled</span>
+                          </div>
+                        ) : refund?.status === 'pending' ? (
+                          <div className="flex-1 py-1.5 sm:py-2 px-3 bg-amber-50 text-amber-800 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-amber-200 flex items-center justify-center gap-1.5 select-none shadow-2xs">
+                            <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                            <span>Cancellation In Review</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setViewTicketReg({
+                              ...reg,
+                              center: (reg.voice_name && !['none', 'null', 'undefined', 'n/a', '-'].includes(reg.voice_name.toLowerCase()))
+                                ? reg.voice_name
+                                : (userData?.hierarchy?.center || (userData as any)?.center || '')
+                            })}
+                            className="flex-1 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Ticket className="w-3.5 h-3.5" />
+                            <span>View Ticket Pass</span>
+                          </button>
+                        )}
 
-                        {!reg.is_cancelled && (!refund || refund.status === 'rejected') && (
+                        {!reg.is_cancelled && reg.payment_status !== 'refunded' && (!refund || refund.status === 'rejected') && (
                           <button
                             onClick={() => handleOpenCancelModal(reg)}
                             className="py-1.5 sm:py-2 px-2.5 sm:px-3 bg-white hover:bg-rose-50 text-rose-700 font-bold rounded-lg sm:rounded-xl text-[11px] sm:text-xs border border-rose-200 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"

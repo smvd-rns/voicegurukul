@@ -39,7 +39,7 @@ async function verifyAdminAuth() {
     throw new Error('Forbidden: Super Admin or Camp Coordinator privileges required');
   }
 
-  return { user, isSuperAdmin, campAllocations };
+  return { user, isSuperAdmin, isHigherAdmin, campAllocations };
 }
 
 /**
@@ -128,7 +128,10 @@ export async function getCampBySlugAction(slug: string) {
  */
 export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'updated_at'>) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to create camps');
+    }
 
     // Generate unique slug if not provided
     const slug = data.slug
@@ -190,7 +193,10 @@ export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'u
  */
 export async function updateCampAction(id: string, data: Partial<Camp>) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to update camp configurations');
+    }
 
     const sql = `
       UPDATE camps SET
@@ -254,7 +260,10 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
  */
 export async function toggleCampStatusAction(id: string, newStatus: 'draft' | 'active' | 'closed' | 'completed' | 'archived') {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to change camp status');
+    }
 
     const res = await query(
       'UPDATE camps SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status',
@@ -292,7 +301,10 @@ export async function unarchiveCampAction(id: string) {
  */
 export async function deleteCampAction(id: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to delete a camp');
+    }
 
     await query('DELETE FROM camps WHERE id = $1', [id]);
     revalidatePath('/dashboard/admin/camps');
@@ -308,12 +320,12 @@ export async function deleteCampAction(id: string) {
  */
 export async function getCampRegistrationsAction(campId: string, searchTerm?: string) {
   try {
-    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
     // Enforce role isolation: Non-superadmins must have 'attendance' or 'both' permission for this camp
-    if (!isSuperAdmin) {
-      const alloc = campAllocations.find((a) => a.camp_id === campId);
-      if (!alloc || !['attendance', 'both'].includes(alloc.permission_type)) {
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some((a) => a.camp_id === campId && ['attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
         return { success: true, registrations: [], error: 'Forbidden: Attendance desk permission required' };
       }
     }
@@ -374,13 +386,26 @@ export async function verifyAndApproveCampRegistrationAction(
   data: { transactionId: string; receivedDate: string; remarks?: string }
 ) {
   try {
-    const { user } = await verifyAdminAuth();
+    const { user, isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
     if (!data.transactionId || !data.transactionId.trim()) {
       return { success: false, error: 'Transaction ID / UTR is required for verification.' };
     }
     if (!data.receivedDate || !data.receivedDate.trim()) {
       return { success: false, error: 'Payment received date is required.' };
+    }
+
+    const regLookup = await query('SELECT camp_id FROM camp_registrations WHERE id = $1', [registrationId]);
+    if (regLookup.rows.length === 0) {
+      return { success: false, error: 'Registration record not found' };
+    }
+    const campId = regLookup.rows[0].camp_id;
+
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Attendance desk permission required to approve registrations for this camp.' };
+      }
     }
 
     const adminIdentifier = user.email || user.id;
@@ -479,12 +504,12 @@ export async function verifyAndApproveCampBatchAction(
  */
 export async function getCampRefundRequestsAction(campId: string) {
   try {
-    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
     // Enforce role isolation: Non-superadmins must have 'refunds' or 'both' permission for this camp
-    if (!isSuperAdmin) {
-      const alloc = campAllocations.find((a) => a.camp_id === campId);
-      if (!alloc || !['refunds', 'both'].includes(alloc.permission_type)) {
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some((a) => a.camp_id === campId && ['refunds', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
         return { success: true, requests: [], error: 'Forbidden: Refunds desk permission required' };
       }
     }
@@ -526,7 +551,21 @@ export async function processCampRefundAction(
   }
 ) {
   try {
-    const { user } = await verifyAdminAuth();
+    const { user, isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+
+    const refundLookup = await query('SELECT camp_id FROM camp_refund_requests WHERE id = $1', [refundRequestId]);
+    if (refundLookup.rows.length === 0) {
+      return { success: false, error: 'Refund request record not found.' };
+    }
+    const campId = refundLookup.rows[0].camp_id;
+
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['refunds', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Refunds desk permission required to process refunds for this camp.' };
+      }
+    }
+
     const adminIdentifier = user.email || user.id;
 
     if (data.status === 'refunded') {
@@ -617,13 +656,13 @@ export async function processCampRefundAction(
 export async function lookupCampRegistrationsAction(campSlugOrId: string, identifier: string) {
   try {
     const rawId = (identifier || '').trim();
-    if (!rawId) {
-      return { success: false, error: 'Please enter your registered WhatsApp / Phone number or Email address.' };
+    if (!rawId || rawId.length < 5) {
+      return { success: false, error: 'Please enter a complete 10-digit WhatsApp number, valid Email, or Booking Group ID (minimum 5 characters).' };
     }
 
     // 1. Fetch camp
     const campRes = await query(
-      'SELECT * FROM camps WHERE slug = $1 OR id::text = $1',
+      'SELECT id, title, slug FROM camps WHERE slug = $1 OR id::text = $1',
       [campSlugOrId]
     );
 
@@ -633,23 +672,39 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
 
     const camp = campRes.rows[0] as Camp;
 
-    // Check if identifier is email or phone
+    // Check if identifier is email, phone, or group ID
     const isEmail = rawId.includes('@');
     const digitsOnly = rawId.replace(/[^0-9]/g, '');
-    const phone10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+    const isPhone = digitsOnly.length >= 10;
+    const phone10 = isPhone ? digitsOnly.slice(-10) : '';
+    const isGroupId = rawId.toUpperCase().startsWith('GRP_') || rawId.length >= 8;
 
-    // 2. Fetch registrations matching identifier (supports with or without country code +91)
+    if (!isEmail && !isPhone && !isGroupId) {
+      return {
+        success: false,
+        error: 'Please enter a complete 10-digit mobile number, valid email address, or Booking Group ID.'
+      };
+    }
+
+    // 2. Fetch registrations strictly matching exact identifier (No loose wildcard substring scraping)
     const regSql = `
-      SELECT * FROM camp_registrations
+      SELECT 
+        id, camp_id, group_id, poc_name, poc_contact, email,
+        parent_temple, voice_name, current_temple, current_center,
+        participant_name, whatsapp, counselor_name,
+        gender, age, married_since_year, camp_track, participant_type,
+        first_meal_date, first_meal_type, last_meal_date, last_meal_type,
+        dinner_type, accommodation,
+        meal_cost, acc_cost, ac_cost, late_fee, entry_cost, total_cost,
+        discount_amount, coupon_code,
+        payment_method, payment_status, is_cancelled, cancellation_id,
+        meals_served, checked_in, checked_in_at, created_at
+      FROM camp_registrations
       WHERE camp_id = $1
         AND (
           ($2 <> '' AND LOWER(email) = LOWER($2)) OR
-          ($3 <> '' AND (
-            REGEXP_REPLACE(whatsapp, '[^0-9]', '', 'g') LIKE '%' || $3 || '%' OR
-            REGEXP_REPLACE(poc_contact, '[^0-9]', '', 'g') LIKE '%' || $3 || '%'
-          )) OR
-          whatsapp ILIKE '%' || $4 || '%' OR
-          poc_contact ILIKE '%' || $4 || '%'
+          ($3 <> '' AND (RIGHT(REGEXP_REPLACE(whatsapp, '[^0-9]', '', 'g'), 10) = $3 OR RIGHT(REGEXP_REPLACE(poc_contact, '[^0-9]', '', 'g'), 10) = $3)) OR
+          ($4 <> '' AND LOWER(group_id) = LOWER($4))
         )
       ORDER BY created_at ASC
     `;
@@ -658,7 +713,7 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
       camp.id,
       isEmail ? rawId : '',
       phone10,
-      rawId
+      isGroupId ? rawId : ''
     ]);
 
     if (regRes.rows.length === 0) {
@@ -763,6 +818,47 @@ export async function submitCampRefundRequestAction(data: {
     }
 
     const regs = regRes.rows as CampRegistration[];
+
+    // Security Check: Verify Ownership & Prevent Cancellation / Refund Hijacking
+    const callerUser = await getAuthUserFromCookies().catch(() => null);
+    const callerEmail = (callerUser?.email || data.email || '').trim().toLowerCase();
+    const cleanPocContact = (data.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+    for (const reg of regs) {
+      if (reg.is_cancelled || reg.payment_status === 'refunded') {
+        return {
+          success: false,
+          error: `Attendee "${reg.participant_name}" has already been cancelled/refunded.`
+        };
+      }
+
+      const regEmail = (reg.email || '').trim().toLowerCase();
+      const regPhone = (reg.whatsapp || reg.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+      const emailMatches = Boolean(callerEmail && regEmail && callerEmail === regEmail);
+      const phoneMatches = Boolean(cleanPocContact && regPhone && cleanPocContact === regPhone);
+
+      let isCallerAdmin = false;
+      if (callerUser) {
+        try {
+          const uRes = await query('SELECT role FROM users WHERE id = $1', [callerUser.id]);
+          const role = uRes.rows[0]?.role;
+          const roles = (Array.isArray(role) ? role : [role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+          if (roles.includes(8) || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r))) {
+            isCallerAdmin = true;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!emailMatches && !phoneMatches && !isCallerAdmin) {
+        return {
+          success: false,
+          error: `Security verification failed: You are not authorized to cancel or request a refund for attendee "${reg.participant_name}". Contact details must match the registration record.`
+        };
+      }
+    }
 
     // 3. Determine applicable refund tier by current date (local date YYYY-MM-DD)
     const today = new Date();
@@ -1143,8 +1239,21 @@ export async function getActiveCampsForUserAction() {
  */
 export async function getUserCampRegistrationsAction(identifier: { email?: string; phone?: string }) {
   try {
-    const cleanEmail = (identifier.email || '').trim().toLowerCase();
-    const cleanPhone = (identifier.phone || '').trim().replace(/[^0-9]/g, '');
+    // Security: Require active session and bind query strictly to authenticated user's own email/phone
+    const sessionUser = await getAuthUserFromCookies();
+    if (!sessionUser) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    const uRes = await query('SELECT email, phone, role FROM users WHERE id = $1', [sessionUser.id]);
+    const dbUser = uRes.rows[0];
+    const roles = (Array.isArray(dbUser?.role) ? dbUser.role : [dbUser?.role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isSuperAdmin = roles.includes(8) || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r));
+
+    // Non-admins can strictly only fetch registrations matching their OWN verified credentials
+    const cleanEmail = isSuperAdmin && identifier.email ? identifier.email.trim().toLowerCase() : (dbUser?.email || sessionUser.email || '').trim().toLowerCase();
+    const rawPhone = isSuperAdmin && identifier.phone ? identifier.phone : (dbUser?.phone || '');
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10);
 
     if (!cleanEmail && !cleanPhone) {
       return { success: true, registrations: [] };
@@ -1185,8 +1294,8 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
         WHERE (
           ($1 <> '' AND LOWER(r.email) = $1) OR
           ($2 <> '' AND (
-            r.poc_contact LIKE '%' || $2 || '%' OR 
-            r.whatsapp LIKE '%' || $2 || '%'
+            RIGHT(r.poc_contact, 10) = $2 OR 
+            RIGHT(r.whatsapp, 10) = $2
           ))
         )
       )
@@ -1239,7 +1348,7 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
  */
 export async function verifyCampRegistrationAction(registrationId: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
     const cleanId = (registrationId || '').trim();
     if (!cleanId) {
@@ -1284,6 +1393,14 @@ export async function verifyCampRegistrationAction(registrationId: string) {
 
     const registration = res.rows[0];
 
+    // Enforce camp allocation isolation for staff members
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === registration.camp_id);
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: You do not have permissions for this camp.' };
+      }
+    }
+
     // Check for refund requests
     const refundSql = `
       SELECT * FROM camp_refund_requests 
@@ -1310,10 +1427,21 @@ export async function verifyCampRegistrationAction(registrationId: string) {
  */
 export async function checkInCampAttendeeAction(registrationId: string, mealKey?: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
     const cleanId = (registrationId || '').trim();
     if (!cleanId) {
       return { success: false, error: 'Registration ID required' };
+    }
+
+    const regLookup = await query('SELECT camp_id FROM camp_registrations WHERE id = $1', [cleanId]);
+    if (regLookup.rows.length === 0) return { success: false, error: 'Registration not found' };
+    const campId = regLookup.rows[0].camp_id;
+
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['scan_pass', 'prasadam', 'attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: You do not have check-in privileges for this camp.' };
+      }
     }
 
     if (mealKey) {
@@ -1586,11 +1714,11 @@ export async function getUserAllocatedCampsAction() {
  */
 export async function getCampUserAccessAction(campId: string) {
   try {
-    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
-    if (isSuperAdmin) {
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+    if (isSuperAdmin || isHigherAdmin) {
       return {
         success: true,
-        isSuperAdmin: true,
+        isSuperAdmin: isSuperAdmin,
         permission: 'super_admin' as const,
         permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both'] as string[],
         canAttendance: true,
@@ -1649,7 +1777,14 @@ export async function verifyAndPunchMealPassAction(data: {
   mealName: string;
 }) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+
+    if (data.campId && !isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === data.campId && ['scan_pass', 'prasadam', 'attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, status: 'UNAUTHORIZED_CAMP', message: 'You are not assigned scanning or prasadam privileges for this camp.' };
+      }
+    }
 
     let cleanId = (data.rawPassInput || '').trim();
     if (!cleanId) {
@@ -2061,7 +2196,14 @@ function resolveDevoteeCenterAndTemple(r: any): { center: string; temple: string
  */
 export async function getCampPrasadamLogsAction(campId: string) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['prasadam', 'attendance', 'scan_pass', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Prasadam or Attendance desk permission required for this camp.' };
+      }
+    }
 
     // Camp details
     const campRes = await query(`
@@ -2446,7 +2588,13 @@ export async function saveCampKitchenExtraMealsAction(data: {
   notes?: string;
 }) {
   try {
-    const { user } = await verifyAdminAuth();
+    const { user, isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === data.campId && ['prasadam', 'attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Kitchen & Prasadam desk permission required for this camp.' };
+      }
+    }
     let adminName = (user as any)?.name || user?.user_metadata?.name || 'Camp Admin';
     if (user?.id) {
       try {
@@ -2522,7 +2670,13 @@ export async function recordExtraGuestMealPunchAction(data: {
   notes?: string;
 }) {
   try {
-    const { user } = await verifyAdminAuth();
+    const { user, isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === data.campId && ['prasadam', 'attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Kitchen & Prasadam desk permission required for this camp.' };
+      }
+    }
     let adminName = (user as any)?.name || user?.user_metadata?.name || 'Gate Scanner Desk';
     if (user?.id) {
       try {
@@ -2642,9 +2796,15 @@ export async function getSessionMealStatsAction(data: {
   mealName: string;
 }) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
     if (!data.campId || !data.mealDate || !data.mealName) {
       return { success: false, error: 'Missing parameters' };
+    }
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === data.campId && ['prasadam', 'attendance', 'scan_pass', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Prasadam desk permission required for this camp.' };
+      }
     }
 
     const extraRes = await query(`
@@ -2706,12 +2866,18 @@ export async function toggleManualDevoteeMealPunchAction(
   shouldPunch: boolean
 ) {
   try {
-    await verifyAdminAuth();
+    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
     const regRes = await query(`SELECT id, camp_id, meals_served FROM camp_registrations WHERE id = $1`, [regId]);
     if (regRes.rows.length === 0) return { success: false, error: 'Registration not found' };
 
     const reg = regRes.rows[0];
+    if (!isSuperAdmin && !isHigherAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === reg.camp_id && ['prasadam', 'attendance', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Prasadam or Attendance desk permission required for this camp.' };
+      }
+    }
     const mealsServed = { ...(reg.meals_served || {}) };
     const key = `${mealDate}_${mealName}`;
 

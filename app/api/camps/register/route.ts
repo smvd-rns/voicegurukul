@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { query } from '@/lib/db';
-import { CampRegistration } from '@/types';
+import { CampRegistration, Camp } from '@/types';
+import { calculateDynamicCampCost } from '@/lib/camp-cost';
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,12 +68,56 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Payment Verification
+    // 2.5 Recalculate true cost on the server to prevent client-side price tampering
+    const isLate = Boolean(
+      camp.late_fee_config?.enabled &&
+      camp.late_fee_config?.start_date &&
+      now >= new Date(camp.late_fee_config.start_date)
+    );
+
+    let serverBaseTotal = 0;
+    const computedEntryCosts = entries.map((entry: any) => {
+      const cost = calculateDynamicCampCost(camp, {
+        firstMealDate: entry.first_meal_date || entry.firstMealDate || '',
+        firstMealType: entry.first_meal_type || entry.firstMealType || 'Breakfast',
+        lastMealDate: entry.last_meal_date || entry.lastMealDate || '',
+        lastMealType: entry.last_meal_type || entry.lastMealType || 'Dinner',
+        accommodation: entry.accommodation || 'No',
+        participantType: entry.participant_type || entry.participantType || 'Camp Participant',
+        campTrack: entry.camp_track || entry.campTrack
+      }, isLate);
+      serverBaseTotal += cost.totalCost;
+      return cost;
+    });
+
+    let serverDiscount = 0;
+    if (matchedCoupon && serverBaseTotal > 0) {
+      if (matchedCoupon.discount_type === 'PERCENT') {
+        serverDiscount = Math.round((serverBaseTotal * Number(matchedCoupon.discount_value)) / 100);
+      } else {
+        serverDiscount = Math.min(serverBaseTotal, Number(matchedCoupon.discount_value));
+      }
+    }
+    const serverFinalTotal = Math.max(0, serverBaseTotal - serverDiscount);
+
+    // 3. Payment Verification & Anti-Tampering Checks
     if (paymentMethod === 'RAZORPAY') {
       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
         return NextResponse.json({ error: 'Missing online payment details' }, { status: 400 });
       }
 
+      // Anti-Replay Check: Ensure this transaction ID has not already been used
+      const dupCheck = await query(
+        'SELECT id FROM camp_registrations WHERE payment_id = $1 LIMIT 1',
+        [razorpay_payment_id]
+      );
+      if (dupCheck.rows.length > 0) {
+        return NextResponse.json({
+          error: 'This payment transaction ID has already been registered. Duplicate submission rejected.'
+        }, { status: 400 });
+      }
+
+      const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
       const keySecret = process.env.RAZORPAY_KEY_SECRET;
       if (!keySecret) {
         return NextResponse.json({ error: 'Gateway configuration missing' }, { status: 500 });
@@ -84,6 +130,30 @@ export async function POST(req: NextRequest) {
 
       if (generatedSignature !== razorpay_signature) {
         return NextResponse.json({ error: 'Invalid payment signature verification failed' }, { status: 400 });
+      }
+
+      // Security check: Verify actual amount paid on Razorpay to prevent underpayment / ₹1 order tampering
+      if (keyId) {
+        try {
+          const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+          const payment = await razorpay.payments.fetch(razorpay_payment_id);
+          
+          if (payment.order_id && payment.order_id !== razorpay_order_id) {
+            return NextResponse.json({ error: 'Order ID mismatch for this payment ID' }, { status: 400 });
+          }
+
+          const expectedPaise = Math.round(serverFinalTotal * 100);
+          const paidPaise = Number(payment.amount) || 0;
+          // Payment must be at least the expected total (surcharge may make it slightly higher)
+          if (paidPaise < expectedPaise) {
+            return NextResponse.json({
+              error: `Payment amount discrepancy: Received ₹${(paidPaise / 100).toFixed(2)}, but ₹${serverFinalTotal.toFixed(2)} is required. Registration rejected.`
+            }, { status: 400 });
+          }
+        } catch (gatewayErr: any) {
+          console.error('Failed to verify payment with Razorpay:', gatewayErr);
+          return NextResponse.json({ error: 'Payment verification failed with gateway' }, { status: 400 });
+        }
       }
     } else if (paymentMethod === 'IDT') {
       if (!deductionSource || !passcode) {
@@ -111,6 +181,13 @@ export async function POST(req: NextRequest) {
     } else if (paymentMethod === 'COUPON' || paymentMethod === 'ROLE_WAIVER' || paymentMethod === 'FREE') {
       if (paymentMethod === 'COUPON' && !matchedCoupon) {
         return NextResponse.json({ error: 'Valid coupon code is required for coupon-based registration.' }, { status: 400 });
+      }
+
+      // Security Check: If server-calculated cost is greater than 0, reject free registration!
+      if (serverFinalTotal > 0) {
+        return NextResponse.json({
+          error: `Payment bypass rejected: This registration requires payment of ₹${serverFinalTotal.toLocaleString('en-IN')}. Free/waiver registration is not permitted without a 100% waiver or coupon.`
+        }, { status: 403 });
       }
     } else {
       return NextResponse.json({ error: 'Unsupported payment method' }, { status: 400 });
@@ -198,19 +275,27 @@ export async function POST(req: NextRequest) {
       const entryLastMealType = entry.last_meal_type || entry.lastMealType || 'Dinner';
       const entryDinnerType = entry.dinner_type || entry.dinnerType || 'Dinner Meal';
       const entryAccommodation = entry.accommodation || 'No';
-      const entryMealCost = Number(entry.meal_cost ?? entry.mealCost) || 0;
-      const entryAccCost = Number(entry.acc_cost ?? entry.accCost) || 0;
-      const entryAcCost = Number(entry.ac_cost ?? entry.acCost) || 0;
-      const entryLateFee = Number(entry.late_fee ?? entry.lateFee) || 0;
-      const entryEntryCost = Number(entry.entry_cost ?? entry.entryCost) || 0;
-      const entryTotalCost = Number(entry.total_cost ?? entry.totalCost ?? entryEntryCost) || 0;
+      const costResult = computedEntryCosts[entries.indexOf(entry)] || {
+        mealCost: 0,
+        accCost: 0,
+        acCost: 0,
+        lateFee: 0,
+        entryCost: 0,
+        totalCost: 0
+      };
+      const entryMealCost = costResult.mealCost;
+      const entryAccCost = costResult.accCost;
+      const entryAcCost = costResult.acCost;
+      const entryLateFee = costResult.lateFee;
+      const entryEntryCost = costResult.entryCost;
+      const entryTotalCost = costResult.totalCost;
 
       const cleanCouponCode = body.couponCode ? String(body.couponCode).trim().toUpperCase() : null;
       let entryDiscountAmount = 0;
       if (paymentMethod === 'COUPON' || paymentMethod === 'ROLE_WAIVER' || paymentMethod === 'FREE') {
         entryDiscountAmount = entryTotalCost;
-      } else if (body.discountAmount && Number(body.discountAmount) > 0) {
-        entryDiscountAmount = Math.round(Number(body.discountAmount) / entries.length);
+      } else if (serverDiscount > 0) {
+        entryDiscountAmount = Math.round(serverDiscount / entries.length);
       }
 
       const sql = `

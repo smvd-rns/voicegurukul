@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         log(`Batch Batch Roles check: Super=${isSuperAdmin}, Global=${isGlobalAdmin}, Temple=${isTempleAdmin}, Project=${isProjectAdmin}, Counselor=${isCounselor}`);
 
         if (!isSuperAdmin && !isGlobalAdmin && !isTempleAdmin && !isProjectAdmin && !isCounselor) {
-            return NextResponse.json({ error: 'Forbidden: Insufficient permissions', debug: debugLogs }, { status: 403 });
+            return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
         }
 
         const { requestIds, status, feedback } = await request.json();
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
             allowedTempleNames = (managedTemples as any[] || []).map((t: any) => t.name.trim().toLowerCase());
 
             if (allowedTempleNames.length === 0 && !isProjectAdmin) {
-                return NextResponse.json({ error: 'Forbidden: No temples assigned to Admin', debug: debugLogs }, { status: 403 });
+                return NextResponse.json({ error: 'Forbidden: No temples assigned to Admin' }, { status: 403 });
             }
         }
         
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
             allowedCenterNames = (managedCenters as any[] || []).map((c: any) => c.name.trim().toLowerCase());
 
             if (allowedCenterNames.length === 0 && !isTempleAdmin) {
-                return NextResponse.json({ error: 'Forbidden: No centers assigned to Admin', debug: debugLogs }, { status: 403 });
+                return NextResponse.json({ error: 'Forbidden: No centers assigned to Admin' }, { status: 403 });
             }
         }
 

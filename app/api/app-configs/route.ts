@@ -4,8 +4,16 @@ import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Require an active session — app_configs contains internal platform settings
+    const cookieToken = req.cookies.get('session_token')?.value;
+    const authHeader = req.headers.get('authorization');
+    const token = cookieToken || (authHeader ? authHeader.replace('Bearer ', '') : null);
+    if (!token || !verifyToken(token)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const res = await query('SELECT key, value, updated_at FROM app_configs');
     const configs: Record<string, any> = {};
     for (const row of res.rows) {

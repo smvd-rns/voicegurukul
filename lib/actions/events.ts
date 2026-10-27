@@ -107,7 +107,25 @@ export async function createEvent(eventData: Omit<ManagedEvent, 'id' | 'createdA
  * reading one's own user_profile_details row.
  */
 export async function getAllApprovedUsersForMatching(scopeOrCondition?: string): Promise<any[]> {
-    const { getAdminClient } = await import('@/lib/supabase/admin');
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) throw new Error('Unauthorized: Authentication required');
+
+    const mainAdmin = getAdminClient();
+    const { data: userProfile } = await mainAdmin
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+
+    const roles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorized = numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+        roles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+    if (!isAuthorized) {
+        throw new Error('Forbidden: Insufficient privileges to view user list');
+    }
+
     const adminSupabase = getAdminClient();
     if (!adminSupabase) return [];
 
@@ -149,8 +167,37 @@ export async function getAllApprovedUsersForMatching(scopeOrCondition?: string):
  * Fetch all responses for a specific event
  */
 export async function getEventResponses(eventId: string) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) return [];
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) return [];
+
+    // Verify caller is authorized to view all responses for this event
+    const { data: event } = await supabase
+        .from('events')
+        .select('created_by')
+        .eq('id', eventId)
+        .single();
+
+    const isCreator = event?.created_by === authUser.id;
+    if (!isCreator) {
+        const mainAdmin = getAdminClient();
+        const { data: userProfile } = await mainAdmin
+            .from('users')
+            .select('role')
+            .eq('id', authUser.id)
+            .single();
+
+        const roles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const isAuthorized = numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+            roles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+        if (!isAuthorized) {
+            return [];
+        }
+    }
 
     const { data, error } = await supabase
         .from('event_responses')
@@ -542,6 +589,24 @@ export async function submitEventResponse(response: {
         throw new Error('Forbidden: Cannot submit response on behalf of another user');
     }
 
+    if (response.isBulk) {
+        const mainAdmin = getAdminClient();
+        const { data: userProfile } = await mainAdmin
+            .from('users')
+            .select('role')
+            .eq('id', authUser.id)
+            .single();
+
+        const roles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+        const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        const canBulk = numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+            roles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+        if (!canBulk) {
+            throw new Error('Forbidden: Insufficient privileges for bulk submission');
+        }
+    }
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -638,6 +703,22 @@ export async function bulkSubmitResponses(eventId: string, userIds: string[], pm
     const authUser = await getAuthUserFromCookies();
     if (!authUser || authUser.id !== pmId) throw new Error('Unauthorized');
 
+    const mainAdmin = getAdminClient();
+    const { data: userProfile } = await mainAdmin
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+
+    const roles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const canBulk = numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+        roles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+    if (!canBulk) {
+        throw new Error('Forbidden: Insufficient privileges for bulk submission');
+    }
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) throw new Error('Sadhana Supabase not initialized');
 
@@ -715,8 +796,22 @@ export async function getEventStats(eventId: string) {
  * Get recent responses across all events (Global Log)
  */
 export async function getRecentResponses(limit: number = 20, currentUserId?: string, isSuperAdmin?: boolean) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) return [];
+
     const supabase = getActiveSadhanaSupabase();
     if (!supabase) return [];
+
+    const mainAdmin = getAdminClient();
+    const { data: userProfile } = await mainAdmin
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+
+    const roles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+    const numRoles = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isActuallySuperAdmin = numRoles.includes(8) || roles.some((r: any) => String(r) === '8' || String(r) === 'super_admin');
 
     let query = supabase
         .from('event_responses')
@@ -731,8 +826,8 @@ export async function getRecentResponses(limit: number = 20, currentUserId?: str
         .limit(limit);
 
     // If not a Super Admin, only show responses to events the current user created
-    if (!isSuperAdmin && currentUserId) {
-        query = query.eq('events.created_by', currentUserId);
+    if (!isActuallySuperAdmin) {
+        query = query.eq('events.created_by', authUser.id);
     }
 
     const { data, error } = await query;
@@ -761,6 +856,9 @@ export async function getRecentResponses(limit: number = 20, currentUserId?: str
  * Optimized to only fetch relevant users
  */
 export async function getEventTargetedUsers(eventId: string, filters?: { temple?: string, center?: string }) {
+    const authUser = await getAuthUserFromCookies();
+    if (!authUser) return [];
+
     const supabaseClient = getActiveSadhanaSupabase();
     if (!supabaseClient) return [];
 
@@ -773,11 +871,25 @@ export async function getEventTargetedUsers(eventId: string, filters?: { temple?
 
     if (eventError || !event) return [];
 
-    // 2. Build User Query for main database using Admin Client to bypass RLS
-    // and ensure we see the exact same audience that received the notification
-    const { getAdminClient } = await import('@/lib/supabase/admin');
+    // Check authorization: Super Admin, Creator of the event, or leadership role
     const adminSupabase = getAdminClient();
     if (!adminSupabase) return [];
+
+    const { data: callerProfile } = await adminSupabase
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+
+    const callerRoles = Array.isArray(callerProfile?.role) ? callerProfile.role : [callerProfile?.role];
+    const numRoles = callerRoles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+    const isAuthorized = event.created_by === authUser.id ||
+        numRoles.some((r: number) => [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(r)) ||
+        callerRoles.some((r: any) => ['super_admin', 'managing_director', 'director', 'counselor', 'event_admin'].includes(String(r)));
+
+    if (!isAuthorized) {
+        return [];
+    }
 
     let allFetchedUsers: any[] = [];
     let from = 0;

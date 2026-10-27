@@ -7,17 +7,33 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // 1. Fetch user from DB
-    const res = await query('SELECT * FROM users WHERE email = $1', [email]);
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email/Username and password are required' }, { status: 400 });
+    }
+
+    const identifier = String(email).trim();
+    const cleanPhone = identifier.replace(/[^0-9]/g, '').slice(-10);
+
+    // 1. Fetch user from DB by Email OR by 10-digit phone number
+    const res = await query(
+      `SELECT * FROM users 
+       WHERE LOWER(email) = LOWER($1) 
+          OR ($2 <> '' AND phone IS NOT NULL AND RIGHT(phone, 10) = $2)
+       LIMIT 1`,
+      [identifier, cleanPhone]
+    );
+
     if (res.rows.length === 0) {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid email/phone or password' }, { status: 401 });
     }
 
     const user = res.rows[0];
 
-    // If password_hash is not set (e.g. user was imported or created differently), block password login
+    // If password_hash is not set (e.g. user registered with Google), guide them to set password or use Google
     if (!user.password_hash) {
-      return NextResponse.json({ error: 'Please log in using Google OAuth' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'No local password has been set for this account yet. Please sign in with Google or set a password in your Profile.' 
+      }, { status: 401 });
     }
 
     // 2. Verify password
@@ -31,6 +47,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       email: user.email,
       name: user.name,
+      provider: 'credentials',
     });
 
     const response = NextResponse.json({

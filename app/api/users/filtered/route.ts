@@ -10,6 +10,22 @@ export async function POST(request: NextRequest) {
         }
 
         const supabaseAdmin = createClient();
+
+        // Security check: Only leaders (counselors, managers, admins) can enumerate user IDs
+        const { data: callerData } = await supabaseAdmin
+            .from('users')
+            .select('role')
+            .eq('id', authUser.id)
+            .single();
+
+        const rawRoles = Array.isArray(callerData?.role) ? callerData.role : [callerData?.role];
+        const numRoles = rawRoles.map((r: any) => Number(r)).filter((r: any) => !isNaN(r));
+        const isAuthorized = numRoles.some((r: number) => r >= 2);
+
+        if (!isAuthorized) {
+            return NextResponse.json({ error: 'Forbidden: Leadership or administrative privileges required' }, { status: 403 });
+        }
+
         const body = await request.json();
         const { filterType, filterValue } = body;
 

@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
       userId: user.id,
       email: user.email,
       name: user.name,
+      provider: 'google',
     });
 
     // 5. Determine redirect target based on verification status

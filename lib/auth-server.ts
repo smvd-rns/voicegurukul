@@ -7,6 +7,7 @@ export interface AuthSession {
   userId: string;
   email: string;
   name: string;
+  provider?: 'google' | 'credentials';
 }
 
 export function signToken(payload: AuthSession): string {

@@ -26,7 +26,7 @@ export async function PATCH(
         const adminUser = await getAuthUserFromRequest(request);
         if (!adminUser) {
             log('Auth error: User not found');
-            return NextResponse.json({ error: 'Unauthorized', debug: debugLogs }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         // Verify admin role (Role 8 or 11)
@@ -64,7 +64,7 @@ export async function PATCH(
         log(`Roles check: Super=${isSuperAdmin}, Global=${isGlobalAdmin}, Temple=${isTempleAdmin}, Project=${isProjectAdmin}, Counselor=${isCounselor}`);
 
         if (!isSuperAdmin && !isGlobalAdmin && !isTempleAdmin && !isProjectAdmin && !isCounselor) {
-            return NextResponse.json({ error: 'Unauthorized', debug: debugLogs }, { status: 403 });
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const body = await request.json();

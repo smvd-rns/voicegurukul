@@ -31,10 +31,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized to update this profile' }, { status: 403 });
         }
 
-        // Security check: Regular users cannot change their own roles or self-approve their verification_status
-        delete updates.verification_status;
-        delete updates.verificationStatus;
-        delete updates.role;
+        // Security check: Regular users cannot change their own roles, password hashes, email, or verification status
+        const RESTRICTED_FIELDS = [
+            'password_hash', 'password', 'email', 'role', 
+            'verification_status', 'verificationStatus', 'verified_by', 'verified_at', 
+            'id', 'created_at', 'is_admin', 'admin', 'auth_user_id',
+            'razorpay_customer_id', 'donation_slug'
+        ];
+        for (const field of RESTRICTED_FIELDS) {
+            delete updates[field];
+        }
 
         // Fetch current user data to check for role and center changes
         const { data: currentUser, error: fetchError } = await supabaseAdmin
