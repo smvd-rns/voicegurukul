@@ -61,12 +61,13 @@ export default function CampRegistrationsAdminPage() {
   const [userAccess, setUserAccess] = useState<{
     loaded: boolean;
     isSuperAdmin: boolean;
-    permission: 'super_admin' | 'attendance' | 'refunds' | 'prasadam' | 'both' | 'scan_pass' | null;
+    permission: 'super_admin' | 'attendance' | 'refunds' | 'prasadam' | 'both' | 'scan_pass' | 'payment_approvals' | null;
     permissions: string[];
     canAttendance: boolean;
     canRefunds: boolean;
     canPrasadam: boolean;
     canScan: boolean;
+    canPaymentApprovals: boolean;
   }>({
     loaded: false,
     isSuperAdmin: false,
@@ -76,6 +77,7 @@ export default function CampRegistrationsAdminPage() {
     canRefunds: false,
     canPrasadam: false,
     canScan: false,
+    canPaymentApprovals: false,
   });
 
   // Filters
@@ -166,6 +168,7 @@ export default function CampRegistrationsAdminPage() {
       const canRefunds = isSuper || !!accessRes.canRefunds;
       const canPrasadam = isSuper || !!accessRes.canPrasadam;
       const canScan = isSuper || !!accessRes.canScan;
+      const canPaymentApprovals = isSuper || !!(accessRes as any).canPaymentApprovals;
 
       setUserAccess({
         loaded: true,
@@ -176,12 +179,21 @@ export default function CampRegistrationsAdminPage() {
         canRefunds,
         canPrasadam,
         canScan,
+        canPaymentApprovals,
       });
 
       // If user has no access or only scan_pass, redirect to staff duty desk
-      if (!isSuper && !canAttendance && !canRefunds && !canPrasadam) {
+      if (!isSuper && !canAttendance && !canRefunds && !canPrasadam && !canPaymentApprovals) {
         router.replace('/dashboard/camp?tab=staff');
         return;
+      }
+
+      // Check URL query parameters for payment filter or default for payment_approvals role
+      const paymentParam = searchParams.get('payment');
+      if (paymentParam) {
+        setSelectedPayment(paymentParam);
+      } else if (!canAttendance && canPaymentApprovals) {
+        setSelectedPayment('PROCESSING');
       }
 
       // Automatically initialize allowed activeView
@@ -189,9 +201,9 @@ export default function CampRegistrationsAdminPage() {
         setActiveView('prasadam');
       } else if (initialViewParam === 'refunds' && canRefunds) {
         setActiveView('refunds');
-      } else if (initialViewParam === 'registrations' && canAttendance) {
+      } else if (initialViewParam === 'registrations' && (canAttendance || canPaymentApprovals)) {
         setActiveView('registrations');
-      } else if (canAttendance) {
+      } else if (canAttendance || canPaymentApprovals) {
         setActiveView('registrations');
       } else if (canPrasadam) {
         setActiveView('prasadam');
@@ -201,8 +213,8 @@ export default function CampRegistrationsAdminPage() {
         setActiveView('registrations');
       }
 
-      // 3. Fetch Registrations (only if super admin or attendance permission)
-      if (canAttendance) {
+      // 3. Fetch Registrations (if super admin, attendance, or payment approvals permission)
+      if (canAttendance || canPaymentApprovals) {
         const res = await getCampRegistrationsAction(campId, searchTerm);
         if (res.success && res.registrations) {
           setRegistrations(res.registrations);
@@ -335,9 +347,10 @@ export default function CampRegistrationsAdminPage() {
   // Open Verification Modal
   const handleOpenVerifyModal = (reg: CampRegistration) => {
     setVerifyingReg(reg);
-    setVerifyTxnId(reg.transaction_ref || reg.payment_id || '');
+    const defaultTxn = reg.transaction_ref || reg.payment_id || (reg.payment_method === 'IDT' ? `IDT-${(reg.deduction_source || 'DEPT').toUpperCase().replace(/[^A-Z0-9]/g, '')}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}` : '');
+    setVerifyTxnId(defaultTxn);
     setVerifyDate(new Date().toISOString().split('T')[0]);
-    setVerifyRemarks('');
+    setVerifyRemarks(reg.payment_method === 'IDT' ? `IDT approved from ${reg.deduction_source || 'Dept'}` : '');
     setVerifyError(null);
   };
 
@@ -623,7 +636,7 @@ export default function CampRegistrationsAdminPage() {
 
         {/* View Switcher: Registrations Ledger vs Refund Requests vs Prasadam Logs (Filtered by assigned role) */}
         <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/90 pb-2 overflow-x-auto no-scrollbar">
-          {(userAccess.isSuperAdmin || userAccess.canAttendance) && (
+          {(userAccess.isSuperAdmin || userAccess.canAttendance || userAccess.canPaymentApprovals) && (
             <button
               type="button"
               onClick={() => setActiveView('registrations')}
@@ -634,7 +647,11 @@ export default function CampRegistrationsAdminPage() {
               }`}
             >
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>Attendee Ledger ({registrations.length})</span>
+              <span>
+                {userAccess.canAttendance 
+                  ? `Attendee Ledger (${registrations.length})` 
+                  : `IDT & ITT Payment Approvals (${registrations.filter(r => r.payment_status === 'processing').length})`}
+              </span>
             </button>
           )}
 
@@ -1015,35 +1032,45 @@ export default function CampRegistrationsAdminPage() {
                               <span>{isItt ? 'Inter-Temple' : reg.payment_method}</span>
                             </span>
 
-                            {isItt ? (
+                            {isItt || reg.payment_method === 'IDT' ? (
                               isProcessing ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenVerifyModal(reg)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
-                                  title="Click to cross-verify & approve"
-                                >
-                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                  <span>Verify &amp; Approve</span>
-                                </button>
+                                (userAccess.isSuperAdmin || userAccess.canPaymentApprovals) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenVerifyModal(reg)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
+                                    title="Click to cross-verify & approve"
+                                  >
+                                    <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                    <span>Verify &amp; Approve</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]"
+                                    title="Pending verification by Payment Approval desk"
+                                  >
+                                    <Clock className="w-3 h-3 text-amber-600" />
+                                    <span>Pending Approval</span>
+                                  </span>
+                                )
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => setViewDetailsReg(reg)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
-                                  title="Click to view bank verification & proof details"
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer shadow-2xs ${
+                                    reg.payment_method === 'IDT'
+                                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                                      : 'bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200'
+                                  }`}
+                                  title="Click to view transfer verification details"
                                 >
-                                  <Eye className="w-3 h-3 text-teal-700" />
+                                  <Eye className={`w-3 h-3 ${reg.payment_method === 'IDT' ? 'text-amber-700' : 'text-teal-700'}`} />
                                   <span>View Details</span>
                                 </button>
                               )
                             ) : couponLabel ? (
                               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/80">
                                 🎟️ {couponLabel}
-                              </span>
-                            ) : reg.payment_method === 'IDT' && reg.deduction_source ? (
-                              <span className="text-[10px] text-slate-500 font-medium">
-                                Dept: {reg.deduction_source}
                               </span>
                             ) : null}
                           </div>
@@ -1854,21 +1881,23 @@ export default function CampRegistrationsAdminPage() {
     </div>
   )}
 
-      {/* ITT VIEW DETAILS MODAL */}
+      {/* ITT / IDT VIEW DETAILS MODAL */}
       {viewDetailsReg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
-                  <Landmark className="w-5 h-5" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
+                  viewDetailsReg.payment_method === 'IDT' ? 'bg-amber-50 text-amber-700' : 'bg-teal-50 text-teal-700'
+                }`}>
+                  {viewDetailsReg.payment_method === 'IDT' ? <ShieldCheck className="w-5 h-5" /> : <Landmark className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">
-                    Inter-Temple Transfer Details
+                    {viewDetailsReg.payment_method === 'IDT' ? 'Inter-Department Transfer Details' : 'Inter-Temple Transfer Details'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Verified bank payment &amp; receipt records
+                    {viewDetailsReg.payment_method === 'IDT' ? 'Verified department deduction audit record' : 'Verified bank payment & receipt records'}
                   </p>
                 </div>
               </div>
@@ -1892,8 +1921,12 @@ export default function CampRegistrationsAdminPage() {
                 <span className="font-medium text-slate-800">{viewDetailsReg.whatsapp} • {viewDetailsReg.email}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Transferring Temple / Center:</span>
-                <span className="font-bold text-emerald-800">{viewDetailsReg.deduction_source || '—'}</span>
+                <span className="text-slate-500 font-medium">
+                  {viewDetailsReg.payment_method === 'IDT' ? 'Deduction VOICE / Dept:' : 'Transferring Temple / Center:'}
+                </span>
+                <span className={`font-bold ${viewDetailsReg.payment_method === 'IDT' ? 'text-amber-800' : 'text-emerald-800'}`}>
+                  {viewDetailsReg.deduction_source || '—'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Camp Track:</span>
@@ -1901,15 +1934,21 @@ export default function CampRegistrationsAdminPage() {
               </div>
               <div className="flex justify-between pt-1 border-t border-slate-200 font-black text-sm">
                 <span className="text-slate-700">Total Contribution:</span>
-                <span className="text-emerald-700">₹{viewDetailsReg.total_cost}</span>
+                <span className={viewDetailsReg.payment_method === 'IDT' ? 'text-amber-600' : 'text-emerald-700'}>
+                  ₹{viewDetailsReg.total_cost}
+                </span>
               </div>
             </div>
 
-            {/* Bank Verification Audit */}
-            <div className="p-4 rounded-2xl bg-teal-50/50 border border-teal-200/80 text-xs space-y-2">
-              <div className="flex items-center justify-between pb-1.5 border-b border-teal-200/60">
-                <span className="font-bold text-teal-950 uppercase tracking-wider text-[11px]">
-                  Bank Verification Record
+            {/* Verification Audit */}
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
+              viewDetailsReg.payment_method === 'IDT' ? 'bg-amber-50/50 border-amber-200/80' : 'bg-teal-50/50 border-teal-200/80'
+            }`}>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                <span className={`font-bold uppercase tracking-wider text-[11px] ${
+                  viewDetailsReg.payment_method === 'IDT' ? 'text-amber-950' : 'text-teal-950'
+                }`}>
+                  {viewDetailsReg.payment_method === 'IDT' ? 'IDT Settlement Record' : 'Bank Verification Record'}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1918,7 +1957,9 @@ export default function CampRegistrationsAdminPage() {
               </div>
 
               <div className="flex justify-between items-center pt-1">
-                <span className="text-slate-600">Verified Transaction ID / UTR:</span>
+                <span className="text-slate-600">
+                  {viewDetailsReg.payment_method === 'IDT' ? 'IDT Settlement Code:' : 'Verified Transaction ID / UTR:'}
+                </span>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono font-black text-slate-900 text-sm select-all">
                     {viewDetailsReg.payment_id || viewDetailsReg.transaction_ref || '—'}
@@ -2016,21 +2057,23 @@ export default function CampRegistrationsAdminPage() {
         </div>
       )}
 
-      {/* VERIFY & APPROVE ITT MODAL */}
+      {/* VERIFY & APPROVE ITT / IDT MODAL */}
       {verifyingReg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[94vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
-                  <Landmark className="w-5 h-5" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
+                  verifyingReg.payment_method === 'IDT' ? 'bg-amber-50 text-amber-700' : 'bg-teal-50 text-teal-700'
+                }`}>
+                  {verifyingReg.payment_method === 'IDT' ? <ShieldCheck className="w-5 h-5" /> : <Landmark className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">
-                    Verify Inter-Temple Transfer
+                    {verifyingReg.payment_method === 'IDT' ? 'Verify Inter-Department Transfer (IDT)' : 'Verify Inter-Temple Transfer (ITT)'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Cross-verify bank receipt &amp; confirm registration
+                    {verifyingReg.payment_method === 'IDT' ? 'Verify VOICE department deduction & approve registration' : 'Cross-verify bank receipt & confirm registration'}
                   </p>
                 </div>
               </div>
@@ -2057,8 +2100,12 @@ export default function CampRegistrationsAdminPage() {
                 <span className="font-bold text-slate-900">{verifyingReg.participant_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Transferring Temple / Center:</span>
-                <span className="font-bold text-emerald-800">{verifyingReg.deduction_source || 'Not specified'}</span>
+                <span className="text-slate-500 font-medium">
+                  {verifyingReg.payment_method === 'IDT' ? 'Deduction VOICE / Dept:' : 'Transferring Temple / Center:'}
+                </span>
+                <span className={`font-bold ${verifyingReg.payment_method === 'IDT' ? 'text-amber-800' : 'text-emerald-800'}`}>
+                  {verifyingReg.deduction_source || 'Not specified'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Camp Track:</span>
@@ -2066,15 +2113,17 @@ export default function CampRegistrationsAdminPage() {
               </div>
               <div className="flex justify-between pt-1 border-t border-slate-200 font-black text-sm">
                 <span className="text-slate-700">Amount Due to Verify:</span>
-                <span className="text-emerald-700">₹{verifyingReg.total_cost}</span>
+                <span className={verifyingReg.payment_method === 'IDT' ? 'text-amber-600' : 'text-emerald-700'}>
+                  ₹{verifyingReg.total_cost}
+                </span>
               </div>
             </div>
 
-            {/* Screenshot Proof Preview */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                <span>Devotee Uploaded Receipt Proof</span>
-                {verifyingReg.payment_screenshot_url && (
+            {/* Screenshot Proof Preview (if present) */}
+            {verifyingReg.payment_screenshot_url && (
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Devotee Uploaded Receipt Proof</span>
                   <a
                     href={verifyingReg.payment_screenshot_url}
                     target="_blank"
@@ -2083,10 +2132,7 @@ export default function CampRegistrationsAdminPage() {
                   >
                     Open Original <ExternalLink className="w-3 h-3" />
                   </a>
-                )}
-              </label>
-
-              {verifyingReg.payment_screenshot_url ? (
+                </label>
                 <div className="border border-slate-200 rounded-2xl p-2 bg-slate-50 text-center">
                   <img
                     src={verifyingReg.payment_screenshot_url}
@@ -2095,18 +2141,20 @@ export default function CampRegistrationsAdminPage() {
                     className="max-h-48 mx-auto rounded-xl object-contain shadow-xs border border-slate-200"
                   />
                 </div>
-              ) : (
-                <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-400">
-                  No screenshot proof attached.
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Devotee Provided Ref */}
             {verifyingReg.transaction_ref && (
-              <div className="p-2.5 rounded-xl bg-teal-50/60 border border-teal-200 text-xs">
-                <span className="text-[10px] uppercase font-bold text-teal-800 block">Devotee Provided UTR / Reference</span>
-                <span className="font-mono font-bold text-teal-950 text-xs">{verifyingReg.transaction_ref}</span>
+              <div className={`p-2.5 rounded-xl border text-xs ${
+                verifyingReg.payment_method === 'IDT' ? 'bg-amber-50/60 border-amber-200' : 'bg-teal-50/60 border-teal-200'
+              }`}>
+                <span className={`text-[10px] uppercase font-bold block ${
+                  verifyingReg.payment_method === 'IDT' ? 'text-amber-800' : 'text-teal-800'
+                }`}>
+                  {verifyingReg.payment_method === 'IDT' ? 'Devotee / Center IDT Reference' : 'Devotee Provided UTR / Reference'}
+                </span>
+                <span className="font-mono font-bold text-slate-900 text-xs">{verifyingReg.transaction_ref}</span>
               </div>
             )}
 
@@ -2114,21 +2162,21 @@ export default function CampRegistrationsAdminPage() {
             <div className="space-y-3 pt-1">
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Bank Transaction ID / UTR *
+                  {verifyingReg.payment_method === 'IDT' ? 'IDT Settlement / Voucher Reference ID *' : 'Bank Transaction ID / UTR *'}
                 </label>
                 <input
                   type="text"
                   required
                   value={verifyTxnId}
                   onChange={(e) => setVerifyTxnId(e.target.value)}
-                  placeholder="e.g. 412389123456 or Bank UTR"
+                  placeholder={verifyingReg.payment_method === 'IDT' ? 'e.g. IDT-BAGESHREE-20261028 or Passcode' : 'e.g. 412389123456 or Bank UTR'}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-semibold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Payment Received Date *
+                  Payment / Settlement Date *
                 </label>
                 <input
                   type="date"
@@ -2147,7 +2195,7 @@ export default function CampRegistrationsAdminPage() {
                   type="text"
                   value={verifyRemarks}
                   onChange={(e) => setVerifyRemarks(e.target.value)}
-                  placeholder="e.g. Verified with SBI Statement, passed"
+                  placeholder={verifyingReg.payment_method === 'IDT' ? 'e.g. Verified with Central VOICE ledger, passed' : 'e.g. Verified with SBI Statement, passed'}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                 />
               </div>
@@ -2166,10 +2214,16 @@ export default function CampRegistrationsAdminPage() {
                 type="button"
                 disabled={isApproving}
                 onClick={handleConfirmApproval}
-                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer text-center"
+                className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer text-center ${
+                  verifyingReg.payment_method === 'IDT'
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-600/20'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/20'
+                }`}
               >
                 {isApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>Confirm &amp; Approve Payment Received</span>
+                <span>
+                  {verifyingReg.payment_method === 'IDT' ? 'Confirm & Approve IDT Transfer' : 'Confirm & Approve Payment Received'}
+                </span>
               </button>
             </div>
           </div>

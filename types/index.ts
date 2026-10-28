@@ -514,6 +514,9 @@ export interface CampPaymentConfig {
   enable_itt?: boolean;
   itt_bank_details?: CampIttBankDetails;
   sheets_webhook_url?: string;
+  allow_student_idt?: boolean; // When false (default), regular students cannot see IDT (managerial roles only)
+  allow_student_itt?: boolean; // When false (default), regular students cannot see ITT (managerial roles only)
+  allowed_managerial_roles?: number[]; // Role numbers permitted to access IDT/ITT (default: [8,9,10,11,12,13,14,15,16,17])
 }
 
 export interface CampRefundTier {
@@ -654,7 +657,7 @@ export interface CampAdminAllocation {
   id: string;
   user_id: string;
   camp_id: string;
-  permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam';
+  permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals';
   assigned_by?: string;
   notes?: string;
   created_at?: string;

@@ -33,7 +33,7 @@ async function verifyAdminAuth() {
     'SELECT camp_id, permission_type FROM camp_admin_allocations WHERE user_id = $1',
     [user.id]
   );
-  const campAllocations = allocRes.rows as { camp_id: string; permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' }[];
+  const campAllocations = allocRes.rows as { camp_id: string; permission_type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals' }[];
 
   if (!isHigherAdmin && campAllocations.length === 0) {
     throw new Error('Forbidden: Super Admin or Camp Coordinator privileges required');
@@ -82,7 +82,7 @@ export async function getCampsAction() {
         return {
           ...camp,
           user_permission: 'both',
-          user_permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both']
+          user_permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'payment_approvals', 'both']
         };
       }
       const allocs = campAllocations.filter(a => a.camp_id === camp.id);
@@ -322,11 +322,11 @@ export async function getCampRegistrationsAction(campId: string, searchTerm?: st
   try {
     const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
-    // Enforce role isolation: Non-superadmins must have 'attendance' or 'both' permission for this camp
-    if (!isSuperAdmin && !isHigherAdmin) {
-      const hasPerm = campAllocations.some((a) => a.camp_id === campId && ['attendance', 'both'].includes(a.permission_type));
+    // Enforce role isolation: Non-superadmins must have explicit 'attendance', 'payment_approvals', or 'both' permission for this camp
+    if (!isSuperAdmin) {
+      const hasPerm = campAllocations.some((a) => a.camp_id === campId && ['attendance', 'payment_approvals', 'both'].includes(a.permission_type));
       if (!hasPerm) {
-        return { success: true, registrations: [], error: 'Forbidden: Attendance desk permission required' };
+        return { success: true, registrations: [], error: 'Forbidden: Attendance or Payment Approvals desk permission required' };
       }
     }
 
@@ -401,10 +401,10 @@ export async function verifyAndApproveCampRegistrationAction(
     }
     const campId = regLookup.rows[0].camp_id;
 
-    if (!isSuperAdmin && !isHigherAdmin) {
-      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['attendance', 'both'].includes(a.permission_type));
+    if (!isSuperAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['payment_approvals', 'both'].includes(a.permission_type));
       if (!hasPerm) {
-        return { success: false, error: 'Forbidden: Attendance desk permission required to approve registrations for this camp.' };
+        return { success: false, error: 'Forbidden: Payment Approvals desk permission required to approve registrations for this camp.' };
       }
     }
 
@@ -451,9 +451,20 @@ export async function verifyAndApproveCampBatchAction(
   data: { transactionId: string; receivedDate: string; remarks?: string }
 ) {
   try {
-    const { user, isSuperAdmin } = await verifyAdminAuth();
+    const { user, isSuperAdmin, campAllocations } = await verifyAdminAuth();
     if (!isSuperAdmin) {
-      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+      const checkRes = await query(
+        'SELECT camp_id FROM camp_registrations WHERE group_id = $1 OR payment_id = $1 OR id::text = $1 LIMIT 1',
+        [batchId]
+      );
+      if (checkRes.rows.length === 0) {
+        return { success: false, error: 'No matching transaction records found.' };
+      }
+      const targetCampId = checkRes.rows[0].camp_id;
+      const hasPerm = campAllocations.some(a => a.camp_id === targetCampId && ['payment_approvals', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Payment Approvals desk permission required to approve batches for this camp.' };
+      }
     }
 
     if (!data.transactionId || !data.transactionId.trim()) {
@@ -506,8 +517,8 @@ export async function getCampRefundRequestsAction(campId: string) {
   try {
     const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
-    // Enforce role isolation: Non-superadmins must have 'refunds' or 'both' permission for this camp
-    if (!isSuperAdmin && !isHigherAdmin) {
+    // Enforce role isolation: Non-superadmins must have explicit 'refunds' or 'both' permission for this camp
+    if (!isSuperAdmin) {
       const hasPerm = campAllocations.some((a) => a.camp_id === campId && ['refunds', 'both'].includes(a.permission_type));
       if (!hasPerm) {
         return { success: true, requests: [], error: 'Forbidden: Refunds desk permission required' };
@@ -1546,8 +1557,8 @@ export async function getCampAllocationsAction(campId?: string) {
 export async function assignCampStaffAction(data: {
   userId: string;
   campId: string;
-  permissionType?: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam';
-  permissionTypes?: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[];
+  permissionType?: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals';
+  permissionTypes?: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals')[];
   notes?: string;
 }) {
   try {
@@ -1556,12 +1567,19 @@ export async function assignCampStaffAction(data: {
       throw new Error('Forbidden: Super Admin privileges required to assign staff');
     }
 
-    const typesToAssign: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[] =
+    const typesToAssign: ('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals')[] =
       data.permissionTypes && data.permissionTypes.length > 0
         ? data.permissionTypes
         : data.permissionType
         ? [data.permissionType]
         : ['attendance'];
+
+    // Sync permissions: Delete any previous roles for this user & camp that were not selected
+    await query(
+      `DELETE FROM camp_admin_allocations 
+       WHERE user_id = $1 AND camp_id = $2 AND NOT (permission_type = ANY($3::text[]))`,
+      [data.userId, data.campId, typesToAssign]
+    );
 
     const insertedRows = [];
     for (const pType of typesToAssign) {
@@ -1665,7 +1683,7 @@ export async function getUserAllocatedCampsAction() {
       const camps = res.rows.map(c => ({
         ...c,
         user_role: 'super_admin',
-        user_roles: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both'],
+        user_roles: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'payment_approvals', 'both'],
       }));
       return { success: true, camps, isSuperAdmin: true };
     }
@@ -1714,32 +1732,34 @@ export async function getUserAllocatedCampsAction() {
  */
 export async function getCampUserAccessAction(campId: string) {
   try {
-    const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
-    if (isSuperAdmin || isHigherAdmin) {
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    if (isSuperAdmin) {
       return {
         success: true,
-        isSuperAdmin: isSuperAdmin,
+        isSuperAdmin: true,
         permission: 'super_admin' as const,
-        permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'both'] as string[],
+        permissions: ['attendance', 'refunds', 'prasadam', 'scan_pass', 'payment_approvals', 'both'] as string[],
         canAttendance: true,
         canRefunds: true,
         canPrasadam: true,
         canScan: true,
+        canPaymentApprovals: true,
       };
     }
 
     const matching = campAllocations.filter((a) => a.camp_id === campId);
     const permissions = matching.map((a) => a.permission_type);
 
-    const hasBoth = permissions.includes('both') || (permissions.includes('attendance') && permissions.includes('refunds'));
+    const hasBoth = permissions.includes('both');
     const canAttendance = isSuperAdmin || hasBoth || permissions.includes('attendance');
     const canRefunds = isSuperAdmin || hasBoth || permissions.includes('refunds');
-    const canPrasadam = isSuperAdmin || hasBoth || permissions.includes('prasadam') || permissions.includes('attendance');
+    const canPrasadam = isSuperAdmin || hasBoth || permissions.includes('prasadam');
     const canScan = isSuperAdmin || hasBoth || permissions.includes('scan_pass') || permissions.includes('attendance') || permissions.includes('prasadam');
+    const canPaymentApprovals = isSuperAdmin || hasBoth || permissions.includes('payment_approvals');
 
     const primaryPermission = hasBoth
       ? 'both'
-      : (permissions[0] as 'attendance' | 'refunds' | 'prasadam' | 'scan_pass' | null) || null;
+      : (permissions[0] as 'attendance' | 'refunds' | 'prasadam' | 'scan_pass' | 'payment_approvals' | null) || null;
 
     return {
       success: true,
@@ -1750,6 +1770,7 @@ export async function getCampUserAccessAction(campId: string) {
       canRefunds,
       canPrasadam,
       canScan,
+      canPaymentApprovals,
     };
   } catch (error: any) {
     return {
@@ -1762,6 +1783,7 @@ export async function getCampUserAccessAction(campId: string) {
       canRefunds: false,
       canPrasadam: false,
       canScan: false,
+      canPaymentApprovals: false,
     };
   }
 }
@@ -2198,8 +2220,8 @@ export async function getCampPrasadamLogsAction(campId: string) {
   try {
     const { isSuperAdmin, isHigherAdmin, campAllocations } = await verifyAdminAuth();
 
-    if (!isSuperAdmin && !isHigherAdmin) {
-      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['prasadam', 'attendance', 'scan_pass', 'both'].includes(a.permission_type));
+    if (!isSuperAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['prasadam', 'attendance', 'both'].includes(a.permission_type));
       if (!hasPerm) {
         return { success: false, error: 'Forbidden: Prasadam or Attendance desk permission required for this camp.' };
       }

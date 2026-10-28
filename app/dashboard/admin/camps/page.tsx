@@ -315,8 +315,11 @@ export default function AdminCampsPage() {
       enable_razorpay: true,
       surcharge_percent: 2.0,
       enable_idt: true,
+      allow_student_idt: false,
       idt_passcodes_str: '16, 26, 36, 46, 56, AT123, NITW456, CV108, IITH101, GGD202, VSSUT303, VIT404, MTH505, BEC606, NITR707, MV808, WG909, VIIT1010, KYC1111, KVM1212, KSV1313, VTL108',
       enable_itt: false,
+      allow_student_itt: false,
+      allowed_managerial_roles: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
       itt_bank_details: {
         account_name: '',
         account_number: '',
@@ -884,8 +887,11 @@ export default function AdminCampsPage() {
         enable_razorpay: true,
         surcharge_percent: 2.0,
         enable_idt: true,
+        allow_student_idt: false,
         idt_passcodes_str: '16, 26, 36, 46, 56, AT123, NITW456, CV108, IITH101, GGD202, VSSUT303, VIT404, MTH505, BEC606, NITR707, MV808, WG909, VIIT1010, KYC1111, KVM1212, KSV1313, VTL108',
         enable_itt: false,
+        allow_student_itt: false,
+        allowed_managerial_roles: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
         itt_bank_details: {
           account_name: '',
           account_number: '',
@@ -973,8 +979,11 @@ export default function AdminCampsPage() {
         enable_razorpay: camp.payment_config?.enable_razorpay ?? true,
         surcharge_percent: camp.payment_config?.surcharge_percent ?? 2.0,
         enable_idt: camp.payment_config?.enable_idt ?? true,
+        allow_student_idt: camp.payment_config?.allow_student_idt ?? false,
         idt_passcodes_str: passcodes.join(', '),
         enable_itt: camp.payment_config?.enable_itt ?? false,
+        allow_student_itt: camp.payment_config?.allow_student_itt ?? false,
+        allowed_managerial_roles: camp.payment_config?.allowed_managerial_roles ?? [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
         itt_bank_details: {
           account_name: camp.payment_config?.itt_bank_details?.account_name || '',
           account_number: camp.payment_config?.itt_bank_details?.account_number || '',
@@ -1036,8 +1045,11 @@ export default function AdminCampsPage() {
           enable_razorpay: formData.payment_config.enable_razorpay,
           surcharge_percent: Number(formData.payment_config.surcharge_percent) || 0,
           enable_idt: formData.payment_config.enable_idt,
+          allow_student_idt: Boolean(formData.payment_config.allow_student_idt),
           idt_passcodes: passcodes,
           enable_itt: formData.payment_config.enable_itt,
+          allow_student_itt: Boolean(formData.payment_config.allow_student_itt),
+          allowed_managerial_roles: formData.payment_config.allowed_managerial_roles || [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
           itt_bank_details: formData.payment_config.itt_bank_details,
           sheets_webhook_url: formData.payment_config.sheets_webhook_url
         },
@@ -4547,6 +4559,35 @@ export default function AdminCampsPage() {
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <span>This option is only available to ISKCON NVCC connected centers.</span>
                       </div>
+
+                      {/* Access restriction toggle */}
+                      {formData.payment_config.enable_idt && (
+                        <div className="pt-2.5 border-t border-slate-200/80 space-y-1.5">
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.payment_config.allow_student_idt)}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                payment_config: { ...formData.payment_config, allow_student_idt: e.target.checked }
+                              })}
+                              className="w-4 h-4 text-amber-600 rounded border-2 border-slate-300 focus:ring-amber-500"
+                            />
+                            <span>Allow Regular Students to access IDT</span>
+                          </label>
+                          <div className="text-[11px]">
+                            {formData.payment_config.allow_student_idt ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
+                                🌐 Open to All Devotees &amp; Students
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 font-bold">
+                                🔒 Restricted: Managerial Roles (8 to 17) Only
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Inter-Temple Transfer (ITT) */}
@@ -4569,8 +4610,50 @@ export default function AdminCampsPage() {
                       <span className="inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
                         Admin Receipt Verification
                       </span>
+
+                      {/* Access restriction toggle */}
+                      {formData.payment_config.enable_itt && (
+                        <div className="pt-2.5 border-t border-slate-200/80 space-y-1.5">
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.payment_config.allow_student_itt)}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                payment_config: { ...formData.payment_config, allow_student_itt: e.target.checked }
+                              })}
+                              className="w-4 h-4 text-emerald-600 rounded border-2 border-slate-300 focus:ring-emerald-500"
+                            />
+                            <span>Allow Regular Students to access ITT</span>
+                          </label>
+                          <div className="text-[11px]">
+                            {formData.payment_config.allow_student_itt ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
+                                🌐 Open to All Devotees &amp; Students
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 font-bold">
+                                🔒 Restricted: Managerial Roles (8 to 17) Only
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Special Transfer Role Restriction Helper Notice */}
+                  {(formData.payment_config.enable_idt || formData.payment_config.enable_itt) && (
+                    <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-indigo-900 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-black text-indigo-950">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                        <span>Managerial Roles Access Policy</span>
+                      </div>
+                      <p className="text-[11px] text-indigo-800 leading-relaxed">
+                        By default, IDT and ITT transfer options are reserved exclusively for Managerial Roles (<strong>Roles 8 to 17</strong>: Super Admin, President, VP, Directors, Managers, Advisors, OC). Regular students will only see online payment unless you enable the student permission checkbox above.
+                      </p>
+                    </div>
+                  )}
 
                   {/* IDT Passcodes Section */}
                   {formData.payment_config.enable_idt && (

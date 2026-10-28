@@ -280,3 +280,42 @@ export const isAdminRoleNumber = (roleNumber: number): boolean => {
 export const isSuperAdminRoleNumber = (roleNumber: number): boolean => {
   return roleNumber === 8;
 };
+
+/**
+ * Managerial Role Numbers authorized for special camp transfer payment methods (IDT & ITT).
+ * Role Numbers:
+ * 8: super_admin
+ * 9: vice_president
+ * 10: president
+ * 11: managing_director
+ * 12: director
+ * 13: central_voice_manager
+ * 14: project_advisor
+ * 15: project_manager
+ * 16: acting_manager
+ * 17: oc
+ *
+ * In the future, if you wish to give rights to another role (frontend only),
+ * simply add the role number to this array!
+ */
+export const DEFAULT_CAMP_MANAGERIAL_ROLES: number[] = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+
+/**
+ * Checks if a user has any of the managerial roles permitted to access IDT and ITT.
+ */
+export const isCampManagerialUser = (
+  userRole: UserRole | UserRole[] | undefined | null,
+  allowedRoleNumbers: number[] = DEFAULT_CAMP_MANAGERIAL_ROLES
+): boolean => {
+  if (!userRole) return false;
+  const rolesArray = Array.isArray(userRole) ? userRole : [userRole];
+  const targetRoles = (allowedRoleNumbers && allowedRoleNumbers.length > 0)
+    ? allowedRoleNumbers
+    : DEFAULT_CAMP_MANAGERIAL_ROLES;
+
+  return rolesArray.some((r) => {
+    const num = getRoleHierarchyNumber(r);
+    return targetRoles.includes(num);
+  });
+};
+

@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
+import { isCampManagerialUser } from '@/lib/utils/roles';
 import {
   getActiveCampsForUserAction,
   getUserCampRegistrationsAction,
@@ -90,30 +91,33 @@ function CampDashboardContent() {
   const getStaffRoleMeta = (role: string, roles?: string[]) => {
     const allRoles = roles && roles.length > 0 ? roles : [role];
     const isSuper = role === 'super_admin';
-    const isBoth = isSuper || allRoles.includes('both') || (allRoles.includes('attendance') && allRoles.includes('refunds'));
+    const isBoth = isSuper || allRoles.includes('both');
 
     const canScan = isSuper || isBoth || allRoles.includes('scan_pass') || allRoles.includes('attendance') || allRoles.includes('prasadam');
     const canAttendance = isSuper || isBoth || allRoles.includes('attendance');
     const canRefunds = isSuper || isBoth || allRoles.includes('refunds');
-    const canPrasadam = isSuper || isBoth || allRoles.includes('prasadam') || allRoles.includes('attendance');
+    const canPrasadam = isSuper || isBoth || allRoles.includes('prasadam');
+    const canPaymentApprovals = isSuper || isBoth || allRoles.includes('payment_approvals');
 
     if (isBoth) {
       return {
         title: 'Full Camp Coordinator',
         pill: 'Full Coordinator',
         badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
-        desc: 'Complete operational management: QR pass scanning, attendee ledger, kitchen tally & refunds.',
+        desc: 'Complete operational management: QR pass scanning, attendee ledger, IDT & ITT payment approvals, kitchen tally & refunds.',
         canScan: true,
         canAttendance: true,
         canRefunds: true,
         canPrasadam: true,
+        canPaymentApprovals: true,
       };
     }
 
     if (allRoles.length > 1) {
       const labels: string[] = [];
       if (canAttendance) labels.push('Attendance');
-      if (allRoles.includes('prasadam') && !labels.includes('Prasadam')) labels.push('Prasadam');
+      if (canPaymentApprovals && !labels.includes('Approvals')) labels.push('Approvals');
+      if (canPrasadam && !labels.includes('Prasadam')) labels.push('Prasadam');
       if (canRefunds) labels.push('Refunds');
       if (allRoles.includes('scan_pass') && !canAttendance && !canPrasadam) labels.push('Scanner');
 
@@ -127,6 +131,7 @@ function CampDashboardContent() {
         canAttendance,
         canRefunds,
         canPrasadam,
+        canPaymentApprovals,
       };
     }
 
@@ -140,18 +145,32 @@ function CampDashboardContent() {
           canScan: true,
           canAttendance: false,
           canRefunds: false,
-          canPrasadam: false
+          canPrasadam: false,
+          canPaymentApprovals: false,
         };
       case 'attendance':
         return {
           title: 'Attendance & Registrations',
-          pill: 'Attendance Manager',
+          pill: 'Attendance Desk',
           badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-          desc: 'Full attendee ledger access, Excel export, ITT payment verification, and meal counters.',
+          desc: 'Full attendee ledger access, delegate check-in coordination, and Excel export.',
           canScan: true,
           canAttendance: true,
           canRefunds: false,
-          canPrasadam: true
+          canPrasadam: false,
+          canPaymentApprovals: false,
+        };
+      case 'payment_approvals':
+        return {
+          title: 'IDT & ITT Payment Approvals',
+          pill: 'Payment Approvals Desk',
+          badgeClass: 'bg-teal-100 text-teal-800 border-teal-200',
+          desc: 'Inspect UTR payment proofs, verify Inter-Department (IDT) center passcodes, and approve Inter-Temple Transfers (ITT).',
+          canScan: false,
+          canAttendance: false,
+          canRefunds: false,
+          canPrasadam: false,
+          canPaymentApprovals: true,
         };
       case 'refunds':
         return {
@@ -162,7 +181,8 @@ function CampDashboardContent() {
           canScan: false,
           canAttendance: false,
           canRefunds: true,
-          canPrasadam: false
+          canPrasadam: false,
+          canPaymentApprovals: false,
         };
       case 'prasadam':
         return {
@@ -173,7 +193,8 @@ function CampDashboardContent() {
           canScan: true,
           canAttendance: false,
           canRefunds: false,
-          canPrasadam: true
+          canPrasadam: true,
+          canPaymentApprovals: false,
         };
       case 'both':
       case 'super_admin':
@@ -182,11 +203,12 @@ function CampDashboardContent() {
           title: 'Full Camp Coordinator',
           pill: 'Full Coordinator',
           badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
-          desc: 'Complete operational management: QR pass scanning, attendee ledger, kitchen tally & refunds.',
+          desc: 'Complete operational management: QR pass scanning, attendee ledger, IDT & ITT payment approvals, kitchen tally & refunds.',
           canScan: true,
           canAttendance: true,
           canRefunds: true,
-          canPrasadam: true
+          canPrasadam: true,
+          canPaymentApprovals: true,
         };
     }
   };
@@ -695,10 +717,29 @@ function CampDashboardContent() {
     setCouponError(null);
   };
 
+  // Submit Free Registration (Bypasses payment gateway when total is ₹0 via coupon or waiver)
+  const submitFreeRegistration = async () => {
+    if (entries.length === 0) {
+      alert('Please add at least one participant entry before proceeding.');
+      return;
+    }
+    setIsSubmitting(true);
+    setPaymentError(null);
+    await submitRegistrationsToBackend({
+      paymentMethod: appliedCoupon ? 'COUPON' : 'FREE',
+      deductionSource: appliedCoupon ? `Coupon: ${appliedCoupon.code}` : 'Complimentary Free Registration',
+      couponCode: appliedCoupon?.code
+    });
+  };
+
   // Open Payment Modal
   const handleProceedToPayment = () => {
     if (entries.length === 0) {
       alert('Please add at least one participant entry before proceeding.');
+      return;
+    }
+    if (grandTotal === 0) {
+      submitFreeRegistration();
       return;
     }
     setSelectedMethod(null);
@@ -804,6 +845,7 @@ function CampDashboardContent() {
       paymentMethod: 'IDT',
       deductionSource: idtSource.trim(),
       passcode: idtPasscode.trim(),
+      paymentStatus: 'processing',
     });
   };
 
@@ -893,11 +935,20 @@ function CampDashboardContent() {
         throw new Error(json.error || 'Registration failed');
       }
 
+      const finalPaymentStatus = json.paymentStatus || (
+        paymentDetails.paymentMethod === 'IDT' ||
+        paymentDetails.paymentMethod === 'INTER_TEMPLE_TRANSFER' ||
+        paymentDetails.paymentMethod === 'ITT'
+          ? 'processing'
+          : 'completed'
+      );
+
       setRegistrationSuccess({
         groupId: json.groupId,
         count: json.count,
         totalPaid: finalPaidAmount,
         paymentMethod: paymentDetails.paymentMethod,
+        paymentStatus: finalPaymentStatus,
         pocName: payerName,
         pocContact: payerContact,
         email: payerEmail,
@@ -1503,6 +1554,16 @@ function CampDashboardContent() {
                                   </Link>
                                 )}
 
+                                {meta.canPaymentApprovals && (
+                                  <Link
+                                    href={`/dashboard/admin/camps/${camp.id}/registrations?payment=PROCESSING`}
+                                    className="py-1.5 px-2.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-200 font-bold rounded-lg text-[11px] flex items-center justify-center gap-1 border border-teal-400/30 transition-all"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+                                    <span>Payment Approvals</span>
+                                  </Link>
+                                )}
+
                                 {meta.canPrasadam && (
                                   <Link
                                     href={`/dashboard/admin/camps/${camp.id}/registrations?view=prasadam`}
@@ -1876,6 +1937,16 @@ function CampDashboardContent() {
                             </Link>
                           )}
 
+                          {meta.canPaymentApprovals && (
+                            <Link
+                              href={`/dashboard/admin/camps/${camp.id}/registrations?payment=PROCESSING`}
+                              className="w-full sm:w-auto py-2.5 px-4 bg-white hover:bg-teal-50 text-teal-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-teal-200 shadow-sm transition-all text-center"
+                            >
+                              <Clock className="w-4 h-4 text-teal-600 shrink-0" />
+                              <span>Payment Approvals (IDT/ITT)</span>
+                            </Link>
+                          )}
+
                           {meta.canPrasadam && (
                             <Link
                               href={`/dashboard/admin/camps/${camp.id}/registrations?view=prasadam`}
@@ -1923,15 +1994,34 @@ function CampDashboardContent() {
             {/* Success View */}
             {registrationSuccess ? (
               <div className="bg-white rounded-3xl p-8 sm:p-10 border border-emerald-200 shadow-xl text-center space-y-6">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-                  <CheckCircle2 className="w-10 h-10" />
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-inner ${
+                  registrationSuccess.paymentStatus === 'processing'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-600'
+                }`}>
+                  {registrationSuccess.paymentStatus === 'processing' ? (
+                    <Clock className="w-10 h-10 animate-pulse" />
+                  ) : (
+                    <CheckCircle2 className="w-10 h-10" />
+                  )}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900">Camp Registration Confirmed!</h2>
+                  <h2 className="text-2xl font-black text-gray-900">
+                    {registrationSuccess.paymentStatus === 'processing'
+                      ? 'Camp Registration Submitted - Pending Verification'
+                      : 'Camp Registration Confirmed!'}
+                  </h2>
                   <p className="text-xs text-gray-600 mt-1">
-                    Hare Krishna! Your registration has been successfully recorded under group reference:{' '}
+                    {registrationSuccess.paymentStatus === 'processing'
+                      ? `Hare Krishna! Your transfer request (${registrationSuccess.paymentMethod}) has been recorded under reference: `
+                      : 'Hare Krishna! Your registration has been successfully recorded under group reference: '}
                     <span className="font-mono font-bold text-amber-700">{registrationSuccess.groupId}</span>
                   </p>
+                  {registrationSuccess.paymentStatus === 'processing' && (
+                    <div className="mt-3 p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-800 text-xs font-semibold max-w-md mx-auto">
+                      ⏳ Your transfer is currently being verified by the central administration desk. Your pass will be fully activated upon approval.
+                    </div>
+                  )}
                 </div>
 
                 <div className="max-w-md mx-auto bg-gray-50 rounded-2xl p-5 text-xs text-left space-y-2 border border-gray-200">
@@ -2433,19 +2523,54 @@ function CampDashboardContent() {
                       )}
                     </div>
 
-                    {/* Checkout Button */}
-                    <button
-                      onClick={handleProceedToPayment}
-                      disabled={entries.length === 0}
-                      className={`w-full py-3 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
-                        entries.length > 0
-                          ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
-                    </button>
+                    {/* Error display if registration failed outside modal */}
+                    {paymentError && !showPaymentModal && (
+                      <div className="p-3 mb-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{paymentError}</span>
+                      </div>
+                    )}
+
+                    {/* Checkout Button: Direct Free Registration if total is ₹0 */}
+                    {grandTotal === 0 ? (
+                      <button
+                        type="button"
+                        onClick={submitFreeRegistration}
+                        disabled={entries.length === 0 || isSubmitting}
+                        className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
+                          entries.length > 0 && !isSubmitting
+                            ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-emerald-600/30 active:scale-[0.99]'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                        }`}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Registering Devotees...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Gift className="w-4 h-4" />
+                            <span>Confirm Free Registration (₹0)</span>
+                            <CheckCircle className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleProceedToPayment}
+                        disabled={entries.length === 0}
+                        className={`w-full py-3 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
+                          entries.length > 0
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2455,7 +2580,7 @@ function CampDashboardContent() {
       </div>
 
       {/* PAYMENT METHOD SELECTION MODAL: Matching Image 2 */}
-      {showPaymentModal && selectedCamp && (
+      {showPaymentModal && selectedCamp && grandTotal > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
             <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -2483,7 +2608,18 @@ function CampDashboardContent() {
                 </div>
               )}
 
-              {!selectedMethod ? (
+              {!selectedMethod ? (() => {
+                const isManager = isCampManagerialUser(userData?.role, selectedCamp.payment_config?.allowed_managerial_roles);
+                const showIdtOption = Boolean(
+                  selectedCamp.payment_config?.enable_idt &&
+                  (selectedCamp.payment_config?.allow_student_idt === true || isManager)
+                );
+                const showIttOption = Boolean(
+                  selectedCamp.payment_config?.enable_itt &&
+                  (selectedCamp.payment_config?.allow_student_itt === true || isManager)
+                );
+
+                return (
                 <div className="space-y-3">
                   {selectedCamp.payment_config?.enable_razorpay !== false && (
                     <button
@@ -2514,7 +2650,7 @@ function CampDashboardContent() {
                     </button>
                   )}
 
-                  {selectedCamp.payment_config?.enable_idt && (
+                  {showIdtOption && (
                     <button
                       type="button"
                       onClick={() => setSelectedMethod('IDT')}
@@ -2544,7 +2680,7 @@ function CampDashboardContent() {
                     </button>
                   )}
 
-                  {selectedCamp.payment_config?.enable_itt && (
+                  {showIttOption && (
                     <button
                       type="button"
                       onClick={() => setSelectedMethod('INTER_TEMPLE_TRANSFER')}
@@ -2574,7 +2710,8 @@ function CampDashboardContent() {
                     </button>
                   )}
                 </div>
-              ) : selectedMethod === 'RAZORPAY' ? (
+                );
+              })() : selectedMethod === 'RAZORPAY' ? (
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 text-xs space-y-2">
                     <div className="flex justify-between">

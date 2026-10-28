@@ -17,6 +17,7 @@ import {
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { isCampManagerialUser } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
 import { lookupCampRegistrationsAction, submitCampRefundRequestAction } from '@/app/dashboard/admin/camps/actions';
@@ -69,7 +70,7 @@ export default function PublicCampRegistrationPage() {
   const params = useParams();
   const router = useRouter();
   const slug = String(params.slug || '');
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
 
   // If user is already authenticated, redirect them directly to the authenticated camp dashboard
   useEffect(() => {
@@ -581,6 +582,17 @@ export default function PublicCampRegistrationPage() {
   const surchargeAmount = selectedMethod === 'RAZORPAY' && finalTotalAmount > 0 ? (finalTotalAmount * surchargePercent) / 100 : 0;
   const grandTotalWithSurcharge = Math.round(finalTotalAmount + surchargeAmount);
 
+  // Check if current user possesses an allowed managerial role for special transfers (IDT / ITT)
+  const isManager = isCampManagerialUser(userData?.role, camp?.payment_config?.allowed_managerial_roles);
+  const showIdtOption = Boolean(
+    camp?.payment_config?.enable_idt &&
+    (camp?.payment_config?.allow_student_idt === true || isManager)
+  );
+  const showIttOption = Boolean(
+    camp?.payment_config?.enable_itt &&
+    (camp?.payment_config?.allow_student_itt === true || isManager)
+  );
+
   // Submit Free Registration (Bypasses payment gateway when total is ₹0 via coupon or waiver)
   const submitFreeRegistration = async () => {
     setIsSubmitting(true);
@@ -683,6 +695,7 @@ export default function PublicCampRegistrationPage() {
       paymentMethod: 'IDT',
       deductionSource: idtSource.trim(),
       passcode: idtPasscode.trim(),
+      paymentStatus: 'processing',
     });
   };
 
@@ -781,11 +794,14 @@ export default function PublicCampRegistrationPage() {
         throw new Error(json.error || 'Registration failed');
       }
 
+      const finalPaymentStatus = paymentDetails.paymentStatus || (paymentDetails.paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentDetails.paymentMethod === 'IDT' ? 'processing' : 'completed');
+
       setRegistrationSuccess({
         groupId: json.groupId,
         count: json.count,
         totalPaid: grandTotalWithSurcharge,
         paymentMethod: paymentDetails.paymentMethod,
+        paymentStatus: json.paymentStatus || finalPaymentStatus,
         pocName: pocDetails.pocName,
         pocContact: pocDetails.pocContact,
         email: pocDetails.email,
@@ -877,15 +893,31 @@ export default function PublicCampRegistrationPage() {
         <PublicNavbar />
         <div className="flex-1 py-12 px-4 sm:px-6">
           <div className="max-w-2xl mx-auto bg-white rounded-3xl border border-amber-200/80 p-8 sm:p-10 shadow-2xl shadow-amber-500/5 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
-              <CheckCircle2 className="w-9 h-9" />
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border ${
+              registrationSuccess.paymentStatus === 'processing'
+                ? 'bg-amber-50 text-amber-600 border-amber-200'
+                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+            }`}>
+              {registrationSuccess.paymentStatus === 'processing' ? (
+                <Clock className="w-9 h-9 animate-pulse" />
+              ) : (
+                <CheckCircle2 className="w-9 h-9" />
+              )}
             </div>
 
-            <span className="inline-block px-3 py-1 rounded-full bg-emerald-100/60 text-emerald-800 font-bold text-xs uppercase tracking-wider mb-2">
-              Registration Successful
+            <span className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${
+              registrationSuccess.paymentStatus === 'processing'
+                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                : 'bg-emerald-100/60 text-emerald-800'
+            }`}>
+              {registrationSuccess.paymentStatus === 'processing'
+                ? 'Camp Registration Submitted - Pending Verification ⏳'
+                : 'Registration Successful'}
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-              Hare Krishna! You&apos;re Confirmed
+              {registrationSuccess.paymentStatus === 'processing'
+                ? 'Registration Submitted for Verification'
+                : "Hare Krishna! You're Confirmed"}
             </h2>
             <p className="text-sm text-slate-600 mt-1 mb-6">
               Your registration for <strong>{camp.title}</strong> has been recorded.
@@ -913,17 +945,23 @@ export default function PublicCampRegistrationPage() {
               <div className="flex justify-between py-1 border-b border-slate-200/60">
                 <span className="text-slate-500 font-medium">Payment Mode:</span>
                 <span className="font-bold text-emerald-600 uppercase">
-                  {registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER' ? 'Inter-Temple Transfer' : registrationSuccess.paymentMethod}
+                  {registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER'
+                    ? 'Inter-Temple Transfer'
+                    : registrationSuccess.paymentMethod === 'IDT'
+                    ? 'Inter-Department Transfer (IDT)'
+                    : registrationSuccess.paymentMethod}
                 </span>
               </div>
-              {registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER' && (
+              {(registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER' || registrationSuccess.paymentMethod === 'IDT') && (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
                   <div className="flex items-center gap-1.5 font-bold text-amber-800">
                     <Clock className="w-4 h-4 text-amber-600" />
                     <span>Payment Status: Under Verification (Processing)</span>
                   </div>
                   <p className="text-[11px] text-amber-700 leading-relaxed">
-                    Your transfer receipt has been uploaded to Central VOICE records. Camp administration will verify the transaction UTR with bank statements and approve the final confirmation.
+                    {registrationSuccess.paymentMethod === 'IDT'
+                      ? 'Your IDT transfer request has been recorded. Central VOICE administration will verify the department passcode and approve your registration.'
+                      : 'Your transfer receipt has been uploaded to Central VOICE records. Camp administration will verify the transaction UTR with bank statements and approve the final confirmation.'}
                   </p>
                 </div>
               )}
@@ -2090,7 +2128,7 @@ export default function PublicCampRegistrationPage() {
                     </button>
                   )}
 
-                  {camp.payment_config?.enable_idt && (
+                  {showIdtOption && (
                     <button
                       type="button"
                       onClick={() => setSelectedMethod('IDT')}
@@ -2120,7 +2158,7 @@ export default function PublicCampRegistrationPage() {
                     </button>
                   )}
 
-                  {camp.payment_config?.enable_itt && (
+                  {showIttOption && (
                     <button
                       type="button"
                       onClick={() => setSelectedMethod('INTER_TEMPLE_TRANSFER')}

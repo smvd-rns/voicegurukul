@@ -197,7 +197,10 @@ export async function POST(req: NextRequest) {
     const groupId = `GRP_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const insertedRecords: any[] = [];
     const isItt = paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT';
-    const paymentStatus = isItt ? 'processing' : 'completed';
+    const isIdt = paymentMethod === 'IDT';
+    const isPendingVerification = isItt || isIdt;
+    // Both ITT and IDT go to 'processing' (pending administrative verification)
+    const paymentStatus = isPendingVerification ? 'processing' : 'completed';
     const screenshotUrl = body.payment_screenshot_url || body.paymentScreenshotUrl || null;
     const transactionRef = body.transaction_ref || body.transactionRef || null;
 
@@ -436,9 +439,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Camp registrations submitted successfully!',
+      message: isPendingVerification
+        ? `Registration recorded! Your ${paymentMethod} transfer details have been submitted and are pending verification.`
+        : 'Camp registrations submitted successfully!',
       groupId,
       count: insertedRecords.length,
+      paymentStatus,
       registrations: insertedRecords,
     });
   } catch (error: any) {

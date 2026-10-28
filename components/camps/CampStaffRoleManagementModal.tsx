@@ -38,17 +38,17 @@ export default function CampStaffRoleManagementModal({
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
 
   const [selectedCampId, setSelectedCampId] = useState<string>(camps[0]?.id || '');
-  const [selectedPermissions, setSelectedPermissions] = useState<('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam')[]>(['attendance']);
+  const [selectedPermissions, setSelectedPermissions] = useState<('attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals')[]>(['attendance']);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  const togglePermission = (type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam') => {
+  const togglePermission = (type: 'attendance' | 'refunds' | 'both' | 'scan_pass' | 'prasadam' | 'payment_approvals') => {
     if (type === 'both') {
       if (selectedPermissions.includes('both')) {
         setSelectedPermissions(['attendance']);
       } else {
-        setSelectedPermissions(['both', 'attendance', 'refunds', 'prasadam', 'scan_pass']);
+        setSelectedPermissions(['both', 'attendance', 'refunds', 'prasadam', 'scan_pass', 'payment_approvals']);
       }
       return;
     }
@@ -119,6 +119,8 @@ export default function CampStaffRoleManagementModal({
         .map((a) => a.permission_type);
       if (existing.length > 0) {
         setSelectedPermissions(existing as any);
+      } else {
+        setSelectedPermissions(['scan_pass']);
       }
     }
   }, [selectedUser, selectedCampId, allocations]);
@@ -305,6 +307,13 @@ export default function CampStaffRoleManagementModal({
           bg: 'bg-purple-50',
           text: 'text-purple-800',
           border: 'border-purple-200',
+        };
+      case 'payment_approvals':
+        return {
+          label: 'Payment Approvals Only',
+          bg: 'bg-teal-50',
+          text: 'text-teal-900',
+          border: 'border-teal-200',
         };
       case 'both':
       default:
@@ -583,7 +592,30 @@ export default function CampStaffRoleManagementModal({
                     </p>
                   </div>
 
-                  {/* Option 4: Full Camp Coordinator */}
+                  {/* Option 4: IDT & ITT Payment Approvals */}
+                  <div
+                    onClick={() => togglePermission('payment_approvals')}
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none ${
+                      selectedPermissions.includes('payment_approvals') || selectedPermissions.includes('both')
+                        ? 'border-teal-600 bg-teal-50 text-teal-950 shadow-sm ring-1 ring-teal-600'
+                        : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermissions.includes('payment_approvals') || selectedPermissions.includes('both')}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 cursor-pointer pointer-events-none"
+                      />
+                      <span>IDT &amp; ITT Payment Approvals</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Payment desk. Cross-verify IDT passcodes and bank UTRs to approve pending transfer payments.
+                    </p>
+                  </div>
+
+                  {/* Option 5: Full Camp Coordinator */}
                   <div
                     onClick={() => togglePermission('both')}
                     className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none sm:col-span-2 ${
@@ -602,7 +634,7 @@ export default function CampStaffRoleManagementModal({
                       <span>Full Camp Coordinator (All Desks Access)</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                      Full operational access across attendance ledger, prasadam kitchen, scanning, and refunds.
+                      Full operational access across pass scanning, attendance ledger, prasadam kitchen, refunds, and IDT/ITT payment approvals.
                     </p>
                   </div>
                 </div>
