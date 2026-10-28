@@ -24,6 +24,7 @@ jobs:
         run: npm ci
 
       - name: Create .env file from Secret
+        if: ${{ secrets.ENV_FILE != '' }}
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env.production
           echo "${{ secrets.ENV_FILE }}" > .env
@@ -41,6 +42,7 @@ jobs:
           target: "/var/www/voicegurukul"
 
       - name: Copy .env file to Droplet
+        if: ${{ secrets.ENV_FILE != '' }}
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.DROPLET_HOST }}
@@ -57,15 +59,23 @@ jobs:
           password: ${{ secrets.DROPLET_PASSWORD }}
           script: |
             cd /var/www/voicegurukul
-            git pull origin main
-            npm ci --production
-            # Use --update-env so PM2 picks up the freshly deployed .env file
+            # Ensure branch is clean and strictly matches origin/main without merge conflicts
+            git fetch origin main
+            git checkout -f main || git checkout -f -B main origin/main
+            git reset --hard origin/main
+
+            # Install production dependencies safely without wiping node_modules (prevents OOM & next not found)
+            npm install --omit=dev --prefer-offline --no-audit --no-fund
+
+            # Restart PM2 Next.js application
             pm2 restart voicegurukul --update-env || pm2 start npm --name "voicegurukul" -- start
-            
-            # Setup and restart the indexer microservice
-            cd /var/www/voicegurukul/indexer-service
-            npm install --production
-            pm2 restart voicegurukul-indexer || pm2 start server.js --name "voicegurukul-indexer"
-            
+
+            # Setup and restart indexer microservice if present
+            if [ -d "/var/www/voicegurukul/indexer-service" ]; then
+              cd /var/www/voicegurukul/indexer-service
+              npm install --omit=dev --prefer-offline --no-audit --no-fund
+              pm2 restart voicegurukul-indexer --update-env || pm2 start server.js --name "voicegurukul-indexer" || true
+            fi
+
             pm2 save
 
