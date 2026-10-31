@@ -28,58 +28,89 @@ export default function VoiceManagerPage() {
   const [selectedCampFilter, setSelectedCampFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [assignedCentersList, setAssignedCentersList] = useState<string[]>([]);
 
   // Check if user has voice_manager role (role 3)
   const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
   const hasVoiceManagerRole = userRoles.includes('voice_manager') || userRoles.includes('senior_counselor') || userRoles.includes(3);
 
   const loadDevs = useCallback(async () => {
-    if (!userData?.hierarchy?.center && !userData?.hierarchy?.centerId) {
-      console.log('Voice Manager: No center or centerId found', userData?.hierarchy);
+    if (!user || !userData) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      // Get all users from the voice manager's center (same as bc_voice_manager sees, but only one center)
-      // Voice manager can see all users from their center, not just students
+      const { supabase } = await import('@/lib/supabase/config');
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+
+      // 1. Look up centers explicitly assigned to this manager in the database
+      const { data: dbCenters } = await supabase
+        .from('centers')
+        .select('id, name')
+        .or(`project_manager_id.eq.${user.id},project_advisor_id.eq.${user.id},acting_manager_id.eq.${user.id},oc_id.eq.${user.id},care_giver_id.eq.${user.id},youth_preacher_id.eq.${user.id},internal_manager_id.eq.${user.id},preaching_coordinator_id.eq.${user.id},morning_program_in_charge_id.eq.${user.id},accountant_id.eq.${user.id},kitchen_head_id.eq.${user.id},study_in_charge_id.eq.${user.id},event_admin_id.eq.${user.id},grihstha_counselor_id.eq.${user.id},easy_incharge_id.eq.${user.id},prerna_incharge_id.eq.${user.id}`);
+
+      let assignedCenterIds = (dbCenters || []).map((c: any) => c.id).filter(Boolean);
+      let assignedCenterNames = (dbCenters || []).map((c: any) => c.name).filter(Boolean);
+
+      // Also check user_centers junction table
+      const { data: userCenters } = await supabase
+        .from('user_centers')
+        .select('center_id')
+        .eq('user_id', user.id);
+
+      if (userCenters && userCenters.length > 0) {
+        const ucIds = userCenters.map((uc: any) => uc.center_id).filter(Boolean);
+        if (ucIds.length > 0) {
+          const { data: cData } = await supabase
+            .from('centers')
+            .select('id, name')
+            .in('id', ucIds);
+          if (cData) {
+            cData.forEach((c: any) => {
+              if (c.id && !assignedCenterIds.includes(c.id)) assignedCenterIds.push(c.id);
+              if (c.name && !assignedCenterNames.includes(c.name)) assignedCenterNames.push(c.name);
+            });
+          }
+        }
+      }
+
+      setAssignedCentersList(assignedCenterNames);
+
+      if (assignedCenterIds.length === 0 && assignedCenterNames.length === 0) {
+        console.log('Voice Manager: No assigned centers found in database.');
+        setDevs([]);
+        setLoading(false);
+        return;
+      }
+
       let centerUsers: User[] = [];
 
-      console.log('Voice Manager: Loading users for center:', {
-        centerId: userData.hierarchy?.centerId,
-        center: userData.hierarchy?.center
-      });
-
-      // Try to get users by center_id first (more accurate)
-      if (userData.hierarchy?.centerId) {
+      // Query users by assigned center IDs
+      if (assignedCenterIds.length > 0) {
         const { getUsersByCenterIds } = await import('@/lib/supabase/users');
-        centerUsers = await getUsersByCenterIds([userData.hierarchy.centerId]);
-        console.log('Voice Manager: Found users by center_id:', centerUsers.length);
+        centerUsers = await getUsersByCenterIds(assignedCenterIds);
       }
 
-      // Fallback to center name if center_id doesn't work or returns no results
-      if (centerUsers.length === 0 && userData.hierarchy?.center) {
-        console.log('Voice Manager: Falling back to center name:', userData.hierarchy.center);
-        centerUsers = await getUsersByHierarchy({
-          center: userData.hierarchy.center,
-        });
-        console.log('Voice Manager: Found users by center name:', centerUsers.length);
+      // Query users by assigned center names if ID query didn't find them
+      if (centerUsers.length === 0 && assignedCenterNames.length > 0) {
+        for (const cName of assignedCenterNames) {
+          const res = await getUsersByHierarchy({ center: cName });
+          centerUsers.push(...res);
+        }
       }
 
-      // If still no users, try by state and city
-      if (centerUsers.length === 0 && userData.hierarchy?.state && userData.hierarchy?.city) {
-        console.log('Voice Manager: Trying state and city:', userData.hierarchy.state, userData.hierarchy.city);
-        centerUsers = await getUsersByHierarchy({
-          state: userData.hierarchy.state,
-          city: userData.hierarchy.city,
-          center: userData.hierarchy.center,
-        });
-        console.log('Voice Manager: Found users by state/city/center:', centerUsers.length);
-      }
-
-      // Show all users from the center (not just students)
-      // This gives voice manager the same view as bc_voice_manager, but limited to one center
+      // Deduplicate users
+      const seenIds = new Set<string>();
+      centerUsers = centerUsers.filter(u => {
+        if (!u.id || seenIds.has(u.id)) return false;
+        seenIds.add(u.id);
+        return true;
+      });
 
       // Filter out users with higher role than current user
       const currentUserRoleNum = Math.max(...(Array.isArray(userData.role) ? userData.role : [userData.role]).map((r: any) => roleToNumber(r)) as number[]);
@@ -184,12 +215,7 @@ export default function VoiceManagerPage() {
       setDevs(allUsers);
 
       if (allUsers.length === 0) {
-        console.warn('Voice Manager: No users found. Check center_id and center name in userData:', {
-          centerId: userData.hierarchy?.centerId,
-          center: userData.hierarchy?.center,
-          state: userData.hierarchy?.state,
-          city: userData.hierarchy?.city
-        });
+        console.warn('Voice Manager: No users found for assigned centers:', assignedCenterNames);
       }
     } catch (error) {
       console.error('Error loading devs:', error);
@@ -291,7 +317,7 @@ export default function VoiceManagerPage() {
             Voice Manager Dashboard
           </h1>
           <p className="text-sm sm:text-base md:text-lg text-gray-700 font-medium">
-            View and manage all users from your center: {userData?.hierarchy?.center}
+            View and manage all users from your assigned center(s): {assignedCentersList.join(', ') || 'No center assigned'}
           </p>
         </div>
 

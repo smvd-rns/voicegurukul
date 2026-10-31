@@ -78,16 +78,11 @@ export default function MDSadhanaReportPage() {
 
                 if (data && data.length > 0) {
                     setAssignedTemples(data);
-                    const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    const match = (data as any[]).find((t: any) => t.name === profileTempleName);
-                    setSelectedTemple(match || data[0]);
+                    setSelectedTemple(data[0]);
                 } else {
-                    const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    if (profileTempleName) {
-                        setSelectedTemple({ name: profileTempleName });
-                    } else {
-                        toast.error('No temple assigned to your profile.');
-                    }
+                    setAssignedTemples([]);
+                    setSelectedTemple(null);
+                    toast.error('No temple assigned to your account in the temples database.');
                 }
             } catch (err) {
                 console.error('Error fetching temples:', err);

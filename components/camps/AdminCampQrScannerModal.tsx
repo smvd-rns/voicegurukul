@@ -91,7 +91,7 @@ export default function AdminCampQrScannerModal({
 
   // Date & Meal Configuration
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedMeal, setSelectedMeal] = useState<'Breakfast' | 'Lunch' | 'Dinner'>('Lunch');
+  const [selectedMeal, setSelectedMeal] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Milk'>('Lunch');
   const [sessionServedCount, setSessionServedCount] = useState<number>(0);
   const [devoteeServedCount, setDevoteeServedCount] = useState<number>(0);
   const [extraGuestsServed, setExtraGuestsServed] = useState<number>(0);
@@ -369,8 +369,10 @@ export default function AdminCampQrScannerModal({
       setSelectedMeal('Breakfast');
     } else if (hour >= 11 && hour < 17) {
       setSelectedMeal('Lunch');
-    } else {
+    } else if (hour >= 17 && hour < 21) {
       setSelectedMeal('Dinner');
+    } else {
+      setSelectedMeal('Milk');
     }
   }, [currentCamp, campDates]);
 
@@ -1383,8 +1385,8 @@ export default function AdminCampQrScannerModal({
                   <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
                   <span>3. Meal Session</span>
                 </label>
-                <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
-                  {(['Breakfast', 'Lunch', 'Dinner'] as const).map((meal) => (
+                <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
+                  {(['Breakfast', 'Lunch', 'Dinner', 'Milk'] as const).map((meal) => (
                     <button
                       key={meal}
                       type="button"

@@ -135,8 +135,8 @@ html {
   --t-blob-b:         254 202 202;  /* red-200     — decorative blob B */
   --t-gradient-from:  249 115 22;   /* orange-500 */
   --t-gradient-to:    239 68 68;    /* red-500 */
-  --t-sidebar-from:   154 52 18;    /* orange-900 */
-  --t-sidebar-to:     120 53 15;    /* amber-900 */
+  --t-sidebar-from:   180 115 15;   /* rich warm golden amber #b4730f */
+  --t-sidebar-to:     120 53 15;    /* deep devotional gold #78350f */
   /* Text contrast rules */
   --t-text-on-primary: 255 255 255; /* white — text on colored (primary) bg */
   --t-text-accent:    194 65 12;    /* orange-700 — accent text on white bg */
@@ -296,7 +296,9 @@ html {
   background: linear-gradient(135deg, rgb(var(--t-primary-light)), rgb(var(--t-primary-mid) / 0.4));
 }
 .t-sidebar-gradient {
-  background: linear-gradient(180deg, rgb(var(--t-sidebar-from)), rgb(var(--t-sidebar-to)));
+  background: 
+    radial-gradient(ellipse 95% 45% at 50% 0%, rgba(254, 240, 138, 0.22), transparent 70%),
+    linear-gradient(180deg, rgb(var(--t-sidebar-from)), rgb(var(--t-sidebar-to)));
 }
 
 /* Text — CONTRAST SAFE */

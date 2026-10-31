@@ -110,15 +110,9 @@ export default function SadhanaReportPage() {
                         return next;
                     });
                 } else {
-                    // Fallback to hierarchy
-                    const h = userData.hierarchy as any;
-                    const cName = h?.currentCenter?.name || h?.currentCenter;
-                    if (cName) {
-                        setCenters([{ id: 'hierarchy', name: cName }]);
-                        setSelectedCenter(cName);
-                    } else {
-                        toast.error('No center assignment found for your profile.');
-                    }
+                    setCenters([]);
+                    setSelectedCenter('');
+                    toast.error('No center assignment found for your account in the centers database.');
                 }
             } catch (err) {
                 console.error(err);

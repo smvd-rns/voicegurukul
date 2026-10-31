@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -10,19 +10,22 @@ import {
   Building, UserCheck, ShieldCheck, CreditCard,
   Landmark, ExternalLink, Eye, CheckCircle2, X, Image as ImageIcon,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy, Check,
-  Undo2, Banknote, AlertTriangle, CheckCheck, RotateCcw, Ticket, QrCode
+  Undo2, Banknote, AlertTriangle, CheckCheck, RotateCcw, Ticket, QrCode,
+  Edit2, Pencil, ShieldAlert, Calculator, Sparkles
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Camp, CampRegistration, CampRefundRequest } from '@/types';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampPrasadamTab from '@/components/camps/CampPrasadamTab';
+import { calculateDynamicCampCost } from '@/lib/camp-cost';
 import {
   getCampRegistrationsAction,
   verifyAndApproveCampRegistrationAction,
   getCampRefundRequestsAction,
   processCampRefundAction,
-  getCampUserAccessAction
+  getCampUserAccessAction,
+  superAdminUpdateCampRegistrationAction
 } from '../../actions';
 
 function formatDisplayDate(val: any): string {
@@ -84,6 +87,7 @@ export default function CampRegistrationsAdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTrack, setSelectedTrack] = useState<string>('all');
   const [selectedPayment, setSelectedPayment] = useState<string>('all');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -140,6 +144,122 @@ export default function CampRegistrationsAdminPage() {
   const [viewRefundReceipt, setViewRefundReceipt] = useState<CampRefundRequest | null>(null);
   const [copiedRefundInfo, setCopiedRefundInfo] = useState(false);
 
+  // Super Admin Emergency Edit Modal State
+  const [editModalReg, setEditModalReg] = useState<CampRegistration | null>(null);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  const handleOpenSuperAdminEdit = (reg: CampRegistration) => {
+    setEditModalReg(reg);
+    setEditError(null);
+    setEditSuccess(null);
+
+    // Format created_at to YYYY-MM-DDTHH:mm for datetime-local input
+    let formattedCreatedAt = '';
+    if (reg.created_at) {
+      try {
+        const d = new Date(reg.created_at);
+        if (!isNaN(d.getTime())) {
+          const pad = (n: number) => String(n).padStart(2, '0');
+          formattedCreatedAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+      } catch (e) {}
+    }
+
+    setEditFormData({
+      participant_name: reg.participant_name || '',
+      whatsapp: reg.whatsapp || '',
+      email: reg.email || '',
+      gender: reg.gender || 'Male',
+      age: reg.age || '',
+      married_since_year: reg.married_since_year || '',
+      voice_name: reg.voice_name || '',
+      parent_temple: reg.parent_temple || '',
+      counselor_name: reg.counselor_name || '',
+      poc_name: reg.poc_name || '',
+      poc_contact: reg.poc_contact || '',
+      camp_track: reg.camp_track || '',
+      participant_type: reg.participant_type || '',
+      first_meal_date: reg.first_meal_date || '',
+      first_meal_type: reg.first_meal_type || 'Breakfast',
+      last_meal_date: reg.last_meal_date || '',
+      last_meal_type: reg.last_meal_type || 'Lunch',
+      dinner_type: reg.dinner_type || 'Dinner Meal',
+      accommodation: reg.accommodation || 'No',
+      total_cost: Number(reg.total_cost || 0),
+      meal_cost: Number(reg.meal_cost || 0),
+      acc_cost: Number(reg.acc_cost || 0),
+      discount_amount: Number(reg.discount_amount || 0),
+      payment_method: reg.payment_method || 'RAZORPAY',
+      payment_status: reg.payment_status || 'completed',
+      transaction_ref: reg.transaction_ref || reg.payment_id || '',
+      created_at: formattedCreatedAt,
+      checked_in: Boolean(reg.checked_in)
+    });
+  };
+
+  const handleRecalculateMealCost = () => {
+    if (!camp) return;
+    const calc = calculateDynamicCampCost(camp, {
+      firstMealDate: editFormData.first_meal_date,
+      firstMealType: editFormData.first_meal_type,
+      lastMealDate: editFormData.last_meal_date,
+      lastMealType: editFormData.last_meal_type,
+      accommodation: editFormData.accommodation,
+      participantType: editFormData.participant_type,
+      campTrack: editFormData.camp_track,
+    });
+
+    const discount = Number(editFormData.discount_amount || 0);
+    const newTotal = Math.max(0, calc.totalCost - discount);
+
+    setEditFormData((prev: any) => ({
+      ...prev,
+      meal_cost: calc.mealCost,
+      acc_cost: calc.accCost,
+      total_cost: newTotal,
+    }));
+  };
+
+  const handleSaveSuperAdminEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalReg || !editModalReg.id) return;
+
+    setEditSaving(true);
+    setEditError(null);
+    setEditSuccess(null);
+
+    try {
+      const res = await superAdminUpdateCampRegistrationAction(editModalReg.id, editFormData);
+      if (!res.success || !res.registration) {
+        throw new Error(res.error || 'Failed to update attendee registration.');
+      }
+
+      // Update in local state
+      const updatedReg = res.registration;
+      setRegistrations((prev) =>
+        prev.map((r) => (r.id === editModalReg.id ? { ...r, ...updatedReg } : r))
+      );
+
+      // If pass preview is open for this devotee, update it in live preview as well
+      if (viewPassReg && viewPassReg.id === editModalReg.id) {
+        setViewPassReg((prev: any) => (prev ? { ...prev, ...updatedReg } : null));
+      }
+
+      setEditSuccess('Attendee record updated successfully! Pass and QR code reflect new data.');
+      setTimeout(() => {
+        setEditModalReg(null);
+      }, 1200);
+    } catch (err: any) {
+      console.error('Super Admin save error:', err);
+      setEditError(err.message || 'Error updating registration.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -188,12 +308,10 @@ export default function CampRegistrationsAdminPage() {
         return;
       }
 
-      // Check URL query parameters for payment filter or default for payment_approvals role
+      // Check URL query parameters for payment filter
       const paymentParam = searchParams.get('payment');
       if (paymentParam) {
         setSelectedPayment(paymentParam);
-      } else if (!canAttendance && canPaymentApprovals) {
-        setSelectedPayment('PROCESSING');
       }
 
       // Automatically initialize allowed activeView
@@ -319,7 +437,7 @@ export default function CampRegistrationsAdminPage() {
   // Reset pagination on filter or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedTrack, selectedPayment, pageSize]);
+  }, [searchTerm, selectedTrack, selectedPayment, selectedRole, pageSize]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -391,9 +509,37 @@ export default function CampRegistrationsAdminPage() {
     }
   };
 
+  // Role counts for understanding attendance distribution
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    registrations.forEach((r) => {
+      const role = (r.participant_type || (r as any).participantType || 'Camp Participant').trim();
+      counts[role] = (counts[role] || 0) + 1;
+    });
+    return counts;
+  }, [registrations]);
+
+  const allDistinctRoles: string[] = useMemo(() => {
+    const standardRoles = ['Camp Participant', 'Mentor', 'Volunteer', 'Brahmachari'];
+    const rolesSet = new Set<string>();
+    const configuredRoles = (camp?.participant_types && camp.participant_types.length > 0)
+      ? camp.participant_types
+      : standardRoles;
+    configuredRoles.forEach((r: string) => rolesSet.add(r));
+    registrations.forEach((r) => {
+      const role = (r.participant_type || (r as any).participantType || '').trim();
+      if (role) rolesSet.add(role);
+    });
+    return Array.from(rolesSet);
+  }, [camp?.participant_types, registrations]);
+
   // Filtered List
   const filteredRegistrations = registrations.filter((reg) => {
     if (selectedTrack !== 'all' && reg.camp_track !== selectedTrack) return false;
+    if (selectedRole !== 'all') {
+      const regRole = (reg.participant_type || (reg as any).participantType || 'Camp Participant').trim().toLowerCase();
+      if (regRole !== selectedRole.trim().toLowerCase()) return false;
+    }
     if (selectedPayment !== 'all') {
       if (selectedPayment === 'PROCESSING') {
         if (reg.payment_status !== 'processing') return false;
@@ -606,7 +752,7 @@ export default function CampRegistrationsAdminPage() {
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
             <button
               onClick={loadData}
-              className="p-2 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-xl sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer shrink-0"
+              className="p-1.5 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-lg sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer shrink-0"
               title="Refresh Records"
             >
               <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -614,17 +760,17 @@ export default function CampRegistrationsAdminPage() {
             {(userAccess.isSuperAdmin || userAccess.canScan) && (
               <button
                 onClick={() => setIsQrScannerOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-5 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
                 title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
               >
                 <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                 <span>Scan Pass</span>
               </button>
             )}
-            {(userAccess.isSuperAdmin || userAccess.canAttendance) && (
+            {(userAccess.isSuperAdmin || userAccess.canAttendance || userAccess.canPaymentApprovals) && (
               <button
                 onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-6 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-6 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Export Excel</span>
@@ -635,23 +781,29 @@ export default function CampRegistrationsAdminPage() {
         </div>
 
         {/* View Switcher: Registrations Ledger vs Refund Requests vs Prasadam Logs (Filtered by assigned role) */}
-        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-200/90 pb-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 sm:gap-2 border-b border-slate-200/90 pb-1.5 sm:pb-2 overflow-x-auto no-scrollbar">
           {(userAccess.isSuperAdmin || userAccess.canAttendance || userAccess.canPaymentApprovals) && (
             <button
               type="button"
               onClick={() => setActiveView('registrations')}
-              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeView === 'registrations'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>
-                {userAccess.canAttendance 
-                  ? `Attendee Ledger (${registrations.length})` 
-                  : `IDT & ITT Payment Approvals (${registrations.filter(r => r.payment_status === 'processing').length})`}
+              <Users className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+              <span className="sm:hidden">Ledger ({registrations.length})</span>
+              <span className="hidden sm:inline">
+                {userAccess.canPaymentApprovals
+                  ? `Attendee Ledger & Approvals (${registrations.length})`
+                  : `Attendee Ledger (${registrations.length})`}
               </span>
+              {(userAccess.isSuperAdmin || userAccess.canPaymentApprovals) && processingCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[8.5px] sm:text-[10px] font-black animate-pulse">
+                  {processingCount}
+                </span>
+              )}
             </button>
           )}
 
@@ -659,16 +811,17 @@ export default function CampRegistrationsAdminPage() {
             <button
               type="button"
               onClick={() => setActiveView('refunds')}
-              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer relative whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer relative whitespace-nowrap shrink-0 ${
                 activeView === 'refunds'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>Refund Requests ({refundRequests.length})</span>
+              <Undo2 className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+              <span className="sm:hidden">Refunds ({refundRequests.length})</span>
+              <span className="hidden sm:inline">Refund Requests ({refundRequests.length})</span>
               {pendingRefundsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] sm:text-[10px] font-black animate-pulse">
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[8.5px] sm:text-[10px] font-black animate-pulse">
                   {pendingRefundsCount}
                 </span>
               )}
@@ -679,20 +832,21 @@ export default function CampRegistrationsAdminPage() {
             <button
               type="button"
               onClick={() => setActiveView('prasadam')}
-              className={`flex items-center gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeView === 'prasadam'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>Prasadam Logs &amp; Kitchen Tally</span>
+              <Utensils className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+              <span className="sm:hidden">Prasadam</span>
+              <span className="hidden sm:inline">Prasadam Logs &amp; Kitchen Tally</span>
             </button>
           )}
         </div>
 
         {/* VIEW 1: ATTENDEE REGISTRATIONS LEDGER */}
-        {activeView === 'registrations' && (userAccess.isSuperAdmin || userAccess.canAttendance) && (
+        {activeView === 'registrations' && (userAccess.isSuperAdmin || userAccess.canAttendance || userAccess.canPaymentApprovals) && (
           <>
             {/* Metrics Row: Role-aware data viewing protection */}
             {!userAccess.canRefunds && !userAccess.isSuperAdmin ? (
@@ -835,6 +989,19 @@ export default function CampRegistrationsAdminPage() {
             </select>
 
             <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="w-full sm:w-auto px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
+            >
+              <option value="all">All Roles ({registrations.length})</option>
+              {allDistinctRoles.map((role: string) => (
+                <option key={role} value={role}>
+                  {role} ({roleCounts[role] || 0})
+                </option>
+              ))}
+            </select>
+
+            <select
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
               className="w-full sm:w-auto px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all"
@@ -851,6 +1018,51 @@ export default function CampRegistrationsAdminPage() {
           </div>
         </div>
 
+        {/* Role Selection & Distribution Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1 pb-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Role Filter:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedRole('all')}
+            className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+              selectedRole === 'all'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50'
+            }`}
+          >
+            All Roles ({registrations.length})
+          </button>
+          {allDistinctRoles.map((role: string) => {
+            const count = roleCounts[role] || 0;
+            const isSelected = selectedRole.toLowerCase() === role.toLowerCase();
+            return (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setSelectedRole(isSelected ? 'all' : role)}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50'
+                }`}
+              >
+                <span>{role}</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    isSelected
+                      ? 'bg-white text-amber-700'
+                      : count > 0
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Table View: Clean, Uniform Row Heights */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs">
@@ -862,7 +1074,7 @@ export default function CampRegistrationsAdminPage() {
             <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <h3 className="text-sm sm:text-base font-bold text-slate-800">No Registrations Found</h3>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
-              {searchTerm || selectedTrack !== 'all' || selectedPayment !== 'all'
+              {searchTerm || selectedTrack !== 'all' || selectedRole !== 'all' || selectedPayment !== 'all'
                 ? 'Try adjusting your search criteria or filters.'
                 : 'No attendees have registered for this camp yet.'}
             </p>
@@ -926,6 +1138,17 @@ export default function CampRegistrationsAdminPage() {
                               <Ticket className="w-2.5 h-2.5 text-amber-700" />
                               <span>Pass &amp; QR</span>
                             </button>
+                            {userAccess.isSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenSuperAdminEdit(reg)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-bold transition-all cursor-pointer shadow-2xs hover:scale-105"
+                                title="Super Admin Emergency Edit: Modify devotee details, meal counts, arrival/departure dates, or fees"
+                              >
+                                <Edit2 className="w-2.5 h-2.5 text-purple-700" />
+                                <span>Edit</span>
+                              </button>
+                            )}
                             {reg.is_cancelled && (
                               <span
                                 className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider ${
@@ -1601,20 +1824,20 @@ export default function CampRegistrationsAdminPage() {
     )}
   </div>
 
-  {/* RECORD REFUND PAYOUT MODAL */}
+  {/* RECORD REFUND PAYOUT MODAL: Compact on Mobile */}
   {payoutModal.isOpen && payoutModal.refund && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-              <Banknote className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-3.5 sm:p-5 shadow-2xl border border-slate-200 space-y-2.5 sm:space-y-3.5 max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-2 sm:pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+              <Banknote className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900">
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 truncate">
                 {payoutModal.actionType === 'refund' ? 'Record Devotee Refund Payout' : 'Reject Refund Request'}
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[9.5px] sm:text-[11px] text-slate-500 truncate">
                 Confirm payout transfer details for complete transparency
               </p>
             </div>
@@ -1622,30 +1845,30 @@ export default function CampRegistrationsAdminPage() {
           <button
             type="button"
             onClick={() => setPayoutModal(prev => ({ ...prev, isOpen: false }))}
-            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+            className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {payoutModal.error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+          <div className="p-2 sm:p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
             <span>{payoutModal.error}</span>
           </div>
         )}
 
-        {/* Devotee & Payout Summary Card */}
-        <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80 space-y-2 text-xs">
+        {/* Devotee & Payout Summary Card: Compact */}
+        <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-1.5 text-[11px] sm:text-xs">
           <div className="flex items-center justify-between">
             <span className="text-slate-600">Devotee (POC):</span>
-            <span className="font-bold text-slate-900">{payoutModal.refund.poc_name} ({payoutModal.refund.poc_contact})</span>
+            <span className="font-bold text-slate-900 truncate max-w-[200px]">{payoutModal.refund.poc_name} ({payoutModal.refund.poc_contact})</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-600">Calculated Refund Amount:</span>
-            <span className="text-base font-black text-emerald-700">₹{Number(payoutModal.refund.refund_amount).toLocaleString('en-IN')}</span>
+            <span className="text-sm sm:text-base font-black text-emerald-700">₹{Number(payoutModal.refund.refund_amount).toLocaleString('en-IN')}</span>
           </div>
-          <div className="pt-2 border-t border-amber-200/60 flex items-start justify-between">
+          <div className="pt-1.5 border-t border-amber-200/60 flex items-start justify-between">
             <span className="text-slate-600">Transfer Target:</span>
             <div className="text-right">
               {payoutModal.refund.payout_type === 'UPI' ? (
@@ -1653,18 +1876,18 @@ export default function CampRegistrationsAdminPage() {
               ) : (
                 <div>
                   <div className="font-mono font-bold text-slate-900">{payoutModal.refund.account_number}</div>
-                  <div className="text-[10px] text-slate-500">IFSC: {payoutModal.refund.ifsc_code} • {payoutModal.refund.account_name}</div>
+                  <div className="text-[9.5px] sm:text-[10px] text-slate-500">IFSC: {payoutModal.refund.ifsc_code} &bull; {payoutModal.refund.account_name}</div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleProcessPayout} className="space-y-4">
+        <form onSubmit={handleProcessPayout} className="space-y-2.5 sm:space-y-3">
           {payoutModal.actionType === 'refund' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
                   Bank Transaction ID / UTR *
                 </label>
                 <input
@@ -1673,12 +1896,12 @@ export default function CampRegistrationsAdminPage() {
                   value={payoutModal.txnRef}
                   onChange={(e) => setPayoutModal({ ...payoutModal, txnRef: e.target.value })}
                   placeholder="e.g. UPI/1234567890 or NEFT..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-mono font-semibold text-slate-900 focus:border-emerald-500 outline-none"
+                  className="w-full px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl border border-slate-300 bg-white text-xs font-mono font-semibold text-slate-900 focus:border-emerald-500 outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
                   Transfer Date *
                 </label>
                 <input
@@ -1686,14 +1909,14 @@ export default function CampRegistrationsAdminPage() {
                   required
                   value={payoutModal.payoutDate}
                   onChange={(e) => setPayoutModal({ ...payoutModal, payoutDate: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-emerald-500 outline-none"
+                  className="w-full px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:border-emerald-500 outline-none"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
               {payoutModal.actionType === 'refund' ? 'Admin Notes / Remarks (Optional)' : 'Rejection Reason / Remarks (Required) *'}
             </label>
             <textarea
@@ -1702,41 +1925,41 @@ export default function CampRegistrationsAdminPage() {
               value={payoutModal.notes}
               onChange={(e) => setPayoutModal({ ...payoutModal, notes: e.target.value })}
               placeholder={payoutModal.actionType === 'refund' ? 'e.g. Transferred via HDFC Current Account...' : 'e.g. Devotee requested withdrawal, wrong bank details, duplicate, etc.'}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:border-emerald-500 outline-none"
+              className="w-full px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:border-emerald-500 outline-none"
             />
           </div>
 
-          <div className="pt-2 flex items-center justify-between gap-2">
+          <div className="pt-2 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setPayoutModal(prev => ({
                 ...prev,
                 actionType: prev.actionType === 'refund' ? 'reject' : 'refund'
               }))}
-              className="text-xs font-semibold text-slate-500 hover:text-amber-700 transition-colors cursor-pointer"
+              className="text-[10.5px] sm:text-xs font-semibold text-slate-500 hover:text-amber-700 text-center sm:text-left transition-colors cursor-pointer py-1"
             >
-              {payoutModal.actionType === 'refund' ? 'Switch to Reject Mode' : 'Switch to Payout Mode'}
+              {payoutModal.actionType === 'refund' ? '⇄ Switch to Reject Mode' : '⇄ Switch to Payout Mode'}
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => setPayoutModal(prev => ({ ...prev, isOpen: false }))}
-                className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                className="px-3 sm:px-4 py-1.5 rounded-lg sm:rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={payoutModal.saving}
-                className={`px-5 py-2 rounded-full text-xs font-bold text-white shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                className={`flex-1 sm:flex-none px-4 sm:px-5 py-1.5 sm:py-2 rounded-lg sm:rounded-full text-xs font-bold text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
                   payoutModal.actionType === 'refund'
                     ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
                     : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
                 }`}
               >
                 {payoutModal.saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>{payoutModal.actionType === 'refund' ? 'Confirm & Mark as Refunded' : 'Confirm Rejection'}</span>
+                <span>{payoutModal.actionType === 'refund' ? 'Confirm & Mark Refunded' : 'Confirm Rejection'}</span>
               </button>
             </div>
           </div>
@@ -2270,6 +2493,561 @@ export default function CampRegistrationsAdminPage() {
                 Open in Full Window <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUPER ADMIN EMERGENCY REGISTRATION EDIT MODAL */}
+      {editModalReg && userAccess.isSuperAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-4xl w-full shadow-2xl border border-purple-200 overflow-hidden max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-800 via-indigo-900 to-purple-950 p-4 sm:p-5 text-white flex items-start justify-between gap-3 shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/40 text-rose-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3 text-rose-300" />
+                    Super Admin Emergency Override
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-white/20 text-purple-200 text-[10px] font-bold border border-white/20 font-mono">
+                    Pass #T-{(editModalReg as any).serial_no || (editModalReg as any).token_no || 1}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-xl font-black text-white leading-tight">
+                  Edit Registration: {editModalReg.participant_name}
+                </h3>
+                <p className="text-[11px] sm:text-xs text-purple-200/90 leading-relaxed max-w-2xl">
+                  Changes made here immediately update the live registration record, digital pass, and desk punch verification. The devotee&apos;s QR code token remains identical.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditModalReg(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 border border-white/20"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Error & Success Feedback Alerts */}
+            {editError && (
+              <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{editError}</span>
+              </div>
+            )}
+            {editSuccess && (
+              <div className="mx-4 mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{editSuccess}</span>
+              </div>
+            )}
+
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveSuperAdminEdit} className="p-4 sm:p-6 overflow-y-auto space-y-5 text-xs sm:text-sm">
+              {/* SECTION 1: Participant Identity & Contact */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 pb-1.5">
+                  <UserCheck className="w-4 h-4 text-purple-700" />
+                  Devotee Identity &amp; Contact Details
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFormData.participant_name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, participant_name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">WhatsApp / Phone (+91)</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editFormData.whatsapp || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, whatsapp: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={editFormData.email || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Gender</label>
+                    <select
+                      value={editFormData.gender || 'Male'}
+                      onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Age</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={editFormData.age || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, age: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Married Since (Year)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 2020 (Optional)"
+                      value={editFormData.married_since_year || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, married_since_year: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: Center, Temple & Counselor */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 pb-1.5">
+                  <Building className="w-4 h-4 text-purple-700" />
+                  Center, Temple &amp; Counselor Allocation
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Current Center / VOICE</label>
+                    <input
+                      type="text"
+                      value={editFormData.voice_name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, voice_name: e.target.value })}
+                      placeholder="e.g. Central VOICE"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Parent Temple</label>
+                    <input
+                      type="text"
+                      value={editFormData.parent_temple || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, parent_temple: e.target.value })}
+                      placeholder="e.g. ISKCON NVCC • PUNE"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Counselor Name</label>
+                    <input
+                      type="text"
+                      value={editFormData.counselor_name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, counselor_name: e.target.value })}
+                      placeholder="Counselor devotee name"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Point of Contact (POC) Name</label>
+                    <input
+                      type="text"
+                      value={editFormData.poc_name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, poc_name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">POC Contact Number</label>
+                    <input
+                      type="tel"
+                      value={editFormData.poc_contact || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, poc_contact: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: Camp Track & Participant Role */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 pb-1.5">
+                  <ShieldCheck className="w-4 h-4 text-purple-700" />
+                  Camp Track &amp; Participant Role
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Camp Track</label>
+                    <div className="space-y-1.5">
+                      <select
+                        value={editFormData.camp_track || ''}
+                        onChange={(e) => setEditFormData({ ...editFormData, camp_track: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                      >
+                        {camp?.tracks?.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                        {editFormData.camp_track && !camp?.tracks?.includes(editFormData.camp_track) && (
+                          <option value={editFormData.camp_track}>{editFormData.camp_track}</option>
+                        )}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Or customize track title..."
+                        value={editFormData.camp_track || ''}
+                        onChange={(e) => setEditFormData({ ...editFormData, camp_track: e.target.value })}
+                        className="w-full px-3 py-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-800 text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Participant Type / Role</label>
+                    <select
+                      value={editFormData.participant_type || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, participant_type: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    >
+                      {camp?.participant_types?.map((pt) => (
+                        <option key={pt} value={pt}>
+                          {pt}
+                        </option>
+                      ))}
+                      {editFormData.participant_type && !camp?.participant_types?.includes(editFormData.participant_type) && (
+                        <option value={editFormData.participant_type}>{editFormData.participant_type}</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: Prasadam Meals, Arrival & Departure Dates (Medium Purple Shading) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/80 via-indigo-50/40 to-purple-50/60 border-2 border-purple-300/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-200/60 pb-2">
+                  <div>
+                    <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <Utensils className="w-4 h-4 text-purple-700" />
+                      Prasadam Dates &amp; Meal Slots (Pass Reflection)
+                    </h4>
+                    <p className="text-[10px] text-purple-800/80">
+                      Modifying these dates directly updates the meal columns on the boy&apos;s digital pass and attendance desk punches.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRecalculateMealCost}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer self-start sm:self-auto shrink-0"
+                    title="Recalculate meal & stay costs according to camp master schedule"
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-purple-200" />
+                    <span>Auto-Recalculate Fees</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Arrival Meal */}
+                  <div className="p-3 rounded-xl bg-white/90 border border-purple-200 space-y-2">
+                    <span className="text-[10px] uppercase font-black text-purple-900 tracking-wider block">
+                      Arrival (First Meal)
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Arrival Date</label>
+                        <select
+                          value={editFormData.first_meal_date || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, first_meal_date: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white"
+                        >
+                          {camp?.meal_pricing?.map((m) => (
+                            <option key={m.date} value={String(m.date)}>
+                              {m.label || `Day ${m.date}`}
+                            </option>
+                          ))}
+                          {editFormData.first_meal_date && !camp?.meal_pricing?.some((m) => String(m.date) === String(editFormData.first_meal_date)) && (
+                            <option value={editFormData.first_meal_date}>{editFormData.first_meal_date}</option>
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">First Meal</label>
+                        <select
+                          value={editFormData.first_meal_type || 'Breakfast'}
+                          onChange={(e) => setEditFormData({ ...editFormData, first_meal_type: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white"
+                        >
+                          <option value="Breakfast">Breakfast</option>
+                          <option value="Lunch">Lunch</option>
+                          <option value="Dinner">Dinner</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Departure Meal */}
+                  <div className="p-3 rounded-xl bg-white/90 border border-purple-200 space-y-2">
+                    <span className="text-[10px] uppercase font-black text-purple-900 tracking-wider block">
+                      Departure (Last Meal)
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Departure Date</label>
+                        <select
+                          value={editFormData.last_meal_date || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, last_meal_date: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white"
+                        >
+                          {camp?.meal_pricing?.map((m) => (
+                            <option key={m.date} value={String(m.date)}>
+                              {m.label || `Day ${m.date}`}
+                            </option>
+                          ))}
+                          {editFormData.last_meal_date && !camp?.meal_pricing?.some((m) => String(m.date) === String(editFormData.last_meal_date)) && (
+                            <option value={editFormData.last_meal_date}>{editFormData.last_meal_date}</option>
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Last Meal</label>
+                        <select
+                          value={editFormData.last_meal_type || 'Lunch'}
+                          onChange={(e) => setEditFormData({ ...editFormData, last_meal_type: e.target.value })}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white"
+                        >
+                          <option value="Breakfast">Breakfast</option>
+                          <option value="Lunch">Lunch</option>
+                          <option value="Dinner">Dinner</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Evening Prasadam Selection (Dinner Type)</label>
+                    <select
+                      value={editFormData.dinner_type || 'Dinner Meal'}
+                      onChange={(e) => setEditFormData({ ...editFormData, dinner_type: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    >
+                      <option value="Dinner Meal">Dinner Meal (Full Dinner)</option>
+                      <option value="Milk Only">Milk Only</option>
+                      <option value="Both Dinner & Milk">Both Dinner &amp; Milk</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Accommodation / Stay Included?</label>
+                    <select
+                      value={editFormData.accommodation || 'No'}
+                      onChange={(e) => setEditFormData({ ...editFormData, accommodation: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    >
+                      <option value="Yes">Yes (Stay &amp; Bedding Included)</option>
+                      <option value="No">No (Day Scholar / Outside Stay)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 5: Registration Timestamp & Attendance */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 pb-1.5">
+                  <Clock className="w-4 h-4 text-purple-700" />
+                  Registration Timestamp &amp; Attendance Check-In
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Registration Date &amp; Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editFormData.created_at || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, created_at: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Useful for adjusting late-fee eligibility, historical logs, and batch audits.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Checked-In Status at Desk
+                    </label>
+                    <select
+                      value={editFormData.checked_in ? 'true' : 'false'}
+                      onChange={(e) => setEditFormData({ ...editFormData, checked_in: e.target.value === 'true' })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-purple-500 focus:ring-2 focus:ring-purple-500/15 outline-none"
+                    >
+                      <option value="false">Not Checked In</option>
+                      <option value="true">Checked In (Pass Verified at Desk)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 6: Financials, Payment & Fees (Medium Green Shading) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-emerald-50/60 border-2 border-emerald-300/80 space-y-3">
+                <div className="border-b border-emerald-200/60 pb-1.5">
+                  <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-emerald-700" />
+                    Fees, Payment Method &amp; Transaction Details
+                  </h4>
+                  <p className="text-[10px] text-emerald-800">
+                    You can override costs and update payment verification status.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Total Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editFormData.total_cost ?? 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, total_cost: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-black focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Meal Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editFormData.meal_cost ?? 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, meal_cost: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Stay Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editFormData.acc_cost ?? 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, acc_cost: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Discount (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editFormData.discount_amount ?? 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, discount_amount: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Payment Status</label>
+                    <select
+                      value={editFormData.payment_status || 'completed'}
+                      onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 outline-none"
+                    >
+                      <option value="completed">Completed (Confirmed Pass)</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="processing">Processing (Awaiting verification)</option>
+                      <option value="refunded">Refunded</option>
+                      <option value="failed">Failed / Cancelled</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Payment Method</label>
+                    <select
+                      value={editFormData.payment_method || 'RAZORPAY'}
+                      onChange={(e) => setEditFormData({ ...editFormData, payment_method: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 outline-none"
+                    >
+                      <option value="RAZORPAY">Razorpay (Online)</option>
+                      <option value="IDT">Internal Dept Transfer (IDT)</option>
+                      <option value="INTER_TEMPLE_TRANSFER">Inter-Temple Transfer (ITT)</option>
+                      <option value="FREE">Free Pass (Role Waiver)</option>
+                      <option value="CASH">Cash / Manual</option>
+                      <option value="COUPON">Coupon Pass</option>
+                      <option value="ROLE_WAIVER">Role Waiver</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Transaction Ref / UTR / Passcode</label>
+                    <input
+                      type="text"
+                      value={editFormData.transaction_ref || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, transaction_ref: e.target.value })}
+                      placeholder="e.g. Bank UTR or IDT Code"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="pt-3 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  disabled={editSaving}
+                  onClick={() => setEditModalReg(null)}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="w-full sm:w-auto px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-md shadow-emerald-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 hover:scale-[1.01]"
+                >
+                  {editSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving &amp; Updating Live Pass...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Save &amp; Update Live Pass</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

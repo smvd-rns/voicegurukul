@@ -7,7 +7,7 @@ import {
   CheckCircle2, XCircle, Users, RefreshCw, QrCode,
   FileSpreadsheet, Building, Landmark, ChevronLeft, ChevronRight,
   PlusCircle, Edit2, ChevronDown, Check, HelpCircle, Layers,
-  Coffee, Sun, Moon, AlertCircle, ArrowUpRight, CheckCheck,
+  Coffee, Sun, Moon, Milk, AlertCircle, ArrowUpRight, CheckCheck,
   Share2, Copy, Sparkles
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -154,13 +154,14 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
   }, [filteredKitchenTally]);
 
   const guestByMeal = useMemo(() => {
-    let bf = 0, ln = 0, dn = 0;
+    let bf = 0, ln = 0, dn = 0, ml = 0;
     filteredKitchenTally.forEach((r) => {
       if (r.meal === 'Breakfast') bf += (r.extraServedCount || 0);
       else if (r.meal === 'Lunch') ln += (r.extraServedCount || 0);
       else if (r.meal === 'Dinner') dn += (r.extraServedCount || 0);
+      else if (r.meal === 'Milk') ml += (r.extraServedCount || 0);
     });
-    return { bf, ln, dn };
+    return { bf, ln, dn, ml };
   }, [filteredKitchenTally]);
 
   // Dynamically computed Kitchen Stats based on selected filters
@@ -339,6 +340,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
     let bfEligible = 0, bfTaken = 0;
     let lnEligible = 0, lnTaken = 0;
     let dnEligible = 0, dnTaken = 0;
+    let mlEligible = 0, mlTaken = 0;
 
     let devoteesFullyHonored = 0;
     let devoteesPartiallyHonored = 0;
@@ -387,6 +389,18 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               }
             }
           }
+          if (mealFilter === 'all' || mealFilter === 'Milk') {
+            if (day.milk?.eligible) {
+              mlEligible++;
+              devoteeTotalForScope++;
+              totalScheduledMeals++;
+              if (day.milk?.punched) {
+                mlTaken++;
+                devoteeTakenForScope++;
+                totalTakenMeals++;
+              }
+            }
+          }
         }
       } else {
         d.dateMatrix?.forEach((day: any) => {
@@ -426,6 +440,18 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               }
             }
           }
+          if (mealFilter === 'all' || mealFilter === 'Milk') {
+            if (day.milk?.eligible) {
+              mlEligible++;
+              devoteeTotalForScope++;
+              totalScheduledMeals++;
+              if (day.milk?.punched) {
+                mlTaken++;
+                devoteeTakenForScope++;
+                totalTakenMeals++;
+              }
+            }
+          }
         });
       }
 
@@ -457,6 +483,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
       bf: { eligible: bfEligible, taken: bfTaken, remaining: Math.max(0, bfEligible - bfTaken) },
       ln: { eligible: lnEligible, taken: lnTaken, remaining: Math.max(0, lnEligible - lnTaken) },
       dn: { eligible: dnEligible, taken: dnTaken, remaining: Math.max(0, dnEligible - dnTaken) },
+      ml: { eligible: mlEligible, taken: mlTaken, remaining: Math.max(0, mlEligible - mlTaken) },
       dateLabel: dateFilter !== 'all' ? dateFilter : 'All Dates',
     };
   }, [filteredDevotees, dateFilter, mealFilter]);
@@ -538,17 +565,24 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
     const sessions = filteredKitchenTally;
     sessions.forEach(s => {
-      slip += `🍽 *${s.campTitle} • ${s.meal.toUpperCase()}*:\n`;
+      const isMilk = s.meal === 'Milk';
+      const unit = isMilk ? 'Glasses' : 'Plates';
+      const icon = isMilk ? '🥛' : '🍽';
+      slip += `${icon} *${s.campTitle} • ${s.meal.toUpperCase()}*:\n`;
       slip += `   • Registered: ${s.scheduledCount} devotees\n`;
       slip += `   • Extra Guests: +${s.extraCount}\n`;
-      slip += `   👉 *Total Plates Target: ${s.totalKitchenTarget}*\n`;
+      slip += `   👉 *Total ${unit} Target: ${s.totalKitchenTarget}*\n`;
       if (s.notes) slip += `   (Note: ${s.notes})\n`;
       slip += `\n`;
     });
 
-    const totalPlates = sessions.reduce((acc, s) => acc + s.totalKitchenTarget, 0);
+    const mealPlates = sessions.filter(s => s.meal !== 'Milk').reduce((acc, s) => acc + s.totalKitchenTarget, 0);
+    const milkGlasses = sessions.filter(s => s.meal === 'Milk').reduce((acc, s) => acc + s.totalKitchenTarget, 0);
     slip += `--------------------------------------\n`;
-    slip += `🍛 *Total Global Plates Target: ${totalPlates}*\n`;
+    slip += `🍛 *Total Global Meal Plates: ${mealPlates}*\n`;
+    if (milkGlasses > 0) {
+      slip += `🥛 *Total Night Milk Glasses: ${milkGlasses}*\n`;
+    }
     slip += `Sent via VOICE Gurukul System`;
 
     navigator.clipboard.writeText(slip);
@@ -593,6 +627,11 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
         'Dinner': currentDay
           ? currentDay.dinner.eligible
             ? currentDay.dinner.punched ? `TAKEN (${currentDay.dinner.punchedAt})` : 'NOT TAKEN'
+            : 'NOT INCLUDED'
+          : '',
+        'Milk': currentDay
+          ? (currentDay as any).milk?.eligible
+            ? (currentDay as any).milk?.punched ? `TAKEN (${(currentDay as any).milk?.punchedAt})` : 'NOT TAKEN'
             : 'NOT INCLUDED'
           : '',
         'Total Camp Meals Taken': `${d.takenCount} / ${d.eligibleCount}`
@@ -779,7 +818,15 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
 
             {/* Dynamic Meal Date Pills below other filters */}
-            <div className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+            <div
+              onWheel={(e) => {
+                if (e.deltaY !== 0) {
+                  e.currentTarget.scrollLeft += e.deltaY;
+                }
+              }}
+              className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5"
+              style={{ scrollbarWidth: 'thin' }}
+            >
               <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
                 Meal Date:
               </span>
@@ -961,13 +1008,16 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                     </tr>
                   ) : (
                     filteredKitchenTally.map((row, idx) => {
+                      const isMilk = row.meal === 'Milk';
                       const mealIcon =
                         row.meal === 'Breakfast' ? (
                           <Coffee className="w-3.5 h-3.5 text-amber-500" />
                         ) : row.meal === 'Lunch' ? (
                           <Sun className="w-3.5 h-3.5 text-orange-500" />
-                        ) : (
+                        ) : row.meal === 'Dinner' ? (
                           <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                        ) : (
+                          <Milk className="w-3.5 h-3.5 text-cyan-600" />
                         );
 
                       const clearanceRate =
@@ -1033,7 +1083,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                             <span className="text-sm font-black text-slate-900">
                               {row.totalKitchenTarget}
                             </span>
-                            <span className="text-[10px] text-slate-400 block">plates target</span>
+                            <span className="text-[10px] text-slate-400 block">{isMilk ? 'glasses target' : 'plates target'}</span>
                           </td>
                           <td className="py-3 px-4 text-center">
                             <button
@@ -1202,10 +1252,11 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   onChange={(e) => setMealFilter(e.target.value)}
                   className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
-                  <option value="all">All Meals (BF, LN, DN)</option>
+                  <option value="all">All Meals (BF, LN, DN, Milk)</option>
                   <option value="Breakfast">Breakfast</option>
                   <option value="Lunch">Lunch</option>
                   <option value="Dinner">Dinner</option>
+                  <option value="Milk">Night Milk</option>
                 </select>
               </div>
 
@@ -1227,7 +1278,15 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
 
             {/* DYNAMIC MEAL DATE PILLS */}
-            <div className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+            <div
+              onWheel={(e) => {
+                if (e.deltaY !== 0) {
+                  e.currentTarget.scrollLeft += e.deltaY;
+                }
+              }}
+              className="pt-2 border-t border-slate-100 flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5"
+              style={{ scrollbarWidth: 'thin' }}
+            >
               <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">
                 Meal Date:
               </span>
@@ -1326,23 +1385,29 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   {devoteeStats.dateLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5 text-center mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-slate-800">
+              <div className="grid grid-cols-4 gap-1 text-center mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-slate-800">
                 <div>
-                  <span className="text-[8px] sm:text-[9px] font-bold text-amber-300 uppercase block">BF</span>
-                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-amber-300 uppercase block">BF</span>
+                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
                     {devoteeStats.bf.taken + guestByMeal.bf}/{devoteeStats.bf.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[8px] sm:text-[9px] font-bold text-orange-300 uppercase block">LN</span>
-                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-orange-300 uppercase block">LN</span>
+                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
                     {devoteeStats.ln.taken + guestByMeal.ln}/{devoteeStats.ln.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[8px] sm:text-[9px] font-bold text-indigo-300 uppercase block">DN</span>
-                  <span className="text-[11px] sm:text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-indigo-300 uppercase block">DN</span>
+                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
                     {devoteeStats.dn.taken + guestByMeal.dn}/{devoteeStats.dn.eligible}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-cyan-300 uppercase block">MILK</span>
+                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.ml.taken} Devotees + ${guestByMeal.ml} Guests`}>
+                    {devoteeStats.ml.taken + guestByMeal.ml}/{devoteeStats.ml.eligible}
                   </span>
                 </div>
               </div>
@@ -1375,13 +1440,14 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Breakfast</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Lunch</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Dinner</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Milk</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Camp Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paginatedDevotees.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400 font-medium">
+                      <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
                         No devotees match the selected filters.
                       </td>
                     </tr>
@@ -1391,7 +1457,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                         ? d.dateMatrix?.find((m: any) => m.date === dateFilter || m.rawDate === dateFilter)
                         : null;
 
-                      const renderMealPill = (mealName: 'Breakfast' | 'Lunch' | 'Dinner', mealData: any) => {
+                      const renderMealPill = (mealName: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk', mealData: any) => {
                         if (!mealData || !mealData.eligible) {
                           return (
                             <span className="text-slate-300 font-medium text-[11px]" title="Meal not in registered window">
@@ -1455,6 +1521,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                       let bfEligible = 0, bfTaken = 0;
                       let lnEligible = 0, lnTaken = 0;
                       let dnEligible = 0, dnTaken = 0;
+                      let mlEligible = 0, mlTaken = 0;
 
                       d.dateMatrix?.forEach((m: any) => {
                         if (m.breakfast?.eligible) {
@@ -1468,6 +1535,10 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                         if (m.dinner?.eligible) {
                           dnEligible++;
                           if (m.dinner?.punched) dnTaken++;
+                        }
+                        if (m.milk?.eligible) {
+                          mlEligible++;
+                          if (m.milk?.punched) mlTaken++;
                         }
                       });
 
@@ -1562,6 +1633,22 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 </span>
                                 <span className="text-[9px] text-slate-400 font-semibold">
                                   {dnEligible > 0 ? `${Math.round((dnTaken / dnEligible) * 100)}%` : '—'}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Milk */}
+                          <td className="py-3 px-3 text-center">
+                            {dateFilter && dateFilter !== 'all' ? (
+                              renderMealPill('Milk', dayMatrix?.milk)
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className={`text-xs font-bold ${mlTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
+                                  {mlTaken} / {mlEligible}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-semibold">
+                                  {mlEligible > 0 ? `${Math.round((mlTaken / mlEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
                             )}

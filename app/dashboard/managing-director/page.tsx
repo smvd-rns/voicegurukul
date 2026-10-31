@@ -1276,21 +1276,15 @@ export default function ManagingDirectorDashboard() {
                 // Only set the default selectedTemple if one hasn't been set yet
                 // This prevents the temple from resetting to default when switching tabs
                 // IF the user has already manually selected a different temple.
+                // Default to the first assigned temple from the database
                 setSelectedTemple((prev: any) => {
-                    if (prev) return prev; // Keep current selection if it exists
-
-                    // Preference: If current profile temple is in assigned list, use it. Otherwise use first.
-                    const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    const match = (data as any[]).find((t: any) => t.name === profileTempleName);
-                    return match || data[0];
+                    if (prev && (data as any[]).some((t: any) => t.id === prev.id || t.name === prev.name)) return prev;
+                    return data[0];
                 });
             } else {
-                // Fallback for transition period if no assignments yet but they have the role
-                setSelectedTemple((prev: any) => {
-                    if (prev) return prev;
-                    const profileTempleName = (userData.hierarchy as any)?.currentTemple?.name || (userData as any).current_temple;
-                    return profileTempleName ? { name: profileTempleName } : null;
-                });
+                setAssignedTemples([]);
+                setSelectedTemple(null);
+                toast.error('No temple assignment found for your account in the temples database.');
             }
             setLoadingAssignments(false);
         };

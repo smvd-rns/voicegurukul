@@ -29,40 +29,82 @@ export async function GET(request: Request) {
 
         // Roles
         const isSuperAdmin = roleNums.includes(8);
-        const isTempleAdmin = roleNums.some((r: number) => [11, 12, 13].includes(r));
-        const isCenterAdmin = roleNums.some((r: number) => [14, 15, 16, 17].includes(r));
+        const isTempleAdmin = roleNums.some((r: number) => [11, 12, 13, 21].includes(r));
+        const isCenterAdmin = roleNums.some((r: number) => [14, 15, 16, 17, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33].includes(r));
         const isCounselor = roleNums.some((r: number) => [2, 20].includes(r));
 
         if (!isSuperAdmin && !isTempleAdmin && !isCenterAdmin && !isCounselor) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        // Fetch user's allocated centers if they are a center admin
+        // Helper to safely extract name from hierarchy field (string | object)
+        const extractName = (val: any) => {
+            if (!val) return '';
+            if (typeof val === 'string') return val;
+            return val.name || '';
+        };
+
+        // Normalize string for comparison
+        const normalize = (str: string) => (str || '').trim().toLowerCase();
+
+        // 1. Fetch user's allocated temples if they are a temple admin (strictly from DB, NO home temple fallback)
+        let allocatedTempleNames: string[] = [];
+        if (isTempleAdmin) {
+            const { data: assignedTemples } = await supabase
+                .from('temples')
+                .select('name')
+                .or(`managing_director_id.eq.${adminUser.id},director_id.eq.${adminUser.id},central_voice_manager_id.eq.${adminUser.id},yp_id.eq.${adminUser.id}`);
+
+            if (assignedTemples && assignedTemples.length > 0) {
+                allocatedTempleNames = assignedTemples.map((t: any) => normalize(t.name)).filter(Boolean);
+            }
+        }
+
+        // 2. Fetch user's allocated centers if they are a center admin (strictly from DB, NO home center fallback)
         let allocatedCenterIds: string[] = [];
         let allocatedCenterNames: string[] = [];
 
         if (isCenterAdmin) {
+            // Direct allocations on centers table
+            const { data: directCenters } = await supabase
+                .from('centers')
+                .select('id, name')
+                .or(`project_manager_id.eq.${adminUser.id},project_advisor_id.eq.${adminUser.id},acting_manager_id.eq.${adminUser.id},oc_id.eq.${adminUser.id},care_giver_id.eq.${adminUser.id},youth_preacher_id.eq.${adminUser.id},internal_manager_id.eq.${adminUser.id},preaching_coordinator_id.eq.${adminUser.id},morning_program_in_charge_id.eq.${adminUser.id},accountant_id.eq.${adminUser.id},kitchen_head_id.eq.${adminUser.id},study_in_charge_id.eq.${adminUser.id},event_admin_id.eq.${adminUser.id},grihstha_counselor_id.eq.${adminUser.id},easy_incharge_id.eq.${adminUser.id},prerna_incharge_id.eq.${adminUser.id}`);
+
+            if (directCenters && directCenters.length > 0) {
+                directCenters.forEach((c: any) => {
+                    if (c.id) allocatedCenterIds.push(c.id);
+                    if (c.name) allocatedCenterNames.push(normalize(c.name));
+                });
+            }
+
+            // Junction table allocations (user_centers)
             const { data: userCenters } = await supabase
                 .from('user_centers')
-                .select('*')
+                .select('center_id')
                 .eq('user_id', adminUser.id);
 
             if (userCenters && userCenters.length > 0) {
                 const cIds = userCenters.map((uc: any) => uc.center_id).filter(Boolean);
-                allocatedCenterIds = Array.from(new Set(cIds));
-                if (allocatedCenterIds.length > 0) {
+                if (cIds.length > 0) {
                     const { data: cData } = await supabase
                         .from('centers')
                         .select('id, name')
-                        .in('id', allocatedCenterIds);
+                        .in('id', cIds);
                     if (cData) {
-                        allocatedCenterNames = cData.map((c: any) => c.name).filter(Boolean);
+                        cData.forEach((c: any) => {
+                            if (c.id) allocatedCenterIds.push(c.id);
+                            if (c.name) allocatedCenterNames.push(normalize(c.name));
+                        });
                     }
                 }
             }
+
+            allocatedCenterIds = Array.from(new Set(allocatedCenterIds));
+            allocatedCenterNames = Array.from(new Set(allocatedCenterNames));
         }
 
-        console.log(`PendingUsers Debug: Admin=${adminUser.email} Roles=${roleNums} Temple=${adminProfile.current_temple} AllocatedCenters=${allocatedCenterNames.length}`);
+        console.log(`PendingUsers Debug: Admin=${adminUser.email} Roles=${roleNums} AllocatedTemples=${allocatedTempleNames.join(',')} AllocatedCenters=${allocatedCenterNames.join(',')}`);
 
         // 4. Fetch Pending Users
         // We fetch ALL pending users first, then filter in memory based on admin rights
@@ -81,15 +123,6 @@ export async function GET(request: Request) {
             console.error('Error fetching users:', fetchError);
             return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
         }
-        // Helper to safely extract name from hierarchy field (string | object)
-        const extractName = (val: any) => {
-            if (!val) return '';
-            if (typeof val === 'string') return val;
-            return val.name || '';
-        };
-
-        // Normalize string for comparison
-        const normalize = (str: string) => (str || '').trim().toLowerCase();
 
         // NEW: Fetch Counselor ID and Name for the current admin
         const { data: adminCounselor } = await supabase
@@ -133,15 +166,20 @@ export async function GET(request: Request) {
 
             const matches = [];
 
-            // 2. Temple Admin: Check Temple Match ONLY (Strict)
-            if (isTempleAdmin) {
-                // Admin's Temple
-                const adminTemple = normalize(adminProfile.current_temple || extractName(adminProfile.hierarchy?.currentTemple));
+            // 2. Temple Admin: Check Temple Match ONLY against explicitly allocated temples in DB
+            if (isTempleAdmin && allocatedTempleNames.length > 0) {
+                const userTemple = normalize(user.current_temple || extractName(user.hierarchy?.currentTemple) || user.hierarchy?.temple);
+                if (userTemple && allocatedTempleNames.includes(userTemple)) {
+                    matches.push(true);
+                }
+            }
 
-                // User's Temple
-                const userTemple = normalize(user.current_temple || extractName(user.hierarchy?.currentTemple));
-
-                if (adminTemple && userTemple && adminTemple === userTemple) {
+            // 3. Center Admin: Check Center Match ONLY against explicitly allocated centers in DB
+            if (isCenterAdmin && (allocatedCenterNames.length > 0 || allocatedCenterIds.length > 0)) {
+                const userCenter = normalize(user.current_center || user.center || extractName(user.hierarchy?.currentCenter) || extractName(user.hierarchy?.center));
+                const userCenterId = user.center_id || user.hierarchy?.centerId;
+                if ((userCenter && allocatedCenterNames.includes(userCenter)) ||
+                    (userCenterId && allocatedCenterIds.includes(userCenterId))) {
                     matches.push(true);
                 }
             }

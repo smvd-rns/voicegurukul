@@ -91,13 +91,7 @@ export async function POST(request: Request) {
                 isManaged
             });
 
-            let isAuthorized = isManaged;
-            if (!isAuthorized && managedCenters.length === 0) {
-                const rH = requesterProfile.hierarchy || {};
-                const rCenter = rH.currentCenter?.name || (typeof rH.currentCenter === 'string' ? rH.currentCenter : null);
-                isAuthorized = (rCenter || '').trim().toLowerCase() === normalizedTargetCenter;
-                console.log('API: Fallback Scope Check (Hierarchy):', { rCenter, isAuthorized });
-            }
+            const isAuthorized = isManaged;
 
             if (!isAuthorized) {
                 console.error('API: Authorization Failed. User does not manage target center.');

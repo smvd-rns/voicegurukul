@@ -6,9 +6,10 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/config';
 
 import { Plus, X, Save, User, Mail, Phone, Users, BookOpen, GraduationCap, Briefcase, Calendar, Check, AlertTriangle, Clock, AlertCircle, Info, MessageCircle, Key, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import { validateEmail, isValidName, validateMobile, validateTextInput, validatePhone, sanitizeTextInput, sanitizeInput, validateEducationField, validateWorkField } from '@/lib/utils/validation';
+import { validateEmail, isValidName, validateMobile, validateTextInput, validatePhone, sanitizeTextInput, sanitizeInput, validateEducationField, validateWorkField, validatePhoneNumber } from '@/lib/utils/validation';
 import PhotoUpload from '@/components/ui/PhotoUpload';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
 import { EducationEntry, WorkExperienceEntry, LanguageEntry, SkillEntry, ServiceEntry } from '@/types';
 import { SPIRITUAL_MASTERS } from '@/lib/utils/spiritual-masters';
@@ -1115,14 +1116,14 @@ export default function ProfilePage() {
     // Validate and sanitize phone if provided
     let sanitizedPhone = null;
     if (formData.phone && formData.phone.trim()) {
-      const phoneValidation = validatePhone(formData.phone);
+      const phoneValidation = validatePhoneNumber(formData.phone, '+91', false);
       if (!phoneValidation.valid) {
         setFieldErrors({ phone: phoneValidation.error || 'Invalid phone number' });
         setError(phoneValidation.error || 'Invalid phone number');
         setSaving(false);
         return;
       }
-      sanitizedPhone = formData.phone.trim();
+      sanitizedPhone = phoneValidation.normalizedPhone || formData.phone.trim();
     }
 
     // ALL FIELDS BELOW ARE NOW OPTIONAL - VALIDATIONS COMMENTED OUT
@@ -1951,19 +1952,13 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="group animate-on-scroll" style={{ animationDelay: '0.3s' }}>
-                  <label htmlFor="phone" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2 transform transition-all duration-200 group-hover:translate-x-1">
-                    <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-sky-600 transform transition-all duration-200 group-hover:scale-110 group-hover:rotate-12" />
-                    Phone Number
-                  </label>
-                  <input
+                  <PhoneInputWithCountry
                     id="phone"
-                    type="tel"
+                    label="Phone Number"
                     value={formData.phone}
-                    onChange={(e) => {
-                      // Allow only phone-valid characters
-                      const phoneValue = e.target.value.replace(/[^0-9+\-\s()]/g, '');
-                      setFormData({ ...formData, phone: phoneValue });
-                      // Clear error when user starts typing
+                    error={fieldErrors.phone}
+                    onChange={(fullPhone) => {
+                      setFormData(prev => ({ ...prev, phone: fullPhone }));
                       if (fieldErrors.phone) {
                         setFieldErrors(prev => {
                           const newErrors = { ...prev };
@@ -1972,26 +1967,7 @@ export default function ProfilePage() {
                         });
                       }
                     }}
-                    onBlur={() => {
-                      if (formData.phone && formData.phone.trim()) {
-                        const validation = validatePhone(formData.phone);
-                        if (!validation.valid) {
-                          setFieldErrors(prev => ({ ...prev, phone: validation.error || 'Invalid phone number' }));
-                        }
-                      }
-                    }}
-                    placeholder="+91 9876543210"
-                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-sky-50/50 hover:bg-sky-50 transition-all duration-300 group-hover:border-sky-200 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md ${fieldErrors.phone
-                      ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                      : 'border-sky-100 focus:ring-sky-400 focus:border-sky-400'
-                      }`}
                   />
-                  {fieldErrors.phone && (
-                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                      <X className="h-3 w-3" />
-                      {fieldErrors.phone}
-                    </p>
-                  )}
                 </div>
 
                 <div className="group animate-on-scroll" style={{ animationDelay: '0.4s' }}>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Script from 'next/script';
 import Link from 'next/link';
@@ -12,7 +12,7 @@ import {
   Search, FileText, CheckCircle2, HeartHandshake,
   Building, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
-  Undo2, Banknote, Ticket
+  Undo2, Banknote, Ticket, UserCircle, UserPlus
 } from 'lucide-react';
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
@@ -20,7 +20,9 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { isCampManagerialUser } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
-import { lookupCampRegistrationsAction, submitCampRefundRequestAction } from '@/app/dashboard/admin/camps/actions';
+import { lookupCampRegistrationsAction, submitCampRefundRequestAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction } from '@/app/dashboard/admin/camps/actions';
+import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
+import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 
 // Smart date label formatter to ensure the actual month is always shown instead of generic "Date"
 function formatMealOptionLabel(m?: CampMealConfig | null, campStartDate?: string): string {
@@ -97,6 +99,7 @@ export default function PublicCampRegistrationPage() {
     voiceName: '',
     participantName: '',
     whatsapp: '',
+    rounds: '',
     parentTemple: '',
     counselorName: '',
     campTrack: '',
@@ -115,6 +118,26 @@ export default function PublicCampRegistrationPage() {
   // Batch Entries
   const [entries, setEntries] = useState<any[]>([]);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  // Center Devotees for Managerial Quick Registration
+  const [centerDevotees, setCenterDevotees] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    gender: string;
+    age: string;
+    rounds?: number | string;
+    counselor: string;
+    center: string;
+    temple: string;
+    registeredTracks?: string[];
+  }[]>([]);
+  const [loadingDevotees, setLoadingDevotees] = useState(false);
+  const [selectedDevoteeId, setSelectedDevoteeId] = useState('');
+  const [devoteeSearchTerm, setDevoteeSearchTerm] = useState('');
+  const [entryMode, setEntryMode] = useState<'select' | 'manual'>('select');
+  const [centerNameFound, setCenterNameFound] = useState<string>('');
 
   // Live Cost Preview
   const [liveCost, setLiveCost] = useState<CalculatedCostResult | null>(null);
@@ -172,7 +195,11 @@ export default function PublicCampRegistrationPage() {
 
   const handleLookupForCancel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cancelLookupQuery.trim()) return;
+    const phoneDigits = userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '';
+    const userEmail = (user?.email || userData?.email || '').trim().toLowerCase();
+    const queryToUse = user ? (phoneDigits || userEmail) : cancelLookupQuery.trim();
+
+    if (!queryToUse) return;
 
     setCancelLookupLoading(true);
     setCancelLookupError(null);
@@ -180,18 +207,19 @@ export default function PublicCampRegistrationPage() {
     setSelectedRegIdsToCancel([]);
 
     try {
-      const res = await lookupCampRegistrationsAction(camp?.id || slug, cancelLookupQuery.trim());
+      const res = await lookupCampRegistrationsAction(camp?.id || slug, queryToUse, userData?.id);
       if (res.success && res.registrations && res.registrations.length > 0) {
         setCancelRegs(res.registrations);
         setCancelExistingRefunds(res.existingRefunds || []);
-        // Select registrations that are not cancelled OR whose previous refund request was rejected
+        // Select registrations that are CONFIRMED and not cancelled OR whose previous refund request was rejected
         const activeIds = res.registrations
           .filter((r: any) => {
+            const isConfirmed = r.payment_status === 'completed';
             const m = (res.existingRefunds || []).find((ref: any) =>
               ref.registration_id === r.id ||
               (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === r.id))
             );
-            return !r.is_cancelled || m?.status === 'rejected';
+            return isConfirmed && (!r.is_cancelled || m?.status === 'rejected');
           })
           .map((r: any) => r.id!);
         setSelectedRegIdsToCancel(activeIds);
@@ -319,7 +347,7 @@ export default function PublicCampRegistrationPage() {
         bank_name: cancelBankName.trim(),
         ifsc_code: cancelIfscCode.trim().toUpperCase(),
         reason: finalReason
-      });
+      }, userData?.id);
 
       if (res.success && res.refundRequest) {
         setCancelSuccessResult({
@@ -419,15 +447,165 @@ export default function PublicCampRegistrationPage() {
     }
   };
 
+  const isManager = isCampManagerialUser(userData?.role, camp?.payment_config?.allowed_managerial_roles);
+
+  // Load center devotees for managerial fast registration
+  useEffect(() => {
+    if (camp && isManager) {
+      setLoadingDevotees(true);
+      getCenterDevoteesForCampRegistrationAction(camp.id, userData?.id)
+        .then((res) => {
+          setLoadingDevotees(false);
+          if (res.success && res.devotees) {
+            setCenterDevotees(res.devotees);
+            const label = res.centerName || res.templeName || '';
+            if (label) {
+              setCenterNameFound(label);
+              const assignedCenter = res.centerName ? res.centerName.split(',')[0].trim() : '';
+              const assignedTemple = res.templeName ? res.templeName.split(',')[0].trim() : '';
+              setFormData((prev) => ({
+                ...prev,
+                ...(assignedCenter ? { voiceName: assignedCenter } : {}),
+                ...(assignedTemple ? { parentTemple: assignedTemple } : {})
+              }));
+            }
+          } else {
+            console.warn('[Camp] Devotees fetch failed:', res.error);
+          }
+        })
+        .catch((err) => {
+          console.error('[Camp] Devotees fetch error:', err);
+          setLoadingDevotees(false);
+        });
+    } else {
+      setCenterDevotees([]);
+      setCenterNameFound('');
+      setSelectedDevoteeId('');
+      setDevoteeSearchTerm('');
+    }
+  }, [camp?.id, isManager, userData?.id]);
+
+  // User's own registrations for this camp
+  const [userRegistrations, setUserRegistrations] = useState<CampRegistration[]>([]);
+
+  useEffect(() => {
+    if (userData?.id) {
+      getUserCampRegistrationsAction({ email: userData?.email, phone: userData?.phone, callerUserId: userData?.id }).then((res) => {
+        if (res.success && res.registrations) {
+          setUserRegistrations(res.registrations);
+        }
+      });
+    }
+  }, [userData?.id]);
+
+  const userRegisteredTracks = useMemo(() => {
+    if (!camp) return [];
+    const myEmail = (userData?.email || user?.email || '').trim().toLowerCase();
+    const myPhone = (userData?.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    return userRegistrations
+      .filter((r) => {
+        if (r.camp_id !== camp.id || r.is_cancelled || r.payment_status === 'failed') return false;
+        const rEmail = (r.email || '').trim().toLowerCase();
+        const rPhone = (r.whatsapp || r.poc_contact || '').replace(/[^0-9]/g, '').slice(-10);
+        return (myEmail && rEmail === myEmail) || (myPhone && rPhone === myPhone);
+      })
+      .map((r) => (r.camp_track || '').trim())
+      .filter(Boolean);
+  }, [camp?.id, userRegistrations, userData?.email, user?.email, userData?.phone]);
+
+  const selectedDevotee = useMemo(() => {
+    return centerDevotees.find((d) => d.id === selectedDevoteeId) || null;
+  }, [centerDevotees, selectedDevoteeId]);
+
+  const activeRegisteredTracks = useMemo(() => {
+    if (isManager && selectedDevotee) {
+      return selectedDevotee.registeredTracks || [];
+    }
+    return userRegisteredTracks;
+  }, [isManager, selectedDevotee, userRegisteredTracks]);
+
+  // Dynamically filter available camp tracks based on devotee chanting rounds
+  const availableTracksForDevotee = useMemo(() => {
+    const allTracks = camp?.tracks && camp.tracks.length > 0 ? camp.tracks : ['GS Camp - 1st Timer'];
+    const userRoundsNum = formData.rounds !== '' && formData.rounds !== undefined && formData.rounds !== null
+      ? Number(formData.rounds)
+      : 0;
+    const trackFees = camp?.special_waivers?.track_fees || [];
+
+    return allTracks.filter((t) => {
+      const tf = trackFees.find((x) => x.track.toLowerCase() === t.toLowerCase());
+      const minRounds = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? Number(tf.min_rounds) : 0;
+      if (minRounds > 0) {
+        return userRoundsNum >= minRounds;
+      }
+      return true;
+    });
+  }, [camp, formData.rounds]);
+
+  // If current campTrack is not in the filtered available tracks, auto-select the first available track
+  useEffect(() => {
+    if (availableTracksForDevotee.length > 0 && !availableTracksForDevotee.includes(formData.campTrack)) {
+      const firstAvailable = availableTracksForDevotee.find((t) => !activeRegisteredTracks.includes(t.trim())) || availableTracksForDevotee[0];
+      setFormData((prev) => ({
+        ...prev,
+        campTrack: firstAvailable
+      }));
+    }
+  }, [availableTracksForDevotee, formData.campTrack, activeRegisteredTracks]);
+
+  const isCurrentTrackAlreadyRegistered = useMemo(() => {
+    if (!formData.campTrack) return false;
+    return activeRegisteredTracks.includes(formData.campTrack.trim());
+  }, [formData.campTrack, activeRegisteredTracks]);
+
+  const handleSelectDevotee = (devId: string) => {
+    setSelectedDevoteeId(devId);
+    if (!devId) return;
+    const found = centerDevotees.find((d) => d.id === devId);
+    if (found) {
+      // If devotee already holds the currently selected track, auto-pick an available track
+      let nextTrack = formData.campTrack;
+      const devoteeTracks = found.registeredTracks || [];
+      if (devoteeTracks.includes(nextTrack)) {
+        const available = camp?.tracks?.find((t) => !devoteeTracks.includes(t));
+        if (available) {
+          nextTrack = available;
+        }
+      }
+      setFormData((prev) => ({
+        ...prev,
+        participantName: found.name,
+        whatsapp: found.phone ? found.phone.replace(/[^0-9]/g, '').slice(-10) : prev.whatsapp,
+        rounds: found.rounds !== undefined && found.rounds !== null ? String(found.rounds) : '',
+        age: found.age || prev.age,
+        gender: (found.gender as any) || prev.gender,
+        counselorName: found.counselor || prev.counselorName,
+        voiceName: found.center || prev.voiceName,
+        parentTemple: found.temple || prev.parentTemple,
+        campTrack: nextTrack,
+      }));
+    }
+  };
+
+  const filteredCenterDevotees = centerDevotees.filter((dev) => {
+    if (!devoteeSearchTerm.trim()) return true;
+    const term = devoteeSearchTerm.toLowerCase();
+    return (
+      dev.name.toLowerCase().includes(term) ||
+      dev.phone.includes(term) ||
+      dev.email.toLowerCase().includes(term)
+    );
+  });
+
   const handleSavePoc = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pocDetails.pocName.trim()) {
       alert('Please enter Point of Contact (POC) name');
       return;
     }
-    const cleanPhone = pocDetails.pocContact.replace(/[^0-9]/g, '');
-    if (cleanPhone.length !== 10) {
-      alert('Please enter a valid 10-digit POC Contact number');
+    const phoneRes = validatePhoneNumber(pocDetails.pocContact, '+91', true);
+    if (!phoneRes.isValid) {
+      alert(phoneRes.error || 'Please enter a valid POC Contact number');
       return;
     }
     if (!pocDetails.email.includes('@')) {
@@ -435,21 +613,51 @@ export default function PublicCampRegistrationPage() {
       return;
     }
     setPocSaved(true);
+    // If student, automatically pre-fill Attendee #1 with POC info
+    if (!isManager && !formData.participantName) {
+      setFormData((prev) => ({
+        ...prev,
+        participantName: pocDetails.pocName,
+        whatsapp: pocDetails.pocContact,
+      }));
+    }
   };
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Center restriction check:
+    const eligibleCenters = camp?.eligible_centers || [];
+    if (eligibleCenters.length > 0) {
+      const enteredCenter = (formData.voiceName || '').trim();
+      const isAllowed = eligibleCenters.some((ec) =>
+        ec.toLowerCase() === enteredCenter.toLowerCase() ||
+        ec.toLowerCase().includes(enteredCenter.toLowerCase()) ||
+        enteredCenter.toLowerCase().includes(ec.toLowerCase())
+      );
+      if (!isAllowed) {
+        alert(`Registration for "${camp?.title}" is restricted to attendees from: ${eligibleCenters.join(', ')}. The center "${enteredCenter || 'Unspecified'}" is not eligible.`);
+        return;
+      }
+    }
+
+    // Strict rule: Student accounts are restricted to single attendee self-registration
+    if (!isManager && entries.length >= 1 && editIndex === null) {
+      alert('Student accounts can register for themselves only (1 attendee maximum). Multi-attendee booking is restricted to center managers.');
+      return;
+    }
 
     if (!formData.participantName.trim()) {
       alert('Please enter Participant full name');
       return;
     }
 
-    const cleanWhatsapp = formData.whatsapp.replace(/[^0-9]/g, '');
-    if (cleanWhatsapp.length !== 10) {
-      alert('WhatsApp number must be exactly 10 digits');
+    const phoneRes = validatePhoneNumber(formData.whatsapp, '+91', true);
+    if (!phoneRes.isValid) {
+      alert(phoneRes.error || 'WhatsApp number must be a valid phone number');
       return;
     }
+    const cleanWhatsapp = phoneRes.parsed.cleanNumber;
 
     if (!formData.age || Number(formData.age) < 1) {
       alert('Please enter a valid age');
@@ -472,8 +680,43 @@ export default function PublicCampRegistrationPage() {
       return;
     }
 
+    // Prevent duplicate registration for the same track in this camp
+    if (isCurrentTrackAlreadyRegistered) {
+      const personName = formData.participantName || (isManager && selectedDevotee ? selectedDevotee.name : 'Devotee');
+      alert(`"${personName}" is already registered for "${formData.campTrack}" in this camp. Please select a different track.`);
+      return;
+    }
+
+    // Enforce sub-camp minimum rounds requirement
+    const selectedTrackFeeObj = (camp?.special_waivers?.track_fees || []).find(
+      (x) => x.track.toLowerCase() === (formData.campTrack || '').toLowerCase()
+    );
+    const reqMinRounds = selectedTrackFeeObj?.min_rounds ? Number(selectedTrackFeeObj.min_rounds) : 0;
+    const currentDevoteeRounds = Number(formData.rounds || 0);
+    if (reqMinRounds > 0 && currentDevoteeRounds < reqMinRounds) {
+      alert(`The "${formData.campTrack}" track requires a minimum of ${reqMinRounds} rounds of chanting. (Current: ${currentDevoteeRounds} rounds). Please choose an eligible track.`);
+      return;
+    }
+
+    // Prevent duplicate entries in the same batch for the same track
+    const newEntryPhone = cleanWhatsapp;
+    const newEntryTrack = (formData.campTrack || '').trim().toLowerCase();
+
+    const isDuplicateInBatch = entries.some((e, idx) => {
+      if (editIndex !== null && idx === editIndex) return false;
+      const ePhone = String(e.whatsapp || e.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      const eTrack = (e.campTrack || e.camp_track || '').trim().toLowerCase();
+      return eTrack === newEntryTrack && ePhone === newEntryPhone;
+    });
+
+    if (isDuplicateInBatch) {
+      alert(`"${formData.participantName || 'Devotee'}" is already added to this batch for track "${formData.campTrack}".`);
+      return;
+    }
+
     const newEntry = {
       ...formData,
+      rounds: formData.rounds !== undefined && formData.rounds !== null ? String(formData.rounds) : '0',
       ...pocDetails,
       pocName: pocDetails.pocName,
       pocContact: pocDetails.pocContact,
@@ -482,6 +725,8 @@ export default function PublicCampRegistrationPage() {
       participantName: formData.participantName,
       participant_name: formData.participantName,
       whatsapp: formData.whatsapp,
+      participantType: formData.participantType || 'Camp Participant',
+      participant_type: formData.participantType || 'Camp Participant',
       campTrack: formData.campTrack,
       camp_track: formData.campTrack,
       meal_cost: liveCost.mealCost,
@@ -507,6 +752,7 @@ export default function PublicCampRegistrationPage() {
       ...prev,
       participantName: '',
       whatsapp: '',
+      rounds: '',
       gender: 'Male - Bachelor',
       age: '',
       marriedSinceYear: '',
@@ -522,6 +768,7 @@ export default function PublicCampRegistrationPage() {
       voiceName: item.voiceName || '',
       participantName: item.participantName || '',
       whatsapp: item.whatsapp || '',
+      rounds: item.rounds !== undefined && item.rounds !== null ? String(item.rounds) : '',
       parentTemple: item.parentTemple || '',
       counselorName: item.counselorName || '',
       campTrack: item.campTrack || '',
@@ -583,7 +830,6 @@ export default function PublicCampRegistrationPage() {
   const grandTotalWithSurcharge = Math.round(finalTotalAmount + surchargeAmount);
 
   // Check if current user possesses an allowed managerial role for special transfers (IDT / ITT)
-  const isManager = isCampManagerialUser(userData?.role, camp?.payment_config?.allowed_managerial_roles);
   const showIdtOption = Boolean(
     camp?.payment_config?.enable_idt &&
     (camp?.payment_config?.allow_student_idt === true || isManager)
@@ -1083,6 +1329,13 @@ export default function PublicCampRegistrationPage() {
                     </div>
                   )}
 
+                  {camp.eligible_centers && camp.eligible_centers.length > 0 && (
+                    <div className="flex items-center gap-1.5 bg-indigo-950/70 border border-indigo-300/40 text-indigo-100 px-3.5 py-1.5 sm:py-2 rounded-xl backdrop-blur-md font-semibold text-xs">
+                      <Building className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-200 shrink-0" />
+                      <span>Exclusively for: {camp.eligible_centers.join(', ')}</span>
+                    </div>
+                  )}
+
                   {camp.refund_config?.enable_refunds !== false && (
                     <button
                       type="button"
@@ -1102,6 +1355,21 @@ export default function PublicCampRegistrationPage() {
                 </div>
               </div>
             </div>
+
+            {/* Center Restriction Notice Banner */}
+            {camp.eligible_centers && camp.eligible_centers.length > 0 && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 space-y-1.5 shadow-xs">
+                <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-amber-900">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <span>Center-Specific Camp Registration</span>
+                </div>
+                <p className="text-xs text-amber-900 leading-relaxed">
+                  Hare Krishna! This camp is exclusively organized for devotees belonging to:
+                  <strong className="ml-1 text-amber-950">{camp.eligible_centers.join(', ')}</strong>.
+                  Only devotees associated with these centers are eligible to register.
+                </p>
+              </div>
+            )}
 
             {/* IF REGISTRATION HAS NOT STARTED YET OR CAMP IS CLOSED / DEADLINE PASSED */}
             {isRegistrationNotStarted ? (
@@ -1304,17 +1572,32 @@ export default function PublicCampRegistrationPage() {
 
                   {lookupResults && (
                     <div className="pt-3 text-left space-y-2">
-                      {lookupResults.map((item, idx) => (
-                        <div key={idx} className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs flex justify-between items-center">
-                          <div>
-                            <span className="font-bold text-slate-900 block">{item.participant_name}</span>
-                            <span className="text-[11px] text-slate-500">{item.camp_track} • {item.group_id}</span>
+                      {lookupResults.map((item, idx) => {
+                        const isCompleted = item.payment_status === 'completed';
+                        const isCancelled = item.is_cancelled || item.payment_status === 'refunded';
+                        return (
+                          <div key={idx} className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs flex justify-between items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <span className="font-bold text-slate-900 block truncate">{item.participant_name}</span>
+                              <span className="text-[11px] text-slate-500 block truncate">{item.camp_track} • {item.group_id}</span>
+                              {!isCompleted && !isCancelled && (
+                                <span className="text-[10px] text-amber-700 font-semibold block mt-0.5">
+                                  ⏳ Awaiting central verification for {item.payment_method || 'transfer'}. Pass inactive until approved.
+                                </span>
+                              )}
+                            </div>
+                            <span className={`font-bold px-2.5 py-1 rounded-full text-[10px] shrink-0 ${
+                              isCancelled
+                                ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                                : isCompleted
+                                ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                                : 'text-amber-800 bg-amber-100 border border-amber-200 animate-pulse'
+                            }`}>
+                              {isCancelled ? 'Cancelled' : isCompleted ? 'Confirmed' : 'Pending Approval'}
+                            </span>
                           </div>
-                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px]">
-                            Confirmed
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1364,17 +1647,12 @@ export default function PublicCampRegistrationPage() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">
-                          WhatsApp Mobile Number *
-                        </label>
-                        <input
-                          type="tel"
+                        <PhoneInputWithCountry
+                          label="WhatsApp Mobile Number"
                           required
-                          maxLength={10}
                           value={pocDetails.pocContact}
-                          onChange={(e) => setPocDetails({ ...pocDetails, pocContact: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
-                          placeholder="10-digit mobile"
-                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white focus:bg-white text-slate-900 text-xs font-medium outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all"
+                          onChange={(fullPhone) => setPocDetails((p) => ({ ...p, pocContact: fullPhone }))}
+                          placeholder="e.g. 9876543210"
                         />
                       </div>
 
@@ -1427,61 +1705,208 @@ export default function PublicCampRegistrationPage() {
 
                 {/* STEP 2: PROFESSIONAL SEGMENTED ATTENDEE FORM */}
                 {pocSaved && (
-                  <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm space-y-6">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-black flex items-center justify-center text-xs">
-                        2
+                  <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-amber-300/90 p-6 sm:p-8 shadow-md space-y-6 transition-all">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white font-black flex items-center justify-center text-sm shadow-sm shrink-0">
+                          2
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                              {editIndex !== null
+                                ? 'Edit Devotee Entry'
+                                : isManager
+                                ? 'Add Devotees to Batch (Center Manager)'
+                                : 'Devotee Registration (Self-Registration)'}
+                            </h2>
+                            {!isManager ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[10px] border-2 border-blue-200">
+                                Self Only
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-extrabold text-[10px] border-2 border-emerald-300 shadow-2xs">
+                                Multi-Devotee Allowed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                            {isManager
+                              ? 'Select from your center devotees or type details to add multiple devotees in this booking batch.'
+                              : 'Student registration is for yourself. Review your details and meal itinerary below.'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-base font-bold text-slate-900">
-                          {editIndex !== null ? 'Edit Devotee Entry' : 'Add Devotee / Participant'}
-                        </h2>
-                        <p className="text-xs text-slate-500">
-                          Fill details for this devotee. You can register multiple devotees in a single payment batch.
-                        </p>
-                      </div>
+
+                      {editIndex !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setEditIndex(null)}
+                          className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
                     </div>
 
-                    <form onSubmit={handleAddEntry} className="space-y-6">
-                      
-                      {/* Section A: Personal & Contact Information */}
-                      <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
-                        <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
-                          <User className="w-4 h-4 text-amber-600" />
-                          <span>Devotee Personal Information</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Participant Full Name *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              name="participantName"
-                              value={formData.participantName}
-                              onChange={handleChange}
-                              placeholder="Devotee / Student name"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
+                    {/* Non-Manager Student Limit: If 1 entry already added and not currently editing */}
+                    {!isManager && entries.length >= 1 && editIndex === null ? (
+                      <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <UserCheck className="w-4 h-4" />
                           </div>
-
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              WhatsApp Number *
-                            </label>
-                            <input
-                              type="tel"
-                              required
-                              maxLength={10}
-                              name="whatsapp"
-                              value={formData.whatsapp}
-                              onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
-                              placeholder="10-digit WhatsApp"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
+                            <h4 className="font-bold text-xs sm:text-sm text-slate-900">Your Attendee Registration is Added!</h4>
+                            <p className="text-[11px] text-slate-600 mt-0.5">
+                              Student accounts register individually for themselves. Review your booking summary below and proceed to payment.
+                            </p>
                           </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleEditEntry(0)}
+                          className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border-2 border-slate-300 text-slate-800 font-bold text-xs transition-colors shrink-0 cursor-pointer shadow-2xs"
+                        >
+                          Edit Details
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Manager Center Devotee Picker */}
+                        {isManager && (
+                          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-50 via-cyan-50/50 to-emerald-50 border-2 border-teal-300 space-y-3 shadow-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Building className="w-4 h-4 text-teal-700" />
+                                <span className="font-black text-xs text-teal-950">
+                                  Center Devotee Fast-Select {centerNameFound ? `• ${centerNameFound}` : ''}
+                                </span>
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-teal-200/90 text-teal-900 border border-teal-300">
+                                  {centerDevotees.length} Devotees
+                                </span>
+                              </div>
+
+                              <div className="flex items-center bg-white rounded-lg p-0.5 border border-teal-200 text-[11px] font-bold">
+                                <button
+                                  type="button"
+                                  onClick={() => setEntryMode('select')}
+                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                                    entryMode === 'select'
+                                      ? 'bg-teal-600 text-white shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Select from Center
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEntryMode('manual');
+                                    setSelectedDevoteeId('');
+                                  }}
+                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                                    entryMode === 'manual'
+                                      ? 'bg-teal-600 text-white shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Manual Entry
+                                </button>
+                              </div>
+                            </div>
+
+                            {entryMode === 'select' && (
+                              <div className="space-y-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <div className="relative flex-1">
+                                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                    <input
+                                      type="text"
+                                      value={devoteeSearchTerm}
+                                      onChange={(e) => setDevoteeSearchTerm(e.target.value)}
+                                      placeholder="Search devotee by name, phone, email..."
+                                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-teal-300/80 bg-white text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                                    />
+                                  </div>
+                                  <select
+                                    value={selectedDevoteeId}
+                                    onChange={(e) => handleSelectDevotee(e.target.value)}
+                                    className="flex-1 sm:max-w-xs px-3 py-2 rounded-xl border border-teal-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
+                                  >
+                                    <option value="">-- Click to Choose Devotee --</option>
+                                    {filteredCenterDevotees.map((dev) => {
+                                      const regCount = dev.registeredTracks?.length || 0;
+                                      return (
+                                        <option key={dev.id} value={dev.id}>
+                                          {dev.name} • {dev.phone} {regCount > 0 ? `[Reg: ${dev.registeredTracks?.join(', ')}]` : ''}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+
+                                {selectedDevoteeId && (
+                                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>Devotee details auto-populated! Review track & meals below and add to batch.</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {entryMode === 'manual' && (
+                              <div className="flex items-center gap-2 text-xs font-bold text-teal-950 bg-teal-100/80 px-3.5 py-2 rounded-xl border border-teal-300/80 mt-1">
+                                <UserPlus className="w-4 h-4 text-teal-700 shrink-0" />
+                                <span>Manual Devotee Mode: Enter devotee profile details below and add to batch.</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <form onSubmit={handleAddEntry} className="space-y-6">
+                          
+                          {/* Section A: Personal & Contact Information */}
+                          <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
+                            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
+                              <User className="w-4 h-4 text-amber-600" />
+                              <span>Devotee Personal Information</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Participant Full Name *
+                                  {!isManager && (
+                                    <span className="text-[10px] text-slate-400 font-normal ml-1.5">(Your Profile)</span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  name="participantName"
+                                  value={formData.participantName}
+                                  onChange={handleChange}
+                                  readOnly={!isManager}
+                                  placeholder="Devotee / Student name"
+                                  className={`w-full px-4 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-xs outline-none transition-all placeholder:text-slate-400 ${
+                                    !isManager
+                                      ? 'bg-slate-100 text-slate-700 border-slate-200 cursor-not-allowed'
+                                      : 'border-slate-300 bg-white text-slate-900 hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                                  }`}
+                                />
+                              </div>
+
+                               <div>
+                                 <PhoneInputWithCountry
+                                   label="WhatsApp Number"
+                                   required
+                                   value={formData.whatsapp}
+                                   onChange={(fullPhone) => setFormData((p) => ({ ...p, whatsapp: fullPhone }))}
+                                   disabled={!isManager}
+                                   placeholder="e.g. 9876543210"
+                                 />
+                               </div>
 
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -1498,6 +1923,31 @@ export default function PublicCampRegistrationPage() {
                               placeholder="e.g. 23"
                               className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
                             />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                              <span>No. of Rounds Chanting *</span>
+                              {formData.rounds && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'} / day
+                                </span>
+                              )}
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min={0}
+                              max={64}
+                              name="rounds"
+                              value={formData.rounds}
+                              onChange={handleChange}
+                              placeholder="e.g. 16 (Daily chanting rounds)"
+                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                            />
+                            <span className="text-[10px] text-slate-400 mt-0.5 block">
+                              Sub-camps with minimum round requirements (e.g. Nistha) appear dynamically based on your daily chanting rounds.
+                            </span>
                           </div>
 
                           <div className="sm:col-span-2">
@@ -1601,21 +2051,50 @@ export default function PublicCampRegistrationPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Select Camp (Category) *
+                            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                              <span>Select Camp (Category) *</span>
+                              {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
+                                <span className="text-[10px] font-medium text-amber-700">
+                                  ({availableTracksForDevotee.length}/{camp.tracks.length} eligible)
+                                </span>
+                              )}
                             </label>
                             <select
                               name="campTrack"
                               value={formData.campTrack}
                               onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                              className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${
+                                isCurrentTrackAlreadyRegistered
+                                  ? 'border-amber-400 ring-4 ring-amber-300/30 text-amber-900 bg-amber-50/50'
+                                  : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                              }`}
                             >
-                              {(camp.tracks || []).map((track) => (
-                                <option key={track} value={track}>
-                                  {track}
-                                </option>
-                              ))}
+                              {availableTracksForDevotee.length === 0 ? (
+                                <option value="" disabled>No eligible camp tracks for {formData.rounds || 0} rounds</option>
+                              ) : (
+                                availableTracksForDevotee.map((track) => {
+                                  const isTaken = activeRegisteredTracks.includes(track.trim());
+                                  return (
+                                    <option key={track} value={track} disabled={isTaken} className={isTaken ? 'text-gray-400 bg-gray-50' : ''}>
+                                      {track} {isTaken ? '• (Already Registered)' : ''}
+                                    </option>
+                                  );
+                                })
+                              )}
                             </select>
+                            {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
+                              <p className="mt-1 text-[11px] text-slate-500 italic">
+                                * Sub-camps requiring higher chanting rounds (e.g. 16 rounds) unlock automatically when your chanting rounds meet the requirement.
+                              </p>
+                            )}
+                            {isCurrentTrackAlreadyRegistered && (
+                              <p className="mt-1 text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                <span>
+                                  {isManager && selectedDevotee ? selectedDevotee.name : 'You'} is already registered for &quot;{formData.campTrack}&quot;. Please select another camp/track.
+                                </span>
+                              </p>
+                            )}
                           </div>
 
                           <div>
@@ -1628,13 +2107,14 @@ export default function PublicCampRegistrationPage() {
                               onChange={handleChange}
                               className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
                             >
-                              {(camp.participant_types || ['Camp Participant', 'Mentor', 'Volunteer', 'Brahmachari']).map(
-                                (role) => (
-                                  <option key={role} value={role}>
-                                    {role}
-                                  </option>
-                                )
-                              )}
+                              {((camp?.participant_types && camp.participant_types.length > 0)
+                                ? camp.participant_types
+                                : ['Camp Participant', 'Mentor', 'Volunteer', 'Brahmachari']
+                              ).map((role) => (
+                                <option key={role} value={role}>
+                                  {role}
+                                </option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -1845,14 +2325,29 @@ export default function PublicCampRegistrationPage() {
                       <div className="flex justify-end pt-2">
                         <button
                           type="submit"
-                          className="inline-flex items-center gap-2 px-7 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98]"
+                          disabled={isCurrentTrackAlreadyRegistered}
+                          className={`inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs font-bold transition-all shadow-md ${
+                            isCurrentTrackAlreadyRegistered
+                              ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                              : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                          }`}
                         >
                           <Plus className="w-4 h-4" />
-                          {editIndex !== null ? 'Update Attendee' : 'Add Devotee to Batch'}
+                          <span>
+                            {isCurrentTrackAlreadyRegistered
+                              ? 'Already Registered for This Camp/Track'
+                              : editIndex !== null
+                              ? 'Update Attendee'
+                              : isManager
+                              ? 'Add Devotee to Batch'
+                              : 'Confirm My Registration Entry'}
+                          </span>
                         </button>
                       </div>
                     </form>
-                  </div>
+                  </>
+                )}
+              </div>
                 )}
 
                 {/* STEP 3: BATCH DEVOTEES TABLE */}
@@ -2070,9 +2565,9 @@ export default function PublicCampRegistrationPage() {
 
       {/* PAYMENT METHOD SELECTION MODAL: Clean, Spacious, Professional Styling */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-amber-600" />
                 Select Payment Method
@@ -2089,7 +2584,7 @@ export default function PublicCampRegistrationPage() {
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
               {paymentError && (
                 <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -2213,7 +2708,7 @@ export default function PublicCampRegistrationPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
                     <button
                       type="button"
                       onClick={() => setSelectedMethod(null)}
@@ -2271,7 +2766,7 @@ export default function PublicCampRegistrationPage() {
                     </span>
                   </div>
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
                     <button
                       type="button"
                       onClick={() => setSelectedMethod(null)}
@@ -2430,7 +2925,7 @@ export default function PublicCampRegistrationPage() {
                             <img
                               src={ittScreenshotPreview}
                               alt="Payment Screenshot Preview"
-                              className="max-h-36 mx-auto rounded-lg border border-slate-200 object-contain shadow-xs"
+                              className="max-h-24 sm:max-h-28 mx-auto rounded-lg border border-slate-200 object-contain shadow-xs"
                             />
                             <div className="flex items-center justify-center gap-2">
                               <span className="text-[11px] text-emerald-700 font-bold">Screenshot ready to upload</span>
@@ -2466,7 +2961,7 @@ export default function PublicCampRegistrationPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
                     <button
                       type="button"
                       onClick={() => setSelectedMethod(null)}
@@ -2610,22 +3105,46 @@ export default function PublicCampRegistrationPage() {
               /* STEP 1: LOOKUP BOOKING */
               <div className="space-y-4">
                 <form onSubmit={handleLookupForCancel} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                      Enter Your Registered WhatsApp Phone Number or Email *
-                    </label>
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        required
-                        value={cancelLookupQuery}
-                        onChange={(e) => setCancelLookupQuery(e.target.value)}
-                        placeholder="e.g. 9876543210 or devotee@gmail.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
-                      />
+                  {user ? (
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Registered Account Identity
+                      </span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-900">
+                        <span className="flex items-center gap-1.5">
+                          <UserCircle className="w-4 h-4 text-amber-600" />
+                          {userData?.name || 'Devotee'}
+                        </span>
+                        {userData?.phone && (
+                          <span className="flex items-center gap-1.5 font-mono text-slate-700">
+                            <Phone className="w-3.5 h-3.5 text-amber-600" />
+                            {userData.phone}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <Mail className="w-3.5 h-3.5 text-amber-600" />
+                          {user?.email || userData?.email}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                        Enter Booking Group ID (e.g. GRP_...) from confirmation email *
+                      </label>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          value={cancelLookupQuery}
+                          onChange={(e) => setCancelLookupQuery(e.target.value)}
+                          placeholder="e.g. GRP_ABCD1234EF"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {cancelLookupError && (
                     <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
@@ -2729,23 +3248,25 @@ export default function PublicCampRegistrationPage() {
                       const isRefundRejected = matchingRefund?.status === 'rejected';
                       // An attendee is only permanently locked out if already cancelled and their refund wasn't rejected
                       const isAlreadyCancelled = reg.is_cancelled && !isRefundRejected;
+                      const isPendingApproval = reg.payment_status !== 'completed';
+                      const isLocked = isAlreadyCancelled || isPendingApproval;
                       const isChecked = selectedRegIdsToCancel.includes(reg.id!);
 
                       return (
                         <div
                           key={reg.id}
                           className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 text-xs ${
-                            isAlreadyCancelled
+                            isLocked
                               ? 'bg-slate-100 border-slate-200 opacity-60'
                               : isChecked
                               ? 'bg-amber-50/70 border-amber-300 shadow-2xs'
                               : 'bg-white border-slate-200'
                           }`}
                         >
-                          <label className="flex items-center gap-3 cursor-pointer flex-1">
+                          <label className={`flex items-center gap-3 flex-1 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                             <input
                               type="checkbox"
-                              disabled={isAlreadyCancelled}
+                              disabled={isLocked}
                               checked={isChecked}
                               onChange={(e) => {
                                 if (e.target.checked) {
@@ -2754,11 +3275,16 @@ export default function PublicCampRegistrationPage() {
                                   setSelectedRegIdsToCancel(prev => prev.filter(id => id !== reg.id!));
                                 }
                               }}
-                              className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                              className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed"
                             />
                             <div>
                               <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
                                 <span>{reg.participant_name}</span>
+                                {isPendingApproval && (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                                    ⏳ Awaiting Payment Approval (IDT/ITT) • Cannot Cancel Until Confirmed
+                                  </span>
+                                )}
                                 {isAlreadyCancelled && (
                                   <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
                                     Already Cancelled {matchingRefund?.status === 'refunded' ? '(Refunded)' : '(Pending Payout)'}

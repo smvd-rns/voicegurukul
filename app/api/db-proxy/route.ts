@@ -403,7 +403,7 @@ export async function POST(req: NextRequest) {
     const parseCol = (c: string) => {
       if (typeof c !== 'string') return '';
       const clean = c.trim();
-      if (!/^[a-zA-Z0-9_]+(->>[a-zA-Z0-9_]+)?$/.test(clean)) return '';
+      if (!/^[a-zA-Z0-9_]+((->|->>)[a-zA-Z0-9_]+)*$/.test(clean)) return '';
       return clean.replace(/->>([a-zA-Z0-9_]+)/g, "->>'$1'").replace(/->([a-zA-Z0-9_]+)/g, "->'$1'");
     };
 
@@ -466,7 +466,7 @@ export async function POST(req: NextRequest) {
         const partsClauses = parts.map(part => {
           const subParts = part.split('.');
           const col = parseCol(subParts[0]);
-          if (!col) return 'TRUE';
+          if (!col) return '1=0';
           const op = subParts[1];
           const val = subParts.slice(2).join('.');
 
@@ -478,7 +478,7 @@ export async function POST(req: NextRequest) {
             params.push(cleanVal);
             return `${col} = ANY($${paramCounter++})`;
           }
-          return 'TRUE';
+          return '1=0';
         });
         whereClauses.push(`(${partsClauses.join(' OR ')})`);
       });

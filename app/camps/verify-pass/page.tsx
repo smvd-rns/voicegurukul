@@ -105,7 +105,7 @@ function VerifyPassContent() {
   const isRefunded = refund?.status === 'refunded' || reg?.payment_status === 'refunded';
   const isRefundPending = refund?.status === 'pending';
   const isCancelled = reg?.is_cancelled || isRefunded;
-  const isPaymentPending = reg?.payment_status === 'pending';
+  const isPaymentPending = reg?.payment_status === 'pending' || reg?.payment_status === 'processing';
 
   if (authLoading || !user || !isAuthorizedAdmin) {
     return (
@@ -209,7 +209,7 @@ function VerifyPassContent() {
                 </h3>
               </div>
               <p className="text-xs text-amber-800">
-                Payment for this registration is still under verification. Please check with registration desk.
+                Payment for this registration ({reg.payment_method || 'Transfer'}) is still under verification. Devotee pass is NOT active and NOT eligible for camp entry or Prasadam until approved by central administration.
               </p>
             </div>
           ) : mealEvaluation ? (
@@ -298,14 +298,16 @@ function VerifyPassContent() {
             </div>
           </div>
 
-          {/* 3. FULL PRASADAM COUPON CARD WITH MEAL MATRIX */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <Utensils className="w-4 h-4 text-amber-600" />
-              <span>Full Meal Schedule Pass</span>
-            </h3>
-            <CampPrasadamCard registration={reg} standalone={true} hideActions={true} />
-          </div>
+          {/* 3. FULL PRASADAM COUPON CARD WITH MEAL MATRIX (Only for approved registrations) */}
+          {!isCancelled && !isPaymentPending && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Utensils className="w-4 h-4 text-amber-600" />
+                <span>Full Meal Schedule Pass</span>
+              </h3>
+              <CampPrasadamCard registration={reg} standalone={true} hideActions={true} />
+            </div>
+          )}
         </div>
       )}
 

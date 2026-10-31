@@ -9,6 +9,8 @@ import { getTemplesFromSupabase } from '@/lib/supabase/temples';
 import { supabase } from '@/lib/supabase/config';
 import { Loader2, User, Phone, Mail, Calendar, Home, Building2, CheckCircle2, ChevronRight, Flower, AlertTriangle } from 'lucide-react';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
+import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 
 export default function CompleteRegistrationPage() {
     const { user, userData, loading: authLoading, refreshUserData } = useAuth();
@@ -212,7 +214,8 @@ export default function CompleteRegistrationPage() {
         // Validate Step 1
         if (activeStep === 1) {
             if (!formData.name.trim()) return setError('Name is required');
-            if (!formData.phone.trim()) return setError('Phone is required');
+            const phoneVal = validatePhoneNumber(formData.phone, '+91', true);
+            if (!phoneVal.valid) return setError(phoneVal.error || 'Please enter a valid phone number');
             if (!formData.birthDate) return setError('Date of Birth is required');
             setActiveStep(2);
         } else {
@@ -513,24 +516,18 @@ export default function CompleteRegistrationPage() {
                                 </div>
                             </div>
 
-                            {/* Phone */}
+                            {/* Phone with Country Code */}
                             <div className="group">
-                                <label htmlFor="phone" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-orange-600 transition-colors">
-                                    Phone Number <span className="text-red-500">*</span>
-                                </label>
-                                <div className="relative">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                        <Phone className="h-5 w-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                                    </div>
-                                    <input
-                                        type="tel"
-                                        id="phone"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-orange-600 sm:text-sm sm:leading-6 transition-all"
-                                        placeholder="+91 98765 43210"
-                                    />
-                                </div>
+                                <PhoneInputWithCountry
+                                    id="phone"
+                                    label="Phone Number"
+                                    required
+                                    value={formData.phone}
+                                    onChange={(fullPhone) => {
+                                        setFormData(prev => ({ ...prev, phone: fullPhone }));
+                                        setError('');
+                                    }}
+                                />
                             </div>
 
                             {/* Email (Read-only) */}

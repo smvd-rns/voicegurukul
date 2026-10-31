@@ -11,10 +11,12 @@ import {
   Filter, Archive, Tag, Gift, Percent, Landmark, Building2, AlertTriangle,
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
-  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette, QrCode
+  Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette, QrCode,
+  Upload, UploadCloud
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { getThumbnailUrl } from '@/lib/utils/google-drive';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampStaffRoleManagementModal from '@/components/camps/CampStaffRoleManagementModal';
 import AdminGlobalPrasadamAuditTab from '@/components/camps/AdminGlobalPrasadamAuditTab';
@@ -29,7 +31,8 @@ import {
   deleteCampAction,
   getAllCampTransactionsAction,
   getAllCampRefundsAction,
-  verifyAndApproveCampBatchAction
+  verifyAndApproveCampBatchAction,
+  getAllCentersForCampConfigAction
 } from './actions';
 
 // Formats any Date object or ISO string strictly into YYYY-MM-DD for HTML5 date inputs
@@ -247,6 +250,10 @@ export default function AdminCampsPage() {
   const [newCouponDesc, setNewCouponDesc] = useState('');
   const [newCouponMaxUses, setNewCouponMaxUses] = useState<string>('');
 
+  // Center restriction config state
+  const [availableCenters, setAvailableCenters] = useState<{ id: string; name: string; temple_name?: string }[]>([]);
+  const [centerSearchFilter, setCenterSearchFilter] = useState('');
+
   // Custom Delete Confirmation Modal State
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
@@ -271,6 +278,9 @@ export default function AdminCampsPage() {
     description: '',
     venue: 'Central VOICE, Pune',
     status: 'active' as 'draft' | 'active' | 'closed' | 'completed' | 'archived',
+    poster_url: '',
+    criteria_message: '',
+    banner_message: '',
     start_date: '',
     end_date: '',
     registration_start_date: '',
@@ -341,7 +351,8 @@ export default function AdminCampsPage() {
       refund_meals: true,
       refund_accommodation: true,
       refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
-    }
+    },
+    eligible_centers: [] as string[]
   });
 
   const loadCamps = async () => {
@@ -363,6 +374,17 @@ export default function AdminCampsPage() {
 
   useEffect(() => {
     loadCamps();
+    const fetchCenters = async () => {
+      try {
+        const cRes = await getAllCentersForCampConfigAction();
+        if (cRes.success && cRes.centers) {
+          setAvailableCenters(cRes.centers);
+        }
+      } catch (err) {
+        console.error('Failed to load centers for camp config:', err);
+      }
+    };
+    fetchCenters();
   }, []);
 
   const loadAuditData = async () => {
@@ -841,6 +863,9 @@ export default function AdminCampsPage() {
       title: '',
       slug: '',
       description: 'Spiritual Retreat & Devotee Leadership Camp',
+      poster_url: '',
+      criteria_message: '',
+      banner_message: '',
       venue: 'Central VOICE, Pune',
       status: 'active',
       start_date: '',
@@ -913,7 +938,8 @@ export default function AdminCampsPage() {
         refund_meals: true,
         refund_accommodation: true,
         refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
-      }
+      },
+      eligible_centers: []
     });
 
     setIsModalOpen(true);
@@ -945,6 +971,9 @@ export default function AdminCampsPage() {
       title: camp.title,
       slug: camp.slug,
       description: camp.description || '',
+      poster_url: camp.poster_url || '',
+      criteria_message: camp.criteria_message || '',
+      banner_message: camp.banner_message || '',
       venue: camp.venue || 'Central VOICE, Pune',
       status: camp.status,
       start_date: formatDateForInput(camp.start_date),
@@ -1007,10 +1036,68 @@ export default function AdminCampsPage() {
         refund_meals: camp.refund_config?.refund_meals ?? true,
         refund_accommodation: camp.refund_config?.refund_accommodation ?? true,
         refund_instructions: camp.refund_config?.refund_instructions || 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
-      }
+      },
+      eligible_centers: Array.isArray(camp.eligible_centers) ? camp.eligible_centers : []
     });
 
     setIsModalOpen(true);
+  };
+
+  const posterFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [posterUploading, setPosterUploading] = useState(false);
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null);
+
+  const handlePosterFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPosterUploadError('Please select a valid image file (PNG, JPG, WebP, etc.)');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      setPosterUploadError('Image size should be less than 15MB');
+      return;
+    }
+
+    setPosterUploading(true);
+    setPosterUploadError(null);
+
+    try {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('action', 'upload');
+      uploadData.append('userName', (userData as any)?.name || 'Admin');
+
+      const res = await fetch('/api/upload/google-drive', {
+        method: 'POST',
+        body: uploadData,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to upload photo to Google Drive');
+      }
+
+      const driveUrl = json.data?.directImageUrl || json.data?.webViewLink || json.data?.webContentLink;
+      if (!driveUrl) {
+        throw new Error('Google Drive upload succeeded but no link was returned');
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        poster_url: driveUrl
+      }));
+    } catch (err: any) {
+      console.error('Google Drive photo upload failed:', err);
+      setPosterUploadError(err?.message || 'Error uploading photo to Google Drive');
+    } finally {
+      setPosterUploading(false);
+      if (posterFileInputRef.current) {
+        posterFileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleSaveCamp = async (e: React.FormEvent) => {
@@ -1028,6 +1115,9 @@ export default function AdminCampsPage() {
         title: formData.title,
         slug: formData.slug || formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         description: formData.description,
+        poster_url: formData.poster_url || undefined,
+        criteria_message: formData.criteria_message || undefined,
+        banner_message: formData.banner_message || undefined,
         venue: formData.venue,
         status: formData.status,
         start_date: formData.start_date,
@@ -1053,7 +1143,8 @@ export default function AdminCampsPage() {
           itt_bank_details: formData.payment_config.itt_bank_details,
           sheets_webhook_url: formData.payment_config.sheets_webhook_url
         },
-        refund_config: formData.refund_config
+        refund_config: formData.refund_config,
+        eligible_centers: formData.eligible_centers || []
       };
 
       let res;
@@ -1150,6 +1241,29 @@ export default function AdminCampsPage() {
     }
   };
 
+  const toggleCenterSelection = (centerName: string) => {
+    setFormData((prev) => {
+      const current = prev.eligible_centers || [];
+      const exists = current.includes(centerName);
+      const updated = exists ? current.filter((c) => c !== centerName) : [...current, centerName];
+      return { ...prev, eligible_centers: updated };
+    });
+  };
+
+  const selectAllCenters = () => {
+    setFormData((prev) => ({
+      ...prev,
+      eligible_centers: availableCenters.map((c) => c.name)
+    }));
+  };
+
+  const clearAllCenters = () => {
+    setFormData((prev) => ({
+      ...prev,
+      eligible_centers: []
+    }));
+  };
+
   const addTrack = () => {
     if (!formData.newTrackInput.trim()) return;
     if (formData.tracks.includes(formData.newTrackInput.trim())) return;
@@ -1171,7 +1285,7 @@ export default function AdminCampsPage() {
     });
   };
 
-  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string }) => {
+  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string; min_rounds?: number }) => {
     const existing = formData.special_waivers.track_fees || [];
     const index = existing.findIndex((tf) => tf.track.toLowerCase() === trackName.toLowerCase());
     let nextList: CampTrackFee[];
@@ -1188,7 +1302,8 @@ export default function AdminCampsPage() {
         {
           track: trackName,
           fee: updates.fee ?? 0,
-          label: updates.label ?? 'Camp Booklet & Study Material'
+          label: updates.label ?? 'Camp Booklet & Study Material',
+          min_rounds: updates.min_rounds ?? 0,
         }
       ];
     }
@@ -1942,6 +2057,14 @@ export default function AdminCampsPage() {
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <Utensils className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                         <span>{(camp.meal_pricing || []).length} Scheduled Meal Days</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">
+                          {camp.eligible_centers && camp.eligible_centers.length > 0
+                            ? `Restricted: ${camp.eligible_centers.length} Centers (${camp.eligible_centers.slice(0, 2).join(', ')}${camp.eligible_centers.length > 2 ? '...' : ''})`
+                            : 'Open to All Centers'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -3604,6 +3727,306 @@ export default function AdminCampsPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Panel: Camp Poster, Eligibility Criteria & Colorful Announcement */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50/60 via-slate-50 to-orange-50/40 border border-amber-200/90 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-amber-200/60 pb-2">
+                      <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4 text-amber-600" />
+                        Camp Poster Image &amp; Participant Eligibility
+                      </h4>
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                        Student Card &amp; Presentation Display
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                          <span>Camp Poster / Banner Photo</span>
+                          {formData.poster_url && (
+                            <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              Photo Configured
+                            </span>
+                          )}
+                        </label>
+
+                        {/* Hidden file input for Google Drive upload */}
+                        <input
+                          ref={posterFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePosterFileUpload}
+                          className="hidden"
+                        />
+
+                        {/* Upload to Google Drive Button & Direct Link Input */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
+                          <button
+                            type="button"
+                            disabled={posterUploading}
+                            onClick={() => posterFileInputRef.current?.click()}
+                            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-60"
+                          >
+                            {posterUploading ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Uploading to Drive...</span>
+                              </>
+                            ) : (
+                              <>
+                                <UploadCloud className="w-4 h-4" />
+                                <span>Upload to Google Drive</span>
+                              </>
+                            )}
+                          </button>
+
+                          <div className="flex-1 relative">
+                            <input
+                              type="url"
+                              value={formData.poster_url || ''}
+                              onChange={(e) => setFormData({ ...formData, poster_url: e.target.value })}
+                              placeholder="Or paste Google Drive link / Image URL..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-purple-400 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/15 outline-none transition-all placeholder:text-slate-400 pr-8"
+                            />
+                            {formData.poster_url && (
+                              <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, poster_url: '' })}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 transition-colors p-1 cursor-pointer"
+                                title="Remove photo"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {posterUploadError && (
+                          <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2 mb-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                            <span>{posterUploadError}</span>
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-slate-500">
+                          Upload directly to Google Drive or paste an existing link. Photos are automatically converted into fast CDN images for promotional banners and devotee passes across the website.
+                        </p>
+
+                        {/* Live Photo Preview */}
+                        {formData.poster_url && (
+                          <div className="mt-2.5 relative w-full h-40 rounded-xl overflow-hidden border-2 border-purple-300 bg-slate-900 shadow-md">
+                            <img
+                              src={getThumbnailUrl(formData.poster_url) || formData.poster_url}
+                              alt="Poster Preview"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] text-white font-bold border border-white/20">
+                              Google Drive Preview
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1">
+                          Basic Eligibility Criteria (Audience Requirements)
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={formData.criteria_message || ''}
+                          onChange={(e) => setFormData({ ...formData, criteria_message: e.target.value })}
+                          placeholder="e.g. Open for devotees chanting minimum 4 rounds daily. Recommended age: 18–35. Bachelor &amp; Married tracks available."
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Displayed as an eligibility highlight badge on the camp card and in the presentation overview.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1">
+                          Camp Promotional / Welcome Message (Color Presentation View)
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={formData.banner_message || ''}
+                          onChange={(e) => setFormData({ ...formData, banner_message: e.target.value })}
+                          placeholder="e.g. Join 300+ youth devotees for a blissful 4-day spiritual immersion filled with uplifting kirtans, transformative seminars, and sattvic feasts!"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Shown in a colorful presentation section when devotees click &quot;Explore Camp&quot;.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel 5: Center-Based Access & Registration Restriction */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 via-slate-50 to-blue-50/40 border border-indigo-200/90 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-200/60 pb-3">
+                      <div>
+                        <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-indigo-600" />
+                          Center Registration Restriction (Audience Control)
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1">
+                          Select the centers eligible to view and register for this camp. Only devotees from selected centers can access it.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+                            (formData.eligible_centers?.length || 0) > 0
+                              ? 'bg-amber-100 text-amber-900 border-amber-300'
+                              : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              (formData.eligible_centers?.length || 0) > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                          />
+                          {(formData.eligible_centers?.length || 0) > 0
+                            ? `Restricted: ${formData.eligible_centers.length} center(s)`
+                            : 'Open to All Centers (Public)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Filter and Quick Action Tools */}
+                    <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between pt-1">
+                      <div className="relative flex-1">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={centerSearchFilter}
+                          onChange={(e) => setCenterSearchFilter(e.target.value)}
+                          placeholder="Search centers by name or temple..."
+                          className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        />
+                        {centerSearchFilter && (
+                          <button
+                            type="button"
+                            onClick={() => setCenterSearchFilter('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={selectAllCenters}
+                          className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Select All ({availableCenters.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearAllCenters}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Clear All (Open to All)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active Selected Center Badges */}
+                    {(formData.eligible_centers?.length || 0) > 0 && (
+                      <div className="p-3 bg-white/80 rounded-xl border border-indigo-100 space-y-1.5">
+                        <div className="text-[11px] font-bold text-indigo-900 flex items-center justify-between">
+                          <span>Allowed Centers ({formData.eligible_centers.length}):</span>
+                          <span className="text-[10px] font-medium text-slate-500">Click &times; to remove</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                          {formData.eligible_centers.map((cName) => (
+                            <span
+                              key={cName}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100/80 text-indigo-900 text-xs font-bold border border-indigo-300/80"
+                            >
+                              <span>{cName}</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleCenterSelection(cName)}
+                                className="text-indigo-600 hover:text-indigo-950 p-0.5 rounded-full hover:bg-indigo-200/70"
+                                title={`Remove ${cName}`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Centers Checkbox Selection Grid */}
+                    <div className="bg-white rounded-xl border border-slate-200 p-3 max-h-56 overflow-y-auto space-y-1">
+                      {availableCenters.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-slate-400">
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
+                          Loading centers list...
+                        </div>
+                      ) : (
+                        (() => {
+                          const filtered = availableCenters.filter((c) => {
+                            if (!centerSearchFilter.trim()) return true;
+                            const q = centerSearchFilter.toLowerCase();
+                            return (
+                              c.name.toLowerCase().includes(q) ||
+                              (c.temple_name || '').toLowerCase().includes(q)
+                            );
+                          });
+
+                          if (filtered.length === 0) {
+                            return (
+                              <div className="py-6 text-center text-xs text-slate-400">
+                                No centers match &quot;{centerSearchFilter}&quot;.
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                              {filtered.map((center) => {
+                                const isSelected = (formData.eligible_centers || []).includes(center.name);
+                                return (
+                                  <label
+                                    key={center.id}
+                                    onClick={() => toggleCenterSelection(center.name)}
+                                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                                      isSelected
+                                        ? 'bg-indigo-50/80 border-indigo-400/90 text-indigo-950 shadow-xs'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50/80 text-slate-700'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-slate-900 truncate">{center.name}</div>
+                                      {center.temple_name && (
+                                        <div className="text-[10px] text-slate-500 truncate">{center.temple_name}</div>
+                                      )}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3684,30 +4107,42 @@ export default function AdminCampsPage() {
                           );
                           const feeVal = tf && tf.fee !== undefined && tf.fee !== null ? tf.fee : 0;
                           const labelVal = tf?.label || '';
+                          const minRoundsVal = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? tf.min_rounds : 0;
 
                           return (
                             <div
                               key={track}
                               className="p-4 rounded-xl bg-white border-2 border-slate-200/80 hover:border-amber-400 transition-all shadow-2xs space-y-3"
                             >
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
                                 <span className="font-extrabold text-xs text-slate-900 flex items-center gap-2">
                                   <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
                                   {track}
                                 </span>
-                                {feeVal > 0 ? (
-                                  <span className="text-[11px] font-black text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-300">
-                                    +₹{feeVal} {labelVal ? `• ${labelVal}` : '• Extra Charge'}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                                    Standard Rate (No Extra Fee)
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {minRoundsVal > 0 ? (
+                                    <span className="text-[11px] font-black text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200 shadow-2xs flex items-center gap-1">
+                                      <span>📿</span> Min. {minRoundsVal} Rounds Chanting
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      Open to All (0+ Rounds)
+                                    </span>
+                                  )}
+                                  {feeVal > 0 ? (
+                                    <span className="text-[11px] font-black text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-300">
+                                      +₹{feeVal} {labelVal ? `• ${labelVal}` : '• Extra Charge'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                      Standard Rate (No Extra Fee)
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-100">
-                                <div>
+                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1 border-t border-slate-100">
+                                <div className="sm:col-span-3">
                                   <label className="block text-[11px] font-bold text-slate-600 mb-1">
                                     Extra Charge Amount (₹)
                                   </label>
@@ -3727,7 +4162,7 @@ export default function AdminCampsPage() {
                                   </span>
                                 </div>
 
-                                <div className="sm:col-span-2">
+                                <div className="sm:col-span-6">
                                   <label className="block text-[11px] font-bold text-slate-600 mb-1">
                                     Charge Description / Label (Free Text)
                                   </label>
@@ -3740,6 +4175,32 @@ export default function AdminCampsPage() {
                                   />
                                   <span className="text-[10px] text-slate-400 mt-0.5 block">
                                     Visible to devotees during registration as a transparent breakdown line item.
+                                  </span>
+                                </div>
+
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                    <span>Min. Chanting Rounds</span>
+                                    {minRoundsVal > 0 && (
+                                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded">
+                                        {minRoundsVal}+
+                                      </span>
+                                    )}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="64"
+                                    value={minRoundsVal > 0 ? minRoundsVal : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value === '' ? 0 : Math.max(0, Number(e.target.value));
+                                      updateTrackFee(track, { min_rounds: val });
+                                    }}
+                                    placeholder="0 (All Devotees)"
+                                    className="w-full px-3 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-indigo-500 outline-none placeholder:text-slate-400"
+                                  />
+                                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                                    0 or empty = open to all. e.g. 16 = only devotees chanting 16+ rounds can see/register.
                                   </span>
                                 </div>
                               </div>

@@ -77,7 +77,7 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
 
                 const isSuperAdmin = normalizedRoles.some(r => r === '8' || r === 'super_admin');
                 const isTempleAdmin = normalizedRoles.some(r => ['11', '12', '13', '21', 'managing_director', 'director', 'central_voice_manager', 'youth_preacher'].includes(r));
-                const isCenterAdmin = normalizedRoles.some(r => ['14', '15', '16', 'project_advisor', 'project_manager', 'acting_manager'].includes(r));
+                const isCenterAdmin = normalizedRoles.some(r => ['14', '15', '16', '17', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', 'project_advisor', 'project_manager', 'acting_manager', 'oc'].includes(r));
                 const isEventAdmin = normalizedRoles.some(r => r === '30' || r === 'event_admin');
 
                 let templeQuery = supabase.from('temples').select('id, name').order('name');
@@ -106,7 +106,7 @@ export default function AdminEventCompose({ onSuccess }: AdminEventComposeProps)
 
                 // Filter for Center-level Admin (PM, Advisor, etc.)
                 if (isCenterAdmin && !isSuperAdmin) {
-                    centerQuery = centerQuery.or(`project_manager_id.eq.${userData.id},project_advisor_id.eq.${userData.id},acting_manager_id.eq.${userData.id}`);
+                    centerQuery = centerQuery.or(`project_manager_id.eq.${userData.id},project_advisor_id.eq.${userData.id},acting_manager_id.eq.${userData.id},oc_id.eq.${userData.id},internal_manager_id.eq.${userData.id},youth_preacher_id.eq.${userData.id},preaching_coordinator_id.eq.${userData.id},morning_program_in_charge_id.eq.${userData.id},accountant_id.eq.${userData.id},kitchen_head_id.eq.${userData.id},study_in_charge_id.eq.${userData.id},event_admin_id.eq.${userData.id},grihstha_counselor_id.eq.${userData.id},easy_incharge_id.eq.${userData.id},prerna_incharge_id.eq.${userData.id}`);
                 }
 
                 const [{ data: templeData }, { data: centerData }] = await Promise.all([

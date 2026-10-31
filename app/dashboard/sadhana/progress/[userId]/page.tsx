@@ -12,6 +12,7 @@ import { Calendar, TrendingUp, BookOpen, Clock, Filter, ChevronLeft, ChevronRigh
 import { format, subDays, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { getUsersByCounselorEmail } from '@/lib/supabase/counselors';
 import { getBCVoiceManagerRequestByUserId } from '@/lib/supabase/bc-voice-manager-requests';
+import { supabase } from '@/lib/supabase/config';
 
 export default function StudentProgressPage() {
   const params = useParams();
@@ -107,14 +108,18 @@ export default function StudentProgressPage() {
       setStudent(studentData);
 
       const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
-      const hasCounselorRole = userRoles.includes('counselor') || userRoles.includes(2) ||
-        userRoles.includes('senior_counselor') || userRoles.includes(3);
+      const normalizedUserRoles = userRoles.map((r: any) => Number(r));
+      const isSuperAdmin = normalizedUserRoles.includes(8) || userRoles.includes('super_admin');
+      const hasTempleAdminRole = normalizedUserRoles.some((r: number) => [11, 12, 13, 21].includes(r));
+      const hasCenterAdminRole = normalizedUserRoles.some((r: number) => [14, 15, 16, 17, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33].includes(r));
+      const hasCounselorRole = userRoles.includes('counselor') || normalizedUserRoles.includes(2) ||
+        userRoles.includes('senior_counselor') || normalizedUserRoles.includes(3) || normalizedUserRoles.includes(20);
 
-      let hasBCRole = userRoles.includes('bc_voice_manager') || userRoles.includes(4);
-      const hasVoiceManagerRole = userRoles.includes('voice_manager') || userRoles.includes('senior_counselor') || userRoles.includes(3);
-      const hasZonalAdminRole = userRoles.includes('zonal_admin') || userRoles.includes(7);
-      const hasStateAdminRole = userRoles.includes('state_admin') || userRoles.includes(6);
-      const hasCityAdminRole = userRoles.includes('city_admin') || userRoles.includes(5);
+      let hasBCRole = userRoles.includes('bc_voice_manager') || normalizedUserRoles.includes(4);
+      const hasVoiceManagerRole = userRoles.includes('voice_manager') || userRoles.includes('senior_counselor') || normalizedUserRoles.includes(3);
+      const hasZonalAdminRole = userRoles.includes('zonal_admin') || normalizedUserRoles.includes(7);
+      const hasStateAdminRole = userRoles.includes('state_admin') || normalizedUserRoles.includes(6);
+      const hasCityAdminRole = userRoles.includes('city_admin') || normalizedUserRoles.includes(5);
 
       // Check request status if role is missing
       const bcRequest = await getBCVoiceManagerRequestByUserId(userData.id);
@@ -122,29 +127,50 @@ export default function StudentProgressPage() {
         hasBCRole = true;
       }
 
-      if (!hasCounselorRole && !hasBCRole && !hasVoiceManagerRole && !hasZonalAdminRole && !hasStateAdminRole && !hasCityAdminRole) {
+      if (!isSuperAdmin && !hasTempleAdminRole && !hasCenterAdminRole && !hasCounselorRole && !hasBCRole && !hasVoiceManagerRole && !hasZonalAdminRole && !hasStateAdminRole && !hasCityAdminRole) {
         router.push('/dashboard');
         return;
       }
 
-      let isAuthorized = false;
+      let isAuthorized = isSuperAdmin;
 
-      if (hasCounselorRole) {
+      if (!isAuthorized && hasCounselorRole) {
         // Check if this student is assigned to the counselor
         const counselorStudents = await getUsersByCounselorEmail(userData.email);
         isAuthorized = counselorStudents.some(s => s.id === userId);
       }
 
-      if (!isAuthorized && hasVoiceManagerRole) {
-        // Voice Manager access: check if student is in the same center
-        const managerCenter = userData.hierarchy?.center?.trim().toLowerCase();
-        const managerCenterId = userData.hierarchy?.centerId;
+      if (!isAuthorized && (hasCenterAdminRole || hasVoiceManagerRole)) {
+        // Query centers where manager is explicitly assigned in the database
+        const { data: assignedCenters } = await supabase
+          .from('centers')
+          .select('id, name')
+          .or(`project_manager_id.eq.${userData.id},project_advisor_id.eq.${userData.id},acting_manager_id.eq.${userData.id},oc_id.eq.${userData.id},care_giver_id.eq.${userData.id},youth_preacher_id.eq.${userData.id},internal_manager_id.eq.${userData.id},preaching_coordinator_id.eq.${userData.id},morning_program_in_charge_id.eq.${userData.id},accountant_id.eq.${userData.id},kitchen_head_id.eq.${userData.id},study_in_charge_id.eq.${userData.id},event_admin_id.eq.${userData.id},grihstha_counselor_id.eq.${userData.id},easy_incharge_id.eq.${userData.id},prerna_incharge_id.eq.${userData.id}`);
 
-        const studentCenter = studentData.hierarchy?.center?.trim().toLowerCase();
-        const studentCenterId = studentData.hierarchy?.centerId;
+        const assignedNames = (assignedCenters || []).map((c: any) => c.name?.trim().toLowerCase()).filter(Boolean);
+        const assignedIds = (assignedCenters || []).map((c: any) => c.id).filter(Boolean);
 
-        if ((managerCenterId && studentCenterId && managerCenterId === studentCenterId) ||
-          (managerCenter && studentCenter && managerCenter === studentCenter)) {
+        const sAny = studentData as any;
+        const studentCenter = (sAny.current_center || studentData.hierarchy?.currentCenter || studentData.hierarchy?.center || '').trim().toLowerCase();
+        const studentCenterId = sAny.center_id || studentData.hierarchy?.centerId;
+
+        if ((studentCenter && assignedNames.includes(studentCenter)) ||
+          (studentCenterId && assignedIds.includes(studentCenterId))) {
+          isAuthorized = true;
+        }
+      }
+
+      if (!isAuthorized && hasTempleAdminRole) {
+        const { data: assignedTemples } = await supabase
+          .from('temples')
+          .select('name')
+          .or(`managing_director_id.eq.${userData.id},director_id.eq.${userData.id},central_voice_manager_id.eq.${userData.id},yp_id.eq.${userData.id}`);
+
+        const assignedTempleNames = (assignedTemples || []).map((t: any) => t.name?.trim().toLowerCase()).filter(Boolean);
+        const sAny = studentData as any;
+        const studentTemple = (sAny.current_temple || studentData.hierarchy?.currentTemple || studentData.hierarchy?.temple || '').trim().toLowerCase();
+
+        if (studentTemple && assignedTempleNames.includes(studentTemple)) {
           isAuthorized = true;
         }
       }

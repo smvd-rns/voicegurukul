@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/config';
 import { validateMobile, validateEmail, isValidName } from '@/lib/utils/validation';
+import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -271,15 +272,11 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
 
             {/* Phone */}
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                Phone
-              </label>
-              <input
+              <PhoneInputWithCountry
                 id="phone"
-                type="tel"
+                label="Phone Number"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                onChange={(fullPhone) => setFormData({ ...formData, phone: fullPhone })}
               />
             </div>
 

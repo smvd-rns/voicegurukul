@@ -245,3 +245,13 @@ export function validateCounselorInput(
 
     return { valid: true };
 }
+
+// Re-export phone & country code validation utilities
+export {
+  COUNTRY_CODES,
+  parsePhoneNumber,
+  validatePhoneNumber,
+  type CountryCode,
+  type ParsedPhone,
+  type PhoneValidationResult,
+} from './phone-validation';

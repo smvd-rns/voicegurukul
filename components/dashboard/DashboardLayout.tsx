@@ -343,11 +343,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               title="Go to Home Page"
             >
               {isCollapsed ? (
-                <span className="text-base font-black text-amber-300 font-display tracking-widest">VG</span>
+                <span className="text-base font-black text-amber-400 font-display tracking-widest">VG</span>
               ) : (
-                <h1 className="text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
-                  VOICE Gurukul
-                </h1>
+                <div className="flex flex-col">
+                  <h1 className="text-sm lg:text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
+                    VOICE Gurukul
+                  </h1>
+                  <p className="text-[9px] font-bold text-amber-400/90 tracking-wider uppercase -mt-0.5 whitespace-nowrap">
+                    Rekindling Wisdom, Reviving Love
+                  </p>
+                </div>
               )}
             </Link>
             {!isCollapsed && (
@@ -375,7 +380,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Navigation */}
           <div className="flex-1 overflow-y-auto py-2.5 px-2.5 lg:px-2 sidebar-scroll relative z-10">
-            <nav className="space-y-0.5">
+            <nav className="space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const isMobileHidden = ['Dashboard', 'Sadhana', 'Communications', 'Data Center', 'Donations'].includes(item.name);
@@ -385,15 +390,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     key={item.name}
                     href={item.href}
                     title={isCollapsed ? item.name : undefined}
-                    className={`group items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'px-3 lg:px-3'} py-2 lg:py-2 rounded-xl transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${isActive ? 'bg-white/20 text-white font-bold shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                    className={`group items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'px-3 lg:px-3'} py-2 lg:py-2 rounded-xl transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${
+                      isActive 
+                        ? 'bg-black/25 text-white font-black shadow-inner border-l-4 border-amber-200 ring-1 ring-white/10' 
+                        : 'text-amber-100 hover:bg-black/15 hover:text-white'
+                    }`}
                     onClick={() => setSidebarOpen(false)}
                   >
                     <div className={`relative z-10 flex items-center ${isCollapsed ? 'lg:justify-center' : 'w-full'}`}>
-                      <div className={`p-1.5 rounded-lg transition-all duration-200 flex-shrink-0 ${isActive ? 'bg-white/20' : 'bg-white/5 group-hover:bg-white/15'}`}>
-                        <Icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`} />
+                      <div className={`p-1.5 rounded-lg transition-all duration-200 flex-shrink-0 ${
+                        isActive ? 'bg-amber-300 text-slate-950 font-black shadow-xs' : 'bg-black/15 text-amber-200 group-hover:bg-black/25 group-hover:text-white'
+                      }`}>
+                        <Icon className="h-4 w-4 transition-colors duration-200" />
                       </div>
                       {!isCollapsed && (
-                        <span className="ml-3 font-bold text-[10.5px] lg:text-[11px] tracking-wider uppercase font-sans truncate">
+                        <span className="ml-3 font-bold text-[10.5px] lg:text-[11px] tracking-wider uppercase font-sans truncate drop-shadow-2xs">
                           {item.name}
                         </span>
                       )}

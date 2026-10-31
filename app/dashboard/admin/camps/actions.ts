@@ -143,42 +143,110 @@ export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'u
       throw new Error(`A camp with slug "${slug}" already exists. Please choose a different title or slug.`);
     }
 
-    const sql = `
-      INSERT INTO camps (
-        slug, title, description, venue, status,
-        start_date, end_date,
-        registration_start_date, late_fee_start_date, registration_deadline,
-        late_fee, tracks, participant_types, meal_pricing,
-        accommodation_pricing, special_waivers, payment_config, refund_config
-      ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7,
-        $8, $9, $10,
-        $11, $12, $13, $14,
-        $15, $16, $17, $18
-      ) RETURNING *
-    `;
+    // Ensure camp columns exist if migration 043 was not manually executed yet
+    try {
+      await query(`
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS poster_url TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS criteria_message TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS banner_message TEXT;
+      `);
+    } catch (e: any) {
+      console.warn('Notice: DDL auto-check for camp poster columns:', e?.message);
+    }
 
-    const res = await query(sql, [
-      slug,
-      data.title,
-      data.description || null,
-      data.venue || 'Central VOICE, Pune',
-      data.status || 'draft',
-      data.start_date,
-      data.end_date,
-      data.registration_start_date || null,
-      data.late_fee_start_date || null,
-      data.registration_deadline || null,
-      data.late_fee || 0,
-      JSON.stringify(data.tracks || []),
-      JSON.stringify(data.participant_types || []),
-      JSON.stringify(data.meal_pricing || []),
-      JSON.stringify(data.accommodation_pricing || {}),
-      JSON.stringify(data.special_waivers || {}),
-      JSON.stringify(data.payment_config || {}),
-      JSON.stringify(data.refund_config || {})
-    ]);
+    let res;
+    try {
+      const sql = `
+        INSERT INTO camps (
+          slug, title, description, venue, status,
+          start_date, end_date,
+          registration_start_date, late_fee_start_date, registration_deadline,
+          late_fee, tracks, participant_types, meal_pricing,
+          accommodation_pricing, special_waivers, payment_config, refund_config,
+          eligible_centers, poster_url, criteria_message, banner_message
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7,
+          $8, $9, $10,
+          $11, $12, $13, $14,
+          $15, $16, $17, $18,
+          $19, $20, $21, $22
+        ) RETURNING *
+      `;
+
+      res = await query(sql, [
+        slug,
+        data.title,
+        data.description || null,
+        data.venue || 'Central VOICE, Pune',
+        data.status || 'draft',
+        data.start_date,
+        data.end_date,
+        data.registration_start_date || null,
+        data.late_fee_start_date || null,
+        data.registration_deadline || null,
+        data.late_fee || 0,
+        JSON.stringify(data.tracks || []),
+        JSON.stringify(data.participant_types || []),
+        JSON.stringify(data.meal_pricing || []),
+        JSON.stringify(data.accommodation_pricing || {}),
+        JSON.stringify(data.special_waivers || {}),
+        JSON.stringify(data.payment_config || {}),
+        JSON.stringify(data.refund_config || {}),
+        JSON.stringify(data.eligible_centers || []),
+        data.poster_url || null,
+        data.criteria_message || null,
+        data.banner_message || null
+      ]);
+    } catch (insertErr: any) {
+      if (
+        insertErr?.message?.includes('poster_url') ||
+        insertErr?.message?.includes('criteria_message') ||
+        insertErr?.message?.includes('banner_message')
+      ) {
+        console.warn('Falling back to INSERT without poster columns:', insertErr?.message);
+        const fallbackSql = `
+          INSERT INTO camps (
+            slug, title, description, venue, status,
+            start_date, end_date,
+            registration_start_date, late_fee_start_date, registration_deadline,
+            late_fee, tracks, participant_types, meal_pricing,
+            accommodation_pricing, special_waivers, payment_config, refund_config,
+            eligible_centers
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7,
+            $8, $9, $10,
+            $11, $12, $13, $14,
+            $15, $16, $17, $18,
+            $19
+          ) RETURNING *
+        `;
+        res = await query(fallbackSql, [
+          slug,
+          data.title,
+          data.description || null,
+          data.venue || 'Central VOICE, Pune',
+          data.status || 'draft',
+          data.start_date,
+          data.end_date,
+          data.registration_start_date || null,
+          data.late_fee_start_date || null,
+          data.registration_deadline || null,
+          data.late_fee || 0,
+          JSON.stringify(data.tracks || []),
+          JSON.stringify(data.participant_types || []),
+          JSON.stringify(data.meal_pricing || []),
+          JSON.stringify(data.accommodation_pricing || {}),
+          JSON.stringify(data.special_waivers || {}),
+          JSON.stringify(data.payment_config || {}),
+          JSON.stringify(data.refund_config || {}),
+          JSON.stringify(data.eligible_centers || [])
+        ]);
+      } else {
+        throw insertErr;
+      }
+    }
 
     revalidatePath('/dashboard/admin/camps');
     return { success: true, camp: res.rows[0] as Camp };
@@ -198,50 +266,127 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
       throw new Error('Forbidden: Super Admin privileges required to update camp configurations');
     }
 
-    const sql = `
-      UPDATE camps SET
-        title = COALESCE($1, title),
-        description = COALESCE($2, description),
-        venue = COALESCE($3, venue),
-        status = COALESCE($4, status),
-        start_date = COALESCE($5, start_date),
-        end_date = COALESCE($6, end_date),
-        registration_start_date = $7,
-        late_fee_start_date = $8,
-        registration_deadline = $9,
-        late_fee = COALESCE($10, late_fee),
-        tracks = COALESCE($11, tracks),
-        participant_types = COALESCE($12, participant_types),
-        meal_pricing = COALESCE($13, meal_pricing),
-        accommodation_pricing = COALESCE($14, accommodation_pricing),
-        special_waivers = COALESCE($15, special_waivers),
-        payment_config = COALESCE($16, payment_config),
-        refund_config = COALESCE($17, refund_config),
-        updated_at = NOW()
-      WHERE id = $18
-      RETURNING *
-    `;
+    // Ensure camp columns exist if migration 043 was not manually executed yet
+    try {
+      await query(`
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS poster_url TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS criteria_message TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS banner_message TEXT;
+      `);
+    } catch (e: any) {
+      console.warn('Notice: DDL auto-check for camp poster columns:', e?.message);
+    }
 
-    const res = await query(sql, [
-      data.title,
-      data.description,
-      data.venue,
-      data.status,
-      data.start_date,
-      data.end_date,
-      data.registration_start_date ?? null,
-      data.late_fee_start_date ?? null,
-      data.registration_deadline ?? null,
-      data.late_fee,
-      data.tracks ? JSON.stringify(data.tracks) : null,
-      data.participant_types ? JSON.stringify(data.participant_types) : null,
-      data.meal_pricing ? JSON.stringify(data.meal_pricing) : null,
-      data.accommodation_pricing ? JSON.stringify(data.accommodation_pricing) : null,
-      data.special_waivers ? JSON.stringify(data.special_waivers) : null,
-      data.payment_config ? JSON.stringify(data.payment_config) : null,
-      data.refund_config ? JSON.stringify(data.refund_config) : null,
-      id
-    ]);
+    let res;
+    try {
+      const sql = `
+        UPDATE camps SET
+          title = COALESCE($1, title),
+          description = COALESCE($2, description),
+          venue = COALESCE($3, venue),
+          status = COALESCE($4, status),
+          start_date = COALESCE($5, start_date),
+          end_date = COALESCE($6, end_date),
+          registration_start_date = $7,
+          late_fee_start_date = $8,
+          registration_deadline = $9,
+          late_fee = COALESCE($10, late_fee),
+          tracks = COALESCE($11, tracks),
+          participant_types = COALESCE($12, participant_types),
+          meal_pricing = COALESCE($13, meal_pricing),
+          accommodation_pricing = COALESCE($14, accommodation_pricing),
+          special_waivers = COALESCE($15, special_waivers),
+          payment_config = COALESCE($16, payment_config),
+          refund_config = COALESCE($17, refund_config),
+          eligible_centers = COALESCE($18, eligible_centers),
+          poster_url = COALESCE($19, poster_url),
+          criteria_message = COALESCE($20, criteria_message),
+          banner_message = COALESCE($21, banner_message),
+          updated_at = NOW()
+        WHERE id = $22
+        RETURNING *
+      `;
+
+      res = await query(sql, [
+        data.title,
+        data.description,
+        data.venue,
+        data.status,
+        data.start_date,
+        data.end_date,
+        data.registration_start_date ?? null,
+        data.late_fee_start_date ?? null,
+        data.registration_deadline ?? null,
+        data.late_fee,
+        data.tracks ? JSON.stringify(data.tracks) : null,
+        data.participant_types ? JSON.stringify(data.participant_types) : null,
+        data.meal_pricing ? JSON.stringify(data.meal_pricing) : null,
+        data.accommodation_pricing ? JSON.stringify(data.accommodation_pricing) : null,
+        data.special_waivers ? JSON.stringify(data.special_waivers) : null,
+        data.payment_config ? JSON.stringify(data.payment_config) : null,
+        data.refund_config ? JSON.stringify(data.refund_config) : null,
+        data.eligible_centers !== undefined ? JSON.stringify(data.eligible_centers) : null,
+        data.poster_url !== undefined ? data.poster_url : null,
+        data.criteria_message !== undefined ? data.criteria_message : null,
+        data.banner_message !== undefined ? data.banner_message : null,
+        id
+      ]);
+    } catch (updateErr: any) {
+      if (
+        updateErr?.message?.includes('poster_url') ||
+        updateErr?.message?.includes('criteria_message') ||
+        updateErr?.message?.includes('banner_message')
+      ) {
+        console.warn('Falling back to UPDATE without poster columns:', updateErr?.message);
+        const fallbackSql = `
+          UPDATE camps SET
+            title = COALESCE($1, title),
+            description = COALESCE($2, description),
+            venue = COALESCE($3, venue),
+            status = COALESCE($4, status),
+            start_date = COALESCE($5, start_date),
+            end_date = COALESCE($6, end_date),
+            registration_start_date = $7,
+            late_fee_start_date = $8,
+            registration_deadline = $9,
+            late_fee = COALESCE($10, late_fee),
+            tracks = COALESCE($11, tracks),
+            participant_types = COALESCE($12, participant_types),
+            meal_pricing = COALESCE($13, meal_pricing),
+            accommodation_pricing = COALESCE($14, accommodation_pricing),
+            special_waivers = COALESCE($15, special_waivers),
+            payment_config = COALESCE($16, payment_config),
+            refund_config = COALESCE($17, refund_config),
+            eligible_centers = COALESCE($18, eligible_centers),
+            updated_at = NOW()
+          WHERE id = $19
+          RETURNING *
+        `;
+        res = await query(fallbackSql, [
+          data.title,
+          data.description,
+          data.venue,
+          data.status,
+          data.start_date,
+          data.end_date,
+          data.registration_start_date ?? null,
+          data.late_fee_start_date ?? null,
+          data.registration_deadline ?? null,
+          data.late_fee,
+          data.tracks ? JSON.stringify(data.tracks) : null,
+          data.participant_types ? JSON.stringify(data.participant_types) : null,
+          data.meal_pricing ? JSON.stringify(data.meal_pricing) : null,
+          data.accommodation_pricing ? JSON.stringify(data.accommodation_pricing) : null,
+          data.special_waivers ? JSON.stringify(data.special_waivers) : null,
+          data.payment_config ? JSON.stringify(data.payment_config) : null,
+          data.refund_config ? JSON.stringify(data.refund_config) : null,
+          data.eligible_centers !== undefined ? JSON.stringify(data.eligible_centers) : null,
+          id
+        ]);
+      } else {
+        throw updateErr;
+      }
+    }
 
     if (res.rows.length === 0) {
       throw new Error('Camp not found');
@@ -662,18 +807,127 @@ export async function processCampRefundAction(
 }
 
 /**
- * Lookup camp registrations by WhatsApp / Phone or Email (Public - for devotees cancelling/modifying)
+ * Resolves assigned temples and centers for leadership roles (11-16, 17, 8, etc.)
+ * Strictly derives assignments from database allocation records (temples, centers, user_centers).
+ * DOES NOT use caller's personal home or living center/temple.
  */
-export async function lookupCampRegistrationsAction(campSlugOrId: string, identifier: string) {
+export async function getManagerAssignedLocations(userId: string, userRoles: number[]) {
+  const isSuperAdmin = userRoles.includes(8);
+  const isManagerialRole = isSuperAdmin || userRoles.some(r => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r));
+
+  if (!isManagerialRole) {
+    return {
+      isSuperAdmin: false,
+      isTempleLeadership: false,
+      isManager: false,
+      assignedTempleNames: [] as string[],
+      assignedCenterNames: [] as string[],
+      directlyAssignedCenterNames: [] as string[],
+    };
+  }
+
+  const assignedTempleNames: string[] = [];
+  const assignedCenterNames: string[] = [];
+  const directlyAssignedCenterNames: string[] = [];
+
+  // Check if caller is high-level temple leadership (Roles 8, 9, 10, 11, 12, 13)
+  const isTempleLeadership = isSuperAdmin || userRoles.some(r => [8, 9, 10, 11, 12, 13].includes(r));
+
+  // 1. Fetch allocated temples from temples table for temple leadership (11 MD, 12 Dir, 13 CVM, 9 VP, 10 Pres, 21 YP)
   try {
-    const rawId = (identifier || '').trim();
+    const tAllocRes = await query(
+      `SELECT name FROM temples 
+       WHERE managing_director_id = $1 
+          OR director_id = $1 
+          OR central_voice_manager_id = $1 
+          OR yp_id = $1`,
+      [userId]
+    );
+    tAllocRes.rows.forEach(r => {
+      if (r.name && r.name.trim()) assignedTempleNames.push(r.name.trim());
+    });
+  } catch (e) {
+    console.warn('Error fetching temple assignments:', e);
+  }
+
+  // 2. Fetch allocated centers from centers table for center leadership (14 PA, 15 PM, 16 Acting Manager, 17 OC)
+  try {
+    const cAllocRes = await query(
+      `SELECT c.name, COALESCE(c.temple_name, t.name) as temple_name 
+       FROM centers c
+       LEFT JOIN temples t ON c.temple_id = t.id
+       WHERE c.project_manager_id = $1 
+          OR c.project_advisor_id = $1 
+          OR c.acting_manager_id = $1
+          OR c.oc_id = $1`,
+      [userId]
+    );
+    cAllocRes.rows.forEach(r => {
+      if (r.name && r.name.trim()) {
+        assignedCenterNames.push(r.name.trim());
+        directlyAssignedCenterNames.push(r.name.trim());
+      }
+      if (r.temple_name && r.temple_name.trim()) {
+        assignedTempleNames.push(r.temple_name.trim());
+      }
+    });
+  } catch (e) {
+    console.warn('Error fetching center assignments:', e);
+  }
+
+  // 3. ONLY for temple leadership (MD, Director, CVM, Super Admin, VP, President),
+  // automatically include all centers belonging to their assigned temples.
+  // Center managers (PM, PA, Acting Manager, OC) should NEVER pull other centers under the temple.
+  if (isTempleLeadership && assignedTempleNames.length > 0) {
+    try {
+      const lowerTemples = Array.from(new Set(assignedTempleNames.map(t => t.toLowerCase())));
+      const tCenters = await query(
+        `SELECT name FROM centers WHERE LOWER(temple_name) = ANY($1)`,
+        [lowerTemples]
+      );
+      tCenters.rows.forEach(r => {
+        if (r.name && r.name.trim()) assignedCenterNames.push(r.name.trim());
+      });
+    } catch (e) {
+      console.warn('Error fetching centers for assigned temples:', e);
+    }
+  }
+
+  const uniqueCenterNames = Array.from(new Set(assignedCenterNames));
+  const uniqueTempleNames = Array.from(new Set(assignedTempleNames));
+  const uniqueDirectCenterNames = Array.from(new Set(directlyAssignedCenterNames));
+
+  const hasAssignedLocations = uniqueCenterNames.length > 0 || uniqueTempleNames.length > 0;
+  const isManager = isSuperAdmin || hasAssignedLocations;
+
+  return {
+    isSuperAdmin,
+    isTempleLeadership,
+    isManager,
+    assignedTempleNames: uniqueTempleNames,
+    assignedCenterNames: uniqueCenterNames,
+    directlyAssignedCenterNames: uniqueDirectCenterNames,
+  };
+}
+
+/**
+ * Lookup camp registrations by WhatsApp / Phone, Email, or Booking Group ID
+ * (Supports devotees, public guests with Group ID, and role 11-16 assigned center/temple managers)
+ */
+export async function lookupCampRegistrationsAction(
+  campSlugOrId: string,
+  identifier: string,
+  callerUserId?: string
+) {
+  try {
+    let rawId = (identifier || '').trim();
     if (!rawId || rawId.length < 5) {
       return { success: false, error: 'Please enter a complete 10-digit WhatsApp number, valid Email, or Booking Group ID (minimum 5 characters).' };
     }
 
     // 1. Fetch camp
     const campRes = await query(
-      'SELECT id, title, slug FROM camps WHERE slug = $1 OR id::text = $1',
+      'SELECT id, title, slug, payment_config, refund_config FROM camps WHERE slug = $1 OR id::text = $1',
       [campSlugOrId]
     );
 
@@ -684,16 +938,74 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
     const camp = campRes.rows[0] as Camp;
 
     // Check if identifier is email, phone, or group ID
-    const isEmail = rawId.includes('@');
-    const digitsOnly = rawId.replace(/[^0-9]/g, '');
-    const isPhone = digitsOnly.length >= 10;
-    const phone10 = isPhone ? digitsOnly.slice(-10) : '';
-    const isGroupId = rawId.toUpperCase().startsWith('GRP_') || rawId.length >= 8;
+    let isEmail = rawId.includes('@');
+    let digitsOnly = rawId.replace(/[^0-9]/g, '');
+    let isPhone = digitsOnly.length >= 10;
+    let phone10 = isPhone ? digitsOnly.slice(-10) : '';
+    // Booking Group ID must strictly start with GRP_ (never loosely treat any 8+ char phone or string as group ID)
+    let isGroupId = rawId.toUpperCase().startsWith('GRP_');
 
     if (!isEmail && !isPhone && !isGroupId) {
       return {
         success: false,
-        error: 'Please enter a complete 10-digit mobile number, valid email address, or Booking Group ID.'
+        error: 'Please enter a complete 10-digit mobile number, valid email address, or Booking Group ID (e.g. GRP_...).'
+      };
+    }
+
+    // Security check: Check authenticated session & managerial roles
+    const sessionUser = await getAuthUserFromCookies().catch(() => null);
+    const resolvedUserId = callerUserId || sessionUser?.id;
+
+    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+      isSuperAdmin: false,
+      isManager: false,
+      assignedTempleNames: [],
+      assignedCenterNames: [],
+    };
+    let authEmail = '';
+    let authPhone = '';
+
+    if (resolvedUserId) {
+      const uRes = await query('SELECT id, email, phone, role FROM users WHERE id = $1', [resolvedUserId]);
+      const dbUser = uRes.rows[0];
+      const role = dbUser?.role;
+      const roles = (Array.isArray(role) ? role : [role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+
+      authEmail = (dbUser?.email || sessionUser?.email || '').trim().toLowerCase();
+      authPhone = (dbUser?.phone || '').replace(/[^0-9]/g, '').slice(-10);
+
+      managerLoc = await getManagerAssignedLocations(resolvedUserId, roles);
+
+      if (!managerLoc.isManager) {
+        // Ordinary user: strictly verify ownership to prevent scraping other users
+        const isOwnEmail = isEmail && rawId.toLowerCase() === authEmail;
+        const isOwnPhone = isPhone && phone10 === authPhone;
+
+        if (!isOwnEmail && !isOwnPhone) {
+          if (isGroupId) {
+            const groupOwnerCheck = await query(
+              `SELECT id FROM camp_registrations WHERE camp_id = $1 AND LOWER(group_id) = LOWER($2) AND (
+                ($3 <> '' AND LOWER(email) = $3) OR
+                ($4 <> '' AND (RIGHT(REGEXP_REPLACE(whatsapp, '[^0-9]', '', 'g'), 10) = $4 OR RIGHT(REGEXP_REPLACE(poc_contact, '[^0-9]', '', 'g'), 10) = $4))
+              ) LIMIT 1`,
+              [camp.id, rawId, authEmail, authPhone]
+            );
+            if (groupOwnerCheck.rows.length === 0) {
+              return { success: false, error: 'Unauthorized: You can only look up registrations made under your own account.' };
+            }
+          } else {
+            return {
+              success: false,
+              error: 'Unauthorized: You can only look up and cancel registrations made under your own account.'
+            };
+          }
+        }
+      }
+    } else if (!isGroupId) {
+      // For unauthenticated guests on the public page, require the unique Booking Group ID from confirmation email
+      return {
+        success: false,
+        error: 'Please enter your unique Booking Group ID (e.g. GRP_...) from your confirmation email, or log in to manage your bookings.'
       };
     }
 
@@ -730,12 +1042,56 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
     if (regRes.rows.length === 0) {
       return {
         success: false,
-        error: `No registrations found for "${rawId}" in this camp retreat. Please verify the phone number or email used during registration.`
+        error: `No registrations found for "${rawId}" in this camp retreat.`
       };
     }
 
+    const pendingUnapproved = regRes.rows.filter(r => r.payment_status !== 'completed' && !r.is_cancelled && r.payment_status !== 'refunded');
+    const confirmedRegs = regRes.rows.filter(r => r.payment_status === 'completed' || r.is_cancelled || r.payment_status === 'refunded');
+
+    if (confirmedRegs.length === 0 && pendingUnapproved.length > 0) {
+      return {
+        success: false,
+        error: 'This booking is currently awaiting payment approval (IDT/ITT) and has not been confirmed yet. Registrations cannot be cancelled or refunded until payment is approved and confirmed.'
+      };
+    }
+
+    let matchingRegs = regRes.rows as CampRegistration[];
+
+    // If caller is a manager (and not super admin), verify that the registrations belong to their assigned temple or center
+    if (managerLoc.isManager && !managerLoc.isSuperAdmin) {
+      const lowerTemples = managerLoc.assignedTempleNames.map(t => t.trim().toLowerCase()).filter(Boolean);
+      const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
+
+      matchingRegs = matchingRegs.filter(r => {
+        const pt = (r.parent_temple || '').trim().toLowerCase();
+        const ct = (r.current_temple || '').trim().toLowerCase();
+        const vn = (r.voice_name || '').trim().toLowerCase();
+        const cc = (r.current_center || '').trim().toLowerCase();
+        const rEmail = (r.email || '').trim().toLowerCase();
+        const rPhone = (r.whatsapp || '').replace(/\D/g, '').slice(-10);
+        const rPocPhone = (r.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+        const isOwn = Boolean(
+          (authEmail && rEmail === authEmail) ||
+          (authPhone && (rPhone === authPhone || rPocPhone === authPhone))
+        );
+        const inAssignedTemple = lowerTemples.some(t => pt === t || ct === t);
+        const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
+
+        return isOwn || inAssignedTemple || inAssignedCenter;
+      });
+
+      if (matchingRegs.length === 0) {
+        return {
+          success: false,
+          error: 'No registrations found matching this devotee in your assigned temple or center.'
+        };
+      }
+    }
+
     // 3. Fetch any existing refund requests for these registrations
-    const regIds = regRes.rows.map(r => r.id);
+    const regIds = matchingRegs.map(r => r.id);
     const existingRefundsRes = await query(
       `SELECT * FROM camp_refund_requests WHERE camp_id = $1 AND (
          registration_id = ANY($2::uuid[]) OR 
@@ -749,7 +1105,7 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
     return {
       success: true,
       camp,
-      registrations: regRes.rows as CampRegistration[],
+      registrations: matchingRegs,
       existingRefunds: existingRefundsRes.rows as CampRefundRequest[]
     };
   } catch (error: any) {
@@ -761,22 +1117,25 @@ export async function lookupCampRegistrationsAction(campSlugOrId: string, identi
 /**
  * Submit a cancellation & refund request by devotee (supports full, partial batch attendees, or partial days)
  */
-export async function submitCampRefundRequestAction(data: {
-  campId: string;
-  poc_name: string;
-  poc_contact: string;
-  email: string;
-  cancellation_type: 'FULL' | 'PARTIAL_ATTENDEES' | 'PARTIAL_DAYS';
-  cancelled_reg_ids: string[];
-  updated_itineraries?: Record<string, { first_meal_date: string; first_meal_type: string; last_meal_date: string; last_meal_type: string }>;
-  payout_type: 'UPI' | 'BANK';
-  upi_id?: string;
-  account_name?: string;
-  account_number?: string;
-  bank_name?: string;
-  ifsc_code?: string;
-  reason?: string;
-}) {
+export async function submitCampRefundRequestAction(
+  data: {
+    campId: string;
+    poc_name: string;
+    poc_contact: string;
+    email: string;
+    cancellation_type: 'FULL' | 'PARTIAL_ATTENDEES' | 'PARTIAL_DAYS';
+    cancelled_reg_ids: string[];
+    updated_itineraries?: Record<string, { first_meal_date: string; first_meal_type: string; last_meal_date: string; last_meal_type: string }>;
+    payout_type: 'UPI' | 'BANK';
+    upi_id?: string;
+    account_name?: string;
+    account_number?: string;
+    bank_name?: string;
+    ifsc_code?: string;
+    reason?: string;
+  },
+  callerUserId?: string
+) {
   try {
     if (!data.campId) {
       return { success: false, error: 'Camp ID is required.' };
@@ -832,8 +1191,30 @@ export async function submitCampRefundRequestAction(data: {
 
     // Security Check: Verify Ownership & Prevent Cancellation / Refund Hijacking
     const callerUser = await getAuthUserFromCookies().catch(() => null);
-    const callerEmail = (callerUser?.email || data.email || '').trim().toLowerCase();
-    const cleanPocContact = (data.poc_contact || '').replace(/\D/g, '').slice(-10);
+    const resolvedUserId = callerUserId || callerUser?.id;
+    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+      isSuperAdmin: false,
+      isManager: false,
+      assignedTempleNames: [],
+      assignedCenterNames: [],
+    };
+    let authUserEmail = '';
+    let authUserPhone = '';
+
+    if (resolvedUserId) {
+      try {
+        const uRes = await query('SELECT id, email, phone, role FROM users WHERE id = $1', [resolvedUserId]);
+        const dbUser = uRes.rows[0];
+        authUserEmail = (dbUser?.email || callerUser?.email || '').trim().toLowerCase();
+        authUserPhone = (dbUser?.phone || '').replace(/\D/g, '').slice(-10);
+
+        const role = dbUser?.role;
+        const roles = (Array.isArray(role) ? role : [role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        managerLoc = await getManagerAssignedLocations(resolvedUserId, roles);
+      } catch {
+        // ignore
+      }
+    }
 
     for (const reg of regs) {
       if (reg.is_cancelled || reg.payment_status === 'refunded') {
@@ -843,30 +1224,56 @@ export async function submitCampRefundRequestAction(data: {
         };
       }
 
-      const regEmail = (reg.email || '').trim().toLowerCase();
-      const regPhone = (reg.whatsapp || reg.poc_contact || '').replace(/\D/g, '').slice(-10);
-
-      const emailMatches = Boolean(callerEmail && regEmail && callerEmail === regEmail);
-      const phoneMatches = Boolean(cleanPocContact && regPhone && cleanPocContact === regPhone);
-
-      let isCallerAdmin = false;
-      if (callerUser) {
-        try {
-          const uRes = await query('SELECT role FROM users WHERE id = $1', [callerUser.id]);
-          const role = uRes.rows[0]?.role;
-          const roles = (Array.isArray(role) ? role : [role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
-          if (roles.includes(8) || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r))) {
-            isCallerAdmin = true;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (!emailMatches && !phoneMatches && !isCallerAdmin) {
+      if (reg.payment_status !== 'completed') {
         return {
           success: false,
-          error: `Security verification failed: You are not authorized to cancel or request a refund for attendee "${reg.participant_name}". Contact details must match the registration record.`
+          error: `Attendee "${reg.participant_name}" is currently awaiting payment approval (${reg.payment_status}) and is not confirmed yet. Neither the devotee nor the manager can cancel or apply for a refund on an unconfirmed registration.`
+        };
+      }
+
+      const regEmail = (reg.email || '').trim().toLowerCase();
+      const regPhone = (reg.whatsapp || '').replace(/\D/g, '').slice(-10);
+      const regPocPhone = (reg.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+      let isAuthorized = false;
+      if (managerLoc.isSuperAdmin) {
+        isAuthorized = true;
+      } else if (managerLoc.isManager) {
+        // Roles 11-16 (and other managers) can cancel for themselves OR devotees in their assigned temple/center
+        const isOwn = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+        const lowerTemples = managerLoc.assignedTempleNames.map(t => t.trim().toLowerCase()).filter(Boolean);
+        const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
+        const pt = (reg.parent_temple || '').trim().toLowerCase();
+        const ct = (reg.current_temple || '').trim().toLowerCase();
+        const vn = (reg.voice_name || '').trim().toLowerCase();
+        const cc = (reg.current_center || '').trim().toLowerCase();
+
+        const inAssignedTemple = lowerTemples.some(t => pt === t || ct === t);
+        const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
+        isAuthorized = isOwn || inAssignedTemple || inAssignedCenter;
+      } else if (resolvedUserId) {
+        // Authenticated ordinary users can ONLY cancel registrations matching their OWN verified credentials
+        isAuthorized = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+      } else {
+        // Unauthenticated guests must match the registration's email or phone
+        const cleanPocContact = (data.poc_contact || '').replace(/\D/g, '').slice(-10);
+        const dataEmail = (data.email || '').trim().toLowerCase();
+        isAuthorized = Boolean(
+          (dataEmail && regEmail && dataEmail === regEmail) ||
+          (cleanPocContact && (regPhone === cleanPocContact || regPocPhone === cleanPocContact))
+        );
+      }
+
+      if (!isAuthorized) {
+        return {
+          success: false,
+          error: `Security verification failed: You are not authorized to cancel attendee "${reg.participant_name}". Cancellation is only allowed for your own bookings or devotees in your assigned temple/center.`
         };
       }
     }
@@ -1223,10 +1630,35 @@ export async function getAllCampRefundsAction() {
 }
 
 /**
- * Public & User Dashboard: Fetch all currently active camps for devotee registration
+ * Fetch all registered centers for camp eligibility configuration
  */
-export async function getActiveCampsForUserAction() {
+export async function getAllCentersForCampConfigAction() {
   try {
+    const res = await query(
+      `SELECT id, name, temple_name 
+       FROM centers 
+       WHERE name IS NOT NULL AND name != ''
+       ORDER BY name ASC`
+    );
+    return {
+      success: true,
+      centers: res.rows as { id: string; name: string; temple_name?: string }[]
+    };
+  } catch (error: any) {
+    console.error('getAllCentersForCampConfigAction error:', error);
+    return { success: false, error: error.message, centers: [] };
+  }
+}
+
+/**
+ * Public & User Dashboard: Fetch all currently active camps for devotee registration
+ * Automatically filters camps based on center eligibility restrictions.
+ */
+export async function getActiveCampsForUserAction(clientUserId?: string) {
+  try {
+    const sessionUser = await getAuthUserFromCookies().catch(() => null);
+    const resolvedUserId = clientUserId || sessionUser?.id;
+
     const sql = `
       SELECT 
         c.*,
@@ -1238,7 +1670,91 @@ export async function getActiveCampsForUserAction() {
       ORDER BY c.start_date ASC, c.created_at DESC
     `;
     const res = await query(sql);
-    return { success: true, camps: res.rows as (Camp & { registration_count?: number })[] };
+    const allCamps = res.rows as (Camp & { registration_count?: number })[];
+
+    if (!resolvedUserId) {
+      // Unauthenticated view: only camps open to all centers are visible
+      return {
+        success: true,
+        camps: allCamps.filter(c => {
+          const eligible = Array.isArray(c.eligible_centers) ? c.eligible_centers : [];
+          return eligible.length === 0;
+        })
+      };
+    }
+
+    // Lookup user to resolve all associated centers and managerial roles
+    const uRes = await query(
+      `SELECT id, role, current_center, center, other_center, hierarchy FROM users WHERE id = $1`,
+      [resolvedUserId]
+    );
+
+    if (uRes.rows.length === 0) {
+      return {
+        success: true,
+        camps: allCamps.filter(c => {
+          const eligible = Array.isArray(c.eligible_centers) ? c.eligible_centers : [];
+          return eligible.length === 0;
+        })
+      };
+    }
+
+    const caller = uRes.rows[0];
+    const roles = (Array.isArray(caller.role) ? caller.role : [caller.role])
+      .map((r: any) => Number(r))
+      .filter((r: number) => !isNaN(r));
+
+    const isSuperAdmin = roles.includes(8) || caller.role === 'super_admin' || (Array.isArray(caller.role) && caller.role.includes('super_admin' as any));
+
+    // Super Admin can see ALL camps without restrictions
+    if (isSuperAdmin) {
+      return { success: true, camps: allCamps };
+    }
+
+    // Collect all centers belonging to this user
+    const userCenterSet = new Set<string>();
+    const addCenter = (val?: string | null) => {
+      if (val && typeof val === 'string' && val.trim() && val.trim().toLowerCase() !== 'none') {
+        userCenterSet.add(val.trim().toLowerCase());
+      }
+    };
+
+    addCenter(caller.current_center);
+    addCenter(caller.center);
+    addCenter(caller.other_center);
+    addCenter(caller.hierarchy?.currentCenter);
+    addCenter(caller.hierarchy?.center);
+    if (caller.hierarchy?.currentCenter?.name) addCenter(caller.hierarchy.currentCenter.name);
+
+    // If manager, also check manager assigned centers
+    const isManagerRole = roles.some((r: any) => [9, 10, 11, 12, 13, 14, 15, 16, 17].includes(Number(r)));
+    if (isManagerRole) {
+      try {
+        const managerLoc = await getManagerAssignedLocations(caller.id, roles);
+        (managerLoc.assignedCenterNames || []).forEach(c => addCenter(c));
+        (managerLoc.directlyAssignedCenterNames || []).forEach(c => addCenter(c));
+      } catch (locErr) {
+        console.warn('Error fetching manager assigned locations in getActiveCampsForUserAction:', locErr);
+      }
+    }
+
+    // Filter camps: either open to all (eligible_centers is empty), or user's center is in eligible_centers
+    const visibleCamps = allCamps.filter(c => {
+      const eligible = Array.isArray(c.eligible_centers) ? c.eligible_centers : [];
+      if (eligible.length === 0) return true; // Open to all centers
+
+      return eligible.some(ec => {
+        const ecLower = ec.toLowerCase().trim();
+        for (const uc of userCenterSet) {
+          if (uc === ecLower || uc.includes(ecLower) || ecLower.includes(uc)) {
+            return true;
+          }
+        }
+        return false;
+      });
+    });
+
+    return { success: true, camps: visibleCamps };
   } catch (error: any) {
     console.error('getActiveCampsForUserAction error:', error);
     return { success: false, error: error.message };
@@ -1248,29 +1764,25 @@ export async function getActiveCampsForUserAction() {
 /**
  * User Dashboard: Fetch camp registrations belonging to the current user (by phone or email)
  */
-export async function getUserCampRegistrationsAction(identifier: { email?: string; phone?: string }) {
+export async function getUserCampRegistrationsAction(identifier?: { email?: string; phone?: string; callerUserId?: string }) {
   try {
-    // Security: Require active session and bind query strictly to authenticated user's own email/phone
-    const sessionUser = await getAuthUserFromCookies();
-    if (!sessionUser) {
+    const sessionUser = await getAuthUserFromCookies().catch(() => null);
+    const resolvedUserId = identifier?.callerUserId || sessionUser?.id;
+    if (!resolvedUserId) {
       return { success: false, error: 'Authentication required' };
     }
 
-    const uRes = await query('SELECT email, phone, role FROM users WHERE id = $1', [sessionUser.id]);
+    const uRes = await query('SELECT id, email, phone, role FROM users WHERE id = $1', [resolvedUserId]);
     const dbUser = uRes.rows[0];
     const roles = (Array.isArray(dbUser?.role) ? dbUser.role : [dbUser?.role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
-    const isSuperAdmin = roles.includes(8) || roles.some((r: number) => [9, 10, 11, 12, 13, 14, 15, 16, 17, 21].includes(r));
 
-    // Non-admins can strictly only fetch registrations matching their OWN verified credentials
-    const cleanEmail = isSuperAdmin && identifier.email ? identifier.email.trim().toLowerCase() : (dbUser?.email || sessionUser.email || '').trim().toLowerCase();
-    const rawPhone = isSuperAdmin && identifier.phone ? identifier.phone : (dbUser?.phone || '');
+    const cleanEmail = (dbUser?.email || sessionUser?.email || identifier?.email || '').trim().toLowerCase();
+    const rawPhone = dbUser?.phone || identifier?.phone || '';
     const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10);
 
-    if (!cleanEmail && !cleanPhone) {
-      return { success: true, registrations: [] };
-    }
+    const managerLoc = await getManagerAssignedLocations(resolvedUserId, roles);
 
-    const sql = `
+    let sql = `
       WITH camp_serials AS (
         SELECT id, ROW_NUMBER() OVER (PARTITION BY camp_id ORDER BY created_at ASC) AS serial_no
         FROM camp_registrations
@@ -1295,11 +1807,10 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
         JOIN camp_serials cs ON cs.id = r.id
         JOIN camps c ON c.id = r.camp_id
         LEFT JOIN LATERAL (
-          SELECT current_center, center, other_center, hierarchy
+          SELECT current_center, center, other_center, current_temple, parent_temple, hierarchy
           FROM users
           WHERE (r.email <> '' AND LOWER(email) = LOWER(r.email))
-             OR ($1 <> '' AND LOWER(email) = $1)
-             OR ($2 <> '' AND phone IS NOT NULL AND phone <> '' AND (RIGHT(phone, 10) = RIGHT(r.whatsapp, 10) OR RIGHT(phone, 10) = $2))
+             OR (r.whatsapp <> '' AND phone IS NOT NULL AND phone <> '' AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = RIGHT(REGEXP_REPLACE(r.whatsapp, '[^0-9]', '', 'g'), 10))
           LIMIT 1
         ) u ON TRUE
         WHERE (
@@ -1308,14 +1819,53 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
             RIGHT(r.poc_contact, 10) = $2 OR 
             RIGHT(r.whatsapp, 10) = $2
           ))
+    `;
+
+    const params: any[] = [cleanEmail, cleanPhone];
+
+    if (managerLoc.isSuperAdmin) {
+      sql += ` OR TRUE `;
+    } else if (managerLoc.isManager) {
+      const lowerTemples = managerLoc.assignedTempleNames.map(t => t.toLowerCase());
+      const lowerCenters = managerLoc.assignedCenterNames.map(c => c.toLowerCase());
+      const conditions: string[] = [];
+
+      if (lowerTemples.length > 0) {
+        params.push(lowerTemples);
+        const pIdx = params.length;
+        conditions.push(`LOWER(r.parent_temple) = ANY($${pIdx}) OR LOWER(r.current_temple) = ANY($${pIdx}) OR LOWER(u.current_temple) = ANY($${pIdx}) OR LOWER(u.parent_temple) = ANY($${pIdx})`);
+      }
+      if (lowerCenters.length > 0) {
+        params.push(lowerCenters);
+        const pIdx = params.length;
+        conditions.push(`LOWER(r.voice_name) = ANY($${pIdx}) OR LOWER(r.current_center) = ANY($${pIdx}) OR LOWER(u.current_center) = ANY($${pIdx}) OR LOWER(u.center) = ANY($${pIdx})`);
+      }
+
+      if (conditions.length > 0) {
+        sql += ` OR (${conditions.join(' OR ')}) `;
+      }
+    }
+
+    sql += `
         )
       )
       SELECT * FROM unique_regs
       ORDER BY created_at DESC
     `;
 
-    const res = await query(sql, [cleanEmail, cleanPhone ? cleanPhone.slice(-10) : '']);
-    const registrations = res.rows as (CampRegistration & {
+    const res = await query(sql, params);
+    const registrations = res.rows.map((r: any) => {
+      const rEmail = (r.email || '').trim().toLowerCase();
+      const rPhone = (r.whatsapp || r.poc_contact || '').replace(/\D/g, '').slice(-10);
+      const isOwn = Boolean(
+        (cleanEmail && rEmail === cleanEmail) ||
+        (cleanPhone && rPhone === cleanPhone)
+      );
+      return {
+        ...r,
+        is_own_registration: isOwn
+      };
+    }) as (CampRegistration & {
       serial_no?: number;
       camp_title: string;
       camp_slug: string;
@@ -1325,6 +1875,7 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
       camp_refund_config?: any;
       camp_meal_pricing?: any[];
       camp_tracks?: any[];
+      is_own_registration: boolean;
     })[];
 
     let refundRequests: CampRefundRequest[] = [];
@@ -1336,7 +1887,7 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
         SELECT * FROM camp_refund_requests 
         WHERE registration_id = ANY($1) 
            OR group_id = ANY($2)
-           OR LOWER(email) = $3
+           OR ($3 <> '' AND LOWER(email) = $3)
         ORDER BY created_at DESC
       `;
       const refundRes = await query(refundSql, [regIds, groupIds, cleanEmail]);
@@ -1346,7 +1897,10 @@ export async function getUserCampRegistrationsAction(identifier: { email?: strin
     return { 
       success: true, 
       registrations,
-      refundRequests
+      refundRequests,
+      isManager: managerLoc.isManager,
+      assignedTemples: managerLoc.assignedTempleNames,
+      assignedCenters: managerLoc.assignedCenterNames,
     };
   } catch (error: any) {
     console.error('getUserCampRegistrationsAction error:', error);
@@ -1444,9 +1998,16 @@ export async function checkInCampAttendeeAction(registrationId: string, mealKey?
       return { success: false, error: 'Registration ID required' };
     }
 
-    const regLookup = await query('SELECT camp_id FROM camp_registrations WHERE id = $1', [cleanId]);
+    const regLookup = await query('SELECT camp_id, payment_status, is_cancelled FROM camp_registrations WHERE id = $1', [cleanId]);
     if (regLookup.rows.length === 0) return { success: false, error: 'Registration not found' };
-    const campId = regLookup.rows[0].camp_id;
+    const { camp_id: campId, payment_status, is_cancelled } = regLookup.rows[0];
+
+    if (is_cancelled || payment_status === 'refunded') {
+      return { success: false, error: 'Registration is cancelled / refunded. Gate entry and meals cannot be recorded.' };
+    }
+    if (payment_status === 'processing' || payment_status === 'pending') {
+      return { success: false, error: 'Payment is pending approval (IDT/ITT). Devotee pass is not active until approved.' };
+    }
 
     if (!isSuperAdmin && !isHigherAdmin) {
       const hasPerm = campAllocations.some(a => a.camp_id === campId && ['scan_pass', 'prasadam', 'attendance', 'both'].includes(a.permission_type));
@@ -1751,7 +2312,7 @@ export async function getCampUserAccessAction(campId: string) {
     const permissions = matching.map((a) => a.permission_type);
 
     const hasBoth = permissions.includes('both');
-    const canAttendance = isSuperAdmin || hasBoth || permissions.includes('attendance');
+    const canAttendance = isSuperAdmin || hasBoth || permissions.includes('attendance') || permissions.includes('payment_approvals');
     const canRefunds = isSuperAdmin || hasBoth || permissions.includes('refunds');
     const canPrasadam = isSuperAdmin || hasBoth || permissions.includes('prasadam');
     const canScan = isSuperAdmin || hasBoth || permissions.includes('scan_pass') || permissions.includes('attendance') || permissions.includes('prasadam');
@@ -1909,11 +2470,11 @@ export async function verifyAndPunchMealPassAction(data: {
     }
 
     // Check Pending Payment
-    if (r.payment_status === 'pending') {
+    if (r.payment_status === 'pending' || r.payment_status === 'processing') {
       return {
         success: false,
         status: 'PENDING_PAYMENT',
-        message: 'Payment verification pending. Please verify at Accounts Desk.',
+        message: 'Payment verification pending. Devotee must obtain approval from Payment Approvals desk before pass is valid.',
         attendee: {
           name: r.participant_name,
           track: r.camp_track,
@@ -1967,18 +2528,27 @@ export async function verifyAndPunchMealPassAction(data: {
       ))
     );
     const normMeal = data.mealName.toLowerCase();
+    const isOnlyMilk = String(r.dinner_type || '').toLowerCase().includes('milk');
     let isEligible = false;
     if (dayCol) {
       if (normMeal.startsWith('b')) isEligible = dayCol.breakfast;
       else if (normMeal.startsWith('l')) isEligible = dayCol.lunch;
-      else if (normMeal.startsWith('d')) isEligible = dayCol.dinner;
+      else if (normMeal.startsWith('d')) isEligible = dayCol.dinner && !isOnlyMilk;
+      else if (normMeal.startsWith('m')) isEligible = dayCol.dinner && isOnlyMilk;
     }
 
     if (!isEligible) {
+      let customMsg = `${data.mealName} on ${dayCol?.label || dayCol?.full_date || data.mealDate} is NOT included in this devotee's pass.`;
+      if (dayCol?.dinner && normMeal.startsWith('d') && isOnlyMilk) {
+        customMsg = `Devotee chose 'Only Milk' for dinner preference. Complete Dinner Meal is NOT included on ${dayCol?.label || data.mealDate}.`;
+      } else if (dayCol?.dinner && normMeal.startsWith('m') && !isOnlyMilk) {
+        customMsg = `Devotee chose 'Dinner Meal' for dinner preference. Night Milk pass is NOT included on ${dayCol?.label || data.mealDate}.`;
+      }
+
       return {
         success: false,
         status: 'NOT_ELIGIBLE',
-        message: `${data.mealName} on ${dayCol?.label || dayCol?.full_date || data.mealDate} is NOT included in this devotee's pass.`,
+        message: customMsg,
         attendee: {
           name: r.participant_name,
           track: r.camp_track,
@@ -2261,6 +2831,7 @@ export async function getCampPrasadamLogsAction(campId: string) {
         r.voice_name,
         r.poc_name,
         r.poc_contact,
+        r.dinner_type,
         r.is_cancelled,
         u.current_center AS user_current_center,
         u.center AS user_center,
@@ -2374,7 +2945,7 @@ export async function getCampPrasadamLogsAction(campId: string) {
       const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
       datesSet.add(dateKey);
 
-      (['Breakfast', 'Lunch', 'Dinner'] as const).forEach((mealName) => {
+      (['Breakfast', 'Lunch', 'Dinner', 'Milk'] as const).forEach((mealName) => {
         let scheduledCount = 0;
         let takenCount = 0;
 
@@ -2387,10 +2958,12 @@ export async function getCampPrasadamLogsAction(campId: string) {
           );
           if (!col) return;
 
+          const isOnlyMilk = String(r.dinner_type || '').toLowerCase().includes('milk');
           let isEligible = false;
           if (mealName === 'Breakfast') isEligible = col.breakfast;
           else if (mealName === 'Lunch') isEligible = col.lunch;
-          else if (mealName === 'Dinner') isEligible = col.dinner;
+          else if (mealName === 'Dinner') isEligible = col.dinner && !isOnlyMilk;
+          else if (mealName === 'Milk') isEligible = col.dinner && isOnlyMilk;
 
           if (isEligible) {
             scheduledCount++;
@@ -2467,13 +3040,16 @@ export async function getCampPrasadamLogsAction(campId: string) {
           (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
         );
 
+        const isOnlyMilk = String(r.dinner_type || '').toLowerCase().includes('milk');
         const bfEligible = !!col?.breakfast;
         const lnEligible = !!col?.lunch;
-        const dnEligible = !!col?.dinner;
+        const dnEligible = !!col?.dinner && !isOnlyMilk;
+        const mlEligible = !!col?.dinner && isOnlyMilk;
 
         const bfPunch = mealsServedMap[`${dateKey}_Breakfast`] || mealsServedMap[`${rawDate}_Breakfast`] || null;
         const lnPunch = mealsServedMap[`${dateKey}_Lunch`] || mealsServedMap[`${rawDate}_Lunch`] || null;
         const dnPunch = mealsServedMap[`${dateKey}_Dinner`] || mealsServedMap[`${rawDate}_Dinner`] || null;
+        const mlPunch = mealsServedMap[`${dateKey}_Milk`] || mealsServedMap[`${rawDate}_Milk`] || null;
 
         if (bfEligible) {
           devEligible++;
@@ -2486,6 +3062,10 @@ export async function getCampPrasadamLogsAction(campId: string) {
         if (dnEligible) {
           devEligible++;
           if (dnPunch) devTaken++;
+        }
+        if (mlEligible) {
+          devEligible++;
+          if (mlPunch) devTaken++;
         }
 
         return {
@@ -2506,6 +3086,11 @@ export async function getCampPrasadamLogsAction(campId: string) {
             eligible: dnEligible,
             punched: !!dnPunch,
             punchedAt: dnPunch,
+          },
+          milk: {
+            eligible: mlEligible,
+            punched: !!mlPunch,
+            punchedAt: mlPunch,
           }
         };
       });
@@ -2532,6 +3117,7 @@ export async function getCampPrasadamLogsAction(campId: string) {
         temple: r._resolvedTemple,
         pocName: r.poc_name,
         pocContact: r.poc_contact,
+        dinnerType: r.dinner_type || 'Dinner Meal',
         firstMeal: `${r.first_meal_date} (${r.first_meal_type})`,
         lastMeal: `${r.last_meal_date} (${r.last_meal_type})`,
         eligibleCount: devEligible,
@@ -2975,6 +3561,7 @@ export async function getGlobalPrasadamAuditAction() {
         r.voice_name,
         r.poc_name,
         r.poc_contact,
+        r.dinner_type,
         c.title AS camp_title,
         u.current_center AS user_current_center,
         u.center AS user_center,
@@ -3083,7 +3670,7 @@ export async function getGlobalPrasadamAuditAction() {
         const dateLabel = (day.label || rawDate).replace(/\s*-\s*/g, ' ');
         datesSet.add(dateKey);
 
-        (['Breakfast', 'Lunch', 'Dinner'] as const).forEach((mealName) => {
+        (['Breakfast', 'Lunch', 'Dinner', 'Milk'] as const).forEach((mealName) => {
           let scheduledCount = 0;
           let takenCount = 0;
 
@@ -3096,10 +3683,12 @@ export async function getGlobalPrasadamAuditAction() {
             );
             if (!col) return;
 
+            const isOnlyMilk = String(r.dinner_type || '').toLowerCase().includes('milk');
             let isEligible = false;
             if (mealName === 'Breakfast') isEligible = col.breakfast;
             else if (mealName === 'Lunch') isEligible = col.lunch;
-            else if (mealName === 'Dinner') isEligible = col.dinner;
+            else if (mealName === 'Dinner') isEligible = col.dinner && !isOnlyMilk;
+            else if (mealName === 'Milk') isEligible = col.dinner && isOnlyMilk;
 
             if (isEligible) {
               scheduledCount++;
@@ -3181,13 +3770,16 @@ export async function getGlobalPrasadamAuditAction() {
             (c.full_date && dateKey.includes('-') && c.full_date === dateKey)
           );
 
+          const isOnlyMilk = String(r.dinner_type || '').toLowerCase().includes('milk');
           const bfEligible = !!col?.breakfast;
           const lnEligible = !!col?.lunch;
-          const dnEligible = !!col?.dinner;
+          const dnEligible = !!col?.dinner && !isOnlyMilk;
+          const mlEligible = !!col?.dinner && isOnlyMilk;
 
           const bfPunch = mealsServedMap[`${dateKey}_Breakfast`] || mealsServedMap[`${rawDate}_Breakfast`] || null;
           const lnPunch = mealsServedMap[`${dateKey}_Lunch`] || mealsServedMap[`${rawDate}_Lunch`] || null;
           const dnPunch = mealsServedMap[`${dateKey}_Dinner`] || mealsServedMap[`${rawDate}_Dinner`] || null;
+          const mlPunch = mealsServedMap[`${dateKey}_Milk`] || mealsServedMap[`${rawDate}_Milk`] || null;
 
           if (bfEligible) {
             devEligible++;
@@ -3201,6 +3793,10 @@ export async function getGlobalPrasadamAuditAction() {
             devEligible++;
             if (dnPunch) devTaken++;
           }
+          if (mlEligible) {
+            devEligible++;
+            if (mlPunch) devTaken++;
+          }
 
           return {
             date: dateKey,
@@ -3208,7 +3804,8 @@ export async function getGlobalPrasadamAuditAction() {
             dateLabel,
             breakfast: { eligible: bfEligible, punched: !!bfPunch, punchedAt: bfPunch },
             lunch: { eligible: lnEligible, punched: !!lnPunch, punchedAt: lnPunch },
-            dinner: { eligible: dnEligible, punched: !!dnPunch, punchedAt: dnPunch }
+            dinner: { eligible: dnEligible, punched: !!dnPunch, punchedAt: dnPunch },
+            milk: { eligible: mlEligible, punched: !!mlPunch, punchedAt: mlPunch }
           };
         });
 
@@ -3302,6 +3899,344 @@ export async function getGlobalPrasadamAuditAction() {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Fetch existing users/devotees belonging to the caller's center/temple for fast 1-click camp registration.
+ * Scoped strictly to managerial roles (roles 8-17 or allowed roles).
+ */
+export async function getCenterDevoteesForCampRegistrationAction(campId?: string, clientUserId?: string) {
+  try {
+    const user = await getAuthUserFromCookies();
+    const userId = user?.id || clientUserId;
+    if (!userId) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    const uRes = await query(
+      `SELECT id, name, email, phone, role, current_center, center, other_center, current_temple, parent_temple, other_temple, hierarchy, birth_date, ashram
+       FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (uRes.rows.length === 0) {
+      return { success: false, error: 'User record not found' };
+    }
+
+    const caller = uRes.rows[0];
+    const role = caller.role;
+    const roles = (Array.isArray(role) ? role : [role])
+      .map((r: any) => Number(r))
+      .filter((r: number) => !isNaN(r));
+
+    // Check camp custom managerial roles if campId is passed
+    // Only these roles are permitted:
+    // 8 (Super admin), 9 (VP), 10 (President), 11 (MD), 12 (Director), 13 (Central VOICE Manager),
+    // 14 (Project Advisor), 15 (Project Manager), 16 (Acting Manager), 17 (OC)
+    let allowedManagerialRoles = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+    if (campId) {
+      const cRes = await query('SELECT payment_config FROM camps WHERE id = $1', [campId]);
+      if (cRes.rows.length > 0 && Array.isArray(cRes.rows[0].payment_config?.allowed_managerial_roles)) {
+        allowedManagerialRoles = cRes.rows[0].payment_config.allowed_managerial_roles;
+      }
+    }
+
+    const isSuperAdmin = roles.includes(8) || (Array.isArray(role) && role.includes('super_admin' as any));
+    const isManager = isSuperAdmin || roles.some((r) => allowedManagerialRoles.includes(r));
+
+    if (!isManager) {
+      return { success: false, error: 'Access restricted to center managers and administrators' };
+    }
+
+    // Strictly fetch allocated centers and temples from database allocation tables
+    const managerLoc = await getManagerAssignedLocations(caller.id, roles);
+    const uniqueCenterNames = managerLoc.assignedCenterNames || [];
+    const uniqueTempleNames = managerLoc.assignedTempleNames || [];
+    const directCenterNames = managerLoc.directlyAssignedCenterNames || [];
+
+    // Non-super-admins MUST have assigned centers or temples. If not assigned, return empty list.
+    if (!isSuperAdmin && uniqueCenterNames.length === 0 && uniqueTempleNames.length === 0) {
+      return {
+        success: true,
+        centerName: '',
+        templeName: '',
+        devotees: [],
+      };
+    }
+
+    let sql = `
+      SELECT id, name, email, phone, birth_date, ashram, current_center, center, other_center, current_temple, parent_temple, hierarchy, verification_status, rounds
+      FROM users
+      WHERE email IS NOT NULL AND email <> ''
+    `;
+    const params: any[] = [];
+
+    if (!isSuperAdmin) {
+      const conditions: string[] = [];
+
+      // If manager has directly assigned centers (e.g. Roles 14-17 like Project Manager),
+      // they must ONLY see users belonging to those specific centers!
+      if (directCenterNames.length > 0) {
+        const lowerCenters = directCenterNames.map(c => c.toLowerCase());
+        params.push(lowerCenters);
+        const pIdx = params.length;
+        conditions.push(`LOWER(current_center) = ANY($${pIdx}) OR LOWER(center) = ANY($${pIdx}) OR LOWER(hierarchy->>'currentCenter') = ANY($${pIdx}) OR LOWER(hierarchy->>'center') = ANY($${pIdx}) OR LOWER(hierarchy->'currentCenter'->>'name') = ANY($${pIdx})`);
+      } else {
+        // Otherwise, for temple leadership without specific center allocations:
+        if (uniqueCenterNames.length > 0) {
+          const lowerCenters = uniqueCenterNames.map(c => c.toLowerCase());
+          params.push(lowerCenters);
+          const pIdx = params.length;
+          conditions.push(`LOWER(current_center) = ANY($${pIdx}) OR LOWER(center) = ANY($${pIdx}) OR LOWER(hierarchy->>'currentCenter') = ANY($${pIdx}) OR LOWER(hierarchy->>'center') = ANY($${pIdx}) OR LOWER(hierarchy->'currentCenter'->>'name') = ANY($${pIdx})`);
+        }
+        if (uniqueTempleNames.length > 0) {
+          const lowerTemples = uniqueTempleNames.map(t => t.toLowerCase());
+          params.push(lowerTemples);
+          const pIdx = params.length;
+          conditions.push(`LOWER(current_temple) = ANY($${pIdx}) OR LOWER(parent_temple) = ANY($${pIdx}) OR LOWER(hierarchy->>'currentTemple') = ANY($${pIdx}) OR LOWER(hierarchy->>'parentTemple') = ANY($${pIdx})`);
+        }
+      }
+
+      if (conditions.length > 0) {
+        sql += ` AND (${conditions.join(' OR ')})`;
+      } else {
+        sql += ` AND 1 = 0`;
+      }
+    }
+
+    sql += ` ORDER BY name ASC LIMIT 500`;
+
+    const res = await query(sql, params);
+
+    // Fetch existing registrations for this camp to identify which tracks each devotee already holds
+    const tracksByEmail = new Map<string, string[]>();
+    const tracksByPhone = new Map<string, string[]>();
+    if (campId) {
+      try {
+        const regRes = await query(
+          `SELECT email, whatsapp, camp_track 
+           FROM camp_registrations 
+           WHERE camp_id = $1 
+             AND is_cancelled IS NOT TRUE 
+             AND payment_status != 'failed'`,
+          [campId]
+        );
+        for (const r of regRes.rows) {
+          const track = (r.camp_track || '').trim();
+          if (!track) continue;
+          if (r.email) {
+            const em = r.email.trim().toLowerCase();
+            const list = tracksByEmail.get(em) || [];
+            if (!list.includes(track)) list.push(track);
+            tracksByEmail.set(em, list);
+          }
+          if (r.whatsapp) {
+            const ph = String(r.whatsapp).replace(/[^0-9]/g, '').slice(-10);
+            if (ph) {
+              const list = tracksByPhone.get(ph) || [];
+              if (!list.includes(track)) list.push(track);
+              tracksByPhone.set(ph, list);
+            }
+          }
+        }
+      } catch (regErr) {
+        console.warn('Could not query existing camp registrations for track check:', regErr);
+      }
+    }
+
+    const devotees = res.rows.map((row) => {
+      let calculatedAge = '';
+      if (row.birth_date) {
+        const bDate = new Date(row.birth_date);
+        if (!isNaN(bDate.getTime())) {
+          const ageDiff = Date.now() - bDate.getTime();
+          const ageDate = new Date(ageDiff);
+          calculatedAge = String(Math.abs(ageDate.getUTCFullYear() - 1970));
+        }
+      }
+
+      let mappedGender = 'Male - Bachelor';
+      const hGender = String(row.hierarchy?.gender || '').toLowerCase();
+      const isFemale = hGender.startsWith('f') || hGender === 'female';
+      const isMarried = (row.ashram && row.ashram.toLowerCase().includes('grihastha')) || hGender.includes('married');
+      if (isFemale) {
+        mappedGender = isMarried ? 'Female - Married' : 'Female - Unmarried';
+      } else {
+        mappedGender = isMarried ? 'Male - Married' : 'Male - Bachelor';
+      }
+
+      const counselor = row.hierarchy?.brahmachariCounselor || row.hierarchy?.grihasthaCounselor || row.hierarchy?.counselor || '';
+      const center = row.current_center || row.center || row.other_center || row.hierarchy?.currentCenter || row.hierarchy?.center || '';
+      const temple = row.current_temple || row.parent_temple || row.hierarchy?.currentTemple || row.hierarchy?.parentTemple || '';
+      const isPending = row.verification_status === 'pending';
+
+      const devEmail = (row.email || '').trim().toLowerCase();
+      const devPhone = String(row.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      const registeredTracks = Array.from(new Set([
+        ...(tracksByEmail.get(devEmail) || []),
+        ...(devPhone ? tracksByPhone.get(devPhone) || [] : [])
+      ]));
+
+      return {
+        id: row.id,
+        name: isPending ? `${row.name} (Pending Approval)` : row.name,
+        email: row.email,
+        phone: row.phone || '',
+        gender: mappedGender,
+        age: calculatedAge,
+        counselor,
+        center,
+        temple,
+        rounds: row.rounds !== undefined && row.rounds !== null ? row.rounds : (row.hierarchy?.rounds || ''),
+        isPending,
+        registeredTracks,
+      };
+    });
+
+    const displayCenterName = directCenterNames.length > 0
+      ? directCenterNames.join(', ')
+      : (uniqueCenterNames.join(', ') || uniqueTempleNames.join(', '));
+
+    return {
+      success: true,
+      centerName: displayCenterName,
+      templeName: uniqueTempleNames.join(', '),
+      devotees,
+    };
+  } catch (error: any) {
+    console.error('getCenterDevoteesForCampRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin Emergency: Update any detail of an attendee's camp registration.
+ * Allows editing participant info, arrival/departure prasadam dates, meal types,
+ * accommodation, fees, payment status, counselor, center, and registration date.
+ * Strictly restricted to Super Admin.
+ */
+export async function superAdminUpdateCampRegistrationAction(
+  registrationId: string,
+  data: {
+    participant_name?: string;
+    whatsapp?: string;
+    email?: string;
+    gender?: string;
+    age?: number | string | null;
+    married_since_year?: number | string | null;
+    voice_name?: string;
+    parent_temple?: string;
+    counselor_name?: string;
+    poc_name?: string;
+    poc_contact?: string;
+    camp_track?: string;
+    participant_type?: string;
+    first_meal_date?: string;
+    first_meal_type?: string;
+    last_meal_date?: string;
+    last_meal_type?: string;
+    dinner_type?: string;
+    accommodation?: string;
+    total_cost?: number;
+    meal_cost?: number;
+    acc_cost?: number;
+    late_fee?: number;
+    discount_amount?: number;
+    coupon_code?: string;
+    payment_method?: string;
+    payment_status?: string;
+    transaction_ref?: string;
+    payment_id?: string;
+    checked_in?: boolean;
+    checked_in_at?: string | null;
+    created_at?: string;
+  }
+) {
+  try {
+    const { user, isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      throw new Error('Forbidden: Only Super Admin can edit camp registrations in emergency mode.');
+    }
+
+    if (!registrationId) {
+      throw new Error('Registration ID is required.');
+    }
+
+    // Fetch existing record first
+    const existingRes = await query('SELECT * FROM camp_registrations WHERE id = $1', [registrationId]);
+    if (existingRes.rows.length === 0) {
+      throw new Error('Registration record not found.');
+    }
+    const current = existingRes.rows[0];
+
+    const updatedFields: string[] = [];
+    const params: any[] = [];
+    let pIdx = 1;
+
+    const addField = (col: string, val: any) => {
+      if (val !== undefined) {
+        updatedFields.push(`${col} = $${pIdx++}`);
+        params.push(val);
+      }
+    };
+
+    if (data.participant_name !== undefined) addField('participant_name', data.participant_name.trim());
+    if (data.whatsapp !== undefined) addField('whatsapp', data.whatsapp.trim());
+    if (data.email !== undefined) addField('email', data.email.trim());
+    if (data.gender !== undefined) addField('gender', data.gender.trim());
+    if (data.age !== undefined) addField('age', data.age ? Number(data.age) : null);
+    if (data.married_since_year !== undefined) addField('married_since_year', data.married_since_year ? Number(data.married_since_year) : null);
+    if (data.voice_name !== undefined) addField('voice_name', data.voice_name.trim());
+    if (data.parent_temple !== undefined) addField('parent_temple', data.parent_temple.trim());
+    if (data.counselor_name !== undefined) addField('counselor_name', data.counselor_name.trim());
+    if (data.poc_name !== undefined) addField('poc_name', data.poc_name.trim());
+    if (data.poc_contact !== undefined) addField('poc_contact', data.poc_contact.trim());
+    if (data.camp_track !== undefined) addField('camp_track', data.camp_track.trim());
+    if (data.participant_type !== undefined) addField('participant_type', data.participant_type.trim());
+    if (data.first_meal_date !== undefined) addField('first_meal_date', data.first_meal_date.trim());
+    if (data.first_meal_type !== undefined) addField('first_meal_type', data.first_meal_type.trim());
+    if (data.last_meal_date !== undefined) addField('last_meal_date', data.last_meal_date.trim());
+    if (data.last_meal_type !== undefined) addField('last_meal_type', data.last_meal_type.trim());
+    if (data.dinner_type !== undefined) addField('dinner_type', data.dinner_type.trim());
+    if (data.accommodation !== undefined) addField('accommodation', data.accommodation.trim());
+    if (data.total_cost !== undefined) addField('total_cost', Number(data.total_cost) || 0);
+    if (data.meal_cost !== undefined) addField('meal_cost', Number(data.meal_cost) || 0);
+    if (data.acc_cost !== undefined) addField('acc_cost', Number(data.acc_cost) || 0);
+    if (data.late_fee !== undefined) addField('late_fee', Number(data.late_fee) || 0);
+    if (data.discount_amount !== undefined) addField('discount_amount', Number(data.discount_amount) || 0);
+    if (data.coupon_code !== undefined) addField('coupon_code', data.coupon_code ? data.coupon_code.trim() : null);
+    if (data.payment_method !== undefined) addField('payment_method', data.payment_method.trim());
+    if (data.payment_status !== undefined) addField('payment_status', data.payment_status.trim());
+    if (data.transaction_ref !== undefined) addField('transaction_ref', data.transaction_ref ? data.transaction_ref.trim() : null);
+    if (data.payment_id !== undefined) addField('payment_id', data.payment_id ? data.payment_id.trim() : null);
+    if (data.checked_in !== undefined) addField('checked_in', Boolean(data.checked_in));
+    if (data.checked_in_at !== undefined) addField('checked_in_at', data.checked_in_at ? new Date(data.checked_in_at) : null);
+    if (data.created_at !== undefined && data.created_at) addField('created_at', new Date(data.created_at));
+
+    updatedFields.push(`updated_at = NOW()`);
+
+    params.push(registrationId);
+    const sql = `
+      UPDATE camp_registrations
+      SET ${updatedFields.join(', ')}
+      WHERE id = $${pIdx}
+      RETURNING *
+    `;
+
+    const res = await query(sql, params);
+    const updated = res.rows[0];
+
+    // Revalidate relevant paths
+    revalidatePath(`/dashboard/admin/camps/${current.camp_id}/registrations`);
+    revalidatePath('/dashboard/camp');
+    revalidatePath('/camps/verify-pass');
+
+    return { success: true, registration: updated as CampRegistration };
+  } catch (error: any) {
+    console.error('superAdminUpdateCampRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+
 
 
 

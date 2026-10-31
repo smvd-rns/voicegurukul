@@ -20,6 +20,8 @@ interface SearchableSelectProps {
      */
     valueProperty?: 'id' | 'name';
     triggerClassName?: string;
+    showEmail?: boolean;
+    searchPlaceholder?: string;
 }
 
 export default function SearchableSelect({
@@ -31,6 +33,8 @@ export default function SearchableSelect({
     className = '',
     valueProperty = 'name',
     triggerClassName = '',
+    showEmail = true,
+    searchPlaceholder,
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -103,10 +107,12 @@ export default function SearchableSelect({
         };
     }, [isOpen]);
 
+    const shouldShowEmail = showEmail && options.some((opt) => Boolean(opt.email));
+
     // Filter options based on search (name or email)
     const filteredOptions = options.filter((option) =>
         option.name.toLowerCase().includes(search.toLowerCase()) ||
-        (option.email && option.email.toLowerCase().includes(search.toLowerCase()))
+        (shouldShowEmail && option.email && option.email.toLowerCase().includes(search.toLowerCase()))
     );
 
     let selectedOption = options.find((opt) => opt[valueProperty] === value);
@@ -134,7 +140,7 @@ export default function SearchableSelect({
                     <input
                         type="text"
                         className="w-full rounded-md border-0 bg-gray-50 py-1.5 pl-8 pr-8 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-orange-600 sm:text-sm sm:leading-6"
-                        placeholder="Search by name or email..."
+                        placeholder={searchPlaceholder || (shouldShowEmail ? "Search by name or email..." : "Search by name...")}
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         autoFocus
@@ -176,7 +182,7 @@ export default function SearchableSelect({
                         >
                             <div className="flex flex-col">
                                 <span className="block truncate">{option.name}</span>
-                                {option.email && (
+                                {shouldShowEmail && option.email && (
                                     <span className="block truncate text-xs text-gray-400 group-hover:text-orange-700">
                                         {option.email}
                                     </span>
@@ -208,7 +214,7 @@ export default function SearchableSelect({
                     <span className={`block truncate ${(!selectedOption && !value) ? 'text-gray-400' : 'text-gray-900'}`}>
                         {selectedOption ? selectedOption.name : (value || placeholder)}
                     </span>
-                    {selectedOption?.email && (
+                    {shouldShowEmail && selectedOption?.email && (
                         <span className="block truncate text-xs text-gray-400 font-normal">
                             {selectedOption.email}
                         </span>

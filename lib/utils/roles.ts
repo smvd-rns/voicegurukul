@@ -292,11 +292,16 @@ export const isSuperAdminRoleNumber = (roleNumber: number): boolean => {
  * 13: central_voice_manager
  * 14: project_advisor
  * 15: project_manager
- * 16: acting_manager
- * 17: oc
- *
- * In the future, if you wish to give rights to another role (frontend only),
- * simply add the role number to this array!
+ * 8: Super admin
+ * 9: Vice-President
+ * 10: President
+ * 11: Managing Director
+ * 12: Director
+ * 13: Central VOICE Manager
+ * 14: Project Advisor
+ * 15: Project Manager
+ * 16: Acting Manager
+ * 17: OC
  */
 export const DEFAULT_CAMP_MANAGERIAL_ROLES: number[] = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 

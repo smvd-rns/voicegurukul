@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import {
   Ticket, Utensils, X, Download, Printer, CheckCircle2,
   Calendar, MapPin, User, Phone, Sparkles, AlertCircle,
-  ShieldCheck, ExternalLink, QrCode as QrIcon, Ban
+  ShieldCheck, ExternalLink, QrCode as QrIcon, Ban, Clock
 } from 'lucide-react';
 import { buildMealMatrix, MealMatrixColumn } from '@/lib/camp-cost';
 
@@ -37,6 +37,12 @@ export default function CampPrasadamCard({
     reg.payment_status === 'cancelled' ||
     reg.payment_status === 'refunded' ||
     reg.refund_status === 'refunded'
+  );
+  const isPendingApproval = Boolean(
+    !isCancelled &&
+    (reg.payment_status === 'processing' ||
+     reg.payment_status === 'pending' ||
+     (reg.payment_status !== 'completed' && reg.payment_method !== 'FREE' && reg.payment_method !== 'ROLE_WAIVER'))
   );
   const campTitle = (reg.camp_title || 'Camp Retreat').trim();
   const campStartDate = reg.camp_start_date;
@@ -113,8 +119,19 @@ export default function CampPrasadamCard({
     ? resolvedUserCenter
     : 'MEAL DATES (Contd.)';
 
+  // Check whether devotee is eligible for this specific meal on the column date
+  const isMealEligible = (col: MealMatrixColumn, mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk') => {
+    if (mealType === 'Breakfast') return Boolean(col.breakfast);
+    if (mealType === 'Lunch') return Boolean(col.lunch);
+    if (!col.dinner) return false;
+    const dType = String(reg.dinner_type || '').toLowerCase();
+    if (dType.includes('both')) return true;
+    if (dType.includes('milk')) return mealType === 'Milk';
+    return mealType === 'Dinner';
+  };
+
   // Check whether a specific meal on a date column was scanned/served at the desk
-  const isMealServed = (col: MealMatrixColumn, mealType: 'Breakfast' | 'Lunch' | 'Dinner') => {
+  const isMealServed = (col: MealMatrixColumn, mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk') => {
     if (!reg?.meals_served || typeof reg.meals_served !== 'object') return false;
     const meals = reg.meals_served as Record<string, string>;
 
@@ -166,6 +183,10 @@ export default function CampPrasadamCard({
   const handlePrint = () => {
     if (isCancelled) {
       alert('This pass has been cancelled/refunded and cannot be printed.');
+      return;
+    }
+    if (isPendingApproval) {
+      alert('This pass is pending payment verification and cannot be printed.');
       return;
     }
     const cardEl = document.getElementById('prasadam-card-print-target');
@@ -277,11 +298,15 @@ export default function CampPrasadamCard({
       alert('This pass has been cancelled/refunded and cannot be downloaded.');
       return;
     }
+    if (isPendingApproval) {
+      alert('This pass is pending payment verification and cannot be downloaded.');
+      return;
+    }
     setDownloading(true);
     try {
       const scale = 3;
       const w = 390;
-      const h = tier2.length > 0 ? 320 : 250;
+      const h = tier2.length > 0 ? 360 : 285;
 
       const canvas = document.createElement('canvas');
       canvas.width = w * scale;
@@ -300,6 +325,19 @@ export default function CampPrasadamCard({
           img.onerror = () => resolve(img);
           img.src = qrDataUrl;
         });
+      }
+
+      // Pre-load VOICE Logo image
+      let logoImg: HTMLImageElement | null = null;
+      try {
+        logoImg = await new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(img);
+          img.src = '/images/voice-logo.png';
+        });
+      } catch {
+        // Fallback gracefully to text if offline
       }
 
       // Draw background
@@ -326,7 +364,7 @@ export default function CampPrasadamCard({
       // Card outer border
       if (activeTab === 'delegate_pass') {
         const dpW = 400;
-        const dpH = 260;
+        const dpH = 275;
         canvas.width = dpW * scale;
         canvas.height = dpH * scale;
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -337,10 +375,10 @@ export default function CampPrasadamCard({
         drawRoundRect(4, 4, dpW - 8, dpH - 8, 14, '#ffffff', '#cbd5e1', 1.5);
 
         // Header Gradient Banner
-        const grad = ctx.createLinearGradient(12, 12, dpW - 24, 80);
+        const grad = ctx.createLinearGradient(12, 12, dpW - 24, 95);
         grad.addColorStop(0, '#f59e0b');
         grad.addColorStop(1, '#ea580c');
-        drawRoundRect(12, 12, dpW - 24, 76, 10, grad as any);
+        drawRoundRect(12, 12, dpW - 24, 90, 10, grad as any);
 
         // Header Tag & Token
         ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
@@ -358,22 +396,39 @@ export default function CampPrasadamCard({
         ctx.font = '700 9px monospace, sans-serif';
         ctx.fillText(`Token: #${displayToken}`, dpW - 52, 29);
 
+        // VOICE Institutional Branding
+        if (logoImg && logoImg.width > 0) {
+          const dpLogoH = 22;
+          const dpLogoW = (logoImg.width / logoImg.height) * dpLogoH;
+          drawRoundRect(20, 44, dpLogoW + 8, dpLogoH + 6, 4, '#ffffff');
+          ctx.drawImage(logoImg, 24, 47, dpLogoW, dpLogoH);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '900 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif';
+          ctx.fillText('V O I C E', 20, 48);
+
+          ctx.fillStyle = '#fef3c7';
+          ctx.font = '700 7px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.fillText('Rekindling Wisdom, Reviving Love', 20, 59);
+        }
+
         // Camp Title & Venue
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
-        ctx.font = '900 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText(campTitle, 20, 52, dpW - 60);
+        ctx.font = '900 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(campTitle, 20, 77, dpW - 60);
 
-        ctx.font = '600 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = '600 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillText(`Venue: ${reg.camp_venue || 'Central VOICE, Pune'}`, 20, 72, dpW - 60);
+        ctx.fillText(`Venue: ${reg.camp_venue || 'Central VOICE, Pune'}`, 20, 93, dpW - 60);
 
         // Devotee Details Box
-        drawRoundRect(12, 96, dpW - 120, 150, 10, '#f8fafc', '#e2e8f0', 1);
+        drawRoundRect(12, 110, dpW - 120, 150, 10, '#f8fafc', '#e2e8f0', 1);
 
         const rows = [
           ['Attendee Name:', reg.participant_name, '#0f172a', true],
-          ['Track:', reg.camp_track || 'Standard', '#c2410c', true],
+          ['Camp:', reg.camp_track || 'Standard', '#c2410c', true],
           ['WhatsApp:', reg.whatsapp || reg.poc_contact || '-', '#334155', false],
           ['Center:', resolvedUserCenter, '#0f172a', false],
           ['Booking Group:', reg.group_id, '#1e293b', true],
@@ -381,7 +436,7 @@ export default function CampPrasadamCard({
           ['Payment Status:', (reg.payment_status || 'COMPLETED').toUpperCase(), '#047857', true],
         ];
 
-        let currY = 110;
+        let currY = 124;
         rows.forEach(([label, val, color, isBold]) => {
           ctx.textAlign = 'left';
           ctx.fillStyle = '#64748b';
@@ -396,14 +451,14 @@ export default function CampPrasadamCard({
         });
 
         // QR Box
-        drawRoundRect(dpW - 100, 96, 88, 150, 10, '#ffffff', '#e2e8f0', 1);
+        drawRoundRect(dpW - 100, 110, 88, 150, 10, '#ffffff', '#e2e8f0', 1);
         if (qrImg) {
-          ctx.drawImage(qrImg, dpW - 92, 106, 72, 72);
+          ctx.drawImage(qrImg, dpW - 92, 120, 72, 72);
         }
         ctx.textAlign = 'center';
         ctx.fillStyle = '#64748b';
         ctx.font = '800 6.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText('SCAN TO VERIFY', dpW - 56, 192);
+        ctx.fillText('SCAN TO VERIFY', dpW - 56, 206);
 
         // Download
         const a = document.createElement('a');
@@ -418,72 +473,98 @@ export default function CampPrasadamCard({
 
       drawRoundRect(4, 4, w - 8, h - 8, 12, '#ffffff', '#0f172a', 2);
 
+      // VOICE Institutional Branding Header
+      if (logoImg && logoImg.width > 0) {
+        const logoH = 28;
+        const logoW = (logoImg.width / logoImg.height) * logoH;
+        const logoX = (w - logoW) / 2;
+        ctx.drawImage(logoImg, logoX, 9, logoW, logoH);
+      } else {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '900 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif';
+        ctx.fillText('V O I C E', w / 2, 12);
+
+        ctx.fillStyle = '#b45309';
+        ctx.font = '700 8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Rekindling Wisdom, Reviving Love', w / 2, 30);
+      }
+
+      // Header divider line below branding
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(14, 42);
+      ctx.lineTo(w - 14, 42);
+      ctx.stroke();
+
       // Token Badge Circle
-      drawRoundRect(14, 14, 38, 38, 19, '#fffbeb', '#0f172a', 1.5);
+      drawRoundRect(14, 48, 38, 38, 19, '#fffbeb', '#0f172a', 1.5);
       ctx.fillStyle = '#020617';
       ctx.font = '900 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(displayToken, 33, 33);
+      ctx.fillText(displayToken, 33, 67);
 
       // Camp Title & Temple Banner
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#1e3a8a';
       ctx.font = '900 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(campTitle.toUpperCase(), 58, 15, 230);
+      ctx.fillText(campTitle.toUpperCase(), 58, 49, 230);
 
       ctx.fillStyle = '#1e293b';
       ctx.font = '800 9.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(templeBanner.toUpperCase(), 58, 32, 230);
+      ctx.fillText(templeBanner.toUpperCase(), 58, 66, 230);
 
       // Devotee Name & Mobile
       ctx.fillStyle = '#020617';
       ctx.font = '900 10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(reg.participant_name, 14, 56, 180);
+      ctx.fillText(reg.participant_name, 14, 90, 180);
 
       ctx.textAlign = 'right';
       ctx.fillStyle = '#334155';
       ctx.font = '700 9px monospace, sans-serif';
-      ctx.fillText(`Mob: ${reg.whatsapp || reg.poc_contact || ''}`, 290, 57);
+      ctx.fillText(`Mob: ${reg.whatsapp || reg.poc_contact || ''}`, 290, 91);
 
       // Center
       ctx.textAlign = 'left';
       ctx.fillStyle = '#64748b';
       ctx.font = '800 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('CENTER:', 14, 73);
+      ctx.fillText('CENTER:', 14, 107);
       ctx.fillStyle = '#0f172a';
       ctx.font = '800 9.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(resolvedUserCenter, 60, 72, 230);
+      ctx.fillText(resolvedUserCenter, 60, 106, 230);
 
-      // Track
+      // Camp
       ctx.fillStyle = '#64748b';
       ctx.font = '800 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('TRACK:', 14, 87);
+      ctx.fillText('CAMP:', 14, 121);
       ctx.fillStyle = '#92400e';
       ctx.font = '800 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       const trackDateStr = (campStartDate && campEndDate)
         ? ` (${new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${new Date(campEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})`
         : '';
-      ctx.fillText(`${reg.camp_track || 'Standard Track'}${trackDateStr}`, 56, 86, 234);
+      ctx.fillText(`${reg.camp_track || 'Standard Track'}${trackDateStr}`, 56, 120, 234);
 
       // QR Code Box on right
-      drawRoundRect(296, 14, 80, 88, 8, '#ffffff', '#94a3b8', 1);
+      drawRoundRect(296, 48, 80, 88, 8, '#ffffff', '#94a3b8', 1);
       if (qrImg) {
-        ctx.drawImage(qrImg, 302, 18, 68, 68);
+        ctx.drawImage(qrImg, 302, 52, 68, 68);
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
       ctx.font = '900 7px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('SCAN PASS', 336, 94);
+      ctx.fillText('SCAN PASS', 336, 128);
 
       // Divider line
       ctx.strokeStyle = '#cbd5e1';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(14, 108);
-      ctx.lineTo(376, 108);
+      ctx.moveTo(14, 142);
+      ctx.lineTo(376, 142);
       ctx.stroke();
 
       // Meal Table Drawer
@@ -493,10 +574,10 @@ export default function CampPrasadamCard({
         const col0W = 94;
         const numDateCols = tierCols.length;
         const dateColW = (tableW - col0W) / Math.max(1, numDateCols);
-        const rowH = 15;
+        const rowH = 14;
 
-        // Container
-        drawRoundRect(tableX, startY, tableW, rowH * 4, 4, '#ffffff', '#94a3b8', 1);
+        // Container (1 header row + 4 meal rows = 5 rows)
+        drawRoundRect(tableX, startY, tableW, rowH * 5, 4, '#ffffff', '#94a3b8', 1);
 
         // Header Background (Amber-400)
         ctx.fillStyle = '#fbbf24';
@@ -514,7 +595,7 @@ export default function CampPrasadamCard({
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(tableX + col0W, startY);
-        ctx.lineTo(tableX + col0W, startY + rowH * 4);
+        ctx.lineTo(tableX + col0W, startY + rowH * 5);
         ctx.stroke();
 
         // Date Headers
@@ -523,7 +604,7 @@ export default function CampPrasadamCard({
           if (idx > 0) {
             ctx.beginPath();
             ctx.moveTo(colX, startY);
-            ctx.lineTo(colX, startY + rowH * 4);
+            ctx.lineTo(colX, startY + rowH * 5);
             ctx.stroke();
           }
           ctx.fillStyle = '#0f172a';
@@ -531,11 +612,12 @@ export default function CampPrasadamCard({
           ctx.fillText(col.label, colX + dateColW / 2, startY + rowH / 2, dateColW - 2);
         });
 
-        // 3 Rows
-        const rowDefs = [
-          { key: 'breakfast' as const, label: 'BF' },
-          { key: 'lunch' as const, label: 'Lunch' },
-          { key: 'dinner' as const, label: 'Dinner' }
+        // 4 Rows: Breakfast, Lunch, Dinner, Milk
+        const rowDefs: { mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk'; label: string }[] = [
+          { mealType: 'Breakfast', label: 'BF' },
+          { mealType: 'Lunch', label: 'Lunch' },
+          { mealType: 'Dinner', label: 'Dinner' },
+          { mealType: 'Milk', label: 'Milk' },
         ];
 
         rowDefs.forEach((rDef, rIdx) => {
@@ -558,11 +640,10 @@ export default function CampPrasadamCard({
           // Meal status cells
           tierCols.forEach((col, cIdx) => {
             const cellX = tableX + col0W + cIdx * dateColW;
-            const hasMeal = Boolean(col[rDef.key]);
-            const mealType = rDef.key === 'breakfast' ? 'Breakfast' : rDef.key === 'lunch' ? 'Lunch' : 'Dinner';
-            const isServed = hasMeal && isMealServed(col, mealType);
+            const isEligible = isMealEligible(col, rDef.mealType);
+            const isServed = isEligible && isMealServed(col, rDef.mealType);
 
-            if (!hasMeal) {
+            if (!isEligible) {
               ctx.fillStyle = 'rgba(226, 232, 240, 0.7)';
               ctx.fillRect(cellX + 1, rY + 1, dateColW - 1, rowH - 1);
             } else if (isServed) {
@@ -573,7 +654,7 @@ export default function CampPrasadamCard({
 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            if (!hasMeal) {
+            if (!isEligible) {
               ctx.fillStyle = '#94a3b8';
               ctx.font = '500 8.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
               ctx.fillText('X', cellX + dateColW / 2, rY + rowH / 2);
@@ -591,11 +672,11 @@ export default function CampPrasadamCard({
       };
 
       // Draw Tier 1 Table
-      drawMealTable(tier1, 114, 'MEAL DATES');
+      drawMealTable(tier1, 148, 'MEAL DATES');
 
-      // Draw Tier 2 Table if present
+      // Draw Tier 2 Table if present (148 + 5 * 14 = 218, plus 6px gap = 224)
       if (tier2.length > 0) {
-        drawMealTable(tier2, 178, tier2Header);
+        drawMealTable(tier2, 224, tier2Header);
       }
 
       // Footer Notes
@@ -626,7 +707,7 @@ export default function CampPrasadamCard({
   };
 
   const cardContent = (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       {/* Print isolation stylesheet: fixed positioning directly at top of Page 1 */}
       <style jsx global>{`
         @media print {
@@ -675,50 +756,67 @@ export default function CampPrasadamCard({
 
       {/* Cancelled / Refunded Alert Banner */}
       {isCancelled && (
-        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-3 sm:p-3.5 flex items-start gap-3 text-rose-950 shadow-xs print:hidden">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0 text-rose-600">
-            <Ban className="w-4 h-4" />
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex items-start gap-2.5 sm:gap-3 text-rose-950 shadow-xs print:hidden">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0 text-rose-600">
+            <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
           <div>
-            <div className="text-xs font-black uppercase tracking-wider text-rose-700">Pass Cancelled / Refunded</div>
-            <div className="text-[11px] text-rose-800 leading-snug mt-0.5">
+            <div className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-rose-700">Pass Cancelled / Refunded</div>
+            <div className="text-[10px] sm:text-[11px] text-rose-800 leading-snug mt-0.5">
               This registration is void. Meals and camp entry cannot be collected with this pass, and pass downloading has been disabled.
             </div>
           </div>
         </div>
       )}
 
+      {/* Pending Payment Approval Alert Banner */}
+      {isPendingApproval && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex items-start gap-2.5 sm:gap-3 text-amber-950 shadow-xs print:hidden">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-700">
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />
+          </div>
+          <div>
+            <div className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-800">Pass Inactive • Payment Approval Pending</div>
+            <div className="text-[10px] sm:text-[11px] text-amber-900 leading-snug mt-0.5">
+              Payment verification for this registration ({reg.payment_method || 'Transfer'}) is in progress. Entry and meals will be activated once approved by administration.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Selector Tabs */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl print:hidden text-xs font-bold text-slate-600">
+      <div className="flex items-center gap-1 p-0.5 sm:p-1 bg-slate-100 rounded-lg sm:rounded-xl print:hidden text-xs font-bold text-slate-600">
         <button
           type="button"
           onClick={() => setActiveTab('meal_card')}
-          className={`flex-1 py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md sm:rounded-lg transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-[10.5px] sm:text-xs ${
             activeTab === 'meal_card'
-              ? 'bg-white text-slate-900 shadow-xs font-black'
+              ? 'bg-white text-slate-900 shadow-2xs font-black'
               : 'hover:text-slate-900'
           }`}
         >
-          <Utensils className="w-3.5 h-3.5 text-amber-600" />
-          <span>Prasadam Card (8x5 cm)</span>
+          <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+          <span className="sm:hidden">Prasadam Card</span>
+          <span className="hidden sm:inline">Prasadam Card (8×5 cm)</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('delegate_pass')}
-          className={`flex-1 py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md sm:rounded-lg transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-[10.5px] sm:text-xs ${
             activeTab === 'delegate_pass'
-              ? 'bg-white text-slate-900 shadow-xs font-black'
+              ? 'bg-white text-slate-900 shadow-2xs font-black'
               : 'hover:text-slate-900'
           }`}
         >
-          <Ticket className="w-3.5 h-3.5 text-orange-600" />
-          <span>Official Delegate Pass</span>
+          <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-600 shrink-0" />
+          <span className="sm:hidden">Delegate Pass</span>
+          <span className="hidden sm:inline">Official Delegate Pass</span>
         </button>
       </div>
 
       {/* VIEW 1: PRASADAM COUPON CARD (Unrestricted print height, left-aligned title, prominent QR) */}
       {activeTab === 'meal_card' && (
-        <div className="flex justify-center px-1">
+        <div className="flex justify-center px-0 sm:px-1">
           <div
             id="prasadam-card-print-target"
             className="relative w-full max-w-[390px] bg-white border-2 border-slate-900 rounded-xl p-2 sm:p-2.5 shadow-sm font-sans text-slate-900 select-none space-y-1.5 mx-auto overflow-hidden"
@@ -735,46 +833,68 @@ export default function CampPrasadamCard({
               </div>
             )}
 
+            {/* Pending Approval / Inactive Overlay */}
+            {isPendingApproval && (
+              <div className="absolute inset-0 bg-white/90 backdrop-blur-[1px] rounded-xl z-20 flex flex-col items-center justify-center p-4 text-center">
+                <div className="px-3.5 py-1.5 bg-amber-600 text-white font-black text-xs uppercase tracking-widest rounded-lg shadow-md -rotate-6 border-2 border-white flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>AWAITING APPROVAL</span>
+                </div>
+                <p className="text-[10px] text-amber-900 font-bold mt-2 max-w-[240px]">
+                  Pass is currently inactive. Awaiting payment verification by camp accounts desk.
+                </p>
+              </div>
+            )}
+
+            {/* VOICE Institutional Branding Header with Official Logo */}
+            <div className="flex justify-center items-center pb-1 border-b border-slate-200/90 -mt-0.5">
+              <img
+                src="/images/voice-logo.png"
+                alt="VOICE - Rekindling Wisdom, Reviving Love"
+                className="h-7 sm:h-8 w-auto object-contain max-w-[210px]"
+              />
+            </div>
+
             {/* Top Section: Left (Token + Camp Title + Devotee + Center) | Right (Dedicated Big Scannable QR) */}
-            <div className="flex items-start justify-between gap-2 border-b border-slate-300 pb-2">
+            <div className="flex items-start justify-between gap-1.5 sm:gap-2 border-b border-slate-300 pb-1.5 sm:pb-2">
               {/* Left Side: Title, Token, Devotee, Center */}
-              <div className="flex-1 space-y-1 min-w-0 pr-1">
+              <div className="flex-1 space-y-0.5 sm:space-y-1 min-w-0 pr-1">
                 {/* Row A: Token Circle + Camp Title & Temple */}
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full border-2 border-slate-900 flex items-center justify-center font-black text-base text-slate-950 bg-amber-50 shadow-inner shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-slate-900 flex items-center justify-center font-black text-sm sm:text-base text-slate-950 bg-amber-50 shadow-inner shrink-0">
                     {displayToken}
                   </div>
                   <div className="leading-tight min-w-0 flex-1">
-                    <div className="text-[12px] font-black text-blue-900 uppercase tracking-tight truncate">
+                    <div className="text-[11.5px] sm:text-[12px] font-black text-blue-900 uppercase tracking-tight truncate">
                       {campTitle}
                     </div>
-                    <div className="text-[9.5px] font-black text-slate-800 uppercase tracking-wide truncate">
+                    <div className="text-[9px] sm:text-[9.5px] font-black text-slate-800 uppercase tracking-wide truncate">
                       {templeBanner}
                     </div>
                   </div>
                 </div>
 
                 {/* Row B: Devotee Name & Mobile */}
-                <div className="flex items-baseline justify-between gap-1 text-[10px] leading-tight pt-0.5">
+                <div className="flex items-baseline justify-between gap-1 text-[9.5px] sm:text-[10px] leading-tight pt-0.5">
                   <div className="truncate font-black text-slate-950 max-w-[62%]">
                     {reg.participant_name}
                   </div>
                   <div className="truncate text-right shrink-0">
-                    <span className="font-bold text-slate-500 uppercase text-[8px] mr-1">Mob:</span>
+                    <span className="font-bold text-slate-500 uppercase text-[7.5px] sm:text-[8px] mr-0.5 sm:mr-1">Mob:</span>
                     <span className="font-mono font-bold text-slate-900">{reg.whatsapp || reg.poc_contact}</span>
                   </div>
                 </div>
 
                 {/* Row C: Current Center & Track */}
-                <div className="space-y-0.5 text-[9px] leading-tight">
+                <div className="space-y-0.5 text-[8.5px] sm:text-[9px] leading-tight">
                   <div className="flex items-baseline gap-1">
-                    <span className="font-bold text-slate-500 uppercase text-[8px]">CENTER:</span>
+                    <span className="font-bold text-slate-500 uppercase text-[7.5px] sm:text-[8px]">CENTER:</span>
                     <span className="font-bold text-slate-900 truncate">
                       {resolvedUserCenter}
                     </span>
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <span className="font-bold text-slate-500 uppercase text-[8px]">TRACK:</span>
+                    <span className="font-bold text-slate-500 uppercase text-[7.5px] sm:text-[8px]">CAMP:</span>
                     <span className="font-bold text-amber-800 truncate">
                       {reg.camp_track || 'Standard Track'}
                       {campStartDate && campEndDate && (
@@ -787,18 +907,18 @@ export default function CampPrasadamCard({
                 </div>
               </div>
 
-              {/* Right Side: Dedicated Clean QR Code, completely free of text */}
-              <div className="shrink-0 flex flex-col items-center justify-center p-1 bg-white border border-slate-400 rounded-lg shadow-2xs self-center">
+              {/* Right Side: Dedicated Clean QR Code */}
+              <div className="shrink-0 flex flex-col items-center justify-center p-0.5 sm:p-1 bg-white border border-slate-400 rounded-lg shadow-2xs self-center">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
                     alt="Scan Pass QR"
-                    className="w-16 h-16 sm:w-[68px] sm:h-[68px] object-contain"
+                    className="w-14 h-14 sm:w-[68px] sm:h-[68px] object-contain"
                   />
                 ) : (
-                  <div className="w-16 h-16 sm:w-[68px] sm:h-[68px] bg-slate-200 animate-pulse rounded" />
+                  <div className="w-14 h-14 sm:w-[68px] sm:h-[68px] bg-slate-200 animate-pulse rounded" />
                 )}
-                <span className="block text-[7px] font-black text-slate-800 uppercase tracking-wider mt-0.5">
+                <span className="block text-[6.5px] sm:text-[7px] font-black text-slate-800 uppercase tracking-wider mt-0.5">
                   Scan Pass
                 </span>
               </div>
@@ -832,19 +952,20 @@ export default function CampPrasadamCard({
                           BF
                         </td>
                         {tier1.map((col) => {
-                          const isServed = col.breakfast && isMealServed(col, 'Breakfast');
+                          const isEligible = isMealEligible(col, 'Breakfast');
+                          const isServed = isEligible && isMealServed(col, 'Breakfast');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.breakfast
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.breakfast ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -864,19 +985,20 @@ export default function CampPrasadamCard({
                           Lunch
                         </td>
                         {tier1.map((col) => {
-                          const isServed = col.lunch && isMealServed(col, 'Lunch');
+                          const isEligible = isMealEligible(col, 'Lunch');
+                          const isServed = isEligible && isMealServed(col, 'Lunch');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.lunch
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.lunch ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -896,19 +1018,20 @@ export default function CampPrasadamCard({
                           Dinner
                         </td>
                         {tier1.map((col) => {
-                          const isServed = col.dinner && isMealServed(col, 'Dinner');
+                          const isEligible = isMealEligible(col, 'Dinner');
+                          const isServed = isEligible && isMealServed(col, 'Dinner');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.dinner
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.dinner ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -917,6 +1040,39 @@ export default function CampPrasadamCard({
                                 </span>
                               ) : (
                                 'Dinner'
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {/* Milk */}
+                      <tr>
+                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                          Milk
+                        </td>
+                        {tier1.map((col) => {
+                          const isEligible = isMealEligible(col, 'Milk');
+                          const isServed = isEligible && isMealServed(col, 'Milk');
+                          return (
+                            <td
+                              key={col.date}
+                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                !isEligible
+                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                  : isServed
+                                  ? 'bg-emerald-100 text-emerald-800 font-black'
+                                  : 'bg-white text-slate-700 font-bold'
+                              }`}
+                            >
+                              {!isEligible ? (
+                                'X'
+                              ) : isServed ? (
+                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                  <span>✓</span>
+                                  <span>Milk</span>
+                                </span>
+                              ) : (
+                                'Milk'
                               )}
                             </td>
                           );
@@ -953,19 +1109,20 @@ export default function CampPrasadamCard({
                           BF
                         </td>
                         {tier2.map((col) => {
-                          const isServed = col.breakfast && isMealServed(col, 'Breakfast');
+                          const isEligible = isMealEligible(col, 'Breakfast');
+                          const isServed = isEligible && isMealServed(col, 'Breakfast');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.breakfast
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.breakfast ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -985,19 +1142,20 @@ export default function CampPrasadamCard({
                           Lunch
                         </td>
                         {tier2.map((col) => {
-                          const isServed = col.lunch && isMealServed(col, 'Lunch');
+                          const isEligible = isMealEligible(col, 'Lunch');
+                          const isServed = isEligible && isMealServed(col, 'Lunch');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.lunch
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.lunch ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -1017,19 +1175,20 @@ export default function CampPrasadamCard({
                           Dinner
                         </td>
                         {tier2.map((col) => {
-                          const isServed = col.dinner && isMealServed(col, 'Dinner');
+                          const isEligible = isMealEligible(col, 'Dinner');
+                          const isServed = isEligible && isMealServed(col, 'Dinner');
                           return (
                             <td
                               key={col.date}
                               className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !col.dinner
+                                !isEligible
                                   ? 'bg-slate-200/80 text-slate-400 font-normal'
                                   : isServed
                                   ? 'bg-emerald-100 text-emerald-800 font-black'
                                   : 'bg-white text-slate-700 font-bold'
                               }`}
                             >
-                              {!col.dinner ? (
+                              {!isEligible ? (
                                 'X'
                               ) : isServed ? (
                                 <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
@@ -1038,6 +1197,39 @@ export default function CampPrasadamCard({
                                 </span>
                               ) : (
                                 'Dinner'
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {/* Milk */}
+                      <tr>
+                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                          Milk
+                        </td>
+                        {tier2.map((col) => {
+                          const isEligible = isMealEligible(col, 'Milk');
+                          const isServed = isEligible && isMealServed(col, 'Milk');
+                          return (
+                            <td
+                              key={col.date}
+                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                !isEligible
+                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                  : isServed
+                                  ? 'bg-emerald-100 text-emerald-800 font-black'
+                                  : 'bg-white text-slate-700 font-bold'
+                              }`}
+                            >
+                              {!isEligible ? (
+                                'X'
+                              ) : isServed ? (
+                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                  <span>✓</span>
+                                  <span>Milk</span>
+                                </span>
+                              ) : (
+                                'Milk'
                               )}
                             </td>
                           );
@@ -1073,6 +1265,19 @@ export default function CampPrasadamCard({
             </div>
           )}
 
+          {/* Pending Approval / Inactive Overlay */}
+          {isPendingApproval && (
+            <div className="absolute inset-0 bg-white/90 backdrop-blur-[1px] rounded-2xl z-20 flex flex-col items-center justify-center p-4 text-center">
+              <div className="px-4 py-1.5 bg-amber-600 text-white font-black text-xs uppercase tracking-widest rounded-lg shadow-md -rotate-6 border-2 border-white flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>AWAITING APPROVAL</span>
+              </div>
+              <p className="text-[10px] text-amber-900 font-bold mt-2 max-w-[240px]">
+                Pass is currently inactive. Awaiting payment verification by camp accounts desk.
+              </p>
+            </div>
+          )}
+
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 text-white space-y-2 shadow-md">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2 py-0.5 rounded">
@@ -1081,6 +1286,15 @@ export default function CampPrasadamCard({
               <span className="text-[10px] font-mono bg-black/20 px-2 py-0.5 rounded">
                 Token: #{displayToken}
               </span>
+            </div>
+            <div className="pt-0.5 border-b border-white/20 pb-1.5 flex items-center justify-start">
+              <div className="bg-white/95 rounded-lg px-2 py-1 shadow-xs inline-flex items-center">
+                <img
+                  src="/images/voice-logo.png"
+                  alt="VOICE - Rekindling Wisdom, Reviving Love"
+                  className="h-6 sm:h-7 w-auto object-contain"
+                />
+              </div>
             </div>
             <h4 className="text-lg font-black">{campTitle}</h4>
             <p className="text-xs text-white/90">Venue: {reg.camp_venue || 'Central VOICE, Pune'}</p>
@@ -1093,7 +1307,7 @@ export default function CampPrasadamCard({
                 <span className="font-bold text-gray-800">{reg.participant_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Track:</span>
+                <span className="text-gray-500">Camp:</span>
                 <span className="font-bold text-amber-700">{reg.camp_track || 'Standard'}</span>
               </div>
               <div className="flex justify-between">
@@ -1135,44 +1349,44 @@ export default function CampPrasadamCard({
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* Action Buttons: Compact & Balanced Layout */}
       {!hideActions && (
         isCancelled ? (
-          <div className="w-full py-2.5 px-4 bg-rose-50 border border-rose-200 rounded-xl text-center text-xs font-bold text-rose-700 flex items-center justify-center gap-2 print:hidden shadow-xs">
-            <Ban className="w-4 h-4 text-rose-600" />
-            <span>Pass Cancelled &bull; Downloading and Printing Disabled</span>
+          <div className="w-full py-2 px-3 bg-rose-50 border border-rose-200 rounded-xl text-center text-[10.5px] sm:text-xs font-bold text-rose-700 flex items-center justify-center gap-1.5 print:hidden shadow-2xs">
+            <Ban className="w-3.5 h-3.5 text-rose-600" />
+            <span>Pass Cancelled &bull; Download Disabled</span>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-2 pt-2 print:hidden">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex-1 min-w-[140px] py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print / Save Pass</span>
-            </button>
-
+          <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-1.5 sm:gap-2 pt-1.5 sm:pt-2 print:hidden">
             <button
               type="button"
               onClick={handleDownloadHdPass}
               disabled={downloading}
-              className="flex-1 min-w-[150px] py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              className="col-span-2 sm:col-span-1 py-2 sm:py-2.5 px-3 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-slate-950 font-black rounded-xl text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 order-1"
               title="Download razor-sharp, high-resolution pass image (300 DPI PNG)"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 shrink-0" />
               <span>{downloading ? 'Generating...' : 'Download Pass (HD)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="py-2 sm:py-2.5 px-2 bg-slate-900 hover:bg-black active:scale-[0.98] text-white font-bold rounded-xl text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm order-2"
+            >
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span>Print / Save Pass</span>
             </button>
 
             {qrDataUrl && (
               <a
                 href={qrDataUrl}
                 download={`Camp-QR-${displayToken}.png`}
-                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-1"
+                className="py-2 sm:py-2.5 px-2.5 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold rounded-xl text-[11px] sm:text-xs border border-slate-200 transition-all flex items-center justify-center gap-1.5 order-3 text-center"
                 title="Download QR code image only"
               >
-                <QrIcon className="w-3.5 h-3.5" />
-                <span className="text-[11px]">QR</span>
+                <QrIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>QR Image</span>
               </a>
             )}
           </div>
@@ -1186,20 +1400,20 @@ export default function CampPrasadamCard({
   }
 
   return (
-    <div className="print-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block print:z-auto">
-      <div className="print-modal-container bg-white rounded-3xl max-w-lg w-full p-4 sm:p-5 shadow-2xl border border-gray-100 space-y-3 animate-in fade-in zoom-in-95 duration-200 my-8 print:my-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none print:w-auto print:static print:block">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100 print:hidden">
-          <div className="flex items-center gap-2">
-            <Ticket className="w-5 h-5 text-amber-600" />
-            <h3 className="text-base font-black text-gray-900">Camp Entry &amp; Prasadam Pass</h3>
+    <div className="print-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block print:z-auto">
+      <div className="print-modal-container bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-3 sm:p-5 shadow-2xl border border-gray-100 space-y-2.5 sm:space-y-3 animate-in fade-in zoom-in-95 duration-200 my-2 sm:my-8 print:my-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none print:w-auto print:static print:block">
+        <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-gray-100 print:hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+            <h3 className="text-sm sm:text-base font-black text-gray-900">Camp Entry &amp; Prasadam Pass</h3>
           </div>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-1 sm:p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
         </div>

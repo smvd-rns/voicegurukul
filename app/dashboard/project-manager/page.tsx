@@ -550,9 +550,17 @@ export default function ProjectManagerDashboard() {
     };
 
     // Access Control
-    // Allowed Roles: 14 (Project Advisor), 15 (Project Manager), 16 (Acting Manager)
-    const ALLOWED_ROLES = [14, 15, 16];
-    const ALLOWED_ROLE_NAMES = ['project_advisor', 'project_manager', 'acting_manager'];
+    // Allowed Roles: Project Advisor (14), Project Manager (15), Acting Manager (16), OC (17), Care Giver (20),
+    // Youth Preacher (21), Internal Manager (22), Preaching Coordinator (23), Morning Program In-charge (24),
+    // Mentor (25), Frontliner (26), Accountant (27), Kitchen Head (28), Study In-charge (29), Event Admin (30),
+    // Grihastha Counselor (31), Easy Incharge (32), Prerna Incharge (33)
+    const ALLOWED_ROLES = [14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+    const ALLOWED_ROLE_NAMES = [
+        'project_advisor', 'project_manager', 'acting_manager', 'oc', 'care_giver',
+        'youth_preacher', 'internal_manager', 'preaching_coordinator', 'morning_program_in_charge',
+        'mentor', 'frontliner', 'accountant', 'kitchen_head', 'study_in_charge', 'event_admin',
+        'grihstha_counselor', 'easy_incharge', 'prerna_incharge'
+    ];
 
     const isProjectManager = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).some(r =>
         ALLOWED_ROLES.includes(Number(r)) || ALLOWED_ROLE_NAMES.includes(String(r))
@@ -566,7 +574,20 @@ export default function ProjectManagerDashboard() {
         if (center.project_manager_id === userId) return 'Project Manager';
         if (center.project_advisor_id === userId) return 'Project Advisor';
         if (center.acting_manager_id === userId) return 'Acting Manager';
-        return 'Member';
+        if (center.internal_manager_id === userId) return 'Internal Manager';
+        if (center.oc_id === userId) return 'OC';
+        if (center.preaching_coordinator_id === userId) return 'Preaching Coordinator';
+        if (center.care_giver_id === userId) return 'Care Giver';
+        if (center.youth_preacher_id === userId) return 'Youth Preacher';
+        if (center.morning_program_in_charge_id === userId) return 'Morning Program In-charge';
+        if (center.accountant_id === userId) return 'Accountant';
+        if (center.kitchen_head_id === userId) return 'Kitchen Head';
+        if (center.study_in_charge_id === userId) return 'Study In-charge';
+        if (center.event_admin_id === userId) return 'Event Admin';
+        if (center.grihstha_counselor_id === userId) return 'Grihastha Counselor';
+        if (center.easy_incharge_id === userId) return 'Easy Incharge';
+        if (center.prerna_incharge_id === userId) return 'Prerna Incharge';
+        return 'Center Manager';
     };
 
     const buildCenterMatch = useCallback((centerName: string) => {
@@ -670,22 +691,18 @@ export default function ProjectManagerDashboard() {
             }
 
             // Only show full page loader if we don't have cached data
-            setLoadingContext(prev => managedCenters.length === 0);
-
             try {
-                // 1. Fetch managed centers
+                // 1. Fetch managed centers across all center leadership and service team assignments
                 const { data, error } = await supabase
                     .from('centers')
-                    .select('id, name, temple_name, project_manager_id, project_advisor_id, acting_manager_id')
-                    .or(`project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId}`);
+                    .select('id, name, temple_name, project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, oc_id, care_giver_id, youth_preacher_id, preaching_coordinator_id, morning_program_in_charge_id, accountant_id, kitchen_head_id, study_in_charge_id, event_admin_id, grihstha_counselor_id, easy_incharge_id, prerna_incharge_id')
+                    .or(`project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId},internal_manager_id.eq.${adminId},oc_id.eq.${adminId},care_giver_id.eq.${adminId},youth_preacher_id.eq.${adminId},preaching_coordinator_id.eq.${adminId},morning_program_in_charge_id.eq.${adminId},accountant_id.eq.${adminId},kitchen_head_id.eq.${adminId},study_in_charge_id.eq.${adminId},event_admin_id.eq.${adminId},grihstha_counselor_id.eq.${adminId},easy_incharge_id.eq.${adminId},prerna_incharge_id.eq.${adminId}`);
 
                 if (error) throw error;
 
                 if (data && data.length > 0) {
                     const mappedCenters = (data as any[]).map((center: any) => {
-                        const role = center.project_manager_id === adminId ? 'Project Manager' :
-                            center.project_advisor_id === adminId ? 'Project Advisor' :
-                                center.acting_manager_id === adminId ? 'Acting Manager' : 'Member';
+                        const role = getCenterRoleLabel(center, adminId);
                         return {
                             id: center.id,
                             name: center.name,
@@ -699,22 +716,10 @@ export default function ProjectManagerDashboard() {
                     await refreshCounts(mappedCenters);
 
                 } else {
-                    // Fallback: Use hierarchy if no centers found in DB
-                    const h = userData.hierarchy as any;
-                    const center = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
-                    const temple = h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '');
-
-                    if (center) {
-                        const roleName = (Array.isArray(userData.role) ? userData.role : [userData.role]).includes(15) || (Array.isArray(userData.role) ? userData.role : [userData.role]).includes('project_manager') ? 'Project Manager' :
-                            (Array.isArray(userData.role) ? userData.role : [userData.role]).includes(14) || (Array.isArray(userData.role) ? userData.role : [userData.role]).includes('project_advisor') ? 'Project Advisor' :
-                                (Array.isArray(userData.role) ? userData.role : [userData.role]).includes(16) || (Array.isArray(userData.role) ? userData.role : [userData.role]).includes('acting_manager') ? 'Acting Manager' : 'Member';
-
-                        // Create a temporary center object for refreshCounts
-                        const fallbackCenter = [{ id: 'hierarchy-fallback', name: center, temple_name: temple, userRole: roleName, pendingCount: 0 }];
-                        await refreshCounts(fallbackCenter);
-                    } else {
-                        toast.error('No center assignment found for your profile.');
-                    }
+                    setManagedCenters([]);
+                    setCurrentCenter('');
+                    setCurrentTemple('');
+                    toast.error('No center assignment found for your account in the centers database.');
                 }
             } catch (err) {
                 console.error('Failed to load initial PM data', err);
@@ -824,7 +829,27 @@ export default function ProjectManagerDashboard() {
                 .or(buildCenterMatch(currentCenter));
 
             if (error) throw error;
-            setPendingUsers((data || []).map((u: any) => ({
+
+            // Strict center and temple isolation filter
+            const targetCenter = currentCenter.trim().toLowerCase();
+            const targetTemple = (currentTemple || '').trim().toLowerCase();
+
+            const filtered = (data || []).filter((u: any) => {
+                const uH = u.hierarchy as any;
+                const uCenter = (u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '').trim().toLowerCase();
+                if (!uCenter || uCenter === 'none' || uCenter !== targetCenter) {
+                    return false;
+                }
+                if (targetTemple) {
+                    const uTemple = (u.current_temple || u.parent_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || uH?.parentTemple || '').trim().toLowerCase();
+                    if (uTemple && uTemple !== targetTemple) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            setPendingUsers(filtered.map((u: any) => ({
                 ...u,
                 hierarchy: {
                     ...(u.hierarchy || {}),
@@ -843,7 +868,7 @@ export default function ProjectManagerDashboard() {
         } finally {
             setLoadingPendingUsers(false);
         }
-    }, [buildCenterMatch, currentCenter]);
+    }, [buildCenterMatch, currentCenter, currentTemple]);
 
     const handleUserVerification = async (userId: string, status: 'approved' | 'rejected', reason?: string) => {
         if (!supabase) return;

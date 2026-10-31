@@ -221,15 +221,12 @@ export async function GET(request: Request) {
 
             if (templeFilter && (assignedNames.includes(templeFilter) || isSuperAdmin || isGlobalAdmin)) {
                 targetTemple = templeFilter;
-            } else if (templeFilter) {
-                targetTemple = templeFilter;
             } else if (assignedNames.length > 0) {
                 targetTemple = assignedNames[0];
             } else {
-                const h = userData?.hierarchy;
-                targetTemple = (h?.currentTemple?.name || (typeof h?.currentTemple === 'string' ? h?.currentTemple : '')) || '';
+                targetTemple = '__UNASSIGNED__';
             }
-        } else if (templeFilter) {
+        } else if (templeFilter && (isSuperAdmin || isGlobalAdmin)) {
             targetTemple = templeFilter;
         }
 
@@ -286,7 +283,7 @@ export async function GET(request: Request) {
             const { data: managedCenters } = await supabaseAdmin
                 .from('centers')
                 .select('name')
-                .or(`project_manager_id.eq.${adminUser.id},project_advisor_id.eq.${adminUser.id},acting_manager_id.eq.${adminUser.id}`);
+                .or(`project_manager_id.eq.${adminUser.id},project_advisor_id.eq.${adminUser.id},acting_manager_id.eq.${adminUser.id},oc_id.eq.${adminUser.id},care_giver_id.eq.${adminUser.id},youth_preacher_id.eq.${adminUser.id},internal_manager_id.eq.${adminUser.id},preaching_coordinator_id.eq.${adminUser.id},morning_program_in_charge_id.eq.${adminUser.id},accountant_id.eq.${adminUser.id},kitchen_head_id.eq.${adminUser.id},study_in_charge_id.eq.${adminUser.id},event_admin_id.eq.${adminUser.id},grihstha_counselor_id.eq.${adminUser.id},easy_incharge_id.eq.${adminUser.id},prerna_incharge_id.eq.${adminUser.id}`);
 
             const allowedCenterNames = ((managedCenters || []) as any[]).map((c: any) => c.name.trim().toLowerCase());
 

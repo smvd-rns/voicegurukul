@@ -55,21 +55,9 @@ export default function BCVoiceManagerPage() {
           console.log('Approved centers found:', request.approvedCenters);
           setApprovedCenters(request.approvedCenters);
           setLoading(false); // Set loading to false so we can show the page
-        } else if (request.status === 'approved' && (!request.approvedCenters || request.approvedCenters.length === 0)) {
-          // Approved but no centers assigned yet
-          console.log('Request approved but no centers assigned yet');
+        } else {
           setApprovedCenters([]);
           setLoading(false);
-        } else {
-          // Fallback to requested centers if approved centers not set
-          if (request.requestedCenters && request.requestedCenters.length > 0) {
-            console.log('Using requested centers as fallback:', request.requestedCenters);
-            setApprovedCenters(request.requestedCenters);
-            setLoading(false);
-          } else {
-            setApprovedCenters([]);
-            setLoading(false);
-          }
         }
       } else {
         console.log('User does not have BC Voice Manager role or no request found');

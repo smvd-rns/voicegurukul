@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Utensils, Calendar, Clock, Filter, Search, Download,
   CheckCircle2, XCircle, Users, RefreshCw, QrCode,
   FileSpreadsheet, Building, Landmark, ChevronLeft, ChevronRight,
   PlusCircle, Edit2, ChevronDown, Check, HelpCircle, Eye,
-  Coffee, Sun, Moon, Share2, Copy, CheckCheck, Sparkles, Tag
+  Coffee, Sun, Moon, Milk, Share2, Copy, CheckCheck, Sparkles, Tag, Info
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Camp } from '@/types';
@@ -57,7 +57,7 @@ export default function CampPrasadamTab({
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>(''); // Default will be set to first available date or today
-  const [selectedMeal, setSelectedMeal] = useState<'all' | 'Breakfast' | 'Lunch' | 'Dinner'>('all');
+  const [selectedMeal, setSelectedMeal] = useState<'all' | 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk'>('all');
   const [selectedTrack, setSelectedTrack] = useState<string>('all');
   const [selectedCenter, setSelectedCenter] = useState<string>('all');
   const [selectedTemple, setSelectedTemple] = useState<string>('all');
@@ -91,6 +91,26 @@ export default function CampPrasadamTab({
   // WhatsApp Slip Copied State
   const [copiedSlip, setCopiedSlip] = useState(false);
   const [togglingPunchId, setTogglingPunchId] = useState<string | null>(null);
+
+  // Horizontal scroll ref and helper for meal dates
+  const dateScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollDates = (direction: 'left' | 'right') => {
+    if (dateScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -240 : 240;
+      dateScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  // Auto-scroll selected date pill into view
+  useEffect(() => {
+    if (selectedDate && dateScrollRef.current) {
+      const targetPill = dateScrollRef.current.querySelector(`[data-date="${selectedDate}"]`) as HTMLElement;
+      if (targetPill) {
+        targetPill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [selectedDate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -174,7 +194,9 @@ export default function CampPrasadamTab({
               ? dayMatrix.breakfast
               : selectedMeal === 'Lunch'
               ? dayMatrix.lunch
-              : dayMatrix.dinner;
+              : selectedMeal === 'Dinner'
+              ? dayMatrix.dinner
+              : dayMatrix.milk;
 
           if (!mealObj || !mealObj.eligible) return false;
           if (selectedStatus === 'TAKEN' && !mealObj.punched) return false;
@@ -185,13 +207,15 @@ export default function CampPrasadamTab({
             const hasAnyTaken =
               (dayMatrix.breakfast.eligible && dayMatrix.breakfast.punched) ||
               (dayMatrix.lunch.eligible && dayMatrix.lunch.punched) ||
-              (dayMatrix.dinner.eligible && dayMatrix.dinner.punched);
+              (dayMatrix.dinner.eligible && dayMatrix.dinner.punched) ||
+              (dayMatrix.milk?.eligible && dayMatrix.milk?.punched);
             if (!hasAnyTaken) return false;
           } else if (selectedStatus === 'NOT_TAKEN') {
             const hasAnyNotTaken =
               (dayMatrix.breakfast.eligible && !dayMatrix.breakfast.punched) ||
               (dayMatrix.lunch.eligible && !dayMatrix.lunch.punched) ||
-              (dayMatrix.dinner.eligible && !dayMatrix.dinner.punched);
+              (dayMatrix.dinner.eligible && !dayMatrix.dinner.punched) ||
+              (dayMatrix.milk?.eligible && !dayMatrix.milk?.punched);
             if (!hasAnyNotTaken) return false;
           }
         }
@@ -279,13 +303,14 @@ export default function CampPrasadamTab({
   }, [filteredKitchenTally]);
 
   const guestByMeal = useMemo(() => {
-    let bf = 0, ln = 0, dn = 0;
+    let bf = 0, ln = 0, dn = 0, ml = 0;
     filteredKitchenTally.forEach((r) => {
       if (r.meal === 'Breakfast') bf += (r.extraServedCount || 0);
       else if (r.meal === 'Lunch') ln += (r.extraServedCount || 0);
       else if (r.meal === 'Dinner') dn += (r.extraServedCount || 0);
+      else if (r.meal === 'Milk') ml += (r.extraServedCount || 0);
     });
-    return { bf, ln, dn };
+    return { bf, ln, dn, ml };
   }, [filteredKitchenTally]);
 
   // Dynamically computed Kitchen Stats based on selected date & meal
@@ -304,6 +329,22 @@ export default function CampPrasadamTab({
     const clearancePercent = totalScheduled > 0 ? Math.round((totalTaken / totalScheduled) * 100) : 0;
     const notTakenPercent = totalScheduled > 0 ? Math.round((totalNotTaken / totalScheduled) * 100) : 0;
 
+    let devoteeCount = devotees.length;
+    if (selectedDate && selectedDate !== 'all') {
+      devoteeCount = devotees.filter((d) => {
+        const day = d.dateMatrix?.find((m: any) => m.date === selectedDate || m.rawDate === selectedDate);
+        if (!day) return false;
+        if (selectedMeal === 'all') {
+          return day.breakfast?.eligible || day.lunch?.eligible || day.dinner?.eligible || day.milk?.eligible;
+        }
+        if (selectedMeal === 'Breakfast') return !!day.breakfast?.eligible;
+        if (selectedMeal === 'Lunch') return !!day.lunch?.eligible;
+        if (selectedMeal === 'Dinner') return !!day.dinner?.eligible;
+        if (selectedMeal === 'Milk') return !!day.milk?.eligible;
+        return false;
+      }).length;
+    }
+
     return {
       totalScheduled,
       totalTaken,
@@ -314,9 +355,10 @@ export default function CampPrasadamTab({
       totalKitchenTarget,
       clearancePercent,
       notTakenPercent,
+      devoteeCount,
       dateLabel: activeDateObj?.label || (selectedDate === 'all' || !selectedDate ? 'All Dates' : selectedDate),
     };
-  }, [filteredKitchenTally, activeDateObj, selectedDate]);
+  }, [filteredKitchenTally, activeDateObj, selectedDate, devotees, selectedMeal]);
 
   // Dynamically computed Devotee Attendance Stats (Changes with Date & Filter Selection)
   const devoteeStats = useMemo(() => {
@@ -327,6 +369,7 @@ export default function CampPrasadamTab({
     let bfEligible = 0, bfTaken = 0;
     let lnEligible = 0, lnTaken = 0;
     let dnEligible = 0, dnTaken = 0;
+    let mlEligible = 0, mlTaken = 0;
 
     let devoteesFullyHonored = 0;
     let devoteesPartiallyHonored = 0;
@@ -375,6 +418,18 @@ export default function CampPrasadamTab({
               }
             }
           }
+          if (selectedMeal === 'all' || selectedMeal === 'Milk') {
+            if (day.milk?.eligible) {
+              mlEligible++;
+              devoteeTotalForScope++;
+              totalScheduledMeals++;
+              if (day.milk?.punched) {
+                mlTaken++;
+                devoteeTakenForScope++;
+                totalTakenMeals++;
+              }
+            }
+          }
         }
       } else {
         // All dates
@@ -415,6 +470,18 @@ export default function CampPrasadamTab({
               }
             }
           }
+          if (selectedMeal === 'all' || selectedMeal === 'Milk') {
+            if (day.milk?.eligible) {
+              mlEligible++;
+              devoteeTotalForScope++;
+              totalScheduledMeals++;
+              if (day.milk?.punched) {
+                mlTaken++;
+                devoteeTakenForScope++;
+                totalTakenMeals++;
+              }
+            }
+          }
         });
       }
 
@@ -446,9 +513,68 @@ export default function CampPrasadamTab({
       bf: { eligible: bfEligible, taken: bfTaken, remaining: Math.max(0, bfEligible - bfTaken) },
       ln: { eligible: lnEligible, taken: lnTaken, remaining: Math.max(0, lnEligible - lnTaken) },
       dn: { eligible: dnEligible, taken: dnTaken, remaining: Math.max(0, dnEligible - dnTaken) },
+      ml: { eligible: mlEligible, taken: mlTaken, remaining: Math.max(0, mlEligible - mlTaken) },
       dateLabel: activeDateObj?.label || (selectedDate === 'all' || !selectedDate ? 'All Dates' : selectedDate),
     };
   }, [filteredDevotees, selectedDate, selectedMeal, activeDateObj]);
+
+  // Kitchen Session Headcounts (BF, LN, DN, MILK) aggregated for active date scope
+  const kitchenSessionCounts = useMemo(() => {
+    let bfTaken = 0, bfQr = 0, bfGuest = 0, bfTarget = 0, bfScheduled = 0, bfBuffer = 0;
+    let lnTaken = 0, lnQr = 0, lnGuest = 0, lnTarget = 0, lnScheduled = 0, lnBuffer = 0;
+    let dnTaken = 0, dnQr = 0, dnGuest = 0, dnTarget = 0, dnScheduled = 0, dnBuffer = 0;
+    let mlTaken = 0, mlQr = 0, mlGuest = 0, mlTarget = 0, mlScheduled = 0, mlBuffer = 0;
+
+    // Filter by selected date (do not filter by selectedMeal so all 4 session columns show their totals)
+    const targetRows = kitchenTally.filter((row) => {
+      if (selectedDate && selectedDate !== 'all') {
+        const matchesDate =
+          row.date === selectedDate ||
+          row.rawDate === selectedDate ||
+          (row.dateLabel && row.dateLabel.toLowerCase().replace(/\s+/g, '') === selectedDate.toLowerCase().replace(/\s+/g, ''));
+        return matchesDate;
+      }
+      return true;
+    });
+
+    targetRows.forEach((r) => {
+      const qr = r.takenCount || 0;
+      const guest = r.extraServedCount || 0;
+      const buffer = r.extraCount || 0;
+      const taken = qr + guest;
+      const scheduled = r.scheduledCount || 0;
+      const target = (r.totalKitchenTarget ?? (scheduled + buffer)) || 0;
+
+      if (r.meal === 'Breakfast') {
+        bfQr += qr; bfGuest += guest; bfTaken += taken; bfScheduled += scheduled; bfBuffer += buffer; bfTarget += target;
+      } else if (r.meal === 'Lunch') {
+        lnQr += qr; lnGuest += guest; lnTaken += taken; lnScheduled += scheduled; lnBuffer += buffer; lnTarget += target;
+      } else if (r.meal === 'Dinner') {
+        dnQr += qr; dnGuest += guest; dnTaken += taken; dnScheduled += scheduled; dnBuffer += buffer; dnTarget += target;
+      } else if (r.meal === 'Milk') {
+        mlQr += qr; mlGuest += guest; mlTaken += taken; mlScheduled += scheduled; mlBuffer += buffer; mlTarget += target;
+      }
+    });
+
+    // Fallback to devoteeStats if kitchenTally has no rows
+    if (targetRows.length === 0 && devotees.length > 0) {
+      return {
+        bf: { taken: devoteeStats.bf.taken + guestByMeal.bf, qr: devoteeStats.bf.taken, guest: guestByMeal.bf, target: devoteeStats.bf.eligible, scheduled: devoteeStats.bf.eligible, buffer: 0 },
+        ln: { taken: devoteeStats.ln.taken + guestByMeal.ln, qr: devoteeStats.ln.taken, guest: guestByMeal.ln, target: devoteeStats.ln.eligible, scheduled: devoteeStats.ln.eligible, buffer: 0 },
+        dn: { taken: devoteeStats.dn.taken + guestByMeal.dn, qr: devoteeStats.dn.taken, guest: guestByMeal.dn, target: devoteeStats.dn.eligible, scheduled: devoteeStats.dn.eligible, buffer: 0 },
+        ml: { taken: devoteeStats.ml.taken + guestByMeal.ml, qr: devoteeStats.ml.taken, guest: guestByMeal.ml, target: devoteeStats.ml.eligible, scheduled: devoteeStats.ml.eligible, buffer: 0 },
+        dateLabel: activeKitchenStats.dateLabel,
+      };
+    }
+
+    return {
+      bf: { taken: bfTaken, qr: bfQr, guest: bfGuest, target: bfTarget, scheduled: bfScheduled, buffer: bfBuffer },
+      ln: { taken: lnTaken, qr: lnQr, guest: lnGuest, target: lnTarget, scheduled: lnScheduled, buffer: lnBuffer },
+      dn: { taken: dnTaken, qr: dnQr, guest: dnGuest, target: dnTarget, scheduled: dnScheduled, buffer: dnBuffer },
+      ml: { taken: mlTaken, qr: mlQr, guest: mlGuest, target: mlTarget, scheduled: mlScheduled, buffer: mlBuffer },
+      dateLabel: activeKitchenStats.dateLabel,
+    };
+  }, [kitchenTally, selectedDate, activeKitchenStats.dateLabel, devotees.length, devoteeStats, guestByMeal]);
 
   // Save Extra Guest Count
   const handleSaveGuestCount = async () => {
@@ -507,19 +633,26 @@ export default function CampPrasadamTab({
     const sessions = filteredKitchenTally;
 
     sessions.forEach(s => {
-      slip += `🍽 *${s.meal.toUpperCase()}*:\n`;
+      const isMilk = s.meal === 'Milk';
+      const unit = isMilk ? 'Glasses' : 'Plates';
+      const icon = isMilk ? '🥛' : '🍽';
+      slip += `${icon} *${s.meal.toUpperCase()}*:\n`;
       slip += `   • Registered: ${s.scheduledCount} devotees\n`;
       slip += `   • Honored (Taken): ${s.takenCount}\n`;
       slip += `   • Not Taken (Pending): ${s.notTakenCount}\n`;
       slip += `   • Extra Guests: +${s.extraCount}\n`;
-      slip += `   👉 *Total Plates to Prepare: ${s.totalKitchenTarget}*\n`;
+      slip += `   👉 *Total ${unit} to Prepare: ${s.totalKitchenTarget}*\n`;
       if (s.notes) slip += `   (Note: ${s.notes})\n`;
       slip += `\n`;
     });
 
-    const totalPlates = sessions.reduce((acc, s) => acc + s.totalKitchenTarget, 0);
+    const mealPlates = sessions.filter(s => s.meal !== 'Milk').reduce((acc, s) => acc + s.totalKitchenTarget, 0);
+    const milkGlasses = sessions.filter(s => s.meal === 'Milk').reduce((acc, s) => acc + s.totalKitchenTarget, 0);
     slip += `--------------------------------------\n`;
-    slip += `🍛 *Total Day Plates Target: ${totalPlates}*\n`;
+    slip += `🍛 *Total Meals Target: ${mealPlates} plates*\n`;
+    if (milkGlasses > 0) {
+      slip += `🥛 *Total Night Milk Target: ${milkGlasses} glasses*\n`;
+    }
     slip += `Sent via VOICE Gurukul Prasadam System`;
 
     navigator.clipboard.writeText(slip);
@@ -565,6 +698,11 @@ export default function CampPrasadamTab({
             ? currentDay.dinner.punched ? `TAKEN (${currentDay.dinner.punchedAt})` : 'NOT TAKEN'
             : 'NOT INCLUDED'
           : '',
+        'Milk Status': currentDay
+          ? (currentDay as any).milk?.eligible
+            ? (currentDay as any).milk?.punched ? `TAKEN (${(currentDay as any).milk?.punchedAt})` : 'NOT TAKEN'
+            : 'NOT INCLUDED'
+          : '',
         'Total Camp Meals Taken': `${d.takenCount} / ${d.eligibleCount}`
       };
     });
@@ -608,98 +746,164 @@ export default function CampPrasadamTab({
     setSelectedStatus('all');
   };
 
+  const formatPillDate = (dateStr: string) => {
+    if (!dateStr || dateStr === 'all') return 'All Dates';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      if (monthIdx >= 0 && monthIdx < 12) {
+        return `${parseInt(parts[2], 10)} ${months[monthIdx]}`;
+      }
+    }
+    return dateStr;
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-2.5 sm:space-y-6 animate-in fade-in duration-200">
       {/* Top Banner with Quick Actions: Compact on Mobile */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-lg shadow-amber-600/15">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[9px] sm:text-[11px] font-black uppercase tracking-wider mb-1">
-            <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-200" />
+      <div className="flex items-center justify-between gap-2 p-2 sm:p-5 rounded-xl sm:rounded-3xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-md shadow-amber-600/10">
+        <div className="min-w-0">
+          <div className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-wider mb-1">
+            <Utensils className="w-3.5 h-3.5 text-amber-200" />
             <span>Prasadam Attendance &bull; Kitchen Operations</span>
           </div>
-          <h2 className="text-base sm:text-xl md:text-2xl font-black tracking-tight text-white leading-tight">
-            {camp?.title || 'Camp'} &bull; Prasadam &amp; Kitchen Tally
+          <h2 className="text-xs sm:text-xl md:text-2xl font-black tracking-tight text-white leading-tight flex items-center gap-1.5 truncate">
+            <Utensils className="w-3.5 h-3.5 text-amber-200 sm:hidden shrink-0" />
+            <span className="sm:hidden truncate">Prasadam &amp; Kitchen Tally</span>
+            <span className="hidden sm:inline">
+              {camp?.title || 'Camp'} &bull; Prasadam &amp; Kitchen Tally
+            </span>
           </h2>
-          <p className="text-[11px] sm:text-xs text-amber-100 max-w-2xl mt-0.5 hidden sm:block">
+          <p className="text-xs text-amber-100 max-w-2xl mt-0.5 hidden sm:block">
             Track devotee prasadam clearances, audit center &amp; temple headcounts, and give exact meal targets to the kitchen team.
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {onOpenScanner && (
             <button
               onClick={onOpenScanner}
               type="button"
-              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 sm:px-4 py-1 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg sm:rounded-full text-[10px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
               title="Launch QR Pass Scanner"
             >
-              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-              <span>Gate Scanner</span>
+              <QrCode className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
+              <span className="hidden sm:inline">Gate Scanner</span>
             </button>
           )}
 
           <button
             onClick={loadData}
             type="button"
-            className="p-1.5 sm:p-2.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl sm:rounded-2xl transition-all shadow-xs cursor-pointer"
+            className="p-1 sm:p-2.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-lg sm:rounded-2xl transition-all shadow-xs cursor-pointer"
             title="Refresh Data"
           >
-            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           <button
             onClick={handleExportExcel}
             type="button"
-            className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
+            className="inline-flex items-center gap-1 px-2 sm:px-4 py-1 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg sm:rounded-full text-[10px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
+            title="Export Excel (.xlsx)"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Export (.xlsx)</span>
+            <FileSpreadsheet className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export (.xlsx)</span>
           </button>
         </div>
       </div>
 
-      {/* DISTINCT 2 SECTIONS SWITCHER: Compact on Mobile */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-3 gap-2 sm:gap-3 flex-wrap">
-        <div className="flex items-center bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
+      {/* DISTINCT 2 SECTIONS SWITCHER: Row 1 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-2 sm:pb-3 gap-2">
+        <div className="grid grid-cols-2 bg-slate-100 p-0.5 sm:p-1.5 rounded-lg sm:rounded-2xl border border-slate-200 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setActiveSection('devotees')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center justify-center gap-1.5 px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-md sm:rounded-xl text-[10.5px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
               activeSection === 'devotees'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Devotee Prasadam Attendance</span>
+            <span className="sm:hidden">Devotees</span>
+            <span className="hidden sm:inline">Devotee Prasadam Attendance</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSection('kitchen')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center justify-center gap-1.5 px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-md sm:rounded-xl text-[10.5px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
               activeSection === 'kitchen'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
-            <span>Daily Kitchen Headcount &amp; Tally</span>
+            <span className="sm:hidden">Kitchen Tally</span>
+            <span className="hidden sm:inline">Daily Kitchen Headcount &amp; Tally</span>
           </button>
         </div>
 
-        {/* Date Selector Pills (Global to both views) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-          <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline shrink-0">
+        {/* Quick Jump to Date Dropdown Selector (Visible on tablet/desktop) */}
+        <div className="hidden sm:flex items-center gap-2">
+          <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden md:inline">
+            Jump to Date:
+          </span>
+          <select
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold text-slate-700 outline-none focus:border-amber-500 shadow-2xs cursor-pointer"
+          >
+            <option value="all">All Dates ({filterOptions.dates.length} Days)</option>
+            {filterOptions.dates.map((d) => (
+              <option key={d.date} value={d.date}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* DEDICATED MEAL DATE SELECTOR BAR WITH ARROWS & MOUSE WHEEL SCROLL: Row 2 */}
+      <div className="p-1 sm:p-1.5 bg-slate-50/95 rounded-xl sm:rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 text-slate-600 shrink-0 px-1 sm:px-2">
+          <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span className="text-[9.5px] sm:text-[11px] font-black text-slate-700 uppercase tracking-wider whitespace-nowrap hidden sm:inline">
             Meal Date:
           </span>
+        </div>
+
+        {/* Scroll Left Button */}
+        <button
+          type="button"
+          onClick={() => scrollDates('left')}
+          className="p-1 sm:p-1.5 rounded-md sm:rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 shadow-2xs transition-all shrink-0 cursor-pointer hover:border-slate-300"
+          title="Scroll dates left"
+        >
+          <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+        </button>
+
+        {/* Scrollable Container with wheel event listener */}
+        <div
+          ref={dateScrollRef}
+          onWheel={(e) => {
+            if (e.deltaY !== 0) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+          className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto py-0.5 scroll-smooth max-w-full"
+          style={{ scrollbarWidth: 'thin' }}
+        >
           <button
             type="button"
+            data-date="all"
             onClick={() => setSelectedDate('all')}
-            className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`px-2 sm:px-3 py-0.5 sm:py-1.5 rounded-md sm:rounded-xl text-[9.5px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-2xs ${
               selectedDate === 'all'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-amber-600 text-white ring-2 ring-amber-600/20'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
             }`}
           >
             All Dates
@@ -707,140 +911,184 @@ export default function CampPrasadamTab({
           {filterOptions.dates.map((d) => (
             <button
               key={d.date}
+              data-date={d.date}
               type="button"
               onClick={() => setSelectedDate(d.date)}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`px-2 sm:px-3 py-0.5 sm:py-1.5 rounded-md sm:rounded-xl text-[9.5px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-2xs ${
                 selectedDate === d.date
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  ? 'bg-amber-600 text-white ring-2 ring-amber-600/20'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
               }`}
             >
-              {d.label}
+              <span className="sm:hidden">{formatPillDate(d.label)}</span>
+              <span className="hidden sm:inline">{d.label}</span>
             </button>
           ))}
         </div>
+
+        {/* Scroll Right Button */}
+        <button
+          type="button"
+          onClick={() => scrollDates('right')}
+          className="p-1 sm:p-1.5 rounded-md sm:rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 shadow-2xs transition-all shrink-0 cursor-pointer hover:border-slate-300"
+          title="Scroll dates right"
+        >
+          <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
+        </button>
       </div>
 
       {/* ======================================================== */}
       {/* SECTION 1: DAILY KITCHEN HEADCOUNT & TALLY               */}
       {/* ======================================================== */}
       {activeSection === 'kitchen' && (
-        <div className="space-y-3.5 sm:space-y-5 animate-in fade-in duration-150">
+        <div className="space-y-2 sm:space-y-4 animate-in fade-in duration-150">
           {/* Kitchen Stats Cards: Compact on Mobile */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5">
-            {/* 1. Registered Expected */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-xs transition-all hover:border-slate-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Registered Expected
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-3">
+            {/* 1. Total Scheduled */}
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs transition-all hover:border-slate-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
+                Total Scheduled
               </span>
-              <div className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
+              <div className="text-base sm:text-2xl font-black text-slate-900 leading-tight my-0.5 sm:my-1">
                 {activeKitchenStats.totalScheduled}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block">
-                Plates for {activeKitchenStats.dateLabel}
+              <span className="text-[7.5px] sm:text-[10px] text-slate-500 font-medium truncate block leading-tight">
+                {activeKitchenStats.devoteeCount} Devotees &bull; {activeKitchenStats.dateLabel}
               </span>
             </div>
 
             {/* 2. Actually Honored */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50/70 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs transition-all hover:border-emerald-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate">Actually Honored</span>
               </span>
-              <div className="text-lg sm:text-2xl font-black text-emerald-800 mt-0.5 sm:mt-1">
+              <div className="text-base sm:text-2xl font-black text-emerald-800 leading-tight my-0.5 sm:my-1">
                 {activeKitchenStats.totalPlatesHonored}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-medium truncate block">
+              <span className="text-[7.5px] sm:text-[10px] text-emerald-700 font-medium truncate block leading-tight">
                 {activeKitchenStats.totalTaken} QR + {activeKitchenStats.totalExtraServed} Guests
               </span>
             </div>
 
             {/* 3. Not Taken (Pending) */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-amber-50/80 border border-amber-200/80 shadow-xs transition-all hover:border-amber-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
-                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-amber-50/80 border border-amber-200/80 shadow-2xs transition-all hover:border-amber-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                <Clock className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
                 <span className="truncate">Not Taken</span>
               </span>
-              <div className="text-lg sm:text-2xl font-black text-amber-900 mt-0.5 sm:mt-1">
+              <div className="text-base sm:text-2xl font-black text-amber-900 leading-tight my-0.5 sm:my-1">
                 {activeKitchenStats.totalNotTaken}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate block">
+              <span className="text-[7.5px] sm:text-[10px] text-amber-700 font-medium truncate block leading-tight">
                 {activeKitchenStats.notTakenPercent}% pending
               </span>
             </div>
 
             {/* 4. Extra Guests (Without QR) */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-indigo-50/70 border border-indigo-200/80 shadow-xs transition-all hover:border-indigo-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
-                <PlusCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 shrink-0" />
-                <span className="truncate">Guests (No QR)</span>
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-indigo-50/70 border border-indigo-200/80 shadow-2xs transition-all hover:border-indigo-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                <PlusCircle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">Guests &amp; Buffer</span>
               </span>
-              <div className="text-lg sm:text-2xl font-black text-indigo-900 mt-0.5 sm:mt-1">
-                +{activeKitchenStats.totalExtraServed}
+              <div className="text-base sm:text-2xl font-black text-indigo-900 leading-tight my-0.5 sm:my-1">
+                +{activeKitchenStats.totalExtraServed > 0 ? activeKitchenStats.totalExtraServed : activeKitchenStats.totalExtraGuests}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-indigo-700 font-medium truncate block">
-                Target buffer: +{activeKitchenStats.totalExtraGuests}
+              <span className="text-[7.5px] sm:text-[10px] text-indigo-700 font-medium truncate block leading-tight">
+                {activeKitchenStats.totalExtraServed > 0
+                  ? `Honored (+${activeKitchenStats.totalExtraGuests} buffer)`
+                  : `Target buffer (+${activeKitchenStats.totalExtraServed} honored)`}
               </span>
             </div>
 
-            {/* 5. Total Kitchen Target: span 2 cols on mobile */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-900 text-white shadow-xs border border-slate-800 transition-all hover:border-slate-700 col-span-2 sm:col-span-1 flex sm:block items-center justify-between">
-              <div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                  Total Kitchen Target
+            {/* 5. Kitchen Headcount Breakdown: span 2 cols on mobile */}
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-900 text-white shadow-2xs border border-slate-800 transition-all hover:border-slate-700 col-span-2 sm:col-span-1 flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[8px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block truncate">
+                  Kitchen Headcount
                 </span>
-                <span className="text-[9px] sm:text-[10px] text-slate-400 block sm:hidden">Total plates to prepare</span>
+                <span className="text-[7.5px] sm:text-[9px] text-slate-400 font-mono shrink-0">
+                  {kitchenSessionCounts.dateLabel}
+                </span>
               </div>
-              <div className="text-right sm:text-left">
-                <div className="text-xl sm:text-2xl font-black text-white mt-0.5 sm:mt-1">
-                  {activeKitchenStats.totalKitchenTarget}
+              <div className="grid grid-cols-4 gap-1 text-center mt-1 pt-1 sm:pt-1.5 border-t border-slate-800">
+                <div>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-amber-300 uppercase block">BF</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${kitchenSessionCounts.bf.taken} Honored (${kitchenSessionCounts.bf.qr} QR + ${kitchenSessionCounts.bf.guest} Guests) / ${kitchenSessionCounts.bf.target} Target (${kitchenSessionCounts.bf.scheduled} Scheduled + ${kitchenSessionCounts.bf.buffer} Buffer)`}>
+                    {kitchenSessionCounts.bf.taken}/{kitchenSessionCounts.bf.target}
+                  </span>
                 </div>
-                <span className="text-[9px] sm:text-[10px] text-slate-400 hidden sm:block">Total plates to prepare</span>
+                <div>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-orange-300 uppercase block">LN</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${kitchenSessionCounts.ln.taken} Honored (${kitchenSessionCounts.ln.qr} QR + ${kitchenSessionCounts.ln.guest} Guests) / ${kitchenSessionCounts.ln.target} Target (${kitchenSessionCounts.ln.scheduled} Scheduled + ${kitchenSessionCounts.ln.buffer} Buffer)`}>
+                    {kitchenSessionCounts.ln.taken}/{kitchenSessionCounts.ln.target}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-indigo-300 uppercase block">DN</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${kitchenSessionCounts.dn.taken} Honored (${kitchenSessionCounts.dn.qr} QR + ${kitchenSessionCounts.dn.guest} Guests) / ${kitchenSessionCounts.dn.target} Target (${kitchenSessionCounts.dn.scheduled} Scheduled + ${kitchenSessionCounts.dn.buffer} Buffer)`}>
+                    {kitchenSessionCounts.dn.taken}/{kitchenSessionCounts.dn.target}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-cyan-300 uppercase block">MILK</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${kitchenSessionCounts.ml.taken} Honored (${kitchenSessionCounts.ml.qr} QR + ${kitchenSessionCounts.ml.guest} Guests) / ${kitchenSessionCounts.ml.target} Target (${kitchenSessionCounts.ml.scheduled} Scheduled + ${kitchenSessionCounts.ml.buffer} Buffer)`}>
+                    {kitchenSessionCounts.ml.taken}/{kitchenSessionCounts.ml.target}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Quick Meal Session Switcher for Kitchen: Compact on Mobile */}
-          <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap bg-white p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-3 flex-wrap bg-white p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-[9.5px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Session:
               </span>
               <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-                {(['all', 'Breakfast', 'Lunch', 'Dinner'] as const).map((m) => (
+                {(['all', 'Breakfast', 'Lunch', 'Dinner', 'Milk'] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setSelectedMeal(m)}
-                    className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer ${
                       selectedMeal === m
                         ? 'bg-amber-600 text-white shadow-2xs'
                         : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    {m === 'all' ? 'All (BF, LN, DN)' : m}
+                    {m === 'all' ? (
+                      <>
+                        <span className="sm:hidden">All</span>
+                        <span className="hidden sm:inline">All (BF, LN, DN, Milk)</span>
+                      </>
+                    ) : (
+                      m
+                    )}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="text-[11px] sm:text-xs text-slate-500 font-semibold">
+            <div className="text-[10px] sm:text-xs text-slate-500 font-semibold">
               Date: <span className="text-slate-900 font-bold">{activeKitchenStats.dateLabel}</span> &bull;{' '}
               Meal: <span className="text-amber-700 font-bold">{selectedMeal === 'all' ? 'All Meals' : selectedMeal}</span>
             </div>
           </div>
 
           {/* Kitchen Action Bar: Share WhatsApp Slip: Compact on Mobile */}
-          <div className="flex items-center justify-between p-2.5 sm:p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-xl sm:rounded-2xl gap-2">
+          <div className="flex items-center justify-between p-2 sm:p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-xl sm:rounded-2xl gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <span className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500 text-white shrink-0">
                 <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </span>
               <div className="min-w-0">
-                <span className="text-[11px] sm:text-xs font-bold text-slate-800 block truncate">
-                  Kitchen Coordinator WhatsApp Summary
+                <span className="text-[10.5px] sm:text-xs font-bold text-slate-800 block truncate">
+                  <span className="sm:hidden">Kitchen WhatsApp Slip</span>
+                  <span className="hidden sm:inline">Kitchen Coordinator WhatsApp Summary</span>
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-1">
+                <span className="text-[9.5px] sm:text-[11px] text-slate-500 line-clamp-1">
                   Copy formatted meal slip for {activeDateObj?.label || 'All Dates'} to send to kitchen head.
                 </span>
               </div>
@@ -849,7 +1097,7 @@ export default function CampPrasadamTab({
             <button
               type="button"
               onClick={handleCopyKitchenSlip}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
             >
               {copiedSlip ? <CheckCheck className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedSlip ? 'Copied!' : 'Copy Slip'}</span>
@@ -858,11 +1106,16 @@ export default function CampPrasadamTab({
 
           {/* Kitchen Headcount Table: Compact on Mobile */}
           <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
-              <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Kitchen Daily Headcount &amp; Target Prepared Tally
-              </span>
-              <span className="text-[11px] sm:text-xs font-bold text-slate-500">
+            <div className="px-2.5 sm:px-5 py-2 sm:py-3.5 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="sm:hidden text-[11px] font-bold text-slate-800 uppercase tracking-wider block truncate">
+                  Daily Kitchen Tally
+                </span>
+                <span className="hidden sm:inline text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Kitchen Daily Headcount &amp; Target Prepared Tally
+                </span>
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 shrink-0 bg-slate-100 sm:bg-transparent px-2 py-0.5 sm:p-0 rounded-md">
                 {filteredKitchenTally.length} Sessions
               </span>
             </div>
@@ -871,34 +1124,37 @@ export default function CampPrasadamTab({
               <table className="w-full text-left text-xs border-collapse min-w-[850px]">
                 <thead className="bg-slate-50 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-2.5 px-3 sm:px-4">Date &amp; Label</th>
-                    <th className="py-3 px-3">Meal Session</th>
-                    <th className="py-3 px-3 text-right">Registered</th>
-                    <th className="py-3 px-3 text-right">Punched (QR)</th>
-                    <th className="py-3 px-3 text-right">Not Taken</th>
-                    <th className="py-3 px-3 text-right">Guests (No QR)</th>
-                    <th className="py-3 px-3 text-right">Total Honored</th>
-                    <th className="py-3 px-3 text-right">Buffer Planned</th>
-                    <th className="py-3 px-4 text-right">Kitchen Target</th>
-                    <th className="py-3 px-4 text-center">Action / Notes</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-4">Date &amp; Label</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3">Meal Session</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Registered</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Punched (QR)</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Not Taken</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Guests (No QR)</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Total Honored</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-3 text-right">Buffer Planned</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-4 text-right">Kitchen Target</th>
+                    <th className="py-2 px-2.5 sm:py-3 sm:px-4 text-center">Action / Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredKitchenTally.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
+                      <td colSpan={10} className="py-8 sm:py-12 text-center text-slate-400 font-medium text-xs">
                         No meal sessions match the selected date.
                       </td>
                     </tr>
                   ) : (
                     filteredKitchenTally.map((row, idx) => {
+                      const isMilk = row.meal === 'Milk';
                       const mealIcon =
                         row.meal === 'Breakfast' ? (
                           <Coffee className="w-3.5 h-3.5 text-amber-500" />
                         ) : row.meal === 'Lunch' ? (
                           <Sun className="w-3.5 h-3.5 text-orange-500" />
-                        ) : (
+                        ) : row.meal === 'Dinner' ? (
                           <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                        ) : (
+                          <Milk className="w-3.5 h-3.5 text-cyan-600" />
                         );
 
                       const clearanceRate =
@@ -906,35 +1162,35 @@ export default function CampPrasadamTab({
 
                       return (
                         <tr key={`${row.date}_${row.meal}_${idx}`} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="py-3 px-4 font-semibold text-slate-800">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-4 font-semibold text-slate-800">
                             <div>{row.dateLabel}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{row.date}</div>
+                            <div className="text-[9.5px] sm:text-[10px] text-slate-400 font-mono">{row.date}</div>
                           </td>
 
-                          <td className="py-3 px-3">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 font-bold text-[11px] border border-slate-200">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3">
+                            <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-100 text-slate-800 font-bold text-[10px] sm:text-[11px] border border-slate-200">
                               {mealIcon}
                               <span>{row.meal}</span>
                             </span>
                           </td>
 
-                          <td className="py-3 px-3 text-right font-bold text-slate-900">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right font-bold text-slate-900">
                             {row.scheduledCount}
                           </td>
 
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right">
                             <span className="font-black text-emerald-700">{row.takenCount}</span>
-                            <span className="text-[10px] text-emerald-600 block">({clearanceRate}%)</span>
+                            <span className="text-[9.5px] sm:text-[10px] text-emerald-600 block">({clearanceRate}%)</span>
                           </td>
 
-                          <td className="py-3 px-3 text-right font-bold text-amber-700">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right font-bold text-amber-700">
                             {row.notTakenCount}
                           </td>
 
                           {/* Extra Guests Taken Without QR */}
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right">
                             {row.extraServedCount > 0 ? (
-                              <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-black text-[11px] border border-indigo-200">
+                              <span className="inline-block px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-black text-[10px] sm:text-[11px] border border-indigo-200">
                                 +{row.extraServedCount}
                               </span>
                             ) : (
@@ -943,19 +1199,19 @@ export default function CampPrasadamTab({
                           </td>
 
                           {/* Total Honored (QR Scanned + No QR Guests) */}
-                          <td className="py-3 px-3 text-right">
-                            <span className="font-black text-emerald-800 text-sm">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right">
+                            <span className="font-black text-emerald-800 text-xs sm:text-sm">
                               {(row.takenCount || 0) + (row.extraServedCount || 0)}
                             </span>
-                            <span className="text-[10px] text-slate-400 block font-normal">
+                            <span className="text-[9.5px] sm:text-[10px] text-slate-400 block font-normal">
                               ({row.takenCount} + {row.extraServedCount || 0})
                             </span>
                           </td>
 
                           {/* Extra Buffer Planned */}
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-3 text-right">
                             {row.extraCount > 0 ? (
-                              <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-bold text-[11px] border border-slate-200">
+                              <span className="inline-block px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-bold text-[10px] sm:text-[11px] border border-slate-200">
                                 +{row.extraCount}
                               </span>
                             ) : (
@@ -963,14 +1219,14 @@ export default function CampPrasadamTab({
                             )}
                           </td>
 
-                          <td className="py-3 px-4 text-right">
-                            <span className="text-sm font-black text-slate-900">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-4 text-right">
+                            <span className="text-xs sm:text-sm font-black text-slate-900">
                               {row.totalKitchenTarget}
                             </span>
-                            <span className="text-[10px] text-slate-400 block">plates</span>
+                            <span className="text-[9.5px] sm:text-[10px] text-slate-400 block">{isMilk ? 'glasses' : 'plates'}</span>
                           </td>
 
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2 sm:py-3 px-2.5 sm:px-4 text-center">
                             <button
                               type="button"
                               onClick={() => {
@@ -985,14 +1241,14 @@ export default function CampPrasadamTab({
                                   saving: false
                                 });
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] transition-all cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[9.5px] sm:text-[10px] transition-all cursor-pointer shadow-2xs"
                               title="Add or update extra guest servings"
                             >
                               <Edit2 className="w-3 h-3 text-amber-600" />
                               <span>{row.extraCount > 0 || row.extraServedCount > 0 ? 'Edit Guest' : '+ Add Guest'}</span>
                             </button>
                             {row.notes && (
-                              <div className="text-[10px] text-slate-400 italic mt-0.5 truncate max-w-[120px]" title={row.notes}>
+                              <div className="text-[9.5px] sm:text-[10px] text-slate-400 italic mt-0.5 truncate max-w-[120px]" title={row.notes}>
                                 {row.notes}
                               </div>
                             )}
@@ -1012,91 +1268,97 @@ export default function CampPrasadamTab({
       {/* SECTION 2: DEVOTEE PRASADAM ATTENDANCE (1 ROW PER USER) */}
       {/* ======================================================== */}
       {activeSection === 'devotees' && (
-        <div className="space-y-5 animate-in fade-in duration-150">
+        <div className="space-y-2 sm:space-y-4 animate-in fade-in duration-150">
           {/* Devotee Prasadam Summary Cards (Dynamic by Date & Filters - Includes Devotees & Extra Guests) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-3">
             {/* Card 1: Total Expected Meals */}
-            <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-sm transition-all hover:border-slate-300">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Total Meals Scheduled
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs transition-all hover:border-slate-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
+                Total Scheduled
               </span>
-              <div className="text-2xl font-black text-slate-900 mt-1">
+              <div className="text-base sm:text-2xl font-black text-slate-900 leading-tight my-0.5 sm:my-1">
                 {devoteeStats.totalScheduledMeals}
               </div>
-              <span className="text-[10px] text-slate-500 font-medium truncate block">
+              <span className="text-[7.5px] sm:text-[10px] text-slate-500 font-medium truncate block leading-tight">
                 {devoteeStats.devoteeCount} Devotees &bull; {devoteeStats.dateLabel}
               </span>
             </div>
 
             {/* Card 2: Prasadam Taken (Honored Devotees + Extra Guests) */}
-            <div className="p-4 rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-sm transition-all hover:border-emerald-300">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Prasadam Taken</span>
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs transition-all hover:border-emerald-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">Prasadam Taken</span>
               </span>
-              <div className="text-2xl font-black text-emerald-800 mt-1">
+              <div className="text-base sm:text-2xl font-black text-emerald-800 leading-tight my-0.5 sm:my-1">
                 {devoteeStats.totalTakenMeals + guestCountForScope}
               </div>
-              <span className="text-[10px] text-emerald-700 font-medium truncate block">
-                {devoteeStats.totalTakenMeals} Devotees + {guestCountForScope} Guests (No QR)
+              <span className="text-[7.5px] sm:text-[10px] text-emerald-700 font-medium truncate block leading-tight">
+                {devoteeStats.totalTakenMeals} Devotees + {guestCountForScope} Guests
               </span>
             </div>
 
-            {/* Card 3: Guests Honored (No QR) - ADDED FOR VISIBILITY IN BOTH SECTIONS */}
-            <div className="p-4 rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-sm transition-all hover:border-indigo-300">
-              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
-                <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Guests Honored (No QR)</span>
+            {/* Card 3: Guests Honored (No QR) */}
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-indigo-50/70 border border-indigo-200/80 shadow-2xs transition-all hover:border-indigo-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                <PlusCircle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">Guests (No QR)</span>
               </span>
-              <div className="text-2xl font-black text-indigo-900 mt-1">
+              <div className="text-base sm:text-2xl font-black text-indigo-900 leading-tight my-0.5 sm:my-1">
                 +{guestCountForScope}
               </div>
-              <span className="text-[10px] text-indigo-700 font-medium truncate block">
-                Walk-ins, drivers &amp; VIPs honored
+              <span className="text-[7.5px] sm:text-[10px] text-indigo-700 font-medium truncate block leading-tight">
+                Walk-ins &amp; VIPs
               </span>
             </div>
 
             {/* Card 4: Remaining / Pending */}
-            <div className="p-4 rounded-3xl bg-amber-50/80 border border-amber-200/80 shadow-sm transition-all hover:border-amber-300">
-              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Remaining / Pending</span>
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-amber-50/80 border border-amber-200/80 shadow-2xs transition-all hover:border-amber-300 flex flex-col justify-between">
+              <span className="text-[8px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                <Clock className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+                <span className="truncate">Remaining / Pending</span>
               </span>
-              <div className="text-2xl font-black text-amber-900 mt-1">
+              <div className="text-base sm:text-2xl font-black text-amber-900 leading-tight my-0.5 sm:my-1">
                 {devoteeStats.totalRemainingMeals}
               </div>
-              <span className="text-[10px] text-amber-700 font-medium">
+              <span className="text-[7.5px] sm:text-[10px] text-amber-700 font-medium block truncate leading-tight">
                 {devoteeStats.pendingRate}% pending honoring
               </span>
             </div>
 
-            {/* Card 5: Session Breakdown */}
-            <div className="p-4 rounded-3xl bg-slate-900 text-white shadow-sm border border-slate-800 transition-all hover:border-slate-700 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+            {/* Card 5: Session Breakdown: span 2 cols on mobile */}
+            <div className="p-2 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-900 text-white shadow-2xs border border-slate-800 transition-all hover:border-slate-700 col-span-2 sm:col-span-1 flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[8px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block truncate">
                   Session Headcounts
                 </span>
-                <span className="text-[9px] text-slate-400 font-mono">
+                <span className="text-[7.5px] sm:text-[9px] text-slate-400 font-mono shrink-0">
                   {devoteeStats.dateLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center mt-2 pt-2 border-t border-slate-800">
+              <div className="grid grid-cols-4 gap-1 text-center mt-1 pt-1 sm:pt-1.5 border-t border-slate-800">
                 <div>
-                  <span className="text-[9px] font-bold text-amber-300 uppercase block">BF</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-amber-300 uppercase block">BF</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
                     {devoteeStats.bf.taken + guestByMeal.bf}/{devoteeStats.bf.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[9px] font-bold text-orange-300 uppercase block">LN</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-orange-300 uppercase block">LN</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
                     {devoteeStats.ln.taken + guestByMeal.ln}/{devoteeStats.ln.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[9px] font-bold text-indigo-300 uppercase block">DN</span>
-                  <span className="text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-indigo-300 uppercase block">DN</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
                     {devoteeStats.dn.taken + guestByMeal.dn}/{devoteeStats.dn.eligible}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[7px] sm:text-[8.5px] font-bold text-cyan-300 uppercase block">MILK</span>
+                  <span className="text-[9.5px] sm:text-xs font-black text-white" title={`${devoteeStats.ml.taken} Devotees + ${guestByMeal.ml} Guests`}>
+                    {devoteeStats.ml.taken + guestByMeal.ml}/{devoteeStats.ml.eligible}
                   </span>
                 </div>
               </div>
@@ -1104,8 +1366,8 @@ export default function CampPrasadamTab({
           </div>
 
           {/* FILTER BAR WITH CENTER & TEMPLE DROPDOWNS: Compact on Mobile */}
-          <div className="p-2.5 sm:p-4 bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 sm:space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+          <div className="p-2 sm:p-4 bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-2xs space-y-1.5 sm:space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3">
               {/* Search Bar */}
               <div className="relative flex-1">
                 <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1114,7 +1376,7 @@ export default function CampPrasadamTab({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search devotee name, token #, phone, center, temple..."
-                  className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs outline-none focus:border-amber-500 focus:bg-white font-medium"
+                  className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs outline-none focus:border-amber-500 focus:bg-white font-medium"
                 />
                 {searchQuery && (
                   <button
@@ -1130,7 +1392,7 @@ export default function CampPrasadamTab({
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer self-end sm:self-auto"
+                  className="px-2.5 sm:px-3.5 py-1 sm:py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer self-end sm:self-auto"
                 >
                   Clear Filters
                 </button>
@@ -1141,13 +1403,13 @@ export default function CampPrasadamTab({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2.5 pt-1.5 sm:pt-2 border-t border-slate-100 text-xs">
               {/* Camp Track Filter */}
               <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                <label className="text-[8.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 truncate">
                   Camp Track
                 </label>
                 <select
                   value={selectedTrack}
                   onChange={(e) => setSelectedTrack(e.target.value)}
-                  className="w-full px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Tracks ({filterOptions.tracks.length})</option>
                   {filterOptions.tracks.map((t) => (
@@ -1160,13 +1422,13 @@ export default function CampPrasadamTab({
 
               {/* Current Temple Filter */}
               <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                <label className="text-[8.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 truncate">
                   Current Temple
                 </label>
                 <select
                   value={selectedTemple}
                   onChange={(e) => setSelectedTemple(e.target.value)}
-                  className="w-full px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Temples ({filterOptions.temples.length})</option>
                   {filterOptions.temples.map((t) => (
@@ -1179,13 +1441,13 @@ export default function CampPrasadamTab({
 
               {/* VOICE Center Filter */}
               <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                <label className="text-[8.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 truncate">
                   VOICE Center
                 </label>
                 <select
                   value={selectedCenter}
                   onChange={(e) => setSelectedCenter(e.target.value)}
-                  className="w-full px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Centers ({availableCenters.length})</option>
                   {availableCenters.map((c) => (
@@ -1198,30 +1460,31 @@ export default function CampPrasadamTab({
 
               {/* Meal Session Filter */}
               <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                <label className="text-[8.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 truncate">
                   Meal Session
                 </label>
                 <select
                   value={selectedMeal}
                   onChange={(e) => setSelectedMeal(e.target.value as any)}
-                  className="w-full px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
-                  <option value="all">All Meals (BF, LN, DN)</option>
+                  <option value="all">All Meals (BF, LN, DN, Milk)</option>
                   <option value="Breakfast">Breakfast</option>
                   <option value="Lunch">Lunch</option>
                   <option value="Dinner">Dinner</option>
+                  <option value="Milk">Night Milk</option>
                 </select>
               </div>
 
-              {/* Punch Status Filter */}
-              <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+              {/* Punch Status Filter: span 2 cols on mobile */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className="text-[8.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 truncate">
                   Punch Status
                 </label>
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value as any)}
-                  className="w-full px-2 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
+                  className="w-full px-1.5 py-1 sm:px-2.5 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-semibold text-slate-700 outline-none focus:border-amber-500"
                 >
                   <option value="all">All Statuses</option>
                   <option value="TAKEN">Taken (Honored)</option>
@@ -1256,13 +1519,14 @@ export default function CampPrasadamTab({
                     <th className="py-2.5 px-3 text-center">Breakfast</th>
                     <th className="py-2.5 px-3 text-center">Lunch</th>
                     <th className="py-2.5 px-3 text-center">Dinner</th>
+                    <th className="py-2.5 px-3 text-center">Milk</th>
                     <th className="py-2.5 px-3 sm:px-4 text-right">Pass &amp; Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paginatedDevotees.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                      <td colSpan={9} className="py-12 text-center text-slate-400 font-medium">
                         No devotees match the selected filters.
                       </td>
                     </tr>
@@ -1273,7 +1537,7 @@ export default function CampPrasadamTab({
                         : null;
 
                       // Helper render function for meal pill
-                      const renderMealPill = (mealName: 'Breakfast' | 'Lunch' | 'Dinner', mealData: any) => {
+                      const renderMealPill = (mealName: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk', mealData: any) => {
                         if (!mealData || !mealData.eligible) {
                           return (
                             <span className="text-slate-300 font-medium text-[11px]" title="Meal not in registered window">
@@ -1337,6 +1601,7 @@ export default function CampPrasadamTab({
                       let bfEligible = 0, bfTaken = 0;
                       let lnEligible = 0, lnTaken = 0;
                       let dnEligible = 0, dnTaken = 0;
+                      let mlEligible = 0, mlTaken = 0;
 
                       d.dateMatrix?.forEach((m: any) => {
                         if (m.breakfast?.eligible) {
@@ -1350,6 +1615,10 @@ export default function CampPrasadamTab({
                         if (m.dinner?.eligible) {
                           dnEligible++;
                           if (m.dinner?.punched) dnTaken++;
+                        }
+                        if (m.milk?.eligible) {
+                          mlEligible++;
+                          if (m.milk?.punched) mlTaken++;
                         }
                       });
 
@@ -1437,6 +1706,22 @@ export default function CampPrasadamTab({
                                 </span>
                                 <span className="text-[9px] text-slate-400 font-semibold">
                                   {dnEligible > 0 ? `${Math.round((dnTaken / dnEligible) * 100)}%` : '—'}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Milk */}
+                          <td className="py-3 px-3 text-center">
+                            {selectedDate && selectedDate !== 'all' ? (
+                              renderMealPill('Milk', dayMatrix?.milk)
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className={`text-xs font-bold ${mlTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
+                                  {mlTaken} / {mlEligible}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-semibold">
+                                  {mlEligible > 0 ? `${Math.round((mlTaken / mlEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
                             )}
@@ -1580,10 +1865,37 @@ export default function CampPrasadamTab({
                     className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-sm font-black text-indigo-950 outline-none focus:border-indigo-500 focus:bg-white"
                     placeholder="e.g. 5"
                   />
-                  <span className="text-[10px] text-indigo-700/80 mt-1 block">
-                    Plates taken at gate.
-                  </span>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-indigo-700/80">
+                      Plates taken at gate.
+                    </span>
+                    {guestModal.extraCount > 0 && guestModal.extraServedCount !== guestModal.extraCount && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setGuestModal((prev) => ({
+                            ...prev,
+                            extraServedCount: prev.extraCount
+                          }))
+                        }
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                      >
+                        Match Buffer (+{guestModal.extraCount})
+                      </button>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[10.5px] text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1 text-[11px]">
+                  <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>How Guest Counts are Tracked:</span>
+                </div>
+                <p className="text-[10px] text-amber-800 leading-snug">
+                  &bull; <strong>Buffer Planned:</strong> Added to kitchen target and session target plates to cook.<br />
+                  &bull; <strong>Actually Honored:</strong> Counted as prasadam served to walk-ins &amp; guests without QR passes.
+                </p>
               </div>
 
               <div>

@@ -500,5 +500,97 @@ export async function sendProfileUpdateApprovalNotification(userEmail: string, u
     });
 }
 
+/**
+ * Sends a welcome email to a new or existing devotee registered for a camp by their Center Manager.
+ * For new accounts, it includes their login credentials (temporary password) and login link.
+ */
+export async function sendCampDevoteeWelcomeAccountEmail(params: {
+    userEmail: string;
+    userName: string;
+    tempPassword?: string;
+    campTitle: string;
+    trackName: string;
+    centerName?: string;
+    templeName?: string;
+    isExistingAccount?: boolean;
+}) {
+    const {
+        userEmail,
+        userName,
+        tempPassword,
+        campTitle,
+        trackName,
+        centerName = 'Central VOICE',
+        templeName = 'ISKCON NVCC • PUNE',
+        isExistingAccount = false,
+    } = params;
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com').replace(/\/$/, '');
+    const loginUrl = `${appUrl}/auth/login`;
+    const campPassUrl = `${appUrl}/dashboard/camp`;
+
+    const subject = isExistingAccount
+        ? `Camp Registration Confirmed: ${campTitle} (${trackName})`
+        : `Welcome to VOICE Gurukul - Your Account Details & ${campTitle} Registration`;
+
+    const detailRow = (label: string, value: string, isHighlight = false) => `
+        <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 14px; width: 38%;">${label}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: ${isHighlight ? '#ea580c' : '#0f172a'}; font-size: 14px; font-weight: 700; ${isHighlight ? 'font-family: monospace; font-size: 15px;' : ''}">${value}</td>
+        </tr>
+    `;
+
+    const htmlBody = `
+        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
+        <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+            ${isExistingAccount
+                ? `You have been registered for <strong>${campTitle}</strong> (Track: <strong>${trackName}</strong>) by your Center Manager.`
+                : `Welcome to <strong>VOICE Gurukul</strong>! Your account has been registered and verified by your Center Manager for <strong>${campTitle}</strong> (Track: <strong>${trackName}</strong>).`
+            }
+        </p>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px; margin: 25px 0;">
+            <h4 style="margin: 0 0 14px 0; color: #475569; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                ${isExistingAccount ? 'Registration Details' : 'Account & Registration Details'}
+            </h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                ${detailRow('Participant Name', userName)}
+                ${detailRow('Camp Event', campTitle)}
+                ${detailRow('Camp Track', trackName)}
+                ${detailRow('Center & Temple', `${centerName} • ${templeName}`)}
+                ${!isExistingAccount ? detailRow('Login Email', userEmail) : ''}
+                ${!isExistingAccount && tempPassword ? detailRow('Temporary Password', tempPassword, true) : ''}
+                ${detailRow('Account Status', 'Approved & Active')}
+            </table>
+        </div>
+
+        ${!isExistingAccount ? `
+            <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 10px; padding: 14px 18px; margin-bottom: 25px;">
+                <p style="margin: 0; font-size: 13px; color: #92400e; line-height: 1.5;">
+                    <strong>Security Notice:</strong> Please use the temporary password above to log in to your account. You can update your password and fill your sadhana profile anytime from your profile settings.
+                </p>
+            </div>
+        ` : ''}
+
+        <p style="font-size: 14px; color: #64748b; line-height: 1.5;">
+            You can access your camp passes, download digital ID cards, track your daily sadhana, and stay connected with your center.
+        </p>
+
+        <div style="text-align: center; margin: 35px 0;">
+            <a href="${isExistingAccount ? campPassUrl : loginUrl}" style="background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);">
+                ${isExistingAccount ? 'View Camp Passes' : 'Log In to VOICE Gurukul'}
+            </a>
+        </div>
+    `;
+
+    const htmlContent = getEmailWrapper(isExistingAccount ? 'Camp Registration' : 'Welcome to VOICE Gurukul', htmlBody);
+
+    return await dispatchEmail({
+        to: userEmail,
+        subject: subject,
+        html: htmlContent,
+    });
+}
+
 
 

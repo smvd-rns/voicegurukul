@@ -484,6 +484,7 @@ export interface CampTrackFee {
   track: string; // e.g. 'GS Camp - 1st Timer'
   fee: number; // e.g. 150
   label?: string; // e.g. 'Camp Booklet & Study Material'
+  min_rounds?: number; // Minimum daily chanting rounds required (e.g. 16 for Nistha; 0 or undefined = for all)
 }
 
 export interface CampSpecialWaivers {
@@ -598,6 +599,10 @@ export interface Camp {
   special_waivers: CampSpecialWaivers;
   payment_config: CampPaymentConfig;
   refund_config?: CampRefundConfig;
+  eligible_centers?: string[]; // Array of permitted center names (empty or undefined = open to all centers)
+  poster_url?: string; // Camp promotional poster or banner image URL
+  criteria_message?: string; // Eligibility criteria and requirements message
+  banner_message?: string; // Attractive colorful welcome message or announcement
   created_at?: string;
   updated_at?: string;
 }
@@ -651,6 +656,9 @@ export interface CampRegistration {
   meals_served?: Record<string, boolean>;
   created_at?: string;
   updated_at?: string;
+  current_temple?: string;
+  current_center?: string;
+  is_own_registration?: boolean;
 }
 
 export interface CampAdminAllocation {

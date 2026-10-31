@@ -6,6 +6,8 @@ import { User, TempleData } from '@/types';
 import { CenterData } from '@/lib/supabase/centers';
 import { CounselorData } from '@/lib/supabase/counselors';
 import { SPIRITUAL_MASTERS } from '@/lib/utils/spiritual-masters';
+import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
+import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 
 interface EditUserProfileModalProps {
   isOpen: boolean;
@@ -125,6 +127,13 @@ export default function EditUserProfileModal({
     if (!formData.email.trim()) {
       setError('Email is required');
       return;
+    }
+    if (formData.phone) {
+      const phoneRes = validatePhoneNumber(formData.phone, '+91', false);
+      if (!phoneRes.isValid) {
+        setError(phoneRes.error || 'Please enter a valid phone number');
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -278,17 +287,11 @@ export default function EditUserProfileModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile / Phone</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                      placeholder="10 digit number"
-                    />
-                  </div>
+                  <PhoneInputWithCountry
+                    label="Mobile / Phone"
+                    value={formData.phone}
+                    onChange={(fullPhone) => setFormData({ ...formData, phone: fullPhone })}
+                  />
                 </div>
 
                 <div>
