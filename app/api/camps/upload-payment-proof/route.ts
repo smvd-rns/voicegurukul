@@ -88,7 +88,18 @@ export async function POST(req: NextRequest) {
       }, { status: 429 });
     }
 
-    const formData = await req.formData();
+    const contentType = req.headers.get('content-type') || '';
+    if (!contentType.includes('multipart/form-data')) {
+      return NextResponse.json({ error: 'Invalid request: Content-Type must be multipart/form-data' }, { status: 400 });
+    }
+
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json({ error: 'Malformed multipart form data' }, { status: 400 });
+    }
+
     const file = formData.get('file') as File;
     const campTitle = (formData.get('campTitle') as string) || 'General Camps';
     const devoteeName = (formData.get('devoteeName') as string) || 'Devotee';
