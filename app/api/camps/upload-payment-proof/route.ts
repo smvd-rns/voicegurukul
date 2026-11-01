@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const MAIN_FOLDER_ID = process.env.MAIN_DRIVE_FOLDER_ID || '1xcAsRKFb68aV4k__U7RiTFfblpSXQrlo';
 
@@ -73,6 +74,20 @@ async function findOrCreateFolder(drive: any, folderName: string, parentFolderId
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit check: Maximum 10 screenshot uploads per 10 minutes per IP/device
+    const rateLimit = await checkRateLimit(req, null, {
+      action: 'camp_upload_payment_proof',
+      limit: 10,
+      windowMs: 10 * 60 * 1000,
+      blockDurationMs: 15 * 60 * 1000
+    });
+
+    if (rateLimit.blocked) {
+      return NextResponse.json({
+        error: rateLimit.message || 'Too many upload attempts. Please try again later.'
+      }, { status: 429 });
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const campTitle = (formData.get('campTitle') as string) || 'General Camps';

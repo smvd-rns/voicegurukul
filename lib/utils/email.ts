@@ -115,15 +115,25 @@ export async function dispatchEmail(options: EmailDispatchOptions): Promise<bool
 function getEmailWrapper(title: string, bodyContent: string, isAlert = false) {
     const primaryColor = isAlert ? '#dc2626' : '#ea580c';
     const secondaryColor = isAlert ? '#ef4444' : '#f97316';
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com').replace(/\/$/, '');
     
     return `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 40px 20px; color: #1e293b; line-height: 1.6;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
                 
-                <!-- Premium Gradient Header -->
-                <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 35px 30px; text-align: center;">
-                    <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px;">VOICE Gurukul</div>
-                    <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.025em; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">${title}</h1>
+                <!-- Premium Gradient Header with Official Logo -->
+                <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 28px 25px; text-align: center;">
+                    <div style="margin-bottom: 10px;">
+                        <img 
+                            src="${appUrl}/images/voice-logo.png" 
+                            alt="VOICE Gurukul" 
+                            width="160"
+                            height="30"
+                            style="height: 32px; width: auto; max-width: 170px; display: inline-block; background-color: #ffffff; padding: 4px 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.12); vertical-align: middle;" 
+                        />
+                    </div>
+                    <div style="font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.9); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px;">VOICE Gurukul</div>
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">${title}</h1>
                 </div>
                 
                 <!-- Email Content Area -->
@@ -513,6 +523,21 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
     centerName?: string;
     templeName?: string;
     isExistingAccount?: boolean;
+    emailInstructions?: string;
+    emailLinks?: Array<{ id?: string; title: string; url: string; type?: string }>;
+    registrationId?: string;
+    userPhone?: string;
+    campStartDate?: string;
+    campEndDate?: string;
+    venue?: string;
+    mealInfo?: {
+        firstMealDate?: string;
+        firstMealType?: string;
+        lastMealDate?: string;
+        lastMealType?: string;
+        dinnerType?: string;
+        accommodation?: string | boolean;
+    };
 }) {
     const {
         userEmail,
@@ -523,6 +548,13 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
         centerName = 'Central VOICE',
         templeName = 'ISKCON NVCC • PUNE',
         isExistingAccount = false,
+        emailInstructions,
+        emailLinks = [],
+        registrationId,
+        userPhone,
+        campStartDate,
+        campEndDate,
+        mealInfo,
     } = params;
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com').replace(/\/$/, '');
@@ -540,15 +572,236 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
         </tr>
     `;
 
+    // Format custom action links (WhatsApp, Docs, YouTube, Maps, Website)
+    const validLinks = Array.isArray(emailLinks) ? emailLinks.filter(l => l && l.url && l.title) : [];
+    let customLinksHtml = '';
+
+    if (validLinks.length > 0) {
+        const renderedButtons = validLinks.map((link) => {
+            const url = (link.url || '').trim();
+            const title = (link.title || '').trim();
+            const lowerUrl = url.toLowerCase();
+            const linkType = (link.type || '').toLowerCase();
+
+            let btnBg = '#ea580c';
+            let btnGradient = 'linear-gradient(135deg, #ea580c 0%, #d97706 100%)';
+            let icon = '🔗';
+
+            if (linkType === 'whatsapp' || lowerUrl.includes('chat.whatsapp.com') || lowerUrl.includes('wa.me')) {
+                btnBg = '#25D366';
+                btnGradient = 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)';
+                icon = '💬';
+            } else if (linkType === 'video' || lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+                btnBg = '#dc2626';
+                btnGradient = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                icon = '▶️';
+            } else if (linkType === 'document' || lowerUrl.includes('docs.google.com') || lowerUrl.includes('.pdf')) {
+                btnBg = '#2563eb';
+                btnGradient = 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';
+                icon = '📄';
+            } else if (linkType === 'map' || lowerUrl.includes('maps.google') || lowerUrl.includes('goo.gl')) {
+                btnBg = '#059669';
+                btnGradient = 'linear-gradient(135deg, #10b981 0%, #047857 100%)';
+                icon = '📍';
+            }
+
+            return `
+                <div style="margin-bottom: 16px; padding: 14px 16px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;">
+                    <div style="margin-bottom: 8px;">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" style="background: ${btnGradient}; background-color: ${btnBg}; color: #ffffff; padding: 10px 22px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 14px; box-shadow: 0 3px 6px -1px rgba(0,0,0,0.12);">
+                            ${icon} ${title}
+                        </a>
+                    </div>
+                    <div style="font-size: 11.5px; color: #64748b; line-height: 1.4; word-break: break-all;">
+                        Direct link: <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">${url}</a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        customLinksHtml = `
+            <div style="background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                <h4 style="margin: 0 0 14px 0; color: #334155; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                    📢 Important Camp Links &amp; Groups
+                </h4>
+                ${renderedButtons}
+            </div>
+        `;
+    }
+
+    // Format custom instructions / notice if provided by admin
+    let customNoticeHtml = '';
+    if (emailInstructions && emailInstructions.trim()) {
+        const safeInstructions = emailInstructions.trim().replace(/\n/g, '<br/>');
+        customNoticeHtml = `
+            <div style="background-color: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 18px 20px; margin: 25px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #92400e; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center;">
+                    📌 Special Announcement &amp; Instructions
+                </h4>
+                <div style="font-size: 13.5px; color: #78350f; line-height: 1.6;">
+                    ${safeInstructions}
+                </div>
+            </div>
+        `;
+    }
+
+    // Pass details & QR Code generation
+    const formattedDates = (campStartDate && campEndDate)
+        ? `${new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - ${new Date(campEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        : (campStartDate ? new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+
+    const verifyUrl = registrationId
+        ? `${appUrl}/camps/verify-pass?id=${encodeURIComponent(registrationId)}`
+        : campPassUrl;
+
+    const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(verifyUrl)}&format=png`;
+
+    const passBadge = registrationId
+        ? `PASS #${registrationId.slice(0, 8).toUpperCase()}`
+        : 'CONFIRMED PASS';
+
+    let mealSummaryHtml = '';
+    if (mealInfo && (mealInfo.firstMealDate || mealInfo.lastMealDate || mealInfo.accommodation)) {
+        mealSummaryHtml = `
+            <div style="margin-top: 14px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <tr>
+                        <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
+                            🍽️ First Meal:<br/>
+                            <span style="color: #431407; font-weight: 800;">${mealInfo.firstMealDate || 'Included'} ${mealInfo.firstMealType ? `(${mealInfo.firstMealType})` : ''}</span>
+                        </td>
+                        <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
+                            🍽️ Last Meal:<br/>
+                            <span style="color: #431407; font-weight: 800;">${mealInfo.lastMealDate || 'Included'} ${mealInfo.lastMealType ? `(${mealInfo.lastMealType})` : ''}</span>
+                        </td>
+                        <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
+                            🏠 Accommodation:<br/>
+                            <span style="color: #431407; font-weight: 800;">${mealInfo.accommodation ? 'Opted' : 'Not Opted'}</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    const embeddedPassHtml = `
+        <!-- OFFICIAL EMBEDDED DIGITAL CAMP PASS (SHOW DIRECTLY ON PHONE) -->
+        <div style="margin: 28px 0; border: 2.5px dashed #ea580c; background: linear-gradient(180deg, #fffaf5 0%, #ffffff 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.09);">
+            <!-- Pass Top Banner -->
+            <div style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding: 12px 18px; color: #ffffff;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="vertical-align: middle; text-align: left;">
+                            <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; background-color: rgba(255,255,255,0.22); padding: 3px 8px; border-radius: 4px; display: inline-block;">
+                                🎟️ Official Camp Digital Pass
+                            </span>
+                        </td>
+                        <td style="vertical-align: middle; text-align: right;">
+                            <span style="font-size: 11px; font-weight: 700; color: #ffedd5; font-family: monospace;">
+                                ${passBadge}
+                            </span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- VOICE Institutional Branding Header with Official Logo -->
+            <div style="text-align: center; padding: 12px 16px 10px 16px; border-bottom: 1px solid #fed7aa; background-color: #ffffff;">
+                <img 
+                    src="${appUrl}/images/voice-logo.png" 
+                    alt="VOICE - Rekindling Wisdom, Reviving Love" 
+                    width="190"
+                    height="32"
+                    style="height: 32px; width: auto; max-width: 190px; display: inline-block; vertical-align: middle;" 
+                />
+            </div>
+
+            <!-- Pass Content -->
+            <div style="padding: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <!-- Left Details Column -->
+                        <td style="vertical-align: top; padding-right: 15px;">
+                            <div style="font-size: 11px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;">
+                                ${campTitle}
+                            </div>
+                            <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-bottom: 8px; letter-spacing: -0.02em;">
+                                ${userName}
+                            </div>
+                            
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                <tr>
+                                    <td style="padding: 3px 0; color: #64748b; font-weight: 700; width: 68px;">CAMP:</td>
+                                    <td style="padding: 3px 0; color: #9a3412; font-weight: 800;">${trackName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 3px 0; color: #64748b; font-weight: 700;">CENTER:</td>
+                                    <td style="padding: 3px 0; color: #0f172a; font-weight: 700;">${centerName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 3px 0; color: #64748b; font-weight: 700;">TEMPLE:</td>
+                                    <td style="padding: 3px 0; color: #0f172a; font-weight: 700;">${templeName}</td>
+                                </tr>
+                                ${formattedDates ? `
+                                <tr>
+                                    <td style="padding: 3px 0; color: #64748b; font-weight: 700;">DATES:</td>
+                                    <td style="padding: 3px 0; color: #0f172a; font-weight: 700;">${formattedDates}</td>
+                                </tr>
+                                ` : ''}
+                                ${userPhone ? `
+                                <tr>
+                                    <td style="padding: 3px 0; color: #64748b; font-weight: 700;">CONTACT:</td>
+                                    <td style="padding: 3px 0; color: #0f172a; font-weight: 700; font-family: monospace;">${userPhone}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </td>
+
+                        <!-- Right QR Code Column -->
+                        <td style="vertical-align: top; text-align: center; width: 140px;">
+                            <div style="display: inline-block; background-color: #ffffff; padding: 8px; border: 1.5px solid #cbd5e1; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); text-align: center;">
+                                <a href="${verifyUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: block;">
+                                    <img 
+                                        src="${qrImgUrl}" 
+                                        alt="Official Camp Pass QR Code" 
+                                        width="120" 
+                                        height="120" 
+                                        style="display: block; width: 120px; height: 120px; border: 0; outline: none; margin: 0 auto;" 
+                                    />
+                                </a>
+                                <div style="font-size: 9px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 6px;">
+                                    SCAN PASS
+                                </div>
+                                <div style="font-size: 8px; color: #64748b; margin-top: 2px;">
+                                    Wristband &amp; Meals
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+                ${mealSummaryHtml}
+
+                <!-- Direct In-Mail Pass Note -->
+                <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #fdba74; text-align: center;">
+                    <span style="font-size: 11px; color: #9a3412; font-weight: 700;">
+                        📱 <strong>Direct Pass:</strong> You can show this QR code directly from this email on your phone at the entry desk. No extra download needed!
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+
     const htmlBody = `
         <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${userName}</strong>,</p>
         <p style="font-size: 15px; color: #334155; line-height: 1.6;">
             ${isExistingAccount
-                ? `You have been registered for <strong>${campTitle}</strong> (Track: <strong>${trackName}</strong>) by your Center Manager.`
-                : `Welcome to <strong>VOICE Gurukul</strong>! Your account has been registered and verified by your Center Manager for <strong>${campTitle}</strong> (Track: <strong>${trackName}</strong>).`
+                ? `You have been registered for <strong>${campTitle}</strong> (Camp: <strong>${trackName}</strong>) by your Center Manager.`
+                : `Welcome to <strong>VOICE Gurukul</strong>! Your account has been registered and verified by your Center Manager for <strong>${campTitle}</strong> (Camp: <strong>${trackName}</strong>).`
             }
         </p>
 
+        <!-- Registration Details Card -->
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px; margin: 25px 0;">
             <h4 style="margin: 0 0 14px 0; color: #475569; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
                 ${isExistingAccount ? 'Registration Details' : 'Account & Registration Details'}
@@ -556,13 +809,16 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
             <table style="width: 100%; border-collapse: collapse;">
                 ${detailRow('Participant Name', userName)}
                 ${detailRow('Camp Event', campTitle)}
-                ${detailRow('Camp Track', trackName)}
+                ${detailRow('Camp', trackName)}
                 ${detailRow('Center & Temple', `${centerName} • ${templeName}`)}
                 ${!isExistingAccount ? detailRow('Login Email', userEmail) : ''}
                 ${!isExistingAccount && tempPassword ? detailRow('Temporary Password', tempPassword, true) : ''}
                 ${detailRow('Account Status', 'Approved & Active')}
             </table>
         </div>
+
+        <!-- EMBEDDED DIGITAL CAMP PASS -->
+        ${embeddedPassHtml}
 
         ${!isExistingAccount ? `
             <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 10px; padding: 14px 18px; margin-bottom: 25px;">
@@ -571,6 +827,27 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
                 </p>
             </div>
         ` : ''}
+
+        <!-- STANDARD PASS & ENTRY GUIDELINES NOTICE -->
+        <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 18px 20px; margin: 25px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #166534; font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                🎟️ Important Camp Entry &amp; Pass Guidelines
+            </h4>
+            <ul style="margin: 0; padding-left: 20px; color: #14532d; font-size: 13.5px; line-height: 1.65;">
+                <li style="margin-bottom: 6px;">
+                    <strong>Bring Your Pass:</strong> While coming to the camp, please bring your Camp Pass with you — <strong>either as a printed physical copy or a digital pass on your smartphone</strong>.
+                </li>
+                <li>
+                    <strong>QR Code Verification:</strong> The QR code on your pass will be scanned at the registration desk for <strong>issuing your entry wristband</strong> and at the <strong>Prasadam hall</strong> for meal token scanning.
+                </li>
+            </ul>
+        </div>
+
+        <!-- CUSTOM NOTICE IF CONFIGURED BY ADMIN -->
+        ${customNoticeHtml}
+
+        <!-- CUSTOM ACTION LINKS & WHATSAPP GROUPS IF CONFIGURED -->
+        ${customLinksHtml}
 
         <p style="font-size: 14px; color: #64748b; line-height: 1.5;">
             You can access your camp passes, download digital ID cards, track your daily sadhana, and stay connected with your center.

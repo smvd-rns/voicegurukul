@@ -14,19 +14,24 @@ import {
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
   Undo2, Banknote, RefreshCw, Ticket, Download,
   ExternalLink, ArrowLeft, Info, Shield, QrCode,
-  Users, FileSpreadsheet, Ban, UserCircle, UserPlus
+  Users, FileSpreadsheet, Ban, UserCircle, UserPlus,
+  Filter, ChevronDown, Save, BookmarkCheck, RotateCcw,
+  MessageCircle, Receipt
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
 import { isCampManagerialUser } from '@/lib/utils/roles';
+import { toast } from 'react-hot-toast';
 import {
   getActiveCampsForUserAction,
   getUserCampRegistrationsAction,
   submitCampRefundRequestAction,
+  cancelPendingIdtRegistrationAction,
   lookupCampRegistrationsAction,
   getUserAllocatedCampsAction,
-  getCenterDevoteesForCampRegistrationAction
+  getCenterDevoteesForCampRegistrationAction,
+  validateCampCouponAction
 } from '@/app/dashboard/admin/camps/actions';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
@@ -34,6 +39,19 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 import { getThumbnailUrl } from '@/lib/utils/google-drive';
+
+function formatDisplayDateTime(val: any): string {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 function formatMealOptionLabel(m?: CampMealConfig | null, campStartDate?: string): string {
   if (!m) return '';
@@ -73,6 +91,233 @@ function calculateAgeFromBirthDate(birthDateStr?: string | null): string {
     age--;
   }
   return age > 0 ? String(age) : '';
+}
+
+// Deterministic Camp & Pass Theme System
+interface PassColorScheme {
+  name: string;
+  stubGradient: string;
+  stubBorder: string;
+  stubGlow: string;
+  stubIconBg: string;
+  stubTag: string;
+  cardBorder: string;
+  cardBg: string;
+  textAccent: string;
+  iconAccent: string;
+  paidAccent: string;
+  badgeBg: string;
+  dotColor: string;
+}
+
+// Subcamp / Track & Camp Color Palette System (Medium Green, Purple, Orange, Sky Blue, etc.)
+const SUBCAMP_COLOR_PALETTES: PassColorScheme[] = [
+  {
+    name: 'Medium Green',
+    stubGradient: 'bg-gradient-to-br from-emerald-600 via-green-600 to-teal-800',
+    stubBorder: 'border-emerald-400/40',
+    stubGlow: 'bg-emerald-300/30',
+    stubIconBg: 'bg-white/20 text-emerald-100 border-white/20',
+    stubTag: 'text-emerald-100 bg-black/30 border-white/20',
+    cardBorder: 'border-emerald-200/90 hover:border-emerald-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-emerald-950',
+    iconAccent: 'text-emerald-600',
+    paidAccent: 'text-emerald-800',
+    badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    name: 'Purple',
+    stubGradient: 'bg-gradient-to-br from-purple-700 via-violet-750 to-indigo-900',
+    stubBorder: 'border-purple-400/40',
+    stubGlow: 'bg-purple-300/30',
+    stubIconBg: 'bg-white/20 text-purple-100 border-white/20',
+    stubTag: 'text-purple-100 bg-black/30 border-white/20',
+    cardBorder: 'border-purple-200/90 hover:border-purple-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-purple-950',
+    iconAccent: 'text-purple-600',
+    paidAccent: 'text-purple-800',
+    badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
+    dotColor: 'bg-purple-500',
+  },
+  {
+    name: 'Orange',
+    stubGradient: 'bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700',
+    stubBorder: 'border-orange-400/40',
+    stubGlow: 'bg-orange-300/30',
+    stubIconBg: 'bg-white/20 text-amber-100 border-white/20',
+    stubTag: 'text-amber-100 bg-black/30 border-white/20',
+    cardBorder: 'border-orange-200/90 hover:border-orange-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-orange-950',
+    iconAccent: 'text-orange-600',
+    paidAccent: 'text-orange-800',
+    badgeBg: 'bg-orange-100 text-orange-800 border-orange-200',
+    dotColor: 'bg-orange-500',
+  },
+  {
+    name: 'Sky Blue',
+    stubGradient: 'bg-gradient-to-br from-sky-500 via-blue-600 to-cyan-700',
+    stubBorder: 'border-sky-400/40',
+    stubGlow: 'bg-sky-300/30',
+    stubIconBg: 'bg-white/20 text-sky-100 border-white/20',
+    stubTag: 'text-sky-100 bg-black/30 border-white/20',
+    cardBorder: 'border-sky-200/90 hover:border-sky-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-sky-950',
+    iconAccent: 'text-sky-600',
+    paidAccent: 'text-sky-800',
+    badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
+    dotColor: 'bg-sky-500',
+  },
+  {
+    name: 'Royal Indigo',
+    stubGradient: 'bg-gradient-to-br from-indigo-700 via-blue-800 to-slate-900',
+    stubBorder: 'border-indigo-400/40',
+    stubGlow: 'bg-indigo-300/30',
+    stubIconBg: 'bg-white/20 text-indigo-100 border-white/20',
+    stubTag: 'text-indigo-100 bg-black/30 border-white/20',
+    cardBorder: 'border-indigo-200/90 hover:border-indigo-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-indigo-950',
+    iconAccent: 'text-indigo-600',
+    paidAccent: 'text-indigo-800',
+    badgeBg: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    dotColor: 'bg-indigo-500',
+  },
+  {
+    name: 'Rose Crimson',
+    stubGradient: 'bg-gradient-to-br from-rose-600 via-red-600 to-stone-850',
+    stubBorder: 'border-rose-400/40',
+    stubGlow: 'bg-rose-300/30',
+    stubIconBg: 'bg-white/20 text-rose-100 border-white/20',
+    stubTag: 'text-rose-100 bg-black/30 border-white/20',
+    cardBorder: 'border-rose-200/90 hover:border-rose-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-rose-950',
+    iconAccent: 'text-rose-600',
+    paidAccent: 'text-rose-800',
+    badgeBg: 'bg-rose-100 text-rose-800 border-rose-200',
+    dotColor: 'bg-rose-500',
+  },
+  {
+    name: 'Teal Cyan',
+    stubGradient: 'bg-gradient-to-br from-teal-600 via-cyan-700 to-slate-900',
+    stubBorder: 'border-teal-400/40',
+    stubGlow: 'bg-teal-300/30',
+    stubIconBg: 'bg-white/20 text-teal-100 border-white/20',
+    stubTag: 'text-teal-100 bg-black/30 border-white/20',
+    cardBorder: 'border-teal-200/90 hover:border-teal-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-teal-950',
+    iconAccent: 'text-teal-600',
+    paidAccent: 'text-teal-800',
+    badgeBg: 'bg-teal-100 text-teal-800 border-teal-200',
+    dotColor: 'bg-teal-500',
+  },
+  {
+    name: 'Plum Fuchsia',
+    stubGradient: 'bg-gradient-to-br from-fuchsia-700 via-pink-700 to-purple-900',
+    stubBorder: 'border-fuchsia-400/40',
+    stubGlow: 'bg-fuchsia-300/30',
+    stubIconBg: 'bg-white/20 text-pink-100 border-white/20',
+    stubTag: 'text-pink-100 bg-black/30 border-white/20',
+    cardBorder: 'border-pink-200/90 hover:border-pink-400',
+    cardBg: 'bg-white',
+    textAccent: 'text-pink-950',
+    iconAccent: 'text-pink-600',
+    paidAccent: 'text-pink-800',
+    badgeBg: 'bg-pink-100 text-pink-800 border-pink-200',
+    dotColor: 'bg-pink-500',
+  },
+];
+
+// Cancelled Pass Palette (Light Red & Off-Red Preview)
+const CANCELLED_PASS_THEME: PassColorScheme = {
+  name: 'Cancelled',
+  // Light red vibrant gradient stub
+  stubGradient: 'bg-gradient-to-br from-rose-500 via-red-500 to-rose-700',
+  stubBorder: 'border-red-400/50',
+  stubGlow: 'bg-red-400/25',
+  stubIconBg: 'bg-white/25 text-white border-white/30',
+  stubTag: 'text-red-100 bg-black/35 border-red-300/30 line-through',
+  // Soft off-red preview card
+  cardBorder: 'border-red-300/90 border-2 hover:border-red-400',
+  cardBg: 'bg-red-50/50',
+  textAccent: 'text-red-950 line-through decoration-red-400',
+  iconAccent: 'text-red-500',
+  paidAccent: 'text-red-800 line-through',
+  badgeBg: 'bg-red-100 text-red-700 border border-red-200',
+  dotColor: 'bg-red-500',
+};
+
+// Pending Stage Palette (Warm Amber / Saffron Yellow)
+const PENDING_PASS_THEME: PassColorScheme = {
+  name: 'Pending',
+  stubGradient: 'bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700',
+  stubBorder: 'border-amber-400/50',
+  stubGlow: 'bg-amber-300/35',
+  stubIconBg: 'bg-white/20 text-amber-100 border-white/25',
+  stubTag: 'text-amber-100 bg-black/35 border-amber-300/20',
+  cardBorder: 'border-amber-300 border-2 hover:border-amber-400',
+  cardBg: 'bg-amber-50/30',
+  textAccent: 'text-amber-950',
+  iconAccent: 'text-amber-600',
+  paidAccent: 'text-amber-800 font-black',
+  badgeBg: 'bg-amber-100 text-amber-800 border border-amber-300',
+  dotColor: 'bg-amber-500',
+};
+
+function getTrackColorPalette(trackName: string): PassColorScheme {
+  const name = (trackName || '').trim();
+  if (!name) return SUBCAMP_COLOR_PALETTES[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  return SUBCAMP_COLOR_PALETTES[Math.abs(hash) % SUBCAMP_COLOR_PALETTES.length];
+}
+
+function getPassDynamicTheme(
+  reg: any,
+  isCancelled: boolean,
+  isPending: boolean,
+  registeredTracks: Array<{ id: string; name: string }>,
+  registeredCamps: Array<{ id: string; title: string }>
+): PassColorScheme {
+  if (isCancelled) {
+    return CANCELLED_PASS_THEME;
+  }
+  if (isPending) {
+    return PENDING_PASS_THEME;
+  }
+
+  // 1. Assign color by Subcamp / Track first (Medium green, Purple, Orange, Sky blue, etc.)
+  const trackName = (reg.camp_track || '').trim();
+  if (trackName) {
+    const trackIdx = registeredTracks.findIndex(t => t.id.toLowerCase() === trackName.toLowerCase());
+    if (trackIdx >= 0) {
+      return SUBCAMP_COLOR_PALETTES[trackIdx % SUBCAMP_COLOR_PALETTES.length];
+    }
+    let hash = 0;
+    for (let i = 0; i < trackName.length; i++) {
+      hash = (hash << 5) - hash + trackName.charCodeAt(i);
+      hash |= 0;
+    }
+    return SUBCAMP_COLOR_PALETTES[Math.abs(hash) % SUBCAMP_COLOR_PALETTES.length];
+  }
+
+  // 2. Fallback to camp
+  const campId = String(reg.camp_id || reg.camp_title || 'camp');
+  const campIdx = registeredCamps.findIndex(c => c.id === campId || c.title === campId);
+  if (campIdx >= 0) {
+    return SUBCAMP_COLOR_PALETTES[campIdx % SUBCAMP_COLOR_PALETTES.length];
+  }
+
+  return SUBCAMP_COLOR_PALETTES[0];
 }
 
 function CampDashboardContent() {
@@ -233,9 +478,15 @@ function CampDashboardContent() {
     camp_start_date: string;
     camp_end_date: string;
     camp_refund_config?: any;
+    camp_payment_config?: any;
   })[]>([]);
   const [userRefunds, setUserRefunds] = useState<CampRefundRequest[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
+
+  // Pre-IDT Direct Cancellation State
+  const [pendingIdtCancelTarget, setPendingIdtCancelTarget] = useState<any | null>(null);
+  const [pendingIdtCancelReason, setPendingIdtCancelReason] = useState('');
+  const [isCancellingPendingIdt, setIsCancellingPendingIdt] = useState(false);
 
   // Registration Form State (Devotee details come directly from DB!)
   const [formData, setFormData] = useState({
@@ -292,6 +543,17 @@ function CampDashboardContent() {
   const [managerAssignedCenter, setManagerAssignedCenter] = useState<string>('');
   const [managerAssignedTemple, setManagerAssignedTemple] = useState<string>('');
 
+  // POC (Point of Contact) State for Camp Registration
+  const [pocDetails, setPocDetails] = useState({
+    pocName: '',
+    pocContact: '',
+  });
+  const [pocConfirmed, setPocConfirmed] = useState(false);
+  const [pocLoading, setPocLoading] = useState(false);
+  const [pocSaving, setPocSaving] = useState(false);
+  const [pocError, setPocError] = useState<string | null>(null);
+  const [pocEditing, setPocEditing] = useState(false);
+
   // Live Cost Preview
   const [liveCost, setLiveCost] = useState<CalculatedCostResult | null>(null);
 
@@ -302,12 +564,19 @@ function CampDashboardContent() {
   const [idtPasscode, setIdtPasscode] = useState('');
   const [ittTempleName, setIttTempleName] = useState('');
   const [ittTransactionRef, setIttTransactionRef] = useState('');
+  const [ittTransactionDate, setIttTransactionDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [ittScreenshotFile, setIttScreenshotFile] = useState<File | null>(null);
   const [ittScreenshotPreview, setIttScreenshotPreview] = useState<string | null>(null);
   const [ittUploading, setIttUploading] = useState(false);
   const [copiedBankField, setCopiedBankField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Registration Draft / Progress Saving State
+  const [activeDraft, setActiveDraft] = useState<any | null>(null);
+  const [loadingDraft, setLoadingDraft] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftToast, setDraftToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Coupon / Promo Code State
   const [couponInput, setCouponInput] = useState('');
@@ -332,6 +601,9 @@ function CampDashboardContent() {
   const [cancelDevoteeMode, setCancelDevoteeMode] = useState<'self' | 'devotee'>('self');
   const [passViewFilter, setPassViewFilter] = useState<'all' | 'mine' | 'assigned'>('all');
   const [passSearchTerm, setPassSearchTerm] = useState('');
+  const [passCampFilter, setPassCampFilter] = useState<string>('all');
+  const [passStatusFilter, setPassStatusFilter] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
+  const [passSubcampFilter, setPassSubcampFilter] = useState<string>('all');
 
   // Payout details
   const [cancelPayoutType, setCancelPayoutType] = useState<'UPI' | 'BANK'>('UPI');
@@ -346,6 +618,9 @@ function CampDashboardContent() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccessResult, setCancelSuccessResult] = useState<any | null>(null);
+  const [cancelDevoteeFilter, setCancelDevoteeFilter] = useState('');
+  const [viewingRefundStatus, setViewingRefundStatus] = useState<{ reg: any; refund?: CampRefundRequest } | null>(null);
+  const [showLookupFallback, setShowLookupFallback] = useState(false);
 
   // 1. Fetch Active Camps
   const fetchActiveCamps = async () => {
@@ -542,7 +817,252 @@ function CampDashboardContent() {
       );
       setLiveCost(initialCost);
     }
+
+    // Check for existing registration progress draft for this camp
+    checkAndLoadDraft(camp.id);
+
+    // Check if POC is required and if center POC already exists for this camp
+    checkAndLoadPoc(camp, resolvedUserCenter);
   };
+
+  // Check if center POC already exists for this camp
+  const checkAndLoadPoc = async (camp: Camp, centerCandidate?: string) => {
+    if (!camp?.require_poc) {
+      setPocConfirmed(true);
+      return;
+    }
+
+    const targetCenter = (
+      centerCandidate ||
+      managerAssignedCenter ||
+      formData.voiceName ||
+      userData?.hierarchy?.currentCenter ||
+      userData?.hierarchy?.center ||
+      (userData as any)?.center ||
+      'Central VOICE'
+    ).trim();
+
+    setPocLoading(true);
+    setPocError(null);
+    try {
+      const res = await fetch(`/api/camps/poc?campId=${camp.id}&centerName=${encodeURIComponent(targetCenter)}`);
+      const json = await res.json();
+      if (json.success && json.poc) {
+        setPocDetails({
+          pocName: json.poc.poc_name,
+          pocContact: json.poc.poc_phone,
+        });
+        setPocConfirmed(true);
+        setPocEditing(false);
+      } else {
+        // Not filled yet for this camp & center!
+        setPocDetails({
+          pocName: camp.default_poc_name || userData?.name || '',
+          pocContact: camp.default_poc_contact || (userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : ''),
+        });
+        setPocConfirmed(false);
+        setPocEditing(true);
+      }
+    } catch (err: any) {
+      console.error('Error checking camp center POC:', err);
+      setPocDetails({
+        pocName: camp.default_poc_name || userData?.name || '',
+        pocContact: camp.default_poc_contact || (userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : ''),
+      });
+      setPocConfirmed(false);
+      setPocEditing(true);
+    } finally {
+      setPocLoading(false);
+    }
+  };
+
+  const handleSavePoc = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedCamp) return;
+
+    if (!pocDetails.pocName.trim()) {
+      setPocError('Please enter the POC Name');
+      return;
+    }
+    const cleanPhone = pocDetails.pocContact.replace(/[^0-9]/g, '').slice(-10);
+    if (cleanPhone.length < 10) {
+      setPocError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+
+    const targetCenter = (
+      managerAssignedCenter ||
+      formData.voiceName ||
+      userData?.hierarchy?.currentCenter ||
+      userData?.hierarchy?.center ||
+      (userData as any)?.center ||
+      'Central VOICE'
+    ).trim();
+
+    setPocSaving(true);
+    setPocError(null);
+    try {
+      const res = await fetch('/api/camps/poc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campId: selectedCamp.id,
+          centerName: targetCenter,
+          pocName: pocDetails.pocName.trim(),
+          pocPhone: cleanPhone,
+          userId: userData?.id || user?.id,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to save POC details');
+      }
+
+      setPocDetails({
+        pocName: json.poc.poc_name,
+        pocContact: json.poc.poc_phone,
+      });
+      setPocConfirmed(true);
+      setPocEditing(false);
+      setDraftToast({ type: 'success', message: `POC details confirmed for ${targetCenter}!` });
+      setTimeout(() => setDraftToast(null), 4000);
+    } catch (err: any) {
+      setPocError(err.message || 'Failed to save POC details');
+    } finally {
+      setPocSaving(false);
+    }
+  };
+
+  // Draft Check & Load
+  const checkAndLoadDraft = async (campId: string) => {
+    if (!campId) return;
+    setLoadingDraft(true);
+    try {
+      const callerId = userData?.id || user?.id || '';
+      const res = await fetch(`/api/camps/draft?campId=${campId}&userId=${callerId}`);
+      const json = await res.json();
+      if (json.success && json.draft) {
+        if (Array.isArray(json.draft.entries) && json.draft.entries.length > 0) {
+          setActiveDraft(json.draft);
+        } else {
+          setActiveDraft(null);
+        }
+      } else {
+        setActiveDraft(null);
+      }
+    } catch (err) {
+      console.error('Error checking registration draft:', err);
+    } finally {
+      setLoadingDraft(false);
+    }
+  };
+
+  const handleResumeDraft = () => {
+    if (!activeDraft) return;
+    if (Array.isArray(activeDraft.entries) && activeDraft.entries.length > 0) {
+      setEntries(activeDraft.entries);
+    }
+    if (activeDraft.form_data && Object.keys(activeDraft.form_data).length > 0) {
+      setFormData(prev => ({ ...prev, ...activeDraft.form_data }));
+    }
+    if (activeDraft.payment_method) {
+      setSelectedMethod(activeDraft.payment_method);
+    }
+    if (activeDraft.itt_temple_name) {
+      setIttTempleName(activeDraft.itt_temple_name);
+    }
+    if (activeDraft.itt_transaction_ref) {
+      setIttTransactionRef(activeDraft.itt_transaction_ref);
+    }
+    if (activeDraft.itt_transaction_date) {
+      setIttTransactionDate(activeDraft.itt_transaction_date);
+    }
+    if (activeDraft.idt_source) {
+      setIdtSource(activeDraft.idt_source);
+    }
+    if (activeDraft.idt_passcode) {
+      setIdtPasscode(activeDraft.idt_passcode);
+    }
+    if (activeDraft.coupon_code) {
+      setCouponInput(activeDraft.coupon_code);
+    }
+    setDraftToast({
+      type: 'success',
+      message: `Restored saved draft with ${activeDraft.entries?.length || 0} devotee(s)!`,
+    });
+    setTimeout(() => setDraftToast(null), 5000);
+    setActiveDraft(null);
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!selectedCamp?.id) return;
+    try {
+      const callerId = userData?.id || user?.id || '';
+      await fetch(`/api/camps/draft?campId=${selectedCamp.id}&userId=${callerId}`, { method: 'DELETE' });
+      setActiveDraft(null);
+      setDraftToast({ type: 'success', message: 'Draft cleared.' });
+      setTimeout(() => setDraftToast(null), 3000);
+    } catch (err) {
+      console.error('Error discarding draft:', err);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!selectedCamp?.id) return;
+    if (entries.length === 0 && !formData.participantName) {
+      setDraftToast({ type: 'error', message: 'Please add at least one attendee or fill in devotee details before saving.' });
+      setTimeout(() => setDraftToast(null), 4000);
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const callerId = userData?.id || user?.id || '';
+      const payload = {
+        campId: selectedCamp.id,
+        callerUserId: callerId,
+        entries,
+        formData,
+        paymentMethod: selectedMethod,
+        ittTempleName,
+        ittTransactionRef,
+        ittTransactionDate,
+        idtSource,
+        idtPasscode,
+        couponCode: appliedCoupon?.code || couponInput || null,
+      };
+
+      const res = await fetch('/api/camps/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to save progress');
+      }
+
+      setDraftToast({
+        type: 'success',
+        message: `Progress saved (${entries.length} devotee${entries.length === 1 ? '' : 's'})! You can log in from any system anytime to resume.`,
+      });
+      setTimeout(() => setDraftToast(null), 6000);
+    } catch (err: any) {
+      setDraftToast({ type: 'error', message: err.message || 'Failed to save progress' });
+      setTimeout(() => setDraftToast(null), 4000);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  // Re-check draft when camp selection or user changes
+  useEffect(() => {
+    if (selectedCamp?.id) {
+      checkAndLoadDraft(selectedCamp.id);
+    }
+  }, [selectedCamp?.id, userData?.id]);
 
   // Recalculate Live Cost on Attendee Form Change
   useEffect(() => {
@@ -623,6 +1143,9 @@ function CampDashboardContent() {
                 ...(assignedCenter ? { voiceName: assignedCenter } : {}),
                 ...(assignedTemple ? { parentTemple: assignedTemple } : {})
               }));
+              if (assignedCenter && selectedCamp?.require_poc) {
+                checkAndLoadPoc(selectedCamp, assignedCenter);
+              }
             }
           } else {
             console.warn('[Camp] Devotees fetch failed:', res.error);
@@ -685,8 +1208,95 @@ function CampDashboardContent() {
   const myPassesCount = useMemo(() => userRegistrations.filter(r => r.is_own_registration).length, [userRegistrations]);
   const assignedPassesCount = useMemo(() => userRegistrations.filter(r => !r.is_own_registration).length, [userRegistrations]);
 
+  // Unique camps found across all user registrations for quick camp filtering
+  const registeredCampsList = useMemo(() => {
+    const map = new Map<string, { id: string; title: string; count: number }>();
+    userRegistrations.forEach((r) => {
+      const cId = r.camp_id || r.camp_title || 'unknown';
+      const cTitle = r.camp_title || 'Camp Pass';
+      if (!map.has(cId)) {
+        map.set(cId, { id: cId, title: cTitle, count: 0 });
+      }
+      map.get(cId)!.count += 1;
+    });
+    return Array.from(map.values());
+  }, [userRegistrations]);
+
+  // All unique camps available for cancellation (combining active camps and registered camps)
+  const cancellationCamps = useMemo(() => {
+    const map = new Map<string, Camp>();
+    activeCamps.forEach(c => map.set(c.id, c));
+    userRegistrations.forEach(r => {
+      if (r.camp_id && !map.has(r.camp_id)) {
+        const fromActive = activeCamps.find(c => c.id === r.camp_id || c.slug === r.camp_slug);
+        if (fromActive) {
+          map.set(r.camp_id, fromActive);
+        } else {
+          map.set(r.camp_id, {
+            id: r.camp_id,
+            slug: r.camp_slug,
+            title: r.camp_title,
+            venue: r.camp_venue,
+            refund_config: r.camp_refund_config,
+            payment_config: r.camp_payment_config || {
+              enable_razorpay: true,
+              surcharge_percent: Number((r as any)?.camp_payment_config?.surcharge_percent || 0),
+              enable_idt: false,
+              idt_passcodes: []
+            },
+          } as unknown as Camp);
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [activeCamps, userRegistrations]);
+
+  // Unique subcamps / tracks found across all user registrations
+  const registeredTracksList = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    userRegistrations.forEach((r) => {
+      const trackName = (r.camp_track || 'General Attendee').trim();
+      const trackKey = trackName.toLowerCase();
+      if (!map.has(trackKey)) {
+        map.set(trackKey, { id: trackName, name: trackName, count: 0 });
+      }
+      map.get(trackKey)!.count += 1;
+    });
+    return Array.from(map.values());
+  }, [userRegistrations]);
+
+  // Status counts for status filter pills
+  const passStatusCounts = useMemo(() => {
+    let confirmed = 0;
+    let pending = 0;
+    let cancelled = 0;
+
+    userRegistrations.forEach((reg) => {
+      const refund = userRefunds.find(
+        (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
+      );
+      const paymentStatus = String(reg.payment_status || '').toLowerCase();
+      const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
+      const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || refund?.status === 'refunded');
+      const isPendingRefund = refund?.status === 'pending';
+      const isPendingApproval = !isCompleted && !isCancelled;
+
+      if (isCancelled) {
+        cancelled++;
+      } else if (isPendingApproval || isPendingRefund) {
+        pending++;
+      } else if (isCompleted) {
+        confirmed++;
+      }
+    });
+
+    return { confirmed, pending, cancelled, all: userRegistrations.length };
+  }, [userRegistrations, userRefunds]);
+
   const displayedRegistrations = useMemo(() => {
     let list = userRegistrations;
+
+    // 1. Manager view filter (all / mine / assigned)
     if (isManager && passViewFilter !== 'all') {
       if (passViewFilter === 'mine') {
         list = userRegistrations.filter(r => r.is_own_registration);
@@ -694,6 +1304,37 @@ function CampDashboardContent() {
         list = userRegistrations.filter(r => !r.is_own_registration);
       }
     }
+
+    // 2. Status filter ('all' | 'confirmed' | 'pending' | 'cancelled')
+    if (passStatusFilter !== 'all') {
+      list = list.filter((reg) => {
+        const refund = userRefunds.find(
+          (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
+        );
+        const paymentStatus = String(reg.payment_status || '').toLowerCase();
+        const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
+        const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || refund?.status === 'refunded');
+        const isPendingRefund = refund?.status === 'pending';
+        const isPendingApproval = !isCompleted && !isCancelled;
+
+        if (passStatusFilter === 'cancelled') return isCancelled;
+        if (passStatusFilter === 'pending') return (isPendingApproval || isPendingRefund) && !isCancelled;
+        if (passStatusFilter === 'confirmed') return isCompleted && !isCancelled;
+        return true;
+      });
+    }
+
+    // 3. Camp filter
+    if (passCampFilter !== 'all') {
+      list = list.filter((r) => (r.camp_id || r.camp_title) === passCampFilter);
+    }
+
+    // 4. Subcamp / Track filter
+    if (passSubcampFilter !== 'all') {
+      list = list.filter((r) => ((r.camp_track || 'General Attendee').trim().toLowerCase()) === passSubcampFilter.toLowerCase());
+    }
+
+    // 5. Search query
     if (passSearchTerm.trim()) {
       const q = passSearchTerm.trim().toLowerCase();
       list = list.filter((r) => {
@@ -718,7 +1359,7 @@ function CampDashboardContent() {
       });
     }
     return list;
-  }, [userRegistrations, isManager, passViewFilter, passSearchTerm]);
+  }, [userRegistrations, isManager, passViewFilter, passStatusFilter, passCampFilter, passSubcampFilter, passSearchTerm, userRefunds]);
 
   const selectedDevotee = useMemo(() => {
     return centerDevotees.find((d) => d.id === selectedDevoteeId) || null;
@@ -1193,28 +1834,30 @@ function CampDashboardContent() {
   const onlineTotalWithSurcharge = grandTotal + surchargeAmount;
   const grandTotalWithSurcharge = selectedMethod === 'RAZORPAY' ? onlineTotalWithSurcharge : grandTotal;
 
-  // Apply Coupon Code
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  // Apply Coupon Code (Server-side validation for maximum security)
+  const [couponValidating, setCouponValidating] = useState(false);
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!couponInput.trim()) return;
     setCouponError(null);
 
     const clean = couponInput.trim().toUpperCase();
-    const coupons: CampCoupon[] = selectedCamp?.special_waivers?.coupons || [];
-    const found = coupons.find((c) => c.code.trim().toUpperCase() === clean);
+    if (!selectedCamp?.id) return;
 
-    if (!found) {
-      setCouponError(`Promo code "${clean}" is invalid or expired.`);
-      return;
+    setCouponValidating(true);
+    try {
+      const res = await validateCampCouponAction(selectedCamp.id, clean);
+      if (res.success && res.coupon) {
+        setAppliedCoupon(res.coupon as CampCoupon);
+        setCouponError(null);
+      } else {
+        setCouponError(res.error || `Promo code "${clean}" is invalid or expired.`);
+      }
+    } catch {
+      setCouponError('Failed to validate promo code. Please try again.');
+    } finally {
+      setCouponValidating(false);
     }
-
-    if (found.max_uses && (found.used_count || 0) >= found.max_uses) {
-      setCouponError(`Promo code "${clean}" has reached its maximum usage limit.`);
-      return;
-    }
-
-    setAppliedCoupon(found);
-    setCouponError(null);
   };
 
   const handleRemoveCoupon = () => {
@@ -1365,6 +2008,10 @@ function CampDashboardContent() {
       setPaymentError('Please enter the Bank Transaction UTR / Reference ID.');
       return;
     }
+    if (!ittTransactionDate.trim()) {
+      setPaymentError('Please select the Transaction Date.');
+      return;
+    }
     if (!ittScreenshotFile) {
       setPaymentError('Please upload a screenshot of your bank transfer receipt.');
       return;
@@ -1398,6 +2045,8 @@ function CampDashboardContent() {
         payment_screenshot_url: uploadJson.url,
         transactionRef: ittTransactionRef.trim(),
         transaction_ref: ittTransactionRef.trim(),
+        transactionDate: ittTransactionDate.trim(),
+        transaction_date: ittTransactionDate.trim(),
         deductionSource: ittTempleName.trim(),
       });
     } catch (err: any) {
@@ -1410,8 +2059,15 @@ function CampDashboardContent() {
   // Shared Backend Submission
   const submitRegistrationsToBackend = async (paymentDetails: any) => {
     try {
-      const payerName = userData?.name || 'Devotee';
-      const payerContact = userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '';
+      const finalPocName = (selectedCamp?.require_poc && pocDetails.pocName.trim())
+        ? pocDetails.pocName.trim()
+        : (userData?.name || 'Devotee');
+      const finalPocContact = (selectedCamp?.require_poc && pocDetails.pocContact)
+        ? pocDetails.pocContact.replace(/[^0-9]/g, '').slice(-10)
+        : (userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '');
+
+      const payerName = finalPocName;
+      const payerContact = finalPocContact;
       const payerEmail = user?.email || '';
 
       const finalPaidAmount = paymentDetails.paymentMethod === 'RAZORPAY'
@@ -1463,6 +2119,15 @@ function CampDashboardContent() {
 
       setShowPaymentModal(false);
       fetchUserRegistrations(); // refresh passes
+
+      // Clear any saved draft for this camp upon successful completion
+      try {
+        const callerId = userData?.id || user?.id || '';
+        if (selectedCamp?.id) {
+          fetch(`/api/camps/draft?campId=${selectedCamp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => {});
+        }
+        setActiveDraft(null);
+      } catch (e) {}
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to submit registration');
     } finally {
@@ -1470,22 +2135,52 @@ function CampDashboardContent() {
     }
   };
 
-  // Open Cancellation Modal (either for specific pass or general lookup)
+  // Switch selected camp inside Cancellation Modal and auto-load active devotees
+  const onSelectCampForCancel = (campId: string) => {
+    const chosen = cancellationCamps.find(c => c.id === campId || c.slug === campId) ||
+      activeCamps.find(c => c.id === campId || c.slug === campId);
+    if (chosen) {
+      setCancelCamp(chosen);
+      setCancelError(null);
+      setCancelLookupError(null);
+      setCancelDevoteeFilter('');
+      // Filter out all already-cancelled records
+      const campRegs = userRegistrations.filter(r =>
+        (r.camp_id === chosen.id || r.camp_slug === chosen.slug) &&
+        !r.is_cancelled &&
+        r.payment_status !== 'cancelled' &&
+        r.payment_status !== 'refunded'
+      );
+      setCancelRegs(campRegs);
+      setSelectedRegIdsToCancel(campRegs.map(r => r.id!));
+    }
+  };
+
+  // Open Cancellation Modal (Select camp -> Directly show all active devotees)
   const handleOpenCancelModal = async (reg?: any) => {
     setShowCancelModal(true);
     setCancelError(null);
     setCancelSuccessResult(null);
     setCancelLookupError(null);
     setSelectedDevoteeId('');
+    setCancelDevoteeFilter('');
+    setShowLookupFallback(false);
 
     if (reg) {
       if (reg.payment_status !== 'completed') {
-        alert('This registration is currently awaiting payment approval (IDT/ITT) and has not been confirmed yet. Cancellation and refund requests are only allowed for confirmed registrations.');
+        const isIdt = String(reg.payment_method || '').toUpperCase() === 'IDT';
+        if (isIdt) {
+          setShowCancelModal(false);
+          handleOpenDirectIdtCancel(reg);
+          return;
+        }
+        alert('This registration is currently awaiting payment approval (ITT) and has not been confirmed yet. Cancellation and refund requests are only allowed for confirmed registrations.');
         return;
       }
 
-      // Find matching camp in activeCamps or create camp object from reg metadata
-      const campMatch = activeCamps.find(c => c.id === reg.camp_id || c.slug === reg.camp_slug) ||
+      // Find matching camp in activeCamps or cancellationCamps
+      const campMatch = cancellationCamps.find(c => c.id === reg.camp_id || c.slug === reg.camp_slug) ||
+        activeCamps.find(c => c.id === reg.camp_id || c.slug === reg.camp_slug) ||
         (selectedCamp?.id === reg.camp_id ? selectedCamp : null) ||
         ({
           id: reg.camp_id,
@@ -1493,61 +2188,44 @@ function CampDashboardContent() {
           title: reg.camp_title,
           venue: reg.camp_venue,
           refund_config: reg.camp_refund_config,
-          online_payment_surcharge_percent: 2,
+          payment_config: reg.camp_payment_config || {
+            enable_razorpay: true,
+            surcharge_percent: Number((reg as any)?.camp_payment_config?.surcharge_percent || 0),
+            enable_idt: false,
+            idt_passcodes: []
+          },
         } as unknown as Camp);
 
       setCancelCamp(campMatch);
-      const rawContact = reg.group_id || reg.whatsapp || reg.poc_contact || reg.email || '';
-      const queryId = rawContact.includes('@')
-        ? rawContact.trim()
-        : (rawContact.replace(/[^0-9]/g, '').slice(-10) || rawContact.trim());
-      setCancelLookupQuery(queryId);
-      setCancelDevoteeMode(reg.is_own_registration ? 'self' : 'devotee');
-      setCancelRegs([reg]);
+      // Filter all active (non-cancelled) registrations for this camp
+      const campRegs = userRegistrations.filter(r =>
+        (r.camp_id === campMatch.id || r.camp_slug === campMatch.slug) &&
+        !r.is_cancelled &&
+        r.payment_status !== 'cancelled' &&
+        r.payment_status !== 'refunded'
+      );
+      const activeList = campRegs.length > 0 ? campRegs : [reg];
+      setCancelRegs(activeList);
       setSelectedRegIdsToCancel([reg.id]);
-
-      if (queryId && campMatch?.id) {
-        setCancelLookupLoading(true);
-        try {
-          const res = await lookupCampRegistrationsAction(campMatch.id, queryId, userData?.id);
-          if (res.success && res.registrations && res.registrations.length > 0) {
-            setCancelRegs(res.registrations);
-            setCancelExistingRefunds(res.existingRefunds || []);
-            if (res.camp) setCancelCamp(res.camp);
-            // Select registrations that are CONFIRMED and not cancelled OR whose previous refund request was rejected
-            const activeIds = res.registrations
-              .filter((r: any) => {
-                const isConfirmed = r.payment_status === 'completed';
-                const m = (res.existingRefunds || []).find((ref: any) =>
-                  ref.registration_id === r.id ||
-                  (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === r.id))
-                );
-                return isConfirmed && (!r.is_cancelled || m?.status === 'rejected');
-              })
-              .map((r: any) => r.id!);
-            setSelectedRegIdsToCancel(activeIds.length > 0 ? activeIds : [reg.id]);
-          }
-        } catch {
-          // retain [reg]
-        } finally {
-          setCancelLookupLoading(false);
-        }
-      }
     } else {
       const defaultCamp = selectedCamp ||
-        activeCamps.find(c => userRegistrations.some(r => r.camp_id === c.id || r.camp_slug === c.slug)) ||
+        cancellationCamps.find(c => userRegistrations.some(r => (r.camp_id === c.id || r.camp_slug === c.slug) && !r.is_cancelled && r.payment_status !== 'cancelled')) ||
+        (cancellationCamps.length > 0 ? cancellationCamps[0] : null) ||
         (activeCamps.length > 0 ? activeCamps[0] : null);
-      if (defaultCamp) setCancelCamp(defaultCamp);
-      setCancelRegs(null);
-      setSelectedRegIdsToCancel([]);
-      setSelectedDevoteeId('');
-      setCancelDevoteeMode(isManager ? 'devotee' : 'self');
-      const phoneDigits = userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '';
-      const defaultQuery = (!isManager ? phoneDigits : '') || (user?.email || '').trim();
-      setCancelLookupQuery(defaultQuery);
 
-      if (!isManager && defaultCamp && defaultQuery) {
-        handleLookupForCancel(undefined, defaultCamp.id, defaultQuery);
+      if (defaultCamp) {
+        setCancelCamp(defaultCamp);
+        const campRegs = userRegistrations.filter(r =>
+          (r.camp_id === defaultCamp.id || r.camp_slug === defaultCamp.slug) &&
+          !r.is_cancelled &&
+          r.payment_status !== 'cancelled' &&
+          r.payment_status !== 'refunded'
+        );
+        setCancelRegs(campRegs);
+        setSelectedRegIdsToCancel(campRegs.map(r => r.id!));
+      } else {
+        setCancelRegs([]);
+        setSelectedRegIdsToCancel([]);
       }
     }
   };
@@ -1583,28 +2261,24 @@ function CampDashboardContent() {
 
     setCancelLookupLoading(true);
     setCancelLookupError(null);
-    setCancelRegs(null);
     setSelectedRegIdsToCancel([]);
 
     try {
       const res = await lookupCampRegistrationsAction(targetCamp.id || targetCamp.slug, cleanSearchQuery, userData?.id);
       if (res.success && res.registrations && res.registrations.length > 0) {
-        setCancelRegs(res.registrations);
+        // Exclude already cancelled registrations
+        const activeRegistrations = res.registrations.filter((r: any) =>
+          !r.is_cancelled && r.payment_status !== 'cancelled' && r.payment_status !== 'refunded'
+        );
+        setCancelRegs(activeRegistrations);
         setCancelExistingRefunds(res.existingRefunds || []);
         if (res.camp) setCancelCamp(res.camp);
-        const activeIds = res.registrations
-          .filter((r: any) => {
-            const isConfirmed = r.payment_status === 'completed';
-            const m = (res.existingRefunds || []).find((ref: any) =>
-              ref.registration_id === r.id ||
-              (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === r.id))
-            );
-            return isConfirmed && (!r.is_cancelled || m?.status === 'rejected');
-          })
+        const activeIds = activeRegistrations
+          .filter((r: any) => r.payment_status === 'completed' || (String(r.payment_method || '').toUpperCase() === 'IDT'))
           .map((r: any) => r.id!);
         setSelectedRegIdsToCancel(activeIds);
       } else {
-        setCancelLookupError(res.error || 'No registrations found matching this search in your assigned temple or center.');
+        setCancelLookupError(res.error || 'No active registrations found matching this search in your assigned temple or center.');
       }
     } catch (err: any) {
       setCancelLookupError(err.message || 'Error occurred while looking up booking.');
@@ -1614,8 +2288,28 @@ function CampDashboardContent() {
   };
 
   const computeLiveRefund = () => {
+    const campFeePercent = Number(
+      cancelCamp?.payment_config?.surcharge_percent ??
+      (cancelCamp as any)?.online_payment_surcharge_percent ??
+      0
+    );
+
     if (!cancelRegs || selectedRegIdsToCancel.length === 0 || !cancelCamp) {
-      return { totalRefund: 0, baseRefund: 0, mealRefund: 0, accRefund: 0, originalTotal: 0, tierLabel: '', baseRefundPercent: 100 };
+      return {
+        totalRefund: 0,
+        baseRefund: 0,
+        mealRefund: 0,
+        accRefund: 0,
+        originalTotal: 0,
+        totalPaidAtCheckout: 0,
+        tierLabel: 'No Devotees Selected',
+        baseRefundPercent: 100,
+        surchargePercent: campFeePercent,
+        gatewayFee: 0,
+        totalLateFee: 0,
+        cancellationFee: 0,
+        reasonExplanation: 'Please select at least one active devotee to cancel.'
+      };
     }
 
     const selectedRegs = cancelRegs.filter(r => selectedRegIdsToCancel.includes(r.id!));
@@ -1640,46 +2334,162 @@ function CampDashboardContent() {
       matchedTier = sortedRules.find(r => !r.cutoff_date) || sortedRules[sortedRules.length - 1];
     }
 
-    const baseRefundPercent = matchedTier ? Number(matchedTier.refund_percent) : 100;
-    const tierLabel = matchedTier ? matchedTier.label : `Standard Policy (${baseRefundPercent}% Refund)`;
+    const baseRefundPercent = matchedTier ? Number(matchedTier.refund_percent) : (sortedRules.length > 0 ? 0 : 100);
+    const tierLabel = matchedTier
+      ? (matchedTier.label || `${baseRefundPercent}% Refund Tier`)
+      : (sortedRules.length > 0 ? '0% Refund (Deadline Passed)' : 'Standard Policy (100% Refund)');
 
     let originalTotal = 0;
     let baseRefund = 0;
     let mealRefund = 0;
     let accRefund = 0;
+    let totalLateFee = 0;
 
     for (const reg of selectedRegs) {
       const orig = Number(reg.total_cost || 0);
-      originalTotal += orig;
+      const discount = Number(reg.discount_amount || 0);
+      const isFree = ['COUPON', 'ROLE_WAIVER', 'FREE'].includes((reg.payment_method || '').toUpperCase()) || discount >= orig;
+      const actualPaid = isFree ? 0 : Math.max(0, orig - discount);
+      originalTotal += actualPaid;
+
+      const lateFee = Number(reg.late_fee || 0);
+      totalLateFee += lateFee;
 
       const entryCost = Number(reg.entry_cost || 0);
-      const discount = Number(reg.discount_amount || 0);
       const netEntryCost = Math.max(0, entryCost - discount);
 
       const mealCost = Number(reg.meal_cost || 0);
       const accCost = Number(reg.acc_cost || 0) + Number(reg.ac_cost || 0);
 
-      // Base fee is any net fee excluding meals & accommodation (e.g. token fee, camp overhead)
+      // Base fee is any net fee excluding meals, stay, and late fee
       const baseCost = Math.max(0, netEntryCost - mealCost - accCost);
-      const thisBaseRefund = Math.round(baseCost * (baseRefundPercent / 100));
+      const thisBaseRefund = isFree ? 0 : Math.round(baseCost * (baseRefundPercent / 100));
       baseRefund += thisBaseRefund;
 
-      if (refundConfig.refund_meals !== false) {
+      if (!isFree && refundConfig.refund_meals !== false) {
         mealRefund += Math.round(mealCost * (baseRefundPercent / 100));
       }
-      if (refundConfig.refund_accommodation !== false) {
+      if (!isFree && refundConfig.refund_accommodation !== false) {
         accRefund += Math.round(accCost * (baseRefundPercent / 100));
       }
     }
 
-    const totalRefund = Math.min(originalTotal, baseRefund + mealRefund + accRefund);
-    return { totalRefund, baseRefund, mealRefund, accRefund, originalTotal, tierLabel, baseRefundPercent };
+    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r => 
+      ['INTER_TEMPLE_TRANSFER', 'ITT', 'IDT', 'COUPON', 'ROLE_WAIVER', 'FREE'].includes((r.payment_method || '').toUpperCase())
+    );
+
+    const configuredSurcharge = Number(
+      cancelCamp?.payment_config?.surcharge_percent ??
+      (cancelCamp as any)?.online_payment_surcharge_percent ??
+      0
+    );
+
+    const surchargePercent = isAllTransferOrFree ? 0 : configuredSurcharge;
+    const gatewayFee = Math.round(originalTotal * (surchargePercent / 100));
+    const totalPaidAtCheckout = originalTotal + gatewayFee;
+    // Late registration fee is strictly non-refundable per camp policy, and refund cannot exceed actual paid
+    const maxEligible = Math.max(0, originalTotal - totalLateFee);
+    const totalRefund = Math.min(maxEligible, baseRefund + mealRefund + accRefund);
+    const cancellationFee = Math.max(0, originalTotal - totalRefund);
+
+    let reasonExplanation = '';
+    if (baseRefundPercent === 0) {
+      const cutoffInfo = sortedRules.length > 0 && sortedRules[0]?.cutoff_date
+        ? `the refund deadline of ${new Date(sortedRules[0].cutoff_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        : 'the camp refund deadline';
+      reasonExplanation = `Refund is ₹0 because cancellation is being requested after ${cutoffInfo}. As per camp policy, registrations cancelled after this date are non-refundable.`;
+    } else if (baseRefundPercent < 100) {
+      const cutoffInfo = matchedTier?.cutoff_date
+        ? `before ${new Date(matchedTier.cutoff_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        : 'during the current refund window';
+      reasonExplanation = `Under the camp policy for cancellations ${cutoffInfo}, a ${baseRefundPercent}% base fee refund applies (${100 - baseRefundPercent}% retained as cancellation fee).`;
+    } else {
+      reasonExplanation = `Full refund tier applies. 100% of the base registration fee is eligible for refund.`;
+    }
+
+    if (totalLateFee > 0) {
+      reasonExplanation = `${reasonExplanation} Note: ₹${totalLateFee} late registration fee is strictly non-refundable.`;
+    }
+
+    return {
+      totalRefund,
+      baseRefund,
+      mealRefund,
+      accRefund,
+      originalTotal,
+      totalPaidAtCheckout,
+      totalLateFee,
+      tierLabel,
+      baseRefundPercent,
+      surchargePercent,
+      gatewayFee,
+      cancellationFee,
+      reasonExplanation
+    };
+  };
+
+  const handleOpenDirectIdtCancel = (reg: any) => {
+    setPendingIdtCancelTarget(reg);
+    setPendingIdtCancelReason('');
+  };
+
+  const handleConfirmPendingIdtCancel = async () => {
+    if (!pendingIdtCancelTarget?.id) return;
+    setIsCancellingPendingIdt(true);
+    try {
+      const res = await cancelPendingIdtRegistrationAction(
+        [pendingIdtCancelTarget.id],
+        pendingIdtCancelReason.trim() || undefined,
+        userData?.id || user?.id
+      );
+      if (res.success) {
+        toast.success(`Registration for ${pendingIdtCancelTarget.participant_name} cancelled. IDT batch total updated.`);
+        setUserRegistrations(prev =>
+          prev.map(r => r.id === pendingIdtCancelTarget.id ? { ...r, is_cancelled: true, payment_status: 'cancelled', cancellation_reason: pendingIdtCancelReason.trim() } : r)
+        );
+        setPendingIdtCancelTarget(null);
+        fetchUserRegistrations();
+      } else {
+        toast.error(res.error || 'Failed to cancel registration');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error occurred while cancelling');
+    } finally {
+      setIsCancellingPendingIdt(false);
+    }
   };
 
   // Handle Cancellation Submission
   const handleSubmitCancellation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cancelRegs || selectedRegIdsToCancel.length === 0 || !cancelCamp) return;
+
+    const selectedRegs = cancelRegs.filter(r => selectedRegIdsToCancel.includes(r.id!));
+    const isAllPendingIdt = selectedRegs.length > 0 && selectedRegs.every(r => (r.payment_method || '').toUpperCase() === 'IDT' && r.payment_status !== 'completed');
+
+    if (isAllPendingIdt) {
+      setCancelSubmitting(true);
+      setCancelError(null);
+      try {
+        const finalReason = cancelReason === 'Other' ? (cancelReasonCustom.trim() || 'Other') : cancelReason;
+        const res = await cancelPendingIdtRegistrationAction(selectedRegIdsToCancel, finalReason, userData?.id || user?.id);
+        if (res.success) {
+          toast.success(`Successfully cancelled ${selectedRegIdsToCancel.length} devotee(s) from pending IDT batch.`);
+          setUserRegistrations(prev =>
+            prev.map(r => selectedRegIdsToCancel.includes(r.id!) ? { ...r, is_cancelled: true, payment_status: 'cancelled', cancellation_reason: finalReason } : r)
+          );
+          setShowCancelModal(false);
+          fetchUserRegistrations();
+        } else {
+          setCancelError(res.error || 'Failed to cancel registration');
+        }
+      } catch (err: any) {
+        setCancelError(err.message || 'Error occurred while cancelling');
+      } finally {
+        setCancelSubmitting(false);
+      }
+      return;
+    }
 
     if (cancelPayoutType === 'UPI') {
       if (!cancelUpiId.trim()) {
@@ -1735,6 +2545,12 @@ function CampDashboardContent() {
           refundAmount: res.refundAmount,
           breakdown: res.breakdown,
         });
+        setUserRegistrations(prev =>
+          prev.map(r => selectedRegIdsToCancel.includes(r.id!) ? { ...r, is_cancelled: true, payment_status: 'cancelled', cancellation_reason: finalReason } : r)
+        );
+        if (res.refundRequest) {
+          setUserRefunds(prev => [res.refundRequest, ...prev.filter(x => x.id !== res.refundRequest.id)]);
+        }
         fetchUserRegistrations(); // refresh passes
       } else {
         setCancelError(res.error || 'Failed to submit cancellation request.');
@@ -1753,6 +2569,15 @@ function CampDashboardContent() {
     setCopiedBankField(fieldName);
     setTimeout(() => setCopiedBankField(null), 2000);
   };
+
+  const effectiveCenter = (
+    managerAssignedCenter ||
+    formData.voiceName ||
+    userData?.hierarchy?.currentCenter ||
+    userData?.hierarchy?.center ||
+    (userData as any)?.center ||
+    'Central VOICE'
+  ).trim();
 
   return (
     <>
@@ -1957,13 +2782,8 @@ function CampDashboardContent() {
                               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                             />
                           ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-purple-700 via-violet-800 to-indigo-900 flex flex-col justify-between p-4 relative">
+                            <div className="w-full h-full bg-gradient-to-br from-purple-700 via-violet-800 to-indigo-900 flex flex-col justify-end p-4 relative">
                               <div className="absolute -right-6 -bottom-6 w-36 h-36 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
-                              <div className="flex items-center justify-between z-10">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-purple-100 text-[10px] font-bold border border-white/25">
-                                  🌸 Spiritual Retreat
-                                </span>
-                              </div>
                               <div className="z-10">
                                 <h3 className="text-lg sm:text-xl font-black text-white leading-tight drop-shadow-md">
                                   {camp.title}
@@ -1974,26 +2794,12 @@ function CampDashboardContent() {
 
                           {/* Gradient Overlay for Readable Text if poster exists */}
                           {posterUrl && (
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-between p-3.5 sm:p-4 text-white">
-                              <div className="flex items-center justify-between">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-black/50 backdrop-blur-md text-purple-200 text-[10px] font-bold border border-purple-400/30">
-                                  🌸 Spiritual Retreat
-                                </span>
-                              </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-3.5 sm:p-4 text-white">
                               <div>
                                 <h3 className="text-base sm:text-lg font-black text-white leading-tight drop-shadow-md line-clamp-2">
                                   {camp.title}
                                 </h3>
                               </div>
-                            </div>
-                          )}
-
-                          {/* Eligibility Criteria Badge Overlay if available */}
-                          {camp.criteria_message && (
-                            <div className="absolute top-3 right-3 z-10 max-w-[70%]">
-                              <span className="inline-block px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[9.5px] font-black shadow-md border border-emerald-400 truncate">
-                                ✨ {camp.criteria_message}
-                              </span>
                             </div>
                           )}
                         </div>
@@ -2004,7 +2810,7 @@ function CampDashboardContent() {
                           {camp.banner_message && (
                             <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200 text-purple-950 text-[11px] sm:text-xs font-semibold leading-relaxed shadow-2xs">
                               <span className="font-bold text-purple-800">📣 Notice: </span>
-                              {camp.banner_message}
+                              <span className="line-clamp-2 inline">{camp.banner_message}</span>
                             </div>
                           )}
 
@@ -2031,19 +2837,23 @@ function CampDashboardContent() {
                             <p className="font-medium text-gray-800 text-xs line-clamp-1">{camp.venue || 'Central VOICE, Pune'}</p>
                           </div>
 
-                          {/* Tracks */}
+                          {/* Camps */}
                           {camp.tracks && camp.tracks.length > 0 && (
                             <div className="flex items-start gap-2">
-                              <Award className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                              <Tent className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                               <div className="flex flex-wrap gap-1">
-                                {camp.tracks.map((t) => (
-                                  <span
-                                    key={t}
-                                    className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-200 text-[10px] font-semibold"
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
+                                {camp.tracks.map((t) => {
+                                  const tPalette = getTrackColorPalette(t);
+                                  return (
+                                    <span
+                                      key={t}
+                                      className={`px-2 py-0.5 rounded-md ${tPalette.badgeBg} text-[10px] font-bold inline-flex items-center gap-1`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${tPalette.dotColor}`} />
+                                      <span>{t}</span>
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -2069,6 +2879,50 @@ function CampDashboardContent() {
                               </div>
                             )}
                           </div>
+
+                          {/* Camp POC Contact Details for Connect */}
+                          {(camp.default_poc_name || camp.default_poc_contact) && (
+                            <div className="pt-2 border-t border-gray-100">
+                              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-amber-50/95 via-orange-50/80 to-amber-50/95 border border-amber-200/90 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <span className="text-[9.5px] uppercase font-black text-amber-900 tracking-wider flex items-center gap-1">
+                                    <UserCheck className="w-3 h-3 text-amber-600 shrink-0" />
+                                    <span>Camp POC:</span>
+                                  </span>
+                                  <div className="font-extrabold text-slate-900 text-[11px] sm:text-xs truncate">
+                                    {camp.default_poc_name || 'Camp Coordinator'}
+                                  </div>
+                                  {camp.default_poc_contact && (
+                                    <div className="text-[10px] sm:text-[10.5px] font-mono font-semibold text-slate-600 truncate">
+                                      {camp.default_poc_contact}
+                                    </div>
+                                  )}
+                                </div>
+                                {camp.default_poc_contact && (
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <a
+                                      href={`tel:${camp.default_poc_contact.replace(/[^0-9+]/g, '')}`}
+                                      className="px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs transition-all flex items-center gap-1 text-[10.5px] font-bold cursor-pointer"
+                                      title={`Call ${camp.default_poc_name || 'Camp POC'}`}
+                                    >
+                                      <Phone className="w-3 h-3" />
+                                      <span>Call</span>
+                                    </a>
+                                    <a
+                                      href={`https://wa.me/91${camp.default_poc_contact.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hare Krishna! Regarding ${camp.title} Camp Registration:`)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 border border-emerald-300 shadow-2xs transition-all flex items-center gap-1 text-[10.5px] font-bold cursor-pointer"
+                                      title="WhatsApp Camp POC"
+                                    >
+                                      <MessageCircle className="w-3 h-3 text-emerald-700" />
+                                      <span>Chat</span>
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2115,132 +2969,283 @@ function CampDashboardContent() {
         {/* TAB 2: MY BOOKINGS & PASSES */}
         {activeTab === 'registrations' && (
           <div className="space-y-3 sm:space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-              <div>
-                <h2 className="text-sm sm:text-base font-bold text-gray-900">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-xs sm:text-base font-bold text-gray-900 truncate">
                   {isManager ? 'Camp Bookings & Devotee Passes' : 'My Registered Camp Passes'}
                 </h2>
-                <p className="text-[10.5px] sm:text-xs text-gray-500 line-clamp-1 sm:line-clamp-none">
+                <p className="text-[10px] sm:text-xs text-gray-500 line-clamp-1">
                   {isManager 
-                    ? `Showing your personal passes and passes for devotees in your assigned temple / centers.`
-                    : `Passes registered under your mobile number (${userData?.phone || 'none'}) and email (${user?.email})`
+                    ? `Showing personal and center devotee passes.`
+                    : `Passes registered under ${userData?.phone || user?.email}`
                   }
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => handleOpenCancelModal()}
-                  className="flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10.5px] sm:text-xs font-semibold cursor-pointer transition-all"
+                  className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all"
                 >
                   <Undo2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Manage / Cancel</span>
+                  <span className="hidden sm:inline">Manage / Cancel</span>
+                  <span className="sm:hidden">Manage</span>
                 </button>
                 <button
                   onClick={fetchUserRegistrations}
                   disabled={regsLoading}
-                  className="flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-[10.5px] sm:text-xs font-semibold hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-[10px] sm:text-xs font-semibold hover:bg-gray-50 cursor-pointer"
+                  title="Refresh Passes"
                 >
                   <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${regsLoading ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
               </div>
             </div>
 
-            {/* Pass Filters & Search Toolbar */}
+            {/* Pass Filters & Search Toolbar - Compact on Mobile */}
             {userRegistrations.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80">
-                {/* Left: Filter Tabs or Devotee Passes counter badge */}
-                {isManager && assignedPassesCount > 0 ? (
-                  <div className="flex items-center gap-1 p-0.5 bg-slate-200/70 rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setPassViewFilter('all')}
-                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[10.5px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                        passViewFilter === 'all'
-                          ? 'bg-white text-slate-900 shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      All Passes ({userRegistrations.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPassViewFilter('mine')}
-                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[10.5px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                        passViewFilter === 'mine'
-                          ? 'bg-white text-slate-900 shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      My Passes ({myPassesCount})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPassViewFilter('assigned')}
-                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[10.5px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                        passViewFilter === 'assigned'
-                          ? 'bg-teal-600 text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <span className="sm:hidden">Assigned ({assignedPassesCount})</span>
-                      <span className="hidden sm:inline">Assigned Center Passes ({assignedPassesCount})</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-1 text-slate-700">
-                    <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                      <Ticket className="w-3.5 h-3.5" />
+              <div className="space-y-1.5 sm:space-y-2">
+                {/* Main Filter Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2.5 bg-slate-50/90 p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-200/80">
+                  {/* Left: Filter Tabs or Devotee Passes counter badge */}
+                  {isManager && assignedPassesCount > 0 ? (
+                    <div className="flex items-center gap-1 p-0.5 bg-slate-200/70 rounded-lg sm:rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPassViewFilter('all')}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                          passViewFilter === 'all'
+                            ? 'bg-white text-slate-900 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All Passes ({userRegistrations.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassViewFilter('mine')}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                          passViewFilter === 'mine'
+                            ? 'bg-white text-slate-900 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        My Passes ({myPassesCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassViewFilter('assigned')}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                          passViewFilter === 'assigned'
+                            ? 'bg-teal-600 text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="sm:hidden">Assigned ({assignedPassesCount})</span>
+                        <span className="hidden sm:inline">Assigned Center Passes ({assignedPassesCount})</span>
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold block text-slate-800">
-                        {userRegistrations.length} Devotee {userRegistrations.length === 1 ? 'Pass' : 'Passes'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block -mt-0.5">
-                        Active registered bookings
-                      </span>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-1 text-slate-700">
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                        <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] sm:text-xs font-bold block text-slate-800">
+                          {userRegistrations.length} Devotee {userRegistrations.length === 1 ? 'Pass' : 'Passes'}
+                        </span>
+                        <span className="text-[9px] sm:text-[10px] text-slate-400 block -mt-0.5">
+                          Active registered bookings
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Right: Search Input */}
-                <div className="relative w-full sm:w-80 shrink-0">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
-                  <input
-                    type="text"
-                    value={passSearchTerm}
-                    onChange={(e) => setPassSearchTerm(e.target.value)}
-                    placeholder="Search attendee, mobile, group ID..."
-                    style={{ paddingLeft: '38px', paddingRight: '34px' }}
-                    className="w-full py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                  />
-                  {passSearchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => setPassSearchTerm('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 cursor-pointer z-10"
-                      title="Clear Search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                  {/* Right Side: Status Filter Pills & Search */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                    {/* Status Filter Pills: Segmented control fitting perfectly on mobile */}
+                    <div className="flex items-center rounded-lg sm:rounded-xl bg-slate-200/70 p-0.5 text-[10px] sm:text-[11px] font-bold w-full sm:w-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPassStatusFilter('all')}
+                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all ${
+                          passStatusFilter === 'all'
+                            ? 'bg-white text-slate-900 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All ({passStatusCounts.all})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassStatusFilter('confirmed')}
+                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
+                          passStatusFilter === 'confirmed'
+                            ? 'bg-white text-emerald-800 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span>Confirmed ({passStatusCounts.confirmed})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassStatusFilter('pending')}
+                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
+                          passStatusFilter === 'pending'
+                            ? 'bg-white text-amber-800 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span>Pending ({passStatusCounts.pending})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPassStatusFilter('cancelled')}
+                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
+                          passStatusFilter === 'cancelled'
+                            ? 'bg-white text-rose-800 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                        <span>Cancelled ({passStatusCounts.cancelled})</span>
+                      </button>
+                    </div>
+
+                    {/* Search Input - Compact on mobile */}
+                    <div className="relative w-full sm:w-56 md:w-64 shrink-0">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
+                      <input
+                        type="text"
+                        value={passSearchTerm}
+                        onChange={(e) => setPassSearchTerm(e.target.value)}
+                        placeholder="Search attendee, mobile..."
+                        style={{ paddingLeft: '32px', paddingRight: '30px' }}
+                        className="w-full py-1 sm:py-1.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs h-7.5 sm:h-auto"
+                      />
+                      {passSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setPassSearchTerm('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 cursor-pointer z-10"
+                          title="Clear Search"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subcamp / Track Filter Pills & Camp Filter Row - Sleek & Compact */}
+                <div className="flex flex-wrap items-center justify-between gap-1.5 px-0.5">
+                  {/* Subcamp / Track Pills */}
+                  {registeredTracksList.length > 0 && (
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+                      <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 shrink-0 flex items-center gap-1">
+                        <Tag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
+                        <span>Camp:</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPassSubcampFilter('all')}
+                        className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+                          passSubcampFilter === 'all'
+                            ? 'bg-slate-900 text-white shadow-2xs'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>All</span>
+                        <span className="text-[9px] opacity-75 font-mono">({userRegistrations.length})</span>
+                      </button>
+                      {registeredTracksList.map((t, idx) => {
+                        const tTheme = SUBCAMP_COLOR_PALETTES[idx % SUBCAMP_COLOR_PALETTES.length];
+                        const isSelected = passSubcampFilter.toLowerCase() === t.id.toLowerCase();
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setPassSubcampFilter(isSelected ? 'all' : t.id)}
+                            className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? `${tTheme.stubGradient} text-white shadow-xs ring-1 sm:ring-2 ring-purple-400/40`
+                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isSelected ? 'bg-white' : tTheme.dotColor}`} />
+                            <span className="truncate max-w-[120px] sm:max-w-[140px]">{t.name}</span>
+                            <span className="text-[9px] opacity-75 font-mono">({t.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Camp Filter Dropdown (if multiple camps exist) */}
+                  {registeredCampsList.length > 1 && (
+                    <div className="relative shrink-0 w-full sm:w-48 self-end sm:self-auto ml-auto">
+                      <select
+                        value={passCampFilter}
+                        onChange={(e) => setPassCampFilter(e.target.value)}
+                        className="w-full appearance-none pl-7 pr-7 py-1 sm:py-1.5 bg-white border border-slate-200 hover:border-purple-300 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs cursor-pointer transition-all h-7.5 sm:h-auto"
+                      >
+                        <option value="all">🏕️ All Camps ({userRegistrations.length})</option>
+                        {registeredCampsList.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title} ({c.count})
+                          </option>
+                        ))}
+                      </select>
+                      <Filter className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Search Match Info */}
-            {passSearchTerm && (
-              <div className="flex items-center justify-between text-xs text-slate-600 px-3 py-1.5 bg-amber-50/70 border border-amber-200/70 rounded-xl">
-                <span>
-                  Showing <strong className="text-slate-900">{displayedRegistrations.length}</strong> matching {displayedRegistrations.length === 1 ? 'pass' : 'passes'} for &quot;<span className="text-amber-800 font-bold">{passSearchTerm}</span>&quot;
+            {/* Filter Active Match Info Banner */}
+            {(passSearchTerm || passStatusFilter !== 'all' || passCampFilter !== 'all' || passSubcampFilter !== 'all') && (
+              <div className="flex items-center justify-between text-xs text-slate-600 px-3 py-1.5 bg-purple-50/70 border border-purple-200/70 rounded-xl">
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  <span>
+                    Showing <strong className="text-slate-900">{displayedRegistrations.length}</strong> matching {displayedRegistrations.length === 1 ? 'pass' : 'passes'}
+                  </span>
+                  {passStatusFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold text-[11px] border border-purple-200 uppercase">
+                      Status: {passStatusFilter}
+                    </span>
+                  )}
+                  {passSubcampFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-200">
+                      Camp: {passSubcampFilter}
+                    </span>
+                  )}
+                  {passCampFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold text-[11px] border border-purple-200">
+                      Camp: {registeredCampsList.find(c => c.id === passCampFilter)?.title || passCampFilter}
+                    </span>
+                  )}
+                  {passSearchTerm && (
+                    <span>
+                      for &quot;<strong className="text-purple-900">{passSearchTerm}</strong>&quot;
+                    </span>
+                  )}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPassSearchTerm('')}
-                  className="text-amber-700 hover:text-amber-900 font-bold hover:underline cursor-pointer text-xs"
+                  onClick={() => {
+                    setPassSearchTerm('');
+                    setPassStatusFilter('all');
+                    setPassCampFilter('all');
+                    setPassSubcampFilter('all');
+                  }}
+                  className="text-purple-700 hover:text-purple-900 font-bold hover:underline cursor-pointer text-xs shrink-0 ml-2"
                 >
-                  Clear filter
+                  Clear all filters
                 </button>
               </div>
             )}
@@ -2254,23 +3259,30 @@ function CampDashboardContent() {
               <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-gray-200">
                 <Ticket className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2.5 sm:mb-3" />
                 <h3 className="text-sm sm:text-base font-bold text-gray-800">
-                  {passSearchTerm ? 'No Matching Passes Found' : 'No Registrations Found'}
+                  {passSearchTerm || passStatusFilter !== 'all' || passSubcampFilter !== 'all' || passCampFilter !== 'all'
+                    ? 'No Matching Passes Found'
+                    : 'No Registrations Found'}
                 </h3>
                 <p className="text-[11px] sm:text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  {passSearchTerm ? (
-                    <>No devotee passes match &quot;<span className="font-semibold text-gray-700">{passSearchTerm}</span>&quot;. Try checking attendee name, mobile, track, or group ID.</>
+                  {passSearchTerm || passStatusFilter !== 'all' || passSubcampFilter !== 'all' || passCampFilter !== 'all' ? (
+                    'No devotee passes match the selected filters. Try clearing your filters or search query.'
                   ) : passViewFilter === 'assigned' ? (
                     'No devotee passes found for your assigned temple or centers yet.'
                   ) : (
                     "You haven't registered for any camps yet. Browse active camps and book your retreat spot!"
                   )}
                 </p>
-                {passSearchTerm ? (
+                {(passSearchTerm || passStatusFilter !== 'all' || passSubcampFilter !== 'all' || passCampFilter !== 'all') ? (
                   <button
-                    onClick={() => setPassSearchTerm('')}
+                    onClick={() => {
+                      setPassSearchTerm('');
+                      setPassStatusFilter('all');
+                      setPassCampFilter('all');
+                      setPassSubcampFilter('all');
+                    }}
                     className="mt-3.5 sm:mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
-                    Clear Search
+                    Clear Filters
                   </button>
                 ) : passViewFilter !== 'assigned' && (
                   <button
@@ -2285,50 +3297,67 @@ function CampDashboardContent() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {displayedRegistrations.map((reg) => {
                   const refund = userRefunds.find(
-                    (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
+                    (ref) => ref.registration_id === reg.id ||
+                             ref.group_id === reg.group_id ||
+                             (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === reg.id))
                   );
                   const paymentStatus = String(reg.payment_status || '').toLowerCase();
                   const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
-                  const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || refund?.status === 'refunded');
-                  const isPendingRefund = refund?.status === 'pending';
+                  const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || paymentStatus === 'cancelled' || refund?.status === 'refunded');
+                  const isPendingRefund = Boolean(refund?.status === 'pending');
                   const isPendingApproval = !isCompleted && !isCancelled;
                   const tokenNumber = (reg as any).serial_no || (reg as any).token_no || 1;
+
+                  // Dynamic Theme: Cancelled -> Light Red / Off-Red; Pending -> Warm Amber/Yellow; Confirmed -> Subcamp (Medium Green, Purple, Orange, Sky Blue...)
+                  const theme = getPassDynamicTheme(
+                    reg,
+                    isCancelled,
+                    isPendingApproval || isPendingRefund,
+                    registeredTracksList,
+                    registeredCampsList
+                  );
 
                   return (
                     <div
                       key={reg.id}
-                      className="group bg-white rounded-2xl border border-purple-200/80 shadow-xs hover:shadow-lg hover:border-purple-300 transition-all duration-300 overflow-hidden flex flex-col sm:flex-row items-stretch"
+                      className={`group rounded-xl sm:rounded-2xl border ${theme.cardBorder} ${theme.cardBg} shadow-xs hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col sm:flex-row items-stretch`}
                     >
-                      {/* Left Ticket Stub Section (Royal Medium Purple with Shading) */}
-                      <div className="bg-gradient-to-br from-purple-800 via-violet-800 to-purple-950 text-white p-3.5 sm:p-4 flex sm:flex-col items-center justify-between sm:justify-center text-center sm:w-36 shrink-0 relative overflow-hidden border-b sm:border-b-0 sm:border-r border-purple-600/40">
-                        <div className="absolute -left-6 -top-6 w-20 h-20 bg-purple-400/20 rounded-full blur-xl pointer-events-none" />
-                        <div className="flex sm:flex-col items-center gap-1 sm:gap-2 z-10">
-                          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-purple-200 font-bold border border-white/20">
-                            <Ticket className="w-4 h-4" />
+                      {/* Left Ticket Stub Section with dynamic color gradient - Compact on mobile */}
+                      <div className={`${theme.stubGradient} text-white px-3 py-2 sm:p-4 flex sm:flex-col items-center justify-between sm:justify-center text-center sm:w-36 shrink-0 relative overflow-hidden border-b sm:border-b-0 sm:border-r ${theme.stubBorder}`}>
+                        <div className={`absolute -left-6 -top-6 w-20 h-20 ${theme.stubGlow} rounded-full blur-xl pointer-events-none`} />
+                        <div className="flex sm:flex-col items-center gap-1.5 sm:gap-2 z-10">
+                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${theme.stubIconBg} backdrop-blur-md flex items-center justify-center font-bold`}>
+                            {isCancelled ? (
+                              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-300" />
+                            ) : isPendingApproval || isPendingRefund ? (
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
+                            ) : (
+                              <Ticket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            )}
                           </div>
-                          <div>
-                            <span className="block text-[9px] uppercase tracking-widest text-purple-200 font-bold">Pass ID</span>
-                            <span className="font-mono font-black text-xs sm:text-sm text-white">#T-{tokenNumber}</span>
+                          <div className="text-left sm:text-center">
+                            <span className="block text-[8px] sm:text-[9px] uppercase tracking-wider sm:tracking-widest text-white/80 font-bold leading-none">Pass ID</span>
+                            <span className="font-mono font-black text-xs sm:text-sm text-white leading-tight">#T-{tokenNumber}</span>
                           </div>
                         </div>
 
                         <div className="z-10 mt-0 sm:mt-3">
-                          <span className="inline-block px-2 py-0.5 rounded-full bg-black/35 backdrop-blur-md text-[9px] font-bold text-purple-200 border border-white/15 uppercase tracking-wider">
+                          <span className={`inline-block px-2 py-0.5 rounded-full ${theme.stubTag} backdrop-blur-md text-[8.5px] sm:text-[9px] font-bold uppercase tracking-wider`}>
                             {reg.camp_track || 'Attendee'}
                           </span>
                         </div>
                       </div>
 
-                      {/* Main Ticket Information */}
-                      <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-2.5">
+                      {/* Main Ticket Information - Compact on mobile */}
+                      <div className="p-2.5 sm:p-4 flex-1 flex flex-col justify-between space-y-1.5 sm:space-y-2.5">
                         <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <h3 className="text-sm sm:text-base font-black text-gray-900 leading-snug line-clamp-1">
+                          <div className="flex items-start justify-between gap-1.5 sm:gap-2">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-xs sm:text-base font-black text-gray-900 leading-snug line-clamp-1">
                                 {reg.camp_title}
                               </h3>
-                              <p className="text-xs text-purple-900 font-bold flex items-center gap-1 mt-0.5">
-                                <User className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <p className={`text-[11px] sm:text-xs ${theme.textAccent} font-bold flex items-center gap-1 mt-0.5`}>
+                                <User className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${theme.iconAccent} shrink-0`} />
                                 <span className="truncate">{reg.participant_name}</span>
                               </p>
                             </div>
@@ -2336,62 +3365,69 @@ function CampDashboardContent() {
                             {/* Status Pill */}
                             <div className="shrink-0">
                               {refund?.status === 'refunded' ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                                  <Check className="w-3 h-3" />
-                                  Refunded (₹{refund.refund_amount})
+                                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                  <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                  {Number(refund.refund_amount) > 0 ? `Refunded (₹${Number(refund.refund_amount).toLocaleString('en-IN')})` : 'Cancelled (Non-refundable)'}
                                 </span>
-                              ) : isPendingRefund ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
-                                  <Clock className="w-3 h-3" />
-                                  Refund In Review
+                              ) : (isPendingRefund || refund?.status === 'pending') ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                                  <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                  Under Review
                                 </span>
                               ) : isCancelled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                  <X className="w-3 h-3" />
+                                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                   Cancelled
                                 </span>
                               ) : isCompleted ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
-                                  <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                  <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600" />
                                   Confirmed Pass
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                  <Clock className="w-3 h-3 text-amber-600" />
-                                  Payment Pending
+                                <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                                  <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-600" />
+                                  Pending
                                 </span>
                               )}
                             </div>
                           </div>
 
                           {/* Quick 1-line Date & Venue info */}
-                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                          <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10.5px] sm:text-xs text-gray-600">
                             <span className="flex items-center gap-1 font-medium">
-                              <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <Calendar className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${theme.iconAccent} shrink-0`} />
                               <span>{reg.camp_start_date ? new Date(reg.camp_start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Dates TBA'}</span>
                             </span>
                             <span className="flex items-center gap-1 font-medium">
-                              <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                              <span className="truncate max-w-[160px]">{reg.camp_venue || 'Central VOICE'}</span>
+                              <MapPin className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${theme.iconAccent} shrink-0`} />
+                              <span className="truncate max-w-[140px] sm:max-w-[160px]">{reg.camp_venue || 'Central VOICE'}</span>
                             </span>
                             {reg.accommodation === 'Yes' && (
-                              <span className="px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9.5px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] sm:text-[9.5px] font-bold">
                                 Stay Included
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Bottom Actions: Digital Pass View & Amount */}
-                        <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                        {/* Bottom Actions: Digital Pass View, Amount & Refund View */}
+                        <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex items-center justify-between gap-1.5">
                           <div>
-                            <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider">Paid Amount</span>
-                            <span className="font-black text-purple-900 text-xs sm:text-sm">
-                              ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
-                            </span>
+                            <span className="text-gray-400 block text-[8px] sm:text-[9px] uppercase font-bold tracking-wider leading-none">Paid Amount</span>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className={`font-black ${theme.paidAccent} text-xs sm:text-sm leading-tight`}>
+                                ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
+                              </span>
+                              {Number(reg.late_fee || 0) > 0 && (
+                                <span className="text-[8px] sm:text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300" title={`Includes ₹${reg.late_fee} Late Fee (Non-refundable)`}>
+                                  ₹{reg.late_fee} Late Fee
+                                </span>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 sm:gap-2">
                             {isCompleted && !isCancelled && (
                               <button
                                 type="button"
@@ -2401,10 +3437,22 @@ function CampDashboardContent() {
                                     ? reg.voice_name
                                     : (userData?.hierarchy?.center || (userData as any)?.center || '')
                                 })}
-                                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg hover:scale-[1.02]"
+                                className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-md hover:shadow-lg hover:scale-[1.02]"
                               >
-                                <Ticket className="w-3.5 h-3.5" />
+                                <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                 <span>View Full Pass</span>
+                              </button>
+                            )}
+
+                            {/* View Refund Status Button for Cancelled / Refunded Pass */}
+                            {isCancelled && (
+                              <button
+                                type="button"
+                                onClick={() => setViewingRefundStatus({ reg, refund })}
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-amber-300" />
+                                <span>View Refund Status</span>
                               </button>
                             )}
 
@@ -2412,10 +3460,22 @@ function CampDashboardContent() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenCancelModal(reg)}
-                                className="px-2.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 font-semibold rounded-xl text-xs border border-rose-200 transition-all cursor-pointer"
+                                className="px-2 py-1 sm:px-2.5 sm:py-1.5 bg-white hover:bg-rose-50 text-rose-700 font-semibold rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs border border-rose-200 transition-all cursor-pointer"
                                 title="Manage / Request Cancellation"
                               >
                                 <Undo2 className="w-3 h-3 text-rose-500" />
+                              </button>
+                            )}
+
+                            {!isCancelled && !isCompleted && String(reg.payment_method || '').toUpperCase() === 'IDT' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDirectIdtCancel(reg)}
+                                className="px-2 py-1 sm:px-2.5 sm:py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs border border-rose-200 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="Cancel registration before IDT transfer is processed"
+                              >
+                                <Ban className="w-3 h-3 text-rose-600" />
+                                <span>Cancel (Pre-IDT)</span>
                               </button>
                             )}
                           </div>
@@ -2432,30 +3492,33 @@ function CampDashboardContent() {
         {/* TAB: STAFF & COORDINATOR DUTY */}
         {activeTab === 'staff' && (
           <div className="space-y-3 sm:space-y-6">
-            <div className="bg-gradient-to-r from-purple-850 via-indigo-900 to-purple-950 rounded-xl sm:rounded-3xl p-3 sm:p-6 text-white shadow-xl border border-purple-500/30">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-4">
-                <div className="flex items-center gap-2 sm:gap-3.5">
-                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center shrink-0 text-purple-300">
-                    <Shield className="w-4 h-4 sm:w-6 sm:h-6" />
+            <div className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-xl border border-purple-500/40">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center shrink-0 text-amber-300 shadow-inner">
+                    <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <h2 className="text-sm sm:text-2xl font-black tracking-tight text-white leading-tight">Staff &amp; Coordinator Duty</h2>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[11px] font-bold">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-2xl font-black tracking-tight text-white leading-tight">
+                        Staff &amp; Coordinator Duty
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 text-[10px] sm:text-xs font-bold">
                         {allocatedCamps.length} Active {allocatedCamps.length === 1 ? 'Camp' : 'Camps'}
                       </span>
                     </div>
-                    <p className="text-[10px] sm:text-sm text-purple-200/90 mt-0.5 max-w-2xl leading-tight line-clamp-1 sm:line-clamp-none">
+                    <p className="text-xs sm:text-sm text-purple-200 mt-1 max-w-2xl leading-relaxed">
                       Access your assigned operational desks below to verify attendee passes and manage registrations.
                     </p>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   onClick={fetchAllocatedCamps}
-                  className="w-full sm:w-auto px-3 py-1 sm:py-2 rounded-lg sm:rounded-xl bg-white/10 hover:bg-white/20 text-white text-[10.5px] sm:text-xs font-bold border border-white/20 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/25 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-xs hover:border-white/40"
                 >
-                  <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${allocationsLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${allocationsLoading ? 'animate-spin' : ''}`} />
                   <span>Refresh Duties</span>
                 </button>
               </div>
@@ -2706,6 +3769,72 @@ function CampDashboardContent() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left 2 Cols: Profile Card & Attendee Form */}
                 <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+                  {/* Saved Draft Notification Banner */}
+                  {activeDraft && (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in fade-in">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-200/90 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300/80">
+                          <BookmarkCheck className="w-5 h-5 text-amber-800" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black text-amber-950">
+                              Saved Registration Progress Found ({activeDraft.entries?.length || 0} Devotees)
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[9.5px]">
+                              Saved Draft
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                            Last saved on <strong>{formatDisplayDateTime(activeDraft.updated_at)}</strong>. Continue where you left off or start fresh.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleDiscardDraft}
+                          className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xs cursor-pointer transition-colors"
+                        >
+                          Discard
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResumeDraft}
+                          className="px-3.5 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Resume Progress</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Toast/Alert for Save Draft Feedback */}
+                  {draftToast && (
+                    <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${
+                      draftToast.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                        : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {draftToast.type === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        )}
+                        <span>{draftToast.message}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDraftToast(null)}
+                        className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   {/* Center Restriction Warning Banner */}
                   {!isDevoteeEligibleForCamp && (
                     <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border-2 border-amber-300 text-amber-950 space-y-2 shadow-xs">
@@ -2724,46 +3853,171 @@ function CampDashboardContent() {
                     </div>
                   )}
 
-                  {/* Step 1: Verified Devotee Profile (Automatic from DB) */}
-                  <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 p-3 sm:p-4.5 shadow-xs space-y-2 sm:space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] sm:text-xs flex items-center justify-center shrink-0">
-                          1
+                  {/* Step 1: Point of Contact (POC) / Devotee Profile */}
+                  {selectedCamp.require_poc ? (
+                    <div className={`bg-white rounded-xl sm:rounded-2xl border-2 p-3.5 sm:p-5 shadow-xs space-y-3 transition-colors ${
+                      pocConfirmed ? 'border-emerald-300 bg-emerald-50/20' : 'border-amber-400 bg-amber-50/30'
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-start sm:items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
+                            pocConfirmed ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+                          }`}>
+                            1
+                          </span>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-tight">
+                                Point of Contact (POC) Details *
+                              </h3>
+                              {effectiveCenter && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                  Center: {effectiveCenter}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10.5px] sm:text-[11px] text-slate-600 mt-0.5">
+                              {pocConfirmed
+                                ? 'POC details confirmed and shared for this center. Devotee registrations will be coordinated through this contact.'
+                                : 'Please provide the POC Name & Mobile Number for this camp. Once entered, other managers of this center will not be asked again.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {pocConfirmed && (
+                          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>POC Confirmed</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPocEditing(!pocEditing);
+                                setPocError(null);
+                              }}
+                              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300 cursor-pointer transition-colors"
+                            >
+                              {pocEditing ? 'Cancel Edit' : 'Edit POC'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {pocLoading ? (
+                        <div className="py-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                          <span>Checking center POC details...</span>
+                        </div>
+                      ) : (!pocConfirmed || pocEditing) ? (
+                        <form onSubmit={handleSavePoc} className="pt-2 border-t border-amber-200/60 space-y-3">
+                          {pocError && (
+                            <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                              <span>{pocError}</span>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                POC Name *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={pocDetails.pocName}
+                                onChange={(e) => setPocDetails({ ...pocDetails, pocName: e.target.value })}
+                                placeholder="e.g. HG Devotee Das / Center Manager Name"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-semibold outline-none focus:border-amber-500 shadow-2xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                POC Mobile / WhatsApp Number *
+                              </label>
+                              <input
+                                type="tel"
+                                required
+                                maxLength={10}
+                                value={pocDetails.pocContact}
+                                onChange={(e) => setPocDetails({ ...pocDetails, pocContact: e.target.value.replace(/[^0-9]/g, '') })}
+                                placeholder="10-digit mobile (e.g. 9876543210)"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-bold outline-none focus:border-amber-500 shadow-2xs"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
+                            <span className="text-[10.5px] text-slate-500">
+                              ℹ️ Shared for {effectiveCenter} center. Accessible by all center coordinators.
+                            </span>
+                            <button
+                              type="submit"
+                              disabled={pocSaving}
+                              className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-amber-600/25 cursor-pointer disabled:opacity-50 transition-all"
+                            >
+                              {pocSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                              <span>{pocConfirmed ? 'Update POC Contact' : 'Confirm POC & Proceed →'}</span>
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-white/90 rounded-xl p-3 border border-emerald-200 text-xs shadow-2xs">
+                          <div>
+                            <span className="text-slate-400 text-[9.5px] uppercase font-bold tracking-wider block">POC Name</span>
+                            <span className="font-extrabold text-slate-900 text-xs truncate block mt-0.5">{pocDetails.pocName}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[9.5px] uppercase font-bold tracking-wider block">POC Mobile Number</span>
+                            <span className="font-mono font-extrabold text-slate-900 text-xs truncate block mt-0.5">{pocDetails.pocContact}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[9.5px] uppercase font-bold tracking-wider block">Center Assigned</span>
+                            <span className="font-bold text-slate-800 text-xs truncate block mt-0.5">{effectiveCenter}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 p-3 sm:p-4.5 shadow-xs space-y-2 sm:space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] sm:text-xs flex items-center justify-center shrink-0">
+                            1
+                          </span>
+                          <h3 className="text-xs sm:text-sm font-bold text-gray-900 leading-tight">
+                            Devotee Profile &amp; POC <span className="text-[10px] sm:text-xs text-gray-400 font-normal hidden sm:inline">(Auto-filled from Database)</span>
+                          </h3>
+                        </div>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          Verified Profile
                         </span>
-                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 leading-tight">
-                          Devotee Profile &amp; POC <span className="text-[10px] sm:text-xs text-gray-400 font-normal hidden sm:inline">(Auto-filled from Database)</span>
-                        </h3>
                       </div>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                        Verified Profile
-                      </span>
-                    </div>
 
-                    <p className="text-[10px] sm:text-xs text-gray-500 leading-snug">
-                      Your name, contact number, and email are automatically applied to this booking. No manual re-typing required.
-                    </p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 leading-snug">
+                        Your name, contact number, and email are automatically applied to this booking. No manual re-typing required.
+                      </p>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-amber-50/60 rounded-xl p-2.5 sm:p-3 border border-amber-200/60 text-xs">
-                      <div>
-                        <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Payer / Devotee</span>
-                        <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.name || 'Devotee'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Mobile / WhatsApp</span>
-                        <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.phone || 'Not set'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Email</span>
-                        <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{user?.email}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Home Center</span>
-                        <span className="font-semibold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.hierarchy?.center || 'Center Devotee'}</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-amber-50/60 rounded-xl p-2.5 sm:p-3 border border-amber-200/60 text-xs">
+                        <div>
+                          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Payer / Devotee</span>
+                          <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.name || 'Devotee'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Mobile / WhatsApp</span>
+                          <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.phone || 'Not set'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Email</span>
+                          <span className="font-bold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{user?.email}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-wider block">Home Center</span>
+                          <span className="font-semibold text-gray-800 text-[11px] sm:text-xs truncate block mt-0.5">{userData?.hierarchy?.center || 'Center Devotee'}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Step 2: Attendee Form */}
                   <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-amber-300/90 p-4 sm:p-6 shadow-md space-y-4 sm:space-y-5">
@@ -2800,8 +4054,24 @@ function CampDashboardContent() {
                       )}
                     </div>
 
-                    {/* Non-Manager Student Limit: If 1 entry already added and not currently editing */}
-                    {!isManager && entries.length >= 1 && editIndex === null ? (
+                    {/* If POC is required on camp but not confirmed yet, gate attendee entry */}
+                    {selectedCamp.require_poc && !pocConfirmed ? (
+                      <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0">
+                            <UserCheck className="w-5 h-5 text-amber-800" />
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-xs sm:text-sm text-amber-950">
+                              POC Contact Details Required First
+                            </h4>
+                            <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                              Please confirm the Point of Contact (POC) details in <strong>Step 1</strong> above to unlock devotee registrations.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : !isManager && entries.length >= 1 && editIndex === null ? (
                       <div className="p-3.5 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
                         <div className="flex items-start gap-2.5 sm:gap-3">
                           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -3044,7 +4314,7 @@ function CampDashboardContent() {
                                   <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
                                     <span className="flex items-center gap-1.5">
                                       <Tent className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Camp Track *</span>
+                                      <span>Camp *</span>
                                     </span>
                                     {selectedCamp.tracks && selectedCamp.tracks.length > availableTracksForDevotee.length && (
                                       <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
@@ -3059,7 +4329,7 @@ function CampDashboardContent() {
                                     className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-xs font-bold text-slate-900 shadow-2xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
                                   >
                                     {availableTracksForDevotee.length === 0 ? (
-                                      <option value="" disabled>No eligible camp tracks for {formData.rounds || 0} rounds</option>
+                                      <option value="" disabled>No eligible camps for {formData.rounds || 0} rounds</option>
                                     ) : (
                                       availableTracksForDevotee.map((t) => (
                                         <option key={t} value={t}>{t}</option>
@@ -3276,8 +4546,8 @@ function CampDashboardContent() {
                                 <div>
                                   <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
                                     <span className="flex items-center gap-1.5">
-                                      <Award className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Camp Track *</span>
+                                      <Tent className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Camp *</span>
                                     </span>
                                     {selectedCamp.tracks && selectedCamp.tracks.length > availableTracksForDevotee.length && (
                                       <span className="text-[10px] font-bold text-amber-700">
@@ -3296,7 +4566,7 @@ function CampDashboardContent() {
                                     }`}
                                   >
                                     {availableTracksForDevotee.length === 0 ? (
-                                      <option value="" disabled>No eligible camp tracks for {formData.rounds || 0} rounds</option>
+                                      <option value="" disabled>No eligible camps for {formData.rounds || 0} rounds</option>
                                     ) : (
                                       availableTracksForDevotee.map((t) => {
                                         const isTaken = activeRegisteredTracks.includes(t.trim());
@@ -3312,7 +4582,7 @@ function CampDashboardContent() {
                                     <p className="mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-1.5 flex items-center gap-1.5">
                                       <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
                                       <span>
-                                        {isManager && selectedDevotee ? selectedDevotee.name : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another track.
+                                        {isManager && selectedDevotee ? selectedDevotee.name : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another camp.
                                       </span>
                                     </p>
                                   )}
@@ -3553,6 +4823,7 @@ function CampDashboardContent() {
                                   <div>
                                     <span className="text-slate-400 block text-[10px] font-semibold">
                                       {selectedCamp.accommodation_pricing?.facility_charge_label || 'Other'}
+                                      {selectedCamp.accommodation_pricing?.ac_charge_billing_type !== 'fixed' && ` (${Math.max(1, liveCost.daysOfStay)}d)`}
                                     </span>
                                     <span className="font-bold text-slate-900 text-sm sm:text-base">₹{liveCost.acCost}</span>
                                   </div>
@@ -3599,7 +4870,7 @@ function CampDashboardContent() {
                                 {!isDevoteeEligibleForCamp
                                   ? 'Center Ineligible for Camp'
                                   : isCurrentTrackAlreadyRegistered
-                                  ? 'Already Registered for This Track'
+                                  ? 'Already Registered for This Camp'
                                   : editIndex !== null
                                   ? 'Update Attendee'
                                   : isManager
@@ -3626,7 +4897,9 @@ function CampDashboardContent() {
                       </div>
 
                       <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                        {entries.map((entry, idx) => (
+                        {entries.map((entry, idx) => {
+                          const entryPalette = getTrackColorPalette(entry.campTrack);
+                          return (
                           <div
                             key={idx}
                             className="p-2.5 sm:p-3 flex items-center justify-between text-xs hover:bg-gray-50 transition-colors gap-2"
@@ -3634,8 +4907,9 @@ function CampDashboardContent() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-gray-800 truncate">{entry.participantName}</span>
-                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] sm:text-[10px] font-semibold">
-                                  {entry.campTrack}
+                                <span className={`px-1.5 py-0.2 rounded ${entryPalette.badgeBg} text-[9px] sm:text-[10px] font-bold inline-flex items-center gap-1`}>
+                                  <span className={`w-1 h-1 rounded-full ${entryPalette.dotColor}`} />
+                                  <span>{entry.campTrack}</span>
                                 </span>
                               </div>
                               <p className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 truncate">
@@ -3661,7 +4935,8 @@ function CampDashboardContent() {
                               </button>
                             </div>
                           </div>
-                        ))}
+                        );
+                      })}
                       </div>
                     </div>
                   )}
@@ -3771,19 +5046,31 @@ function CampDashboardContent() {
                         )}
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleProceedToPayment}
-                        disabled={entries.length === 0 || !isDevoteeEligibleForCamp}
-                        className={`w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          entries.length > 0 && isDevoteeEligibleForCamp
-                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                        }`}
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveDraft}
+                          disabled={savingDraft || entries.length === 0}
+                          className="sm:w-2/5 py-2.5 sm:py-3 rounded-xl font-bold text-xs border-2 border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-900 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Save progress now and resume anytime from any device"
+                        >
+                          {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-700" />}
+                          <span>{savingDraft ? 'Saving...' : `Save Progress (${entries.length})`}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleProceedToPayment}
+                          disabled={entries.length === 0 || !isDevoteeEligibleForCamp}
+                          className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                            entries.length > 0 && isDevoteeEligibleForCamp
+                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                          }`}
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3795,11 +5082,11 @@ function CampDashboardContent() {
 
       {/* PAYMENT METHOD SELECTION MODAL: Matching Image 2 */}
       {showPaymentModal && selectedCamp && grandTotal > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-amber-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                 Select Payment Method
               </h3>
               <button
@@ -3808,13 +5095,13 @@ function CampDashboardContent() {
                   setSelectedMethod(null);
                   setPaymentError(null);
                 }}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                className="p-1 sm:p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
+            <div className="p-3 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto flex-1 overscroll-contain">
               {paymentError && (
                 <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -3867,7 +5154,28 @@ function CampDashboardContent() {
                   {showIdtOption && (
                     <button
                       type="button"
-                      onClick={() => setSelectedMethod('IDT')}
+                      onClick={() => {
+                        setSelectedMethod('IDT');
+                        const centerIdtList = (selectedCamp?.payment_config?.center_idt_codes || []) as any[];
+                        const userCenterCandidate = (
+                          managerAssignedCenter ||
+                          formData.voiceName ||
+                          userData?.hierarchy?.currentCenter ||
+                          userData?.hierarchy?.center ||
+                          (userData as any)?.center ||
+                          ''
+                        ).trim().toLowerCase();
+                        const matchedCodeObj = centerIdtList.find((c: any) => 
+                          c.code && (
+                            c.center_name.trim().toLowerCase() === userCenterCandidate ||
+                            userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
+                            c.center_name.trim().toLowerCase().includes(userCenterCandidate)
+                          )
+                        ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
+                        if (matchedCodeObj?.code && !idtPasscode) {
+                          setIdtPasscode(matchedCodeObj.code);
+                        }
+                      }}
                       className="w-full p-4 rounded-2xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
                     >
                       <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
@@ -3978,42 +5286,69 @@ function CampDashboardContent() {
                     </button>
                   </div>
                 </div>
-              ) : selectedMethod === 'IDT' ? (
+              ) : selectedMethod === 'IDT' ? (() => {
+                const centerIdtList = (selectedCamp?.payment_config?.center_idt_codes || []) as any[];
+                const userCenterCandidate = (
+                  managerAssignedCenter ||
+                  formData.voiceName ||
+                  userData?.hierarchy?.currentCenter ||
+                  userData?.hierarchy?.center ||
+                  (userData as any)?.center ||
+                  ''
+                ).trim().toLowerCase();
+
+                const matchedCodeObj = centerIdtList.find((c: any) => 
+                  c.code && (
+                    c.center_name.trim().toLowerCase() === userCenterCandidate ||
+                    userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
+                    c.center_name.trim().toLowerCase().includes(userCenterCandidate)
+                  )
+                ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
+
+                return (
                 /* IDT FORM */
                 <div className="space-y-4">
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>This option is only available to ISKCON NVCC connected centers.</span>
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      VOICE Name / Department (Deduction Source) *
+                      Project Name (as per SERP) *
                     </label>
                     <input
                       type="text"
                       required
                       value={idtSource}
                       onChange={(e) => setIdtSource(e.target.value)}
-                      placeholder="e.g. Pune Camp VOICE, Nilachal Dept"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-amber-500"
+                      placeholder="e.g. Enter Project Name / SERP Activity..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
                     />
+                    <span className="text-[10.5px] text-slate-400 mt-1 block">
+                      Manually type the SERP project name for IDT deduction accounting.
+                    </span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      IDT Authorization Passcode *
+                      <span>IDT Authorization Passcode *</span>
+                      {matchedCodeObj && (
+                        <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
+                          (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
+                        </span>
+                      )}
                     </label>
                     <input
-                      type="password"
+                      type="text"
                       required
                       value={idtPasscode}
                       onChange={(e) => setIdtPasscode(e.target.value)}
-                      placeholder="Enter security key"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-amber-500"
+                      placeholder="Enter your center's secret authorization key"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
                     />
                     <span className="text-[11px] text-slate-400 mt-1 block">
-                      Collect authorization passcode from Central VOICE.
+                      Dedicated IDT authorization code for your assigned center.
                     </span>
                   </div>
 
@@ -4045,45 +5380,46 @@ function CampDashboardContent() {
                     </button>
                   </div>
                 </div>
-              ) : (
+                );
+              })() : (
                 /* INTER-TEMPLE TRANSFER FORM */
-                <div className="space-y-4">
+                <div className="space-y-2.5 sm:space-y-3.5">
                   {/* Bank Details Display Card */}
-                  <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60">
-                      <div className="flex items-center gap-2">
-                        <Landmark className="w-4 h-4 text-emerald-700" />
-                        <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                          Temple Bank Account Details
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-2 sm:space-y-3">
+                    <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-emerald-200/60">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Landmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-black text-emerald-950 uppercase tracking-wider">
+                          Temple Bank Details
                         </span>
                       </div>
-                      <span className="text-xs font-black text-emerald-700">
-                        Amount: ₹{grandTotal.toLocaleString('en-IN')}
+                      <span className="text-[11px] sm:text-xs font-black text-emerald-700 shrink-0">
+                        ₹{grandTotal.toLocaleString('en-IN')}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 text-xs">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Beneficiary Name</span>
-                        <span className="font-bold text-slate-900">{selectedCamp.payment_config?.itt_bank_details?.account_name || 'Central VOICE Pune'}</span>
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Beneficiary Name</span>
+                        <span className="font-bold text-slate-900 text-xs truncate block">{selectedCamp.payment_config?.itt_bank_details?.account_name || 'Central VOICE Pune'}</span>
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Bank Name</span>
-                        <span className="font-bold text-slate-900">{selectedCamp.payment_config?.itt_bank_details?.bank_name || 'State Bank of India'}</span>
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Bank Name</span>
+                        <span className="font-bold text-slate-900 text-xs truncate block">{selectedCamp.payment_config?.itt_bank_details?.bank_name || 'State Bank of India'}</span>
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Account Number</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono font-bold text-slate-900 text-sm">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Account Number</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm truncate">
                             {selectedCamp.payment_config?.itt_bank_details?.account_number || '---'}
                           </span>
                           {selectedCamp.payment_config?.itt_bank_details?.account_number && (
                             <button
                               type="button"
                               onClick={() => copyToClipboard(selectedCamp.payment_config?.itt_bank_details?.account_number || '', 'acc')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy Account Number"
                             >
                               {copiedBankField === 'acc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -4093,16 +5429,16 @@ function CampDashboardContent() {
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">IFSC Code</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono font-bold text-slate-900">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">IFSC Code</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm truncate">
                             {selectedCamp.payment_config?.itt_bank_details?.ifsc_code || '---'}
                           </span>
                           {selectedCamp.payment_config?.itt_bank_details?.ifsc_code && (
                             <button
                               type="button"
                               onClick={() => copyToClipboard(selectedCamp.payment_config?.itt_bank_details?.ifsc_code || '', 'ifsc')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy IFSC Code"
                             >
                               {copiedBankField === 'ifsc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -4113,22 +5449,22 @@ function CampDashboardContent() {
 
                       {selectedCamp.payment_config?.itt_bank_details?.branch_name && (
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Branch</span>
-                          <span className="font-medium text-slate-800">{selectedCamp.payment_config.itt_bank_details.branch_name}</span>
+                          <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Branch</span>
+                          <span className="font-medium text-slate-800 text-xs truncate block">{selectedCamp.payment_config.itt_bank_details.branch_name}</span>
                         </div>
                       )}
 
                       {selectedCamp.payment_config?.itt_bank_details?.upi_id && (
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">UPI ID / VPA</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono font-bold text-emerald-800">
+                          <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">UPI ID / VPA</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono font-bold text-emerald-800 text-xs truncate">
                               {selectedCamp.payment_config.itt_bank_details.upi_id}
                             </span>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(selectedCamp.payment_config?.itt_bank_details?.upi_id || '', 'upi')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy UPI ID"
                             >
                               {copiedBankField === 'upi' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -4139,14 +5475,14 @@ function CampDashboardContent() {
                     </div>
 
                     {selectedCamp.payment_config?.itt_bank_details?.instructions && (
-                      <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-emerald-900 font-medium">
+                      <div className="pt-1.5 border-t border-emerald-200/60 text-[10.5px] text-emerald-900 font-medium">
                         💡 {selectedCamp.payment_config.itt_bank_details.instructions}
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                       Temple / Center Name (Sender) *
                     </label>
                     <input
@@ -4155,12 +5491,12 @@ function CampDashboardContent() {
                       value={ittTempleName}
                       onChange={(e) => setIttTempleName(e.target.value)}
                       placeholder="e.g. ISKCON Bangalore, ISKCON NVCC"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-emerald-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                       Bank UTR / Transaction Reference Number *
                     </label>
                     <input
@@ -4169,12 +5505,25 @@ function CampDashboardContent() {
                       value={ittTransactionRef}
                       onChange={(e) => setIttTransactionRef(e.target.value)}
                       placeholder="e.g. UTR123456789012"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-mono outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-mono outline-none focus:border-emerald-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
+                      Transaction Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={ittTransactionDate}
+                      onChange={(e) => setIttTransactionDate(e.target.value)}
+                      className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-semibold outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                       Upload Bank Transfer Receipt Screenshot *
                     </label>
                     <input
@@ -4190,42 +5539,62 @@ function CampDashboardContent() {
                           reader.readAsDataURL(file);
                         }
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-slate-50 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg sm:rounded-xl text-xs bg-slate-50 file:mr-2.5 file:py-0.5 sm:file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer"
                     />
                     {ittScreenshotPreview && (
-                      <div className="mt-2">
+                      <div className="mt-1.5">
                         <img
                           src={ittScreenshotPreview}
                           alt="Transfer Receipt Preview"
-                          className="h-20 sm:h-24 w-auto rounded-lg border border-slate-200 object-cover shadow-xs"
+                          className="h-16 sm:h-20 w-auto rounded-lg border border-slate-200 object-cover shadow-xs"
                         />
                       </div>
                     )}
                   </div>
 
-                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
+                  {/* Compact Info Banner (No duplicate button) */}
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-[10.5px] sm:text-[11px] flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="leading-snug">
+                      Waiting for temple accounts? Tap <strong>Save Draft</strong> below to resume anytime.
+                    </span>
+                  </div>
+
+                  {/* Sticky Compact Action Bar */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 pt-2 pb-0.5 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-1 sm:mt-2 z-10">
                     <button
                       type="button"
                       onClick={() => setSelectedMethod(null)}
-                      className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
+                      className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 border border-slate-200 text-xs font-bold rounded-lg sm:rounded-xl text-slate-600 hover:bg-slate-50 shrink-0 cursor-pointer transition-colors"
                     >
-                      &larr; Back
+                      &larr; <span className="hidden xs:inline">Back</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      disabled={savingDraft}
+                      className="px-2.5 sm:px-3 py-2 sm:py-2.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                      title="Save progress and complete payment later"
+                    >
+                      {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-amber-700 shrink-0" />}
+                      <span className="whitespace-nowrap">{savingDraft ? 'Saving...' : 'Save Draft'}</span>
                     </button>
                     <button
                       type="button"
                       disabled={isSubmitting || ittUploading}
                       onClick={submitIttPayment}
-                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 min-w-0 py-2 sm:py-2.5 px-2.5 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer transition-all"
                     >
                       {isSubmitting || ittUploading ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Uploading &amp; Submitting...</span>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          <span className="truncate">{ittUploading ? 'Uploading...' : 'Submitting...'}</span>
                         </>
                       ) : (
                         <>
-                          <UploadCloud className="w-4 h-4" />
-                          <span>Submit Transfer Details (₹{grandTotal.toLocaleString('en-IN')})</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate sm:hidden">Confirm (₹{grandTotal.toLocaleString('en-IN')})</span>
+                          <span className="truncate hidden sm:inline">Submit Transfer (₹{grandTotal.toLocaleString('en-IN')})</span>
                         </>
                       )}
                     </button>
@@ -4249,9 +5618,9 @@ function CampDashboardContent() {
       {/* CANCELLATION & REFUND MODAL */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full p-3.5 sm:p-6 shadow-2xl border border-slate-200 space-y-3 sm:space-y-4 max-h-[94vh] sm:max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full p-3 sm:p-5 shadow-2xl border border-slate-200 space-y-2.5 sm:space-y-3 max-h-[94vh] sm:max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold shrink-0">
                   <Undo2 className="w-4 h-4" />
@@ -4261,7 +5630,7 @@ function CampDashboardContent() {
                     Manage / Cancel Registration
                   </h3>
                   <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">
-                    Lookup your booking, select devotees to cancel &amp; refund
+                    Select camp and devotee(s) to cancel &amp; refund
                   </p>
                 </div>
               </div>
@@ -4329,12 +5698,10 @@ function CampDashboardContent() {
                       </span>
                     </div>
                   )}
-                  {Number(cancelSuccessResult.breakdown?.base_fee_refund || 0) === 0 &&
-                   Number(cancelSuccessResult.breakdown?.meal_refund || 0) === 0 &&
-                   Number(cancelSuccessResult.breakdown?.acc_refund || 0) === 0 && (
-                    <div className="flex justify-between py-0.5 text-[10px] sm:text-[11px]">
-                      <span className="text-slate-500">Refund Breakdown:</span>
-                      <span className="font-semibold text-slate-800">₹0</span>
+                  {Number(cancelSuccessResult.refundAmount) === 0 && (
+                    <div className="flex justify-between py-0.5 text-[10px] sm:text-[11px] text-rose-700 font-bold">
+                      <span>Refund Status:</span>
+                      <span>₹0 (Post-deadline cancellation)</span>
                     </div>
                   )}
                   <div className="pt-1 border-t border-amber-200/60 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
@@ -4361,234 +5728,38 @@ function CampDashboardContent() {
                   Done &amp; Close
                 </button>
               </div>
-            ) : !cancelRegs ? (
-              /* STEP 1: LOOKUP BOOKING */
-              <div className="space-y-3 sm:space-y-4">
-                <form onSubmit={handleLookupForCancel} className="space-y-2.5 sm:space-y-3">
-                  {activeCamps.length > 1 && (
-                    <div>
-                      <label className="block text-[10px] sm:text-xs font-bold text-slate-700 mb-0.5">
-                        Select Camp Retreat
-                      </label>
-                      <select
-                        value={cancelCamp?.id || ''}
-                        onChange={(e) => {
-                          const found = activeCamps.find(c => c.id === e.target.value);
-                          if (found) {
-                            setCancelCamp(found);
-                            setCancelLookupError(null);
-                            setCancelRegs(null);
-                            setSelectedDevoteeId('');
-                            if (cancelDevoteeMode === 'self') {
-                              handleLookupForCancel(undefined, found.id);
-                            } else if (cancelLookupQuery.trim()) {
-                              handleLookupForCancel(undefined, found.id, cancelLookupQuery.trim());
-                            }
-                          }
-                        }}
-                        className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 focus:border-amber-500 outline-none cursor-pointer"
-                      >
-                        {activeCamps.map(c => (
-                          <option key={c.id} value={c.id}>{c.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Manager Mode Segmented Control */}
-                  {isManager && (
-                    <div className="grid grid-cols-2 gap-1 p-0.5 sm:p-1 bg-slate-100 rounded-xl text-[11px] sm:text-xs font-bold">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCancelDevoteeMode('self');
-                          const phoneDigits = userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '';
-                          const userEmail = (user?.email || userData?.email || '').trim().toLowerCase();
-                          setCancelLookupQuery(phoneDigits || userEmail);
-                        }}
-                        className={`py-1 sm:py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
-                          cancelDevoteeMode === 'self'
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        My Bookings
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCancelDevoteeMode('devotee');
-                          setCancelLookupQuery('');
-                        }}
-                        className={`py-1 sm:py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer ${
-                          cancelDevoteeMode === 'devotee'
-                            ? 'bg-teal-600 text-white shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="sm:hidden">Center Devotees</span>
-                        <span className="hidden sm:inline">Devotee Bookings (Assigned Center)</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {(!isManager || cancelDevoteeMode === 'self') ? (
-                    /* Authenticated Account Identity */
-                    <div className="p-2.5 sm:p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-1">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                        Registered Account Identity
-                      </span>
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-900">
-                        <span className="flex items-center gap-1">
-                          <UserCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="truncate max-w-[120px]">{userData?.name || 'Devotee'}</span>
-                        </span>
-                        {userData?.phone && (
-                          <span className="flex items-center gap-1 font-mono text-slate-700">
-                            <Phone className="w-3 h-3 text-amber-600 shrink-0" />
-                            {userData.phone}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1 text-slate-600">
-                          <Mail className="w-3 h-3 text-amber-600 shrink-0" />
-                          <span className="truncate max-w-[140px]">{user?.email || userData?.email}</span>
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-2.5 sm:p-3 bg-teal-50/50 border border-teal-200 rounded-xl space-y-2">
-                      <div>
-                        <label className="block text-[11px] sm:text-xs font-bold text-slate-800 mb-0.5">
-                          Select Devotee from Center / Temple:
-                        </label>
-                        <select
-                          value={selectedDevoteeId}
-                          onChange={(e) => {
-                            const devId = e.target.value;
-                            setSelectedDevoteeId(devId);
-                            setCancelLookupError(null);
-                            const found = devoteesForCancellation.find(d => d.id === devId);
-                            if (found) {
-                              const raw = found.queryIdentifier;
-                              setCancelLookupQuery(raw);
-                              if (raw && cancelCamp) {
-                                handleLookupForCancel(undefined, cancelCamp.id, raw);
-                              }
-                            }
-                          }}
-                          className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-teal-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
-                        >
-                          <option value="">
-                            {devoteesForCancellation.length > 0
-                              ? `-- Choose Devotee (${devoteesForCancellation.length} available) --`
-                              : (loadingDevotees ? '-- Loading Devotees... --' : '-- No Devotees in Assigned Center --')}
-                          </option>
-                          {devoteesForCancellation.map((dev) => (
-                            <option key={dev.id} value={dev.id}>
-                              {dev.hasPassInCamp ? '⭐ ' : ''}{dev.name} • {dev.phone} {dev.hasPassInCamp ? `[Active Pass]` : (dev.center ? `(${dev.center})` : '')}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] sm:text-[11px] font-semibold text-slate-600 mb-0.5">
-                          Or enter WhatsApp / Email / Booking Group ID:
-                        </label>
-                        <div className="relative">
-                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            type="text"
-                            value={cancelLookupQuery}
-                            onChange={(e) => setCancelLookupQuery(e.target.value)}
-                            placeholder="e.g. 9876543210, devotee@mail.com"
-                            className="w-full pl-8 pr-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-900 focus:border-teal-500 outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="p-1.5 sm:p-2 rounded-lg bg-teal-100/70 border border-teal-200 text-teal-900 text-[10px] sm:text-[11px] leading-tight flex items-start gap-1">
-                        <span className="shrink-0">🔒</span>
-                        <span><strong>Scope:</strong> You can only look up devotees in your assigned center.</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {cancelLookupError && (
-                    <div className="p-2.5 sm:p-3 bg-amber-50/80 border border-amber-200 text-amber-900 text-xs rounded-xl flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                      <div>
-                        <span className="font-bold block text-xs">No Registrations Found</span>
-                        <p className="text-[10px] sm:text-[11px] text-amber-800 mt-0.5 leading-snug">
-                          No active bookings were found matching your search for <strong>{cancelCamp?.title}</strong>.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={cancelLookupLoading}
-                    className="w-full py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl text-xs shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {cancelLookupLoading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Searching Registrations...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-3.5 h-3.5" />
-                        <span>{isManager && cancelDevoteeMode === 'devotee' ? 'Find Devotee Bookings' : 'Find My Bookings'}</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Display Camp Refund Policy Tiers for Awareness */}
-                {cancelCamp?.refund_config?.refund_policy_rules && cancelCamp.refund_config.refund_policy_rules.length > 0 && (
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
-                    <span className="font-bold text-slate-800 block text-[10px] sm:text-[11px] uppercase tracking-wider flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-amber-600" />
-                      Camp Cancellation &amp; Refund Policy:
-                    </span>
-                    <ul className="space-y-1 text-[10px] sm:text-[11px] text-slate-600">
-                      {cancelCamp.refund_config.refund_policy_rules.map((tier, idx) => (
-                        <li key={tier.id || idx} className="flex items-center justify-between gap-1">
-                          <span className="text-slate-500">
-                            {tier.cutoff_date ? `Before ${tier.cutoff_date}:` : 'Default cutoff:'}
-                          </span>
-                          <span className="font-bold text-amber-700 text-right">
-                            {tier.refund_percent}% Base Fee ({tier.label})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="pt-1 border-t border-slate-200/60 text-[9px] sm:text-[10px] text-slate-500 leading-tight">
-                      * Payment gateway fee ({Number((cancelCamp as any)?.online_payment_surcharge_percent ?? 2)}%) is non-refundable. Eligible unconsumed meals and accommodation are refunded.
-                    </div>
-                  </div>
-                )}
-              </div>
             ) : (
-              /* STEP 2: SELECT DEVOTEES TO CANCEL (TRAIN CANCELLATION STYLE) & ENTER PAYOUT DETAILS */
-              <form onSubmit={handleSubmitCancellation} className="space-y-3">
-                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Point of Contact</span>
-                    <span className="font-bold text-slate-900 text-xs leading-tight">{cancelRegs[0]?.poc_name || userData?.name} ({cancelRegs[0]?.poc_contact || userData?.phone})</span>
+              /* DIRECT CAMP SELECTION & DEVOTEES CANCELLATION FORM */
+              <form onSubmit={handleSubmitCancellation} className="space-y-2.5 sm:space-y-3">
+                {/* 1. SELECT CAMP RETREAT */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10.5px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Select Camp Retreat:
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {cancellationCamps.length} Camp{cancellationCamps.length !== 1 ? 's' : ''} available
+                    </span>
                   </div>
-                  {activeCamps.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCancelRegs(null);
-                      }}
-                      className="text-[11px] text-amber-600 hover:underline font-bold cursor-pointer shrink-0 ml-2"
-                    >
-                      Change Camp
-                    </button>
-                  )}
+                  <select
+                    value={cancelCamp?.id || ''}
+                    onChange={(e) => onSelectCampForCancel(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-slate-900 bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none cursor-pointer shadow-2xs"
+                  >
+                    {cancellationCamps.map((c) => {
+                      const count = userRegistrations.filter(r =>
+                        (r.camp_id === c.id || r.camp_slug === c.slug) &&
+                        !r.is_cancelled &&
+                        r.payment_status !== 'cancelled' &&
+                        r.payment_status !== 'refunded'
+                      ).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.title} {count > 0 ? `(${count} active attendee${count !== 1 ? 's' : ''})` : '(0 active)'}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
                 {cancelError && (
@@ -4598,323 +5769,499 @@ function CampDashboardContent() {
                   </div>
                 )}
 
-                {/* Devotees List with Checkboxes (Train Ticket Style) */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Select Devotee(s) to Cancel:
-                    </label>
-                    <span className="text-[10px] sm:text-[11px] text-slate-500 font-semibold">
-                      {selectedRegIdsToCancel.length} of {cancelRegs.length} Selected
-                    </span>
-                  </div>
+                {/* 2. ACTIVE DEVOTEES LIST (NO CANCELLED RECORDS SHOWN) */}
+                {(() => {
+                  const activeDevotees = (cancelRegs || []).filter(r => {
+                    const isCancelled = r.is_cancelled || r.payment_status === 'cancelled' || r.payment_status === 'refunded';
+                    if (isCancelled) return false;
+                    if (!cancelDevoteeFilter.trim()) return true;
+                    const q = cancelDevoteeFilter.toLowerCase().trim();
+                    return (
+                      (r.participant_name || '').toLowerCase().includes(q) ||
+                      (r.whatsapp || '').includes(q) ||
+                      (r.camp_track || '').toLowerCase().includes(q)
+                    );
+                  });
 
-                  <div className="space-y-1.5 max-h-44 sm:max-h-48 overflow-y-auto pr-1">
-                    {cancelRegs.map((reg) => {
-                      const matchingRefund = cancelExistingRefunds.find(r => {
-                        if (r.registration_id === reg.id) return true;
-                        if (Array.isArray(r.cancelled_registrations)) {
-                          return r.cancelled_registrations.some((cr: any) => cr.reg_id === reg.id);
-                        }
-                        return false;
-                      });
-
-                      const isRefundRejected = matchingRefund?.status === 'rejected';
-                      const isAlreadyCancelled = reg.is_cancelled && !isRefundRejected;
-                      const isPendingApproval = reg.payment_status !== 'completed';
-                      const isLocked = isAlreadyCancelled || isPendingApproval;
-                      const isChecked = selectedRegIdsToCancel.includes(reg.id!);
-
-                      return (
-                        <div
-                          key={reg.id}
-                          className={`p-2 sm:p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 text-xs ${
-                            isLocked
-                              ? 'bg-slate-100/90 border-slate-200 opacity-65'
-                              : isChecked
-                              ? 'bg-amber-50/70 border-amber-300 shadow-2xs ring-1 ring-amber-300/60'
-                              : 'bg-white border-slate-200'
-                          }`}
+                  if (activeDevotees.length === 0) {
+                    return (
+                      <div className="p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
+                        <User className="w-8 h-8 text-slate-300 mx-auto" />
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-800">
+                          No Active Attendees to Cancel
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] text-slate-500 max-w-sm mx-auto leading-relaxed">
+                          There are no active, non-cancelled devotee registrations found for <strong>{cancelCamp?.title || 'this camp'}</strong>. Devotees who have already been cancelled or refunded are not shown here.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowLookupFallback(prev => !prev)}
+                          className="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer"
                         >
-                          <label className={`flex items-start sm:items-center gap-2 sm:gap-2.5 flex-1 min-w-0 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                            <input
-                              type="checkbox"
-                              disabled={isLocked}
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedRegIdsToCancel(prev => [...prev, reg.id!]);
-                                } else {
-                                  setSelectedRegIdsToCancel(prev => prev.filter(id => id !== reg.id!));
-                                }
-                              }}
-                              className="mt-0.5 sm:mt-0 w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed shrink-0"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5 leading-snug">
-                                <span className="truncate">{reg.participant_name}</span>
-                                {isPendingApproval && (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[9px] sm:text-[10px] font-bold shrink-0"
-                                    title="Awaiting IDT/ITT payment approval. Cannot cancel until payment is confirmed."
-                                  >
-                                    ⏳ Pending Approval (IDT/ITT)
-                                  </span>
-                                )}
-                                {isAlreadyCancelled && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[9px] sm:text-[10px] font-bold shrink-0">
-                                    Cancelled {matchingRefund?.status === 'refunded' ? '(Refunded)' : '(Pending)'}
-                                  </span>
-                                )}
-                                {isRefundRejected && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300 text-[9px] sm:text-[10px] font-bold shrink-0" title={matchingRefund?.admin_notes || 'Refund rejected'}>
-                                    Rejected • Re-apply
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] sm:text-[11px] text-slate-500 truncate mt-0.5">
-                                {reg.camp_track} • {reg.gender} {reg.age ? `• ${reg.age} yrs` : ''}
+                          {showLookupFallback ? 'Hide manual lookup' : 'Looking for another devotee? Search by WhatsApp / Group ID'}
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <label className="block text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Select Active Devotee(s) to Cancel:
+                        </label>
+                        <div className="flex items-center gap-2 text-[10.5px]">
+                          <span className="text-slate-500 font-bold">
+                            {selectedRegIdsToCancel.length} of {activeDevotees.length} Selected
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedRegIdsToCancel.length === activeDevotees.length) {
+                                setSelectedRegIdsToCancel([]);
+                              } else {
+                                setSelectedRegIdsToCancel(activeDevotees.map(r => r.id!));
+                              }
+                            }}
+                            className="font-bold text-amber-700 hover:text-amber-900 hover:underline cursor-pointer"
+                          >
+                            {selectedRegIdsToCancel.length === activeDevotees.length ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Devotee search filter if center has many registrations */}
+                      {(cancelRegs?.length || 0) > 3 && (
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={cancelDevoteeFilter}
+                            onChange={(e) => setCancelDevoteeFilter(e.target.value)}
+                            placeholder="Filter devotees by name, phone or track..."
+                            className="w-full pl-8 pr-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-sky-500 outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Devotees List */}
+                      <div className="space-y-1 max-h-36 sm:max-h-40 overflow-y-auto pr-1">
+                        {activeDevotees.map((reg) => {
+                          const isPendingApproval = reg.payment_status !== 'completed';
+                          const isPendingIdt = isPendingApproval && String(reg.payment_method || '').toUpperCase() === 'IDT';
+                          const isLocked = isPendingApproval && !isPendingIdt;
+                          const isChecked = selectedRegIdsToCancel.includes(reg.id!);
+
+                          return (
+                            <div
+                              key={reg.id}
+                              className={`py-1.5 px-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 text-xs ${
+                                isLocked
+                                  ? 'bg-slate-100/90 border-slate-200 opacity-60'
+                                  : isChecked
+                                  ? 'bg-sky-50/90 border-sky-400 shadow-2xs ring-1 ring-sky-300/50'
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <label className={`flex items-start sm:items-center gap-2 flex-1 min-w-0 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                <input
+                                  type="checkbox"
+                                  disabled={isLocked}
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedRegIdsToCancel(prev => [...prev, reg.id!]);
+                                    } else {
+                                      setSelectedRegIdsToCancel(prev => prev.filter(id => id !== reg.id!));
+                                    }
+                                  }}
+                                  className="mt-0.5 sm:mt-0 w-3.5 h-3.5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer disabled:cursor-not-allowed shrink-0 accent-sky-600"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5 leading-tight">
+                                    <span className="truncate">{reg.participant_name}</span>
+                                    {isPendingApproval && (
+                                      <span
+                                        className={`px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-bold shrink-0 ${
+                                          isPendingIdt
+                                            ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                                            : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        }`}
+                                      >
+                                        {isPendingIdt ? '⚡ Pending IDT' : '⏳ Awaiting ITT'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[9.5px] sm:text-[10.5px] text-slate-500 truncate mt-0.5">
+                                    {reg.camp_track} • {reg.gender} {reg.age ? `• ${reg.age} yrs` : ''}
+                                  </div>
+                                </div>
+                              </label>
+
+                              <div className="text-right shrink-0 pl-1">
+                                <span className={`font-black block text-xs sm:text-sm leading-tight ${isChecked ? 'text-sky-950' : 'text-slate-900'}`}>
+                                  ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
+                                </span>
+                                <span className="text-[8.5px] text-slate-400 font-semibold">Camp Fee</span>
                               </div>
                             </div>
-                          </label>
-
-                          <div className="text-right shrink-0 pl-1">
-                            <span className="font-black text-slate-900 block text-xs sm:text-sm">
-                              ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
-                            </span>
-                            <span className="text-[9px] sm:text-[10px] text-slate-400">Paid Fee</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Live Computed Refund Box */}
-                {(() => {
-                  const live = computeLiveRefund();
-                  const surchargePercent = Number((cancelCamp as any)?.online_payment_surcharge_percent ?? 2);
-                  return (
-                    <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/80 border border-amber-300/80 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between pb-1 border-b border-amber-200/80">
-                        <span className="font-bold text-amber-900 flex items-center gap-1 text-[11px] sm:text-xs">
-                          <Banknote className="w-3.5 h-3.5 text-amber-600" />
-                          Refund Policy Applied
-                        </span>
-                        <span className="text-[10px] sm:text-[11px] font-bold text-amber-800">
-                          {live.tierLabel}
-                        </span>
-                      </div>
-
-                      <div className="space-y-0.5 text-[10px] sm:text-[11px] text-slate-600">
-                        {live.baseRefundPercent === 0 ? (
-                          <div className="flex justify-between text-rose-600 font-bold py-0.5">
-                            <span>Refund Eligibility:</span>
-                            <span>No Refund (0% policy applied)</span>
-                          </div>
-                        ) : (
-                          <>
-                            {live.baseRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Base Fee Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.baseRefund}</span>
-                              </div>
-                            )}
-                            {cancelCamp?.refund_config?.refund_meals !== false && live.mealRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Meals Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.mealRefund}</span>
-                              </div>
-                            )}
-                            {cancelCamp?.refund_config?.refund_accommodation !== false && live.accRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Stay Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.accRefund}</span>
-                              </div>
-                            )}
-                            {live.originalTotal > live.totalRefund && (
-                              <div className="flex justify-between text-rose-700 font-semibold pt-0.5 border-t border-dashed border-amber-200">
-                                <span>Cancellation Fee ({100 - live.baseRefundPercent}%):</span>
-                                <span>-₹{(live.originalTotal - live.totalRefund).toLocaleString('en-IN')}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        <div className="flex justify-between text-slate-400 text-[9px] sm:text-[10px]">
-                          <span>Gateway Fee {surchargePercent > 0 ? `(${surchargePercent}%)` : ''}:</span>
-                          <span>Non-refundable</span>
-                        </div>
-                      </div>
-
-                      <div className="pt-1.5 border-t border-amber-200/80 flex items-center justify-between">
-                        <span className="font-bold text-amber-950 text-xs sm:text-sm">Total Refund Due:</span>
-                        <span className="text-sm sm:text-base font-black text-emerald-700">
-                          ₹{live.totalRefund.toLocaleString('en-IN')}
-                        </span>
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })()}
 
-                {/* Payout Details Section */}
-                <div className="p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Select Payout:
-                    </label>
-
-                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
+                {/* Optional manual lookup fallback if manager has external booking ID */}
+                {showLookupFallback && (
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="text-[10.5px] font-bold text-slate-800 block">Manual Registration Lookup:</span>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={cancelLookupQuery}
+                        onChange={(e) => setCancelLookupQuery(e.target.value)}
+                        placeholder="Enter WhatsApp / Email / Group ID..."
+                        className="flex-1 px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-medium"
+                      />
                       <button
                         type="button"
-                        onClick={() => setCancelPayoutType('UPI')}
-                        className={`px-2.5 py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          cancelPayoutType === 'UPI'
-                            ? 'bg-white text-emerald-800 shadow-2xs'
-                            : 'text-slate-600'
-                        }`}
+                        disabled={cancelLookupLoading || !cancelLookupQuery.trim()}
+                        onClick={() => handleLookupForCancel()}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer disabled:opacity-50"
                       >
-                        ⚡ UPI ID
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCancelPayoutType('BANK')}
-                        className={`px-2.5 py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          cancelPayoutType === 'BANK'
-                            ? 'bg-white text-blue-800 shadow-2xs'
-                            : 'text-slate-600'
-                        }`}
-                      >
-                        🏛️ Bank Transfer
+                        {cancelLookupLoading ? 'Searching...' : 'Lookup'}
                       </button>
                     </div>
                   </div>
+                )}
 
-                  {cancelPayoutType === 'UPI' ? (
-                    <div>
-                      <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                        Your UPI ID / VPA *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={cancelUpiId}
-                        onChange={(e) => setCancelUpiId(e.target.value)}
-                        placeholder="e.g. devotee@okhdfcbank or 9876543210@paytm"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold text-slate-900 focus:border-emerald-500 outline-none"
-                      />
+                {/* 3. FINANCIAL TRANSPARENCY BREAKDOWN (FULL ACCOUNTING AUDIT) */}
+                {(() => {
+                  const isSelectedAllPendingIdt = Boolean(
+                    selectedRegIdsToCancel.length > 0 &&
+                    selectedRegIdsToCancel.every(id => {
+                      const found = (cancelRegs || []).find(r => r.id === id);
+                      return found && String(found.payment_method || '').toUpperCase() === 'IDT' && found.payment_status !== 'completed';
+                    })
+                  );
+
+                  if (isSelectedAllPendingIdt) {
+                    const totalIdtDeduction = (cancelRegs || [])
+                      .filter(r => selectedRegIdsToCancel.includes(r.id!))
+                      .reduce((s, r) => s + Number(r.total_cost || 0), 0);
+
+                    return (
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-950 text-xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold text-sky-900">
+                          <Sparkles className="w-4 h-4 text-sky-600 shrink-0" />
+                          <span>Direct Pre-Transfer Cancellation (IDT)</span>
+                        </div>
+                        <p className="text-[10.5px] text-sky-800 leading-relaxed">
+                          Since this batch is awaiting IDT approval and has not been transferred by the Accounts Department yet, the selected {selectedRegIdsToCancel.length} devotee(s) will be directly removed from the batch.
+                        </p>
+                        <div className="p-1.5 rounded-lg bg-white/80 border border-sky-200 flex justify-between font-bold text-xs mt-0.5">
+                          <span className="text-slate-700">Batch Total Deduction:</span>
+                          <span className="text-emerald-700 font-black">
+                            -₹{totalIdtDeduction.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <p className="text-[9.5px] text-sky-600 font-medium">
+                          ⚡ No Bank / UPI refund details required. The accountant will only execute the updated net balance.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  const live = computeLiveRefund();
+
+                  return (
+                    <div className="rounded-xl sm:rounded-2xl border-2 border-indigo-200 bg-indigo-50/20 overflow-hidden shadow-sm">
+                      {/* Colorful Section Header with guaranteed deep indigo background */}
+                      <div
+                        className="bg-indigo-700 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 px-3 py-2 flex items-center justify-between text-white"
+                        style={{ backgroundColor: '#4338ca' }}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Banknote className="w-4 h-4 text-indigo-200 shrink-0" />
+                          <span className="font-black text-xs sm:text-sm tracking-tight truncate text-white">
+                            Refund Policy &amp; Accounting Breakdown
+                          </span>
+                        </div>
+                        <span className="text-[9.5px] sm:text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 shrink-0 backdrop-blur-sm">
+                          {live.tierLabel}
+                        </span>
+                      </div>
+
+                      {/* Content Body with Distinct Colorful Section Divisions */}
+                      <div className="p-2.5 sm:p-3 space-y-1.5 text-xs bg-white">
+                        {/* Section Division 1: Paid & Gateway Surcharge (Sky/Slate Card) */}
+                        {live.gatewayFee > 0 ? (
+                          <div className="bg-sky-50/90 border border-sky-200 rounded-lg p-2 text-[11px] sm:text-xs space-y-0.5">
+                            <div className="flex justify-between text-slate-700">
+                              <span className="font-semibold text-slate-600">Total Paid at Checkout:</span>
+                              <span className="font-black text-slate-900">₹{live.totalPaidAtCheckout.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Gateway Fee ({live.surchargePercent}% non-refundable):</span>
+                              <span className="font-bold text-slate-700">-₹{live.gatewayFee.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between pt-0.5 border-t border-sky-200 text-sky-950 font-bold">
+                              <span>Camp Base Fee:</span>
+                              <span className="font-black text-sky-900">₹{live.originalTotal.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-sky-50/90 border border-sky-200 rounded-lg p-2 flex justify-between text-[11px] sm:text-xs text-slate-800 font-bold">
+                            <span>Camp Base Fee Paid:</span>
+                            <span className="font-black text-sky-900">₹{live.originalTotal.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+
+                        {/* Section Division 2: Policy Fee Deduction (Soft Rose Card) */}
+                        {live.cancellationFee > 0 && (
+                          <div className="bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px] sm:text-xs">
+                            <div className="flex items-center gap-1.5 text-rose-950 font-bold truncate">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                              <span className="truncate">Policy Deduction ({100 - live.baseRefundPercent}%):</span>
+                            </div>
+                            <span className="font-black text-rose-700 shrink-0">-₹{live.cancellationFee.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+
+                        {/* Late fee non-refundable deduction if any */}
+                        {live.totalLateFee > 0 && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 flex justify-between text-[11px] sm:text-xs text-amber-950 font-medium">
+                            <span>Late Registration Fee (Non-refundable):</span>
+                            <span className="font-bold text-amber-900">-₹{live.totalLateFee.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+
+                        {/* Section Division 3: Final Refund Highlight Banner (Guaranteed Rich Emerald Background) */}
+                        <div
+                          className="rounded-xl p-2.5 sm:p-3 flex items-center justify-between shadow-sm text-white"
+                          style={{ backgroundColor: live.totalRefund > 0 ? '#059669' : '#334155' }}
+                        >
+                          <div className="min-w-0 pr-1">
+                            <div className="font-black text-xs sm:text-sm flex items-center gap-1 text-white">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                              <span>Total Net Refund Due:</span>
+                            </div>
+                            <span className="text-[9.5px] sm:text-[10px] text-emerald-100 block truncate font-medium">
+                              {live.gatewayFee > 0
+                                ? `₹${live.totalPaidAtCheckout} paid − ₹${live.gatewayFee} gateway − ₹${live.cancellationFee} deduction`
+                                : `Net eligible payout to your destination`}
+                            </span>
+                          </div>
+                          <span className="text-lg sm:text-xl font-black text-white shrink-0">
+                            ₹{live.totalRefund.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+
+                        {/* Subtle 1-line policy note */}
+                        <div className="text-[9.5px] sm:text-[10px] text-slate-500 text-center leading-tight pt-0.5">
+                          {live.totalRefund === 0 ? (
+                            <span className="text-rose-600 font-semibold">{live.reasonExplanation}</span>
+                          ) : (
+                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • Credited in 5-7 working days</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                  );
+                })()}
+
+                {/* 4. PAYOUT DETAILS SECTION */}
+                {(() => {
+                  const isSelectedAllPendingIdt = Boolean(
+                    selectedRegIdsToCancel.length > 0 &&
+                    selectedRegIdsToCancel.every(id => {
+                      const found = (cancelRegs || []).find(r => r.id === id);
+                      return found && String(found.payment_method || '').toUpperCase() === 'IDT' && found.payment_status !== 'completed';
+                    })
+                  );
+
+                  if (isSelectedAllPendingIdt) return null;
+
+                  return (
+                    <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-xs">
                       <div>
-                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                          A/C Holder Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cancelAccountName}
-                          onChange={(e) => setCancelAccountName(e.target.value)}
-                          placeholder="e.g. Radheshyam Das"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:border-blue-500 outline-none"
-                        />
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
+                            Select Payout Destination:
+                          </label>
+                          <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700">
+                            Eligible Refund: ₹{computeLiveRefund().totalRefund.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">Choose where NVCC Accounts will transfer your refund</span>
                       </div>
 
-                      <div>
-                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                          Bank Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cancelBankName}
-                          onChange={(e) => setCancelBankName(e.target.value)}
-                          placeholder="e.g. State Bank of India"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:border-blue-500 outline-none"
-                        />
+                      {/* 2-Column Responsive Segmented Cards */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCancelPayoutType('UPI')}
+                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
+                            cancelPayoutType === 'UPI'
+                              ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="text-lg shrink-0">⚡</span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-black block truncate">UPI ID / VPA</span>
+                            <span className="text-[9.5px] opacity-75 font-medium block truncate">Instant transfer</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCancelPayoutType('BANK')}
+                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
+                            cancelPayoutType === 'BANK'
+                              ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="text-lg shrink-0">🏛️</span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-black block truncate">Bank Account</span>
+                            <span className="text-[9.5px] opacity-75 font-medium block truncate">NEFT / RTGS</span>
+                          </div>
+                        </button>
                       </div>
 
-                      <div>
-                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                          Account Number *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cancelAccountNumber}
-                          onChange={(e) => setCancelAccountNumber(e.target.value)}
-                          placeholder="Account Number"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold focus:border-blue-500 outline-none"
-                        />
-                      </div>
+                      {cancelPayoutType === 'UPI' ? (
+                        <div>
+                          <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-1">
+                            Your UPI ID / VPA *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={cancelUpiId}
+                            onChange={(e) => setCancelUpiId(e.target.value)}
+                            placeholder="e.g. devotee@okhdfcbank or 9876543210@paytm"
+                            className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-semibold text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                              A/C Holder Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={cancelAccountName}
+                              onChange={(e) => setCancelAccountName(e.target.value)}
+                              placeholder="e.g. Radheshyam Das"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:border-blue-500 outline-none"
+                            />
+                          </div>
 
-                      <div>
-                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                          Confirm Account *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cancelConfirmAccount}
-                          onChange={(e) => setCancelConfirmAccount(e.target.value)}
-                          placeholder="Re-enter Number"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold focus:border-blue-500 outline-none"
-                        />
-                      </div>
+                          <div>
+                            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                              Bank Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={cancelBankName}
+                              onChange={(e) => setCancelBankName(e.target.value)}
+                              placeholder="e.g. State Bank of India"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:border-blue-500 outline-none"
+                            />
+                          </div>
 
-                      <div className="col-span-2">
-                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                          Bank IFSC Code *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cancelIfscCode}
-                          onChange={(e) => setCancelIfscCode(e.target.value.toUpperCase())}
-                          placeholder="e.g. SBIN0001234"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono uppercase font-semibold focus:border-blue-500 outline-none"
-                        />
-                      </div>
+                          <div>
+                            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                              Account Number *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={cancelAccountNumber}
+                              onChange={(e) => setCancelAccountNumber(e.target.value)}
+                              placeholder="Account Number"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold focus:border-blue-500 outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                              Confirm Account *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={cancelConfirmAccount}
+                              onChange={(e) => setCancelConfirmAccount(e.target.value)}
+                              placeholder="Re-enter Number"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-semibold focus:border-blue-500 outline-none"
+                            />
+                          </div>
+
+                          <div className="col-span-2">
+                            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                              Bank IFSC Code *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={cancelIfscCode}
+                              onChange={(e) => setCancelIfscCode(e.target.value.toUpperCase())}
+                              placeholder="e.g. SBIN0001234"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono uppercase font-semibold focus:border-blue-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  );
+                })()}
+
+                {/* 5. REASON FOR CANCELLATION */}
+                <div>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
+                    Reason for Cancellation
+                  </label>
+                  <select
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 focus:border-amber-500 outline-none cursor-pointer"
+                  >
+                    <option value="Schedule Conflict">Schedule Conflict / Work Commitments</option>
+                    <option value="Health / Medical Emergency">Health / Medical Emergency</option>
+                    <option value="Family Obligation">Family Obligation</option>
+                    <option value="Other">Other Reason</option>
+                  </select>
+
+                  {cancelReason === 'Other' && (
+                    <input
+                      type="text"
+                      value={cancelReasonCustom}
+                      onChange={(e) => setCancelReasonCustom(e.target.value)}
+                      placeholder="Please specify your reason..."
+                      className="w-full mt-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-medium focus:border-amber-500 outline-none"
+                    />
                   )}
-
-                  <div>
-                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-0.5">
-                      Reason for Cancellation
-                    </label>
-                    <select
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 focus:border-amber-500 outline-none cursor-pointer"
-                    >
-                      <option value="Schedule Conflict">Schedule Conflict / Work Commitments</option>
-                      <option value="Health / Medical Emergency">Health / Medical Emergency</option>
-                      <option value="Family Obligation">Family Obligation</option>
-                      <option value="Other">Other Reason</option>
-                    </select>
-
-                    {cancelReason === 'Other' && (
-                      <input
-                        type="text"
-                        value={cancelReasonCustom}
-                        onChange={(e) => setCancelReasonCustom(e.target.value)}
-                        placeholder="Please specify your reason..."
-                        className="w-full mt-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-medium focus:border-amber-500 outline-none"
-                      />
-                    )}
-                  </div>
                 </div>
 
                 {/* Form Buttons */}
-                <div className="flex items-center gap-2 pt-1 sticky bottom-0 bg-white/95 backdrop-blur-xs py-1">
+                <div className="flex items-center gap-2 pt-2.5 pb-1 sticky -bottom-3.5 sm:-bottom-6 bg-white border-t border-slate-100 mt-2 z-10">
                   <button
                     type="button"
                     onClick={() => {
+                      setShowCancelModal(false);
                       setCancelRegs(null);
                       setCancelLookupQuery('');
                     }}
                     className="px-3.5 py-2 sm:py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50 cursor-pointer shrink-0"
                   >
-                    &larr; Back
+                    Close
                   </button>
 
                   <button
@@ -4926,6 +6273,23 @@ function CampDashboardContent() {
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         <span>Submitting...</span>
+                      </>
+                    ) : selectedRegIdsToCancel.length > 0 && selectedRegIdsToCancel.every(id => {
+                        const found = (cancelRegs || []).find(r => r.id === id);
+                        return found && String(found.payment_method || '').toUpperCase() === 'IDT' && found.payment_status !== 'completed';
+                      }) ? (
+                      <>
+                        <Ban className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
+                          Cancel {selectedRegIdsToCancel.length} Devotee{selectedRegIdsToCancel.length !== 1 ? 's' : ''} (Pre-IDT)
+                        </span>
+                      </>
+                    ) : computeLiveRefund().totalRefund === 0 ? (
+                      <>
+                        <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
+                          Confirm &amp; Cancel Registration (₹0 Refund)
+                        </span>
                       </>
                     ) : (
                       <>
@@ -4944,25 +6308,389 @@ function CampDashboardContent() {
         </div>
       )}
 
+      {/* VIEW REFUND STATUS MODAL (FOR MY PASSES TRANSPARENCY AUDIT) */}
+      {viewingRefundStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold shrink-0">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                    Refund &amp; Cancellation Status
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Pass #{viewingRefundStatus.reg?.serial_no || viewingRefundStatus.reg?.token_no || 1} • {viewingRefundStatus.reg?.participant_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingRefundStatus(null)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Status Banner */}
+            {(() => {
+              const status = viewingRefundStatus.refund?.status;
+              const isRefunded = status === 'refunded';
+              const isPending = status === 'pending';
+              const isRejected = status === 'rejected';
+
+              if (isRefunded) {
+                return (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black text-xs sm:text-sm block text-emerald-900">
+                        Refund Completed &amp; Disbursed
+                      </span>
+                      <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                        Your refund has been approved and successfully processed by the ISKCON NVCC Accounts Department.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isPending) {
+                return (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-2.5">
+                    <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black text-xs sm:text-sm block text-amber-900">
+                        Cancellation Under Review
+                      </span>
+                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                        Your cancellation &amp; refund request is currently undergoing review and audit by the accounts team. Refunds are processed within 5-7 working days.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isRejected) {
+                return (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 flex items-start gap-2.5">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black text-xs sm:text-sm block text-rose-900">
+                        Refund Request Rejected
+                      </span>
+                      <p className="text-[11px] text-rose-800 mt-0.5 leading-relaxed">
+                        {viewingRefundStatus.refund?.admin_notes || 'Request could not be approved per camp policies.'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 flex items-start gap-2.5">
+                  <Ban className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-black text-xs sm:text-sm block text-slate-900">
+                      Registration Cancelled
+                    </span>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                      {viewingRefundStatus.reg?.cancellation_reason || 'This registration pass was cancelled.'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Financial Transparency Summary */}
+            {(() => {
+              const reg = viewingRefundStatus.reg;
+              const ref = viewingRefundStatus.refund;
+              const originalPaid = Number(reg?.total_cost || ref?.original_total_amount || 0);
+              const matchingAtt = ref?.cancelled_registrations?.find((cr: any) => cr.reg_id === reg?.id) as any;
+              const netRefund = matchingAtt ? Number(matchingAtt.refund_amount) : Number(ref?.refund_amount ?? 0);
+              const lateFee = Number(reg?.late_fee || matchingAtt?.late_fee || (ref?.breakdown as any)?.late_fee || 0);
+              const isTransferOrFree = ['INTER_TEMPLE_TRANSFER', 'ITT', 'IDT', 'COUPON', 'ROLE_WAIVER', 'FREE'].includes(String(reg?.payment_method || '').toUpperCase());
+              const configuredSurcharge = Number(
+                reg?.camp_payment_config?.surcharge_percent ??
+                (reg as any)?.camp?.payment_config?.surcharge_percent ??
+                (ref?.breakdown as any)?.surcharge_percent ??
+                0
+              );
+              const surchargePercent = isTransferOrFree ? 0 : configuredSurcharge;
+              const gatewayFee = Math.round(originalPaid * (surchargePercent / 100));
+              const cancellationDeduction = Math.max(0, originalPaid - lateFee - netRefund);
+
+              return (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-900 uppercase tracking-wider text-[10px] block">
+                    Financial Audit &amp; Calculation Breakdown
+                  </span>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between py-0.5 text-slate-800">
+                      <span className="font-medium">Total Amount Paid by Attendee:</span>
+                      <span className="font-black text-slate-900">₹{originalPaid.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    {/* Itemized Paid Breakdown if components present */}
+                    {(Number(reg?.meal_cost || 0) > 0 || Number(reg?.acc_cost || 0) > 0 || lateFee > 0) && (
+                      <div className="py-1 px-2 rounded-lg bg-slate-100/90 border border-slate-200/90 space-y-0.5 text-[10.5px] text-slate-600">
+                        <span className="font-bold text-[9px] uppercase tracking-wider text-slate-400 block mb-0.5">Contribution Components</span>
+                        {Number(reg?.meal_cost || 0) > 0 && (
+                          <div className="flex justify-between">
+                            <span>Prasadam / Meals:</span>
+                            <span className="font-semibold text-slate-700">₹{Number(reg.meal_cost).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                        {Number(reg?.acc_cost || 0) > 0 && (
+                          <div className="flex justify-between">
+                            <span>Accommodation / Stay:</span>
+                            <span className="font-semibold text-slate-700">₹{Number(reg.acc_cost).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                        {lateFee > 0 && (
+                          <div className="flex justify-between text-amber-800 font-medium">
+                            <span>Late Registration Fee:</span>
+                            <span className="font-bold text-amber-900">₹{lateFee.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {lateFee > 0 && (
+                      <div className="flex justify-between py-0.5 text-amber-900 bg-amber-50/80 px-2 py-1 rounded-lg border border-amber-200/80">
+                        <div>
+                          <span className="font-semibold">Late Registration Surcharge (Non-refundable):</span>
+                          <span className="block text-[9.5px] text-amber-700">Strictly non-refundable enrollment charge</span>
+                        </div>
+                        <span className="font-bold text-amber-900">-₹{lateFee.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    {surchargePercent > 0 && (
+                      <div className="flex justify-between py-0.5 text-slate-600 border-t border-slate-200">
+                        <div>
+                          <span className="font-medium">Payment Gateway &amp; Processing Fee ({surchargePercent}%):</span>
+                          <span className="block text-[10px] text-slate-400">Non-refundable gateway charge</span>
+                        </div>
+                        <span className="font-bold text-slate-600">-₹{gatewayFee.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    {cancellationDeduction > 0 && (
+                      <div className="flex justify-between py-0.5 text-rose-700 border-t border-slate-200">
+                        <div>
+                          <span className="font-medium">Cancellation Fee / Deduction:</span>
+                          <span className="block text-[10px] text-rose-500">Per camp refund schedule</span>
+                        </div>
+                        <span className="font-bold text-rose-700">-₹{cancellationDeduction.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between py-1.5 text-emerald-800 font-bold border-t-2 border-slate-300 text-sm">
+                      <span>Total Net Refund Processed:</span>
+                      <span className="text-base font-black text-emerald-700">₹{netRefund.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    {ref?.admin_notes && (
+                      <div className="mt-2 p-2 rounded-lg bg-purple-50/90 border border-purple-200 text-purple-950 text-[10.5px]">
+                        <span className="font-black text-[9.5px] uppercase tracking-wider text-purple-800 block">Accounts Audit Remarks:</span>
+                        <span className="italic mt-0.5 block">{ref.admin_notes}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Payout & Transaction Details */}
+            {viewingRefundStatus.refund && (
+              <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2 text-xs">
+                <span className="font-bold text-slate-900 uppercase tracking-wider text-[10px] block">
+                  Payout &amp; Transaction Details
+                </span>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Payout Method:</span>
+                    <span className="font-bold text-slate-800">
+                      {viewingRefundStatus.refund.payout_type === 'UPI' ? '⚡ UPI Transfer' : '🏛️ Bank NEFT / IMPS'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Payout Target:</span>
+                    <span className="font-mono font-bold text-slate-800 truncate block">
+                      {viewingRefundStatus.refund.payout_type === 'UPI'
+                        ? (viewingRefundStatus.refund.upi_id || 'UPI')
+                        : `A/c: ${viewingRefundStatus.refund.account_number}`}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Transaction / UTR Reference:</span>
+                    <span className="font-mono font-bold text-slate-800 truncate block">
+                      {viewingRefundStatus.refund.payout_txn_ref || viewingRefundStatus.refund.admin_notes || 'Pending Disbursement'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Refund Date:</span>
+                    <span className="font-bold text-slate-800">
+                      {viewingRefundStatus.refund.payout_date
+                        ? new Date(viewingRefundStatus.refund.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : viewingRefundStatus.refund.created_at
+                        ? new Date(viewingRefundStatus.refund.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : 'Under Review'}
+                    </span>
+                  </div>
+                </div>
+
+                {viewingRefundStatus.refund.reason && (
+                  <div className="pt-2 border-t border-slate-100 text-[11px]">
+                    <span className="text-slate-400 block text-[10px]">Cancellation Reason:</span>
+                    <span className="text-slate-700 italic">&ldquo;{viewingRefundStatus.refund.reason}&rdquo;</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setViewingRefundStatus(null)}
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DEDICATED PRE-IDT CANCELLATION MODAL */}
+      {pendingIdtCancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0">
+                  <Ban className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    Cancel Registration (Pre-IDT)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Inter-Department Transfer (Pending Approval)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingIdtCancelTarget(null)}
+                className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Devotee Info */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Devotee:</span>
+                <span className="font-bold text-slate-900">{pendingIdtCancelTarget.participant_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Track &amp; Gender:</span>
+                <span className="font-bold text-slate-800">{pendingIdtCancelTarget.camp_track} • {pendingIdtCancelTarget.gender}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Center:</span>
+                <span className="font-bold text-slate-800">{pendingIdtCancelTarget.voice_name || pendingIdtCancelTarget.parent_temple || 'Center'}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-slate-200 font-extrabold">
+                <span className="text-slate-700">Registration Amount:</span>
+                <span className="text-rose-700">₹{Number(pendingIdtCancelTarget.total_cost || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            {/* Notice */}
+            <div className="p-3 rounded-xl bg-sky-50/80 border border-sky-200 text-sky-950 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-sky-900">
+                <span>⚡ No Bank / UPI Refund Required</span>
+              </div>
+              <p className="text-[11px] text-sky-800 leading-relaxed">
+                Because this batch is pending IDT transfer and has not been executed by Accounts yet, this devotee will be removed directly. The accountant will only process the updated total for active attendees.
+              </p>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Cancellation Reason (Optional)
+              </label>
+              <input
+                type="text"
+                value={pendingIdtCancelReason}
+                onChange={(e) => setPendingIdtCancelReason(e.target.value)}
+                placeholder="e.g. Devotee unable to attend / personal emergency"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:border-rose-500 outline-none"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPendingIdtCancelTarget(null)}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Keep Registration
+              </button>
+              <button
+                type="button"
+                disabled={isCancellingPendingIdt}
+                onClick={handleConfirmPendingIdtCancel}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isCancellingPendingIdt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                <span>Confirm Cancellation</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CAMP OVERVIEW & PRESENTATION MODAL */}
       {selectedPreviewCamp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-purple-200 overflow-hidden max-h-[92vh] flex flex-col">
-            {/* Modal Hero / Poster Banner */}
-            <div className="relative h-56 sm:h-72 w-full bg-slate-900 shrink-0">
+            {/* Modal Hero / Poster Banner: Fully visible uncropped photo */}
+            <div className="relative h-60 sm:h-80 w-full bg-slate-950 shrink-0 overflow-hidden flex items-center justify-center">
               {selectedPreviewCamp.poster_url ? (
-                <img
-                  src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
-                  alt={selectedPreviewCamp.title}
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  {/* Ambient blurred backdrop so letterboxing looks rich and seamless */}
+                  <img
+                    src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-110 pointer-events-none"
+                  />
+                  {/* Clean uncropped poster photo */}
+                  <img
+                    src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
+                    alt={selectedPreviewCamp.title}
+                    className="relative max-h-60 sm:max-h-80 w-auto max-w-full object-contain z-10 transition-transform duration-300"
+                  />
+                </>
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-purple-800 via-indigo-900 to-purple-950 p-5 sm:p-7 flex flex-col justify-between text-white relative">
+                <div className="w-full h-full bg-gradient-to-br from-purple-800 via-indigo-900 to-purple-950 p-5 sm:p-7 flex flex-col justify-end text-white relative">
                   <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-purple-200 text-xs font-bold border border-white/25 w-fit">
-                    🌸 Devotional Youth Camp &amp; Retreat
-                  </span>
-                  <div>
+                  <div className="z-10">
                     <h2 className="text-xl sm:text-3xl font-black text-white leading-tight drop-shadow-md">
                       {selectedPreviewCamp.title}
                     </h2>
@@ -4974,23 +6702,18 @@ function CampDashboardContent() {
               <button
                 type="button"
                 onClick={() => setSelectedPreviewCamp(null)}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all cursor-pointer z-20 border border-white/20"
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all cursor-pointer z-30 border border-white/20 shadow-lg"
                 title="Close"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
-              {/* Poster bottom gradient text overlay if poster exists */}
+              {/* Title overlay at the bottom if poster exists */}
               {selectedPreviewCamp.poster_url && (
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent flex flex-col justify-between p-4 sm:p-6 text-white pointer-events-none">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md text-emerald-300 text-xs font-bold border border-emerald-400/30 w-fit">
-                    🌸 Devotional Youth Camp &amp; Retreat
-                  </span>
-                  <div>
-                    <h2 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-md">
-                      {selectedPreviewCamp.title}
-                    </h2>
-                  </div>
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 sm:p-6 z-20 pointer-events-none">
+                  <h2 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-md">
+                    {selectedPreviewCamp.title}
+                  </h2>
                 </div>
               )}
             </div>
@@ -5010,16 +6733,14 @@ function CampDashboardContent() {
                 </div>
               )}
 
-              {/* Camp Eligibility & Criteria Box */}
+              {/* Camp Eligibility & Criteria Box: Formatted Hierarchy & Alignment */}
               {selectedPreviewCamp.criteria_message && (
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 border border-emerald-300 shadow-xs space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-emerald-900 font-bold text-xs uppercase tracking-wider">
+                <div className="p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-emerald-50/90 border border-emerald-300 shadow-xs space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-emerald-900 font-black text-xs uppercase tracking-wider border-b border-emerald-200/80 pb-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                     <span>Participant Eligibility &amp; Criteria</span>
                   </div>
-                  <p className="text-slate-800 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line">
-                    {selectedPreviewCamp.criteria_message}
-                  </p>
+                  <FormattedCriteriaMessage text={selectedPreviewCamp.criteria_message} />
                 </div>
               )}
 
@@ -5072,22 +6793,71 @@ function CampDashboardContent() {
                 </div>
               </div>
 
-              {/* Tracks / Categories */}
+              {/* Camps / Categories */}
               {selectedPreviewCamp.tracks && selectedPreviewCamp.tracks.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                    Available Participant Tracks:
+                    Available Camps:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedPreviewCamp.tracks.map((t) => (
-                      <span
-                        key={t}
-                        className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-200 text-xs font-semibold"
-                      >
-                        {t}
-                      </span>
-                    ))}
+                    {selectedPreviewCamp.tracks.map((t) => {
+                      const tPalette = getTrackColorPalette(t);
+                      return (
+                        <span
+                          key={t}
+                          className={`px-3 py-1 rounded-xl ${tPalette.badgeBg} text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${tPalette.dotColor}`} />
+                          <span>{t}</span>
+                        </span>
+                      );
+                    })}
                   </div>
+                </div>
+              )}
+
+              {/* Camp POC Contact Card for Connect in Modal */}
+              {(selectedPreviewCamp.default_poc_name || selectedPreviewCamp.default_poc_contact) && (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0">
+                      <UserCheck className="w-5 h-5 text-amber-800" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-black text-amber-900 tracking-wider block">
+                        Camp Point of Contact (POC)
+                      </span>
+                      <div className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                        {selectedPreviewCamp.default_poc_name || 'Camp Coordinator'}
+                      </div>
+                      {selectedPreviewCamp.default_poc_contact && (
+                        <div className="text-xs font-mono font-bold text-slate-700">
+                          {selectedPreviewCamp.default_poc_contact}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedPreviewCamp.default_poc_contact && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={`tel:${selectedPreviewCamp.default_poc_contact.replace(/[^0-9+]/g, '')}`}
+                        className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>Call POC</span>
+                      </a>
+                      <a
+                        href={`https://wa.me/91${selectedPreviewCamp.default_poc_contact.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hare Krishna! Regarding ${selectedPreviewCamp.title} Camp Registration:`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 active:scale-95 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>WhatsApp Chat</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -5128,6 +6898,97 @@ function CampDashboardContent() {
       />
     </>
   );
+}
+
+// Smart Criteria Message Formatter: converts bullet points, nested letters and Roman numerals into clean typography
+function FormattedCriteriaMessage({ text }: { text: string }) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-2 text-slate-800 text-xs sm:text-[13px] leading-relaxed font-sans">
+      {lines.map((rawLine, idx) => {
+        const line = rawLine.trim();
+        if (!line) {
+          return <div key={idx} className="h-1" />;
+        }
+
+        // Top-level numbered items: "1.", "2.", "3.", etc.
+        const numMatch = line.match(/^(\d+[\.\)])\s*(.*)$/);
+        if (numMatch) {
+          return (
+            <div key={idx} className="font-bold text-slate-900 text-xs sm:text-sm pt-2 first:pt-0 flex items-start gap-2 border-b border-emerald-100 pb-1">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-black shrink-0 mt-0.5 shadow-2xs">
+                {numMatch[1].replace(/[\.\)]/, '')}
+              </span>
+              <span className="flex-1">{numMatch[2]}</span>
+            </div>
+          );
+        }
+
+        // Sub-items: "a.", "b.", "c.", "a)", etc.
+        const letterMatch = line.match(/^([a-zA-Z][\.\)])\s*(.*)$/);
+        if (letterMatch) {
+          const content = letterMatch[2];
+          return (
+            <div key={idx} className="pl-3 sm:pl-6 flex items-start gap-2 text-slate-700">
+              <span className="font-extrabold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded text-[11px] shrink-0 mt-0.5 shadow-2xs">
+                {letterMatch[1]}
+              </span>
+              <span className="flex-1 font-medium">{formatBoldKeywords(content)}</span>
+            </div>
+          );
+        }
+
+        // Sub-sub-items: "i.", "ii.", "iii.", "iv.", "v.", etc.
+        const romanMatch = line.match(/^(i{1,3}|iv|v|vi|vii|viii|ix|x)[\.\)]\s*(.*)$/i);
+        if (romanMatch) {
+          return (
+            <div key={idx} className="pl-7 sm:pl-11 flex items-start gap-2 text-slate-600">
+              <span className="font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded text-[10.5px] shrink-0 mt-0.5 border border-teal-200/70">
+                {romanMatch[1]}.
+              </span>
+              <span className="flex-1 font-normal text-[11.5px] sm:text-xs leading-relaxed">{formatBoldKeywords(romanMatch[2])}</span>
+            </div>
+          );
+        }
+
+        // Bullet points: "-", "*", "•"
+        if (line.startsWith('-') || line.startsWith('*') || line.startsWith('•')) {
+          const content = line.replace(/^[-*•]\s*/, '');
+          return (
+            <div key={idx} className="pl-4 sm:pl-7 flex items-start gap-2 text-slate-700">
+              <span className="text-emerald-500 font-black text-sm shrink-0 leading-none mt-1">&bull;</span>
+              <span className="flex-1 font-medium">{formatBoldKeywords(content)}</span>
+            </div>
+          );
+        }
+
+        // Normal paragraph line
+        return (
+          <p key={idx} className="pl-1 text-slate-700 font-medium leading-relaxed">
+            {formatBoldKeywords(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatBoldKeywords(text: string) {
+  const colonIndex = text.indexOf(':');
+  if (colonIndex > 0 && colonIndex < 40) {
+    const label = text.slice(0, colonIndex + 1);
+    const rest = text.slice(colonIndex + 1);
+    return (
+      <>
+        <strong className="text-slate-900 font-bold">{label}</strong>
+        {rest}
+      </>
+    );
+  }
+  return text;
 }
 
 export default function UserCampDashboardPage() {

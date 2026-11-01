@@ -460,6 +460,8 @@ export interface CampAccommodationPricing {
   peak_end_date?: string; // e.g. "20"
   ac_charge: number; // Optional miscellaneous or other charge amount (₹)
   facility_charge_label?: string; // Custom label, e.g. "Other Charges", "AC Charge", "Hall Setup"
+  ac_charge_billing_type?: 'per_day' | 'fixed'; // Pricing basis: 'per_day' (default) or 'fixed'
+  ac_charge_applies_to?: 'accommodation' | 'all'; // Applies to: 'accommodation' (default) or 'all'
   allow_female_cv_accommodation?: boolean;
 }
 
@@ -507,11 +509,18 @@ export interface CampIttBankDetails {
   instructions?: string;
 }
 
+export interface CenterIdtCode {
+  center_id?: string;
+  center_name: string;
+  code: string;
+}
+
 export interface CampPaymentConfig {
   enable_razorpay: boolean;
   surcharge_percent: number; // e.g. 2.0
   enable_idt: boolean;
   idt_passcodes: string[];
+  center_idt_codes?: CenterIdtCode[];
   enable_itt?: boolean;
   itt_bank_details?: CampIttBankDetails;
   sheets_webhook_url?: string;
@@ -577,6 +586,30 @@ export interface CampRefundRequest {
   processed_by?: string;
   created_at?: string;
   updated_at?: string;
+  camp_title?: string;
+  camp_slug?: string;
+  payment_method?: 'RAZORPAY' | 'IDT' | 'FREE' | 'CASH' | 'COUPON' | 'ROLE_WAIVER' | 'INTER_TEMPLE_TRANSFER' | 'ITT' | string;
+  deduction_source?: string;
+  passcode?: string;
+  payment_id?: string;
+  order_id?: string;
+  transaction_ref?: string;
+  payment_screenshot_url?: string;
+  orig_payment_status?: string;
+  orig_verified_at?: string;
+  orig_verified_by?: string;
+  orig_payment_date?: string;
+  orig_coupon_code?: string;
+  orig_discount_amount?: number;
+  orig_parent_temple?: string;
+  orig_voice_name?: string;
+}
+
+export interface CampEmailLink {
+  id: string;
+  title: string;
+  url: string;
+  type?: 'whatsapp' | 'document' | 'video' | 'map' | 'website' | 'other';
 }
 
 export interface Camp {
@@ -603,6 +636,11 @@ export interface Camp {
   poster_url?: string; // Camp promotional poster or banner image URL
   criteria_message?: string; // Eligibility criteria and requirements message
   banner_message?: string; // Attractive colorful welcome message or announcement
+  require_poc?: boolean; // When enabled, POC contact details (name and phone) must be provided before registering
+  default_poc_name?: string; // Optional default POC name
+  default_poc_contact?: string; // Optional default POC mobile number
+  email_instructions?: string; // Custom instructions/announcement for registration emails
+  email_links?: CampEmailLink[]; // Dynamic action links/buttons (WhatsApp groups, docs, videos, maps)
   created_at?: string;
   updated_at?: string;
 }
@@ -639,18 +677,21 @@ export interface CampRegistration {
   discount_amount?: number;
   coupon_code?: string;
   payment_method: 'RAZORPAY' | 'IDT' | 'FREE' | 'CASH' | 'COUPON' | 'ROLE_WAIVER' | 'INTER_TEMPLE_TRANSFER' | 'ITT';
-  payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
+  payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'rejected' | 'cancelled';
   payment_id?: string;
   order_id?: string;
   deduction_source?: string;
   passcode?: string;
   payment_screenshot_url?: string;
   transaction_ref?: string;
+  transaction_date?: string;
   verified_at?: string;
   verified_by?: string;
   payment_date?: string;
   is_cancelled?: boolean;
   cancellation_id?: string;
+  cancellation_reason?: string;
+  cancelled_at?: string;
   checked_in?: boolean;
   checked_in_at?: string;
   meals_served?: Record<string, boolean>;
@@ -695,11 +736,15 @@ export interface CampAuditTransaction {
   verified_by?: string;
   created_at: string;
   participant_count: number;
+  gross_amount?: number;
   total_amount: number;
   total_meal_cost: number;
   total_acc_cost: number;
+  total_late_fee?: number;
+  total_entry_cost?: number;
   total_discount: number;
   coupon_code?: string;
+  transaction_refund_amount?: number;
   participants: Array<{
     id: string;
     participant_name: string;
@@ -718,6 +763,10 @@ export interface CampAuditTransaction {
     total_cost: number;
     meal_cost: number;
     acc_cost: number;
+    ac_cost?: number;
+    late_fee?: number;
+    entry_cost?: number;
+    discount_amount?: number;
     is_cancelled?: boolean;
     payment_status?: string;
   }>;

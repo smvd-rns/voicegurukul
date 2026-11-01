@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
 
     // Extract user profile metadata
     const name = data?.name || email.split('@')[0];
-    const role = data?.role || [1]; // default 1 (student)
+    // Public self-registration always assigns the basic student role [1]
+    const role = [1];
 
     // 4. Insert user with 'incomplete' status so they must fill the registration form
     await query(

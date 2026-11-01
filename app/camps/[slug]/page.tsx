@@ -12,7 +12,8 @@ import {
   Search, FileText, CheckCircle2, HeartHandshake,
   Building, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
-  Undo2, Banknote, Ticket, UserCircle, UserPlus
+  Undo2, Banknote, Ticket, UserCircle, UserPlus,
+  Save, BookmarkCheck, RotateCcw
 } from 'lucide-react';
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
@@ -20,9 +21,22 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { isCampManagerialUser } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
-import { lookupCampRegistrationsAction, submitCampRefundRequestAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction } from '@/app/dashboard/admin/camps/actions';
+import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction } from '@/app/dashboard/admin/camps/actions';
 import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 import { validatePhoneNumber } from '@/lib/utils/phone-validation';
+
+function formatDisplayDateTime(val: any): string {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 // Smart date label formatter to ensure the actual month is always shown instead of generic "Date"
 function formatMealOptionLabel(m?: CampMealConfig | null, campStartDate?: string): string {
@@ -149,12 +163,19 @@ export default function PublicCampRegistrationPage() {
   const [idtPasscode, setIdtPasscode] = useState('');
   const [ittTempleName, setIttTempleName] = useState('');
   const [ittTransactionRef, setIttTransactionRef] = useState('');
+  const [ittTransactionDate, setIttTransactionDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [ittScreenshotFile, setIttScreenshotFile] = useState<File | null>(null);
   const [ittScreenshotPreview, setIttScreenshotPreview] = useState<string | null>(null);
   const [ittUploading, setIttUploading] = useState(false);
   const [copiedBankField, setCopiedBankField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Registration Draft / Progress Saving State
+  const [activeDraft, setActiveDraft] = useState<any | null>(null);
+  const [loadingDraft, setLoadingDraft] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftToast, setDraftToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Coupon / Promo Code State
   const [couponInput, setCouponInput] = useState('');
@@ -172,6 +193,137 @@ export default function PublicCampRegistrationPage() {
 
   // Cancellation & Refund Modal State
   const [showCancelModal, setShowCancelModal] = useState(false);
+
+  // Draft Check & Load
+  const checkAndLoadDraft = async (campId: string) => {
+    if (!campId) return;
+    setLoadingDraft(true);
+    try {
+      const callerId = userData?.id || user?.id || '';
+      const res = await fetch(`/api/camps/draft?campId=${campId}&userId=${callerId}`);
+      const json = await res.json();
+      if (json.success && json.draft) {
+        if (Array.isArray(json.draft.entries) && json.draft.entries.length > 0) {
+          setActiveDraft(json.draft);
+        } else {
+          setActiveDraft(null);
+        }
+      } else {
+        setActiveDraft(null);
+      }
+    } catch (err) {
+      console.error('Error checking registration draft:', err);
+    } finally {
+      setLoadingDraft(false);
+    }
+  };
+
+  const handleResumeDraft = () => {
+    if (!activeDraft) return;
+    if (Array.isArray(activeDraft.entries) && activeDraft.entries.length > 0) {
+      setEntries(activeDraft.entries);
+    }
+    if (activeDraft.form_data && Object.keys(activeDraft.form_data).length > 0) {
+      setFormData(prev => ({ ...prev, ...activeDraft.form_data }));
+    }
+    if (activeDraft.payment_method) {
+      setSelectedMethod(activeDraft.payment_method);
+    }
+    if (activeDraft.itt_temple_name) {
+      setIttTempleName(activeDraft.itt_temple_name);
+    }
+    if (activeDraft.itt_transaction_ref) {
+      setIttTransactionRef(activeDraft.itt_transaction_ref);
+    }
+    if (activeDraft.itt_transaction_date) {
+      setIttTransactionDate(activeDraft.itt_transaction_date);
+    }
+    if (activeDraft.idt_source) {
+      setIdtSource(activeDraft.idt_source);
+    }
+    if (activeDraft.idt_passcode) {
+      setIdtPasscode(activeDraft.idt_passcode);
+    }
+    if (activeDraft.coupon_code) {
+      setCouponInput(activeDraft.coupon_code);
+    }
+    setPocSaved(true);
+    setDraftToast({
+      type: 'success',
+      message: `Restored saved draft with ${activeDraft.entries?.length || 0} devotee(s)!`,
+    });
+    setTimeout(() => setDraftToast(null), 5000);
+    setActiveDraft(null);
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!camp?.id) return;
+    try {
+      const callerId = userData?.id || user?.id || '';
+      await fetch(`/api/camps/draft?campId=${camp.id}&userId=${callerId}`, { method: 'DELETE' });
+      setActiveDraft(null);
+      setDraftToast({ type: 'success', message: 'Draft cleared.' });
+      setTimeout(() => setDraftToast(null), 3000);
+    } catch (err) {
+      console.error('Error discarding draft:', err);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!camp?.id) return;
+    if (entries.length === 0 && !formData.participantName) {
+      setDraftToast({ type: 'error', message: 'Please add at least one attendee or fill in devotee details before saving.' });
+      setTimeout(() => setDraftToast(null), 4000);
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const callerId = userData?.id || user?.id || '';
+      const payload = {
+        campId: camp.id,
+        callerUserId: callerId,
+        entries,
+        formData,
+        paymentMethod: selectedMethod,
+        ittTempleName,
+        ittTransactionRef,
+        ittTransactionDate,
+        idtSource,
+        idtPasscode,
+        couponCode: appliedCoupon?.code || couponInput || null,
+      };
+
+      const res = await fetch('/api/camps/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to save progress');
+      }
+
+      setDraftToast({
+        type: 'success',
+        message: `Progress saved (${entries.length} devotee${entries.length === 1 ? '' : 's'})! You can log in from any system anytime to resume.`,
+      });
+      setTimeout(() => setDraftToast(null), 6000);
+    } catch (err: any) {
+      setDraftToast({ type: 'error', message: err.message || 'Failed to save progress' });
+      setTimeout(() => setDraftToast(null), 4000);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  // Re-check draft when camp or user profile changes
+  useEffect(() => {
+    if (camp?.id) {
+      checkAndLoadDraft(camp.id);
+    }
+  }, [camp?.id, userData?.id]);
   const [cancelLookupQuery, setCancelLookupQuery] = useState('');
   const [cancelLookupLoading, setCancelLookupLoading] = useState(false);
   const [cancelLookupError, setCancelLookupError] = useState<string | null>(null);
@@ -235,7 +387,7 @@ export default function PublicCampRegistrationPage() {
 
   const computeLiveRefund = () => {
     if (!cancelRegs || selectedRegIdsToCancel.length === 0 || !camp) {
-      return { totalRefund: 0, baseRefund: 0, mealRefund: 0, accRefund: 0, originalTotal: 0, tierLabel: '', baseRefundPercent: 100 };
+      return { totalRefund: 0, baseRefund: 0, mealRefund: 0, accRefund: 0, originalTotal: 0, totalPaidAtCheckout: 0, tierLabel: '', baseRefundPercent: 100, surchargePercent: 0, gatewayFee: 0, cancellationFee: 0 };
     }
 
     const selectedRegs = cancelRegs.filter(r => selectedRegIdsToCancel.includes(r.id!));
@@ -271,10 +423,12 @@ export default function PublicCampRegistrationPage() {
 
     for (const reg of selectedRegs) {
       const orig = Number(reg.total_cost || 0);
-      originalTotal += orig;
+      const discount = Number(reg.discount_amount || 0);
+      const isFree = ['COUPON', 'ROLE_WAIVER', 'FREE'].includes((reg.payment_method || '').toUpperCase()) || discount >= orig;
+      const actualPaid = isFree ? 0 : Math.max(0, orig - discount);
+      originalTotal += actualPaid;
 
       const entryCost = Number(reg.entry_cost || 0);
-      const discount = Number(reg.discount_amount || 0);
       const netEntryCost = Math.max(0, entryCost - discount);
 
       const mealCost = Number(reg.meal_cost || 0);
@@ -282,24 +436,69 @@ export default function PublicCampRegistrationPage() {
 
       // Base fee is any net fee excluding meals & accommodation (e.g. token fee, camp overhead)
       const baseCost = Math.max(0, netEntryCost - mealCost - accCost);
-      const thisBaseRefund = Math.round(baseCost * (baseRefundPercent / 100));
+      const thisBaseRefund = isFree ? 0 : Math.round(baseCost * (baseRefundPercent / 100));
       baseRefund += thisBaseRefund;
 
-      if (refundConfig.refund_meals !== false) {
+      if (!isFree && refundConfig.refund_meals !== false) {
         mealRefund += Math.round(mealCost * (baseRefundPercent / 100));
       }
-      if (refundConfig.refund_accommodation !== false) {
+      if (!isFree && refundConfig.refund_accommodation !== false) {
         accRefund += Math.round(accCost * (baseRefundPercent / 100));
       }
     }
 
+    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r => 
+      ['INTER_TEMPLE_TRANSFER', 'ITT', 'IDT', 'COUPON', 'ROLE_WAIVER', 'FREE'].includes((r.payment_method || '').toUpperCase())
+    );
+    const configuredSurcharge = Number(
+      camp?.payment_config?.surcharge_percent ??
+      (camp as any)?.online_payment_surcharge_percent ??
+      0
+    );
+    const surchargePercent = isAllTransferOrFree ? 0 : configuredSurcharge;
+    const gatewayFee = Math.round(originalTotal * (surchargePercent / 100));
+    const totalPaidAtCheckout = originalTotal + gatewayFee;
     const totalRefund = Math.min(originalTotal, baseRefund + mealRefund + accRefund);
-    return { totalRefund, baseRefund, mealRefund, accRefund, originalTotal, tierLabel, baseRefundPercent };
+    const cancellationFee = Math.max(0, originalTotal - totalRefund);
+
+    return { totalRefund, baseRefund, mealRefund, accRefund, originalTotal, totalPaidAtCheckout, tierLabel, baseRefundPercent, surchargePercent, gatewayFee, cancellationFee };
   };
 
   const handleSubmitCancellation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cancelRegs || selectedRegIdsToCancel.length === 0 || !camp) return;
+
+    const selectedRegs = cancelRegs.filter(r => selectedRegIdsToCancel.includes(r.id!));
+    const isAllPendingIdt = selectedRegs.length > 0 && selectedRegs.every(r => (r.payment_method || '').toUpperCase() === 'IDT' && r.payment_status !== 'completed');
+
+    if (isAllPendingIdt) {
+      setCancelSubmitting(true);
+      setCancelError(null);
+      try {
+        const finalReason = cancelReason === 'Other' ? (cancelReasonCustom.trim() || 'Other') : cancelReason;
+        const res = await cancelPendingIdtRegistrationAction(selectedRegIdsToCancel, finalReason, userData?.id);
+        if (res.success) {
+          setCancelSuccessResult({
+            refundRequest: {
+              id: 'pre-idt-cancel',
+              cancellation_reason: finalReason,
+              status: 'completed',
+              total_registered_amount: 0,
+              calculated_refund_amount: 0,
+            } as any,
+            refundAmount: 0,
+            breakdown: {}
+          });
+        } else {
+          setCancelError(res.error || 'Failed to cancel registration');
+        }
+      } catch (err: any) {
+        setCancelError(err.message || 'Error occurred while cancelling');
+      } finally {
+        setCancelSubmitting(false);
+      }
+      return;
+    }
 
     if (cancelPayoutType === 'UPI') {
       if (!cancelUpiId.trim()) {
@@ -383,6 +582,13 @@ export default function PublicCampRegistrationPage() {
         const json = await res.json();
         if (json.data) {
           setCamp(json.data);
+          if (json.data.default_poc_name || json.data.default_poc_contact) {
+            setPocDetails((prev) => ({
+              ...prev,
+              pocName: json.data.default_poc_name || prev.pocName,
+              pocContact: json.data.default_poc_contact || prev.pocContact,
+            }));
+          }
           const meals = json.data.meal_pricing || [];
           if (meals.length > 0) {
             setFormData((prev) => ({
@@ -791,26 +997,30 @@ export default function PublicCampRegistrationPage() {
     if (editIndex === index) setEditIndex(null);
   };
 
-  // Coupon apply handler
-  const handleApplyCoupon = () => {
+  // Coupon apply handler (Server-side validation for maximum security)
+  const [couponValidating, setCouponValidating] = useState(false);
+  const handleApplyCoupon = async () => {
     setCouponError(null);
     const cleanCode = couponInput.trim().toUpperCase();
     if (!cleanCode) {
       setCouponError('Please enter a coupon code.');
       return;
     }
-    const coupons: CampCoupon[] = camp?.special_waivers?.coupons || [];
-    const found = coupons.find((c) => c.code.trim().toUpperCase() === cleanCode);
-    if (!found) {
-      setCouponError(`Coupon "${cleanCode}" is invalid or expired.`);
-      return;
+    if (!camp?.id) return;
+    setCouponValidating(true);
+    try {
+      const res = await validateCampCouponAction(camp.id, cleanCode);
+      if (res.success && res.coupon) {
+        setAppliedCoupon(res.coupon as CampCoupon);
+        setCouponInput('');
+      } else {
+        setCouponError(res.error || `Promo code "${cleanCode}" is invalid or expired.`);
+      }
+    } catch {
+      setCouponError('Failed to validate promo code. Please try again.');
+    } finally {
+      setCouponValidating(false);
     }
-    if (found.max_uses && (found.used_count || 0) >= found.max_uses) {
-      setCouponError(`Promo code "${cleanCode}" has reached its maximum usage limit (${found.max_uses} users).`);
-      return;
-    }
-    setAppliedCoupon(found);
-    setCouponInput('');
   };
 
   // Grand Total & Discount Calculation
@@ -972,6 +1182,10 @@ export default function PublicCampRegistrationPage() {
       setPaymentError('Please enter the Bank Transaction UTR / Reference ID.');
       return;
     }
+    if (!ittTransactionDate.trim()) {
+      setPaymentError('Please select the Transaction Date.');
+      return;
+    }
     if (!ittScreenshotFile) {
       setPaymentError('Please upload a screenshot of your bank transfer receipt.');
       return;
@@ -1005,6 +1219,8 @@ export default function PublicCampRegistrationPage() {
         payment_screenshot_url: uploadJson.url,
         transactionRef: ittTransactionRef.trim(),
         transaction_ref: ittTransactionRef.trim(),
+        transactionDate: ittTransactionDate.trim(),
+        transaction_date: ittTransactionDate.trim(),
         deductionSource: ittTempleName.trim(),
       });
     } catch (err: any) {
@@ -1055,6 +1271,15 @@ export default function PublicCampRegistrationPage() {
       });
 
       setShowPaymentModal(false);
+
+      // Clear any saved draft for this camp upon successful completion
+      try {
+        const callerId = userData?.id || user?.id || '';
+        if (camp?.id) {
+          fetch(`/api/camps/draft?campId=${camp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => {});
+        }
+        setActiveDraft(null);
+      } catch (e) {}
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to submit registration');
     } finally {
@@ -1336,6 +1561,21 @@ export default function PublicCampRegistrationPage() {
                     </div>
                   )}
 
+                  {(camp.default_poc_name || camp.default_poc_contact) && (
+                    <div className="flex items-center gap-1.5 bg-black/25 px-3.5 py-1.5 sm:py-2 rounded-xl backdrop-blur-md text-amber-100 text-xs font-semibold">
+                      <UserCheck className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-amber-200 shrink-0" />
+                      <span>Camp POC: <strong className="text-white">{camp.default_poc_name || 'Camp Coordinator'}</strong></span>
+                      {camp.default_poc_contact && (
+                        <a
+                          href={`tel:${camp.default_poc_contact.replace(/[^0-9+]/g, '')}`}
+                          className="font-mono text-amber-200 underline hover:text-white ml-0.5"
+                        >
+                          ({camp.default_poc_contact})
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   {camp.refund_config?.enable_refunds !== false && (
                     <button
                       type="button"
@@ -1604,6 +1844,72 @@ export default function PublicCampRegistrationPage() {
               </div>
             ) : (
               <>
+                {/* Saved Draft Notification Banner */}
+                {activeDraft && (
+                  <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in fade-in">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-200/90 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300/80">
+                        <BookmarkCheck className="w-5 h-5 text-amber-800" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs sm:text-sm font-black text-amber-950">
+                            Saved Registration Progress Found ({activeDraft.entries?.length || 0} Devotees)
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[9.5px]">
+                            Saved Draft
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                          Last saved on <strong>{formatDisplayDateTime(activeDraft.updated_at)}</strong>. Continue where you left off or start fresh.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleDiscardDraft}
+                        className="px-3.5 py-1.5 rounded-full border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xs cursor-pointer transition-colors"
+                      >
+                        Discard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResumeDraft}
+                        className="px-4 py-1.5 rounded-full bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Resume Progress</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Toast/Alert for Save Draft Feedback */}
+                {draftToast && (
+                  <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${
+                    draftToast.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                      : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {draftToast.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      )}
+                      <span>{draftToast.message}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraftToast(null)}
+                      className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 {/* STEP 1: POINT OF CONTACT (POC) */}
                 <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
@@ -2542,14 +2848,26 @@ export default function PublicCampRegistrationPage() {
                           <CheckCircle className="w-4 h-4" />
                         </button>
                       ) : (
-                        <button
-                          onClick={() => setShowPaymentModal(true)}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-extrabold rounded-full text-xs sm:text-sm shadow-lg shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          <span>Proceed to Payment (₹{finalTotalAmount.toLocaleString('en-IN')})</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={handleSaveDraft}
+                            disabled={savingDraft || entries.length === 0}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-400 font-bold rounded-full text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Save progress now and resume anytime from any device"
+                          >
+                            {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-700" />}
+                            <span>{savingDraft ? 'Saving...' : `Save Progress (${entries.length})`}</span>
+                          </button>
+                          <button
+                            onClick={() => setShowPaymentModal(true)}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-extrabold rounded-full text-xs sm:text-sm shadow-lg shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            <span>Proceed to Payment (₹{finalTotalAmount.toLocaleString('en-IN')})</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2565,10 +2883,10 @@ export default function PublicCampRegistrationPage() {
 
       {/* PAYMENT METHOD SELECTION MODAL: Clean, Spacious, Professional Styling */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-amber-600" />
                 Select Payment Method
               </h3>
@@ -2578,13 +2896,13 @@ export default function PublicCampRegistrationPage() {
                   setSelectedMethod(null);
                   setPaymentError(null);
                 }}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1 sm:p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
+            <div className="p-3 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto flex-1 overscroll-contain">
               {paymentError && (
                 <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -2727,42 +3045,67 @@ export default function PublicCampRegistrationPage() {
                     </button>
                   </div>
                 </div>
-              ) : selectedMethod === 'IDT' ? (
+              ) : selectedMethod === 'IDT' ? (() => {
+                const centerIdtList = (camp?.payment_config?.center_idt_codes || []) as any[];
+                const userCenterCandidate = (
+                  centerNameFound ||
+                  formData.voiceName ||
+                  entries[0]?.voiceName ||
+                  ''
+                ).trim().toLowerCase();
+
+                const matchedCodeObj = centerIdtList.find((c: any) => 
+                  c.code && (
+                    c.center_name.trim().toLowerCase() === userCenterCandidate ||
+                    userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
+                    c.center_name.trim().toLowerCase().includes(userCenterCandidate)
+                  )
+                ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
+
+                return (
                 /* IDT FORM */
                 <div className="space-y-4">
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>This option is only available to ISKCON NVCC connected centers.</span>
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      VOICE Name / Department (Deduction Source) *
+                      Project Name (as per SERP) *
                     </label>
                     <input
                       type="text"
                       required
                       value={idtSource}
                       onChange={(e) => setIdtSource(e.target.value)}
-                      placeholder="e.g. Bageshree VOICE, Nilachal Dept"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-amber-500"
+                      placeholder="e.g. Enter Project Name / SERP Activity..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
                     />
+                    <span className="text-[10.5px] text-slate-400 mt-1 block">
+                      Manually type the SERP project name for IDT deduction accounting.
+                    </span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      IDT Authorization Passcode *
+                      <span>IDT Authorization Passcode *</span>
+                      {matchedCodeObj && (
+                        <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
+                          (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
+                        </span>
+                      )}
                     </label>
                     <input
-                      type="password"
+                      type="text"
                       required
                       value={idtPasscode}
                       onChange={(e) => setIdtPasscode(e.target.value)}
-                      placeholder="Enter security key"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-amber-500"
+                      placeholder="Enter your center's secret authorization key"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
                     />
                     <span className="text-[11px] text-slate-400 mt-1 block">
-                      Collect authorization passcode from Central VOICE.
+                      Dedicated IDT authorization code for your assigned center.
                     </span>
                   </div>
 
@@ -2778,52 +3121,53 @@ export default function PublicCampRegistrationPage() {
                       type="button"
                       disabled={isSubmitting}
                       onClick={submitIdtPayment}
-                      className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 py-2 sm:py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg sm:rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                       Confirm IDT (₹{baseTotalAmount})
                     </button>
                   </div>
                 </div>
-              ) : (
+                );
+              })() : (
                 /* INTER-TEMPLE TRANSFER FORM */
-                <div className="space-y-4">
+                <div className="space-y-2.5 sm:space-y-3.5">
                   {/* Bank Details Display Card */}
-                  <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60">
-                      <div className="flex items-center gap-2">
-                        <Landmark className="w-4 h-4 text-emerald-700" />
-                        <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                          Temple Bank Account Details
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-2 sm:space-y-3">
+                    <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-emerald-200/60">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Landmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-black text-emerald-950 uppercase tracking-wider">
+                          Temple Bank Details
                         </span>
                       </div>
-                      <span className="text-xs font-black text-emerald-700">
-                        Amount: ₹{finalTotalAmount}
+                      <span className="text-[11px] sm:text-xs font-black text-emerald-700 shrink-0">
+                        ₹{finalTotalAmount}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 text-xs">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Beneficiary Name</span>
-                        <span className="font-bold text-slate-900">{camp.payment_config?.itt_bank_details?.account_name || 'Central VOICE Pune'}</span>
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Beneficiary Name</span>
+                        <span className="font-bold text-slate-900 text-xs truncate block">{camp.payment_config?.itt_bank_details?.account_name || 'Central VOICE Pune'}</span>
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Bank Name</span>
-                        <span className="font-bold text-slate-900">{camp.payment_config?.itt_bank_details?.bank_name || 'State Bank of India'}</span>
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Bank Name</span>
+                        <span className="font-bold text-slate-900 text-xs truncate block">{camp.payment_config?.itt_bank_details?.bank_name || 'State Bank of India'}</span>
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Account Number</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono font-bold text-slate-900 text-sm">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Account Number</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm truncate">
                             {camp.payment_config?.itt_bank_details?.account_number || '---'}
                           </span>
                           {camp.payment_config?.itt_bank_details?.account_number && (
                             <button
                               type="button"
                               onClick={() => copyToClipboard(camp.payment_config.itt_bank_details?.account_number || '', 'acc')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy Account Number"
                             >
                               {copiedBankField === 'acc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2833,16 +3177,16 @@ export default function PublicCampRegistrationPage() {
                       </div>
 
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block">IFSC Code</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono font-bold text-slate-900">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">IFSC Code</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm truncate">
                             {camp.payment_config?.itt_bank_details?.ifsc_code || '---'}
                           </span>
                           {camp.payment_config?.itt_bank_details?.ifsc_code && (
                             <button
                               type="button"
                               onClick={() => copyToClipboard(camp.payment_config.itt_bank_details?.ifsc_code || '', 'ifsc')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy IFSC Code"
                             >
                               {copiedBankField === 'ifsc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2853,22 +3197,22 @@ export default function PublicCampRegistrationPage() {
 
                       {camp.payment_config?.itt_bank_details?.branch_name && (
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Branch</span>
-                          <span className="font-medium text-slate-800">{camp.payment_config.itt_bank_details.branch_name}</span>
+                          <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">Branch</span>
+                          <span className="font-medium text-slate-800 text-xs truncate block">{camp.payment_config.itt_bank_details.branch_name}</span>
                         </div>
                       )}
 
                       {camp.payment_config?.itt_bank_details?.upi_id && (
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">UPI ID / VPA</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono font-bold text-emerald-800">
+                          <span className="text-[9.5px] uppercase font-bold text-slate-500 block leading-tight">UPI ID / VPA</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono font-bold text-emerald-800 text-xs truncate">
                               {camp.payment_config.itt_bank_details.upi_id}
                             </span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(camp.payment_config.itt_bank_details?.upi_id || '', 'upi')}
-                              className="text-slate-400 hover:text-emerald-700 text-xs"
+                              onClick={() => copyToClipboard(camp.payment_config?.itt_bank_details?.upi_id || '', 'upi')}
+                              className="text-slate-400 hover:text-emerald-700 text-xs p-0.5 shrink-0"
                               title="Copy UPI ID"
                             >
                               {copiedBankField === 'upi' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2879,16 +3223,16 @@ export default function PublicCampRegistrationPage() {
                     </div>
 
                     {camp.payment_config?.itt_bank_details?.instructions && (
-                      <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-emerald-900 font-medium">
+                      <div className="pt-1.5 border-t border-emerald-200/60 text-[10.5px] text-emerald-900 font-medium">
                         💡 {camp.payment_config.itt_bank_details.instructions}
                       </div>
                     )}
                   </div>
 
                   {/* Transfer Verification Form */}
-                  <div className="space-y-3">
+                  <div className="space-y-2.5 sm:space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                         Transferring Temple / Center Name *
                       </label>
                       <input
@@ -2897,12 +3241,12 @@ export default function PublicCampRegistrationPage() {
                         value={ittTempleName}
                         onChange={(e) => setIttTempleName(e.target.value)}
                         placeholder="e.g. ISKCON Bangalore, Nigdi VOICE"
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-emerald-500"
+                        className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs outline-none focus:border-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                         Bank Transaction UTR / Ref ID *
                       </label>
                       <input
@@ -2911,25 +3255,38 @@ export default function PublicCampRegistrationPage() {
                         value={ittTransactionRef}
                         onChange={(e) => setIttTransactionRef(e.target.value)}
                         placeholder="e.g. 412389123456 or IMPS/NEFT UTR"
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-mono outline-none focus:border-emerald-500"
+                        className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-mono outline-none focus:border-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
+                        Transaction Date *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={ittTransactionDate}
+                        onChange={(e) => setIttTransactionDate(e.target.value)}
+                        className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-semibold outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">
                         Upload Transfer Screenshot / Receipt Proof *
                       </label>
-                      <div className="border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-2xl p-3 bg-slate-50 text-center transition-colors">
+                      <div className="border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 bg-slate-50 text-center transition-colors">
                         {ittScreenshotPreview ? (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             <img
                               src={ittScreenshotPreview}
                               alt="Payment Screenshot Preview"
-                              className="max-h-24 sm:max-h-28 mx-auto rounded-lg border border-slate-200 object-contain shadow-xs"
+                              className="max-h-20 sm:max-h-24 mx-auto rounded-lg border border-slate-200 object-contain shadow-xs"
                             />
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[11px] text-emerald-700 font-bold">Screenshot ready to upload</span>
-                              <label className="text-[11px] text-slate-600 underline cursor-pointer hover:text-slate-900">
+                              <span className="text-[10.5px] sm:text-[11px] text-emerald-700 font-bold">Screenshot ready to upload</span>
+                              <label className="text-[10.5px] sm:text-[11px] text-slate-600 underline cursor-pointer hover:text-slate-900">
                                 Change
                                 <input
                                   type="file"
@@ -2941,8 +3298,8 @@ export default function PublicCampRegistrationPage() {
                             </div>
                           </div>
                         ) : (
-                          <label className="cursor-pointer block py-2">
-                            <UploadCloud className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
+                          <label className="cursor-pointer block py-1.5 sm:py-2">
+                            <UploadCloud className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 mx-auto mb-1" />
                             <span className="text-xs font-bold text-slate-700 block">Click to select screenshot</span>
                             <span className="text-[10px] text-slate-500">JPG, PNG, or WEBP receipt proof</span>
                             <input
@@ -2956,34 +3313,54 @@ export default function PublicCampRegistrationPage() {
                       </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-[11px] leading-relaxed">
-                      ⏳ <strong>Note:</strong> Registration status will be set to <em>Processing</em>. Central VOICE administration will verify the UTR with bank statements to confirm the registration.
+                    <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-[10.5px] sm:text-[11px] leading-relaxed">
+                      ⏳ <strong>Note:</strong> Registration status will be set to <em>Processing</em> until verified by Central VOICE.
                     </div>
                   </div>
 
-                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
+                  {/* Compact Info Banner (No duplicate button) */}
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-[10.5px] sm:text-[11px] flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="leading-snug">
+                      Waiting for temple accounts? Tap <strong>Save Draft</strong> below to resume anytime.
+                    </span>
+                  </div>
+
+                  {/* Sticky Compact Action Bar */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 pt-2 pb-0.5 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-1 sm:mt-2 z-10">
                     <button
                       type="button"
                       onClick={() => setSelectedMethod(null)}
-                      className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
+                      className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 border border-slate-200 text-xs font-bold rounded-lg sm:rounded-xl text-slate-600 hover:bg-slate-50 shrink-0 cursor-pointer transition-colors"
                     >
-                      &larr; Back
+                      &larr; <span className="hidden xs:inline">Back</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      disabled={savingDraft}
+                      className="px-2.5 sm:px-3 py-2 sm:py-2.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                      title="Save progress and complete payment later"
+                    >
+                      {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-amber-700 shrink-0" />}
+                      <span className="whitespace-nowrap">{savingDraft ? 'Saving...' : 'Save Draft'}</span>
                     </button>
                     <button
                       type="button"
                       disabled={isSubmitting || ittUploading}
                       onClick={submitIttPayment}
-                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 min-w-0 py-2 sm:py-2.5 px-2.5 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer transition-all"
                     >
                       {isSubmitting || ittUploading ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>{ittUploading ? 'Uploading Receipt...' : 'Submitting...'}</span>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          <span className="truncate">{ittUploading ? 'Uploading Receipt...' : 'Submitting...'}</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Submit Proof & Confirm (₹{finalTotalAmount})</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate sm:hidden">Confirm (₹{finalTotalAmount})</span>
+                          <span className="truncate hidden sm:inline">Submit Proof &amp; Confirm (₹{finalTotalAmount})</span>
                         </>
                       )}
                     </button>
@@ -3249,7 +3626,8 @@ export default function PublicCampRegistrationPage() {
                       // An attendee is only permanently locked out if already cancelled and their refund wasn't rejected
                       const isAlreadyCancelled = reg.is_cancelled && !isRefundRejected;
                       const isPendingApproval = reg.payment_status !== 'completed';
-                      const isLocked = isAlreadyCancelled || isPendingApproval;
+                      const isPendingIdt = isPendingApproval && String(reg.payment_method || '').toUpperCase() === 'IDT';
+                      const isLocked = isAlreadyCancelled || (isPendingApproval && !isPendingIdt);
                       const isChecked = selectedRegIdsToCancel.includes(reg.id!);
 
                       return (
@@ -3281,8 +3659,14 @@ export default function PublicCampRegistrationPage() {
                               <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
                                 <span>{reg.participant_name}</span>
                                 {isPendingApproval && (
-                                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
-                                    ⏳ Awaiting Payment Approval (IDT/ITT) • Cannot Cancel Until Confirmed
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    isPendingIdt
+                                      ? 'bg-sky-100 text-sky-900 border-sky-300'
+                                      : 'bg-amber-100 text-amber-900 border-amber-300'
+                                  }`}>
+                                    {isPendingIdt
+                                      ? '⚡ Pending IDT (Direct Cancel)'
+                                      : '⏳ Awaiting Payment Approval (ITT) • Cannot Cancel Until Confirmed'}
                                   </span>
                                 )}
                                 {isAlreadyCancelled && (
@@ -3306,7 +3690,7 @@ export default function PublicCampRegistrationPage() {
                             <span className="font-black text-slate-900 block">
                               ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
                             </span>
-                            <span className="text-[10px] text-slate-400">Paid Fee</span>
+                            <span className="text-[10px] text-slate-400">Camp Fee</span>
                           </div>
                         </div>
                       );
@@ -3318,98 +3702,140 @@ export default function PublicCampRegistrationPage() {
                 {(() => {
                   const live = computeLiveRefund();
                   return (
-                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300/80 space-y-2 text-xs">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/80">
-                        <span className="font-bold text-amber-900 flex items-center gap-1.5">
-                          <Banknote className="w-4 h-4 text-amber-600" />
-                          Refund Policy Applied
-                        </span>
-                        <span className="text-[11px] font-bold text-amber-800">
+                    <div className="rounded-xl sm:rounded-2xl border-2 border-indigo-200 bg-indigo-50/20 overflow-hidden shadow-sm">
+                      {/* Colorful Section Header with guaranteed deep indigo background */}
+                      <div
+                        className="bg-indigo-700 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 px-3 py-2 flex items-center justify-between text-white"
+                        style={{ backgroundColor: '#4338ca' }}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Banknote className="w-4 h-4 text-indigo-200 shrink-0" />
+                          <span className="font-black text-xs sm:text-sm tracking-tight truncate text-white">
+                            Refund Policy &amp; Accounting Breakdown
+                          </span>
+                        </div>
+                        <span className="text-[9.5px] sm:text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 shrink-0 backdrop-blur-sm">
                           {live.tierLabel}
                         </span>
                       </div>
 
-                      <div className="space-y-1 text-[11px] text-slate-600">
-                        {live.baseRefundPercent === 0 ? (
-                          <div className="flex justify-between text-rose-600 font-bold py-1">
-                            <span>Refund Eligibility:</span>
-                            <span>No Refund (0% policy applied)</span>
+                      {/* Content Body with Distinct Colorful Section Divisions */}
+                      <div className="p-2.5 sm:p-3 space-y-1.5 text-xs bg-white">
+                        {/* Section Division 1: Paid & Gateway Surcharge (Sky/Slate Card) */}
+                        {live.gatewayFee > 0 ? (
+                          <div className="bg-sky-50/90 border border-sky-200 rounded-lg p-2 text-[11px] sm:text-xs space-y-0.5">
+                            <div className="flex justify-between text-slate-700">
+                              <span className="font-semibold text-slate-600">Total Paid at Checkout:</span>
+                              <span className="font-black text-slate-900">₹{live.totalPaidAtCheckout.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600">
+                              <span>Gateway Fee ({live.surchargePercent}% non-refundable):</span>
+                              <span className="font-bold text-slate-700">-₹{live.gatewayFee.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between pt-0.5 border-t border-sky-200 text-sky-950 font-bold">
+                              <span>Camp Base Fee:</span>
+                              <span className="font-black text-sky-900">₹{live.originalTotal.toLocaleString('en-IN')}</span>
+                            </div>
                           </div>
                         ) : (
-                          <>
-                            {live.baseRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Base Fee Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.baseRefund}</span>
-                              </div>
-                            )}
-                            {camp.refund_config?.refund_meals !== false && live.mealRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Unconsumed Meals Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.mealRefund}</span>
-                              </div>
-                            )}
-                            {camp.refund_config?.refund_accommodation !== false && live.accRefund > 0 && (
-                              <div className="flex justify-between">
-                                <span>Unconsumed Stay / Room Refund ({live.baseRefundPercent}%):</span>
-                                <span className="font-bold text-slate-800">₹{live.accRefund}</span>
-                              </div>
-                            )}
-                            {live.originalTotal > live.totalRefund && (
-                              <div className="flex justify-between text-rose-700 font-semibold pt-1 border-t border-dashed border-amber-200">
-                                <span>Cancellation Fee / Retained ({100 - live.baseRefundPercent}%):</span>
-                                <span>-₹{(live.originalTotal - live.totalRefund).toLocaleString('en-IN')}</span>
-                              </div>
-                            )}
-                          </>
+                          <div className="bg-sky-50/90 border border-sky-200 rounded-lg p-2 flex justify-between text-[11px] sm:text-xs text-slate-800 font-bold">
+                            <span>Camp Base Fee Paid:</span>
+                            <span className="font-black text-sky-900">₹{live.originalTotal.toLocaleString('en-IN')}</span>
+                          </div>
                         )}
-                        <div className="flex justify-between text-slate-400">
-                          <span>Gateway Processing Fee {surchargePercent > 0 ? `(${surchargePercent}%)` : ''}:</span>
-                          <span>Non-refundable</span>
-                        </div>
-                      </div>
 
-                      <div className="pt-2 border-t border-amber-200/80 flex items-center justify-between text-sm">
-                        <span className="font-bold text-amber-950">Total Refund Due:</span>
-                        <span className="text-base font-black text-emerald-700">
-                          ₹{live.totalRefund.toLocaleString('en-IN')}
-                        </span>
+                        {/* Section Division 2: Policy Fee Deduction (Soft Rose Card) */}
+                        {live.cancellationFee > 0 && (
+                          <div className="bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px] sm:text-xs">
+                            <div className="flex items-center gap-1.5 text-rose-950 font-bold truncate">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                              <span className="truncate">Policy Deduction ({100 - live.baseRefundPercent}%):</span>
+                            </div>
+                            <span className="font-black text-rose-700 shrink-0">-₹{live.cancellationFee.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+
+                        {/* Section Division 3: Final Refund Highlight Banner (Guaranteed Rich Emerald Background) */}
+                        <div
+                          className="rounded-xl p-2.5 sm:p-3 flex items-center justify-between shadow-sm text-white"
+                          style={{ backgroundColor: live.totalRefund > 0 ? '#059669' : '#334155' }}
+                        >
+                          <div className="min-w-0 pr-1">
+                            <div className="font-black text-xs sm:text-sm flex items-center gap-1 text-white">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                              <span>Total Net Refund Due:</span>
+                            </div>
+                            <span className="text-[9.5px] sm:text-[10px] text-emerald-100 block truncate font-medium">
+                              {live.gatewayFee > 0
+                                ? `₹${live.totalPaidAtCheckout} paid − ₹${live.gatewayFee} gateway − ₹${live.cancellationFee} deduction`
+                                : `Net eligible payout to your destination`}
+                            </span>
+                          </div>
+                          <span className="text-lg sm:text-xl font-black text-white shrink-0">
+                            ₹{live.totalRefund.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+
+                        {/* Subtle 1-line policy note */}
+                        <div className="text-[9.5px] sm:text-[10px] text-slate-500 text-center leading-tight pt-0.5">
+                          {live.baseRefundPercent === 0 ? (
+                            <span className="text-rose-600 font-semibold">Post-deadline cancellation • Registrations non-refundable</span>
+                          ) : (
+                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • Credited in 5-7 working days</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
                 })()}
 
                 {/* Payout Details Section */}
-                <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Select Payout Destination:
-                    </label>
-
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setCancelPayoutType('UPI')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          cancelPayoutType === 'UPI'
-                            ? 'bg-white text-emerald-800 shadow-2xs'
-                            : 'text-slate-600'
-                        }`}
-                      >
-                        ⚡ UPI ID
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCancelPayoutType('BANK')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          cancelPayoutType === 'BANK'
-                            ? 'bg-white text-blue-800 shadow-2xs'
-                            : 'text-slate-600'
-                        }`}
-                      >
-                        🏛️ Bank Transfer
-                      </button>
+                <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-xs">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider">
+                        Select Payout Destination:
+                      </label>
+                      <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700">
+                        Eligible Refund: ₹{computeLiveRefund().totalRefund.toLocaleString('en-IN')}
+                      </span>
                     </div>
+                    <span className="text-[10px] text-slate-500">Choose where NVCC Accounts will transfer your refund</span>
+                  </div>
+
+                  {/* 2-Column Responsive Segmented Cards */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCancelPayoutType('UPI')}
+                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
+                        cancelPayoutType === 'UPI'
+                          ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-lg shrink-0">⚡</span>
+                      <div className="min-w-0">
+                        <span className="text-xs font-black block truncate">UPI ID / VPA</span>
+                        <span className="text-[9.5px] opacity-75 font-medium block truncate">Instant transfer</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCancelPayoutType('BANK')}
+                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
+                        cancelPayoutType === 'BANK'
+                          ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-lg shrink-0">🏛️</span>
+                      <div className="min-w-0">
+                        <span className="text-xs font-black block truncate">Bank Account</span>
+                        <span className="text-[9.5px] opacity-75 font-medium block truncate">NEFT / RTGS</span>
+                      </div>
+                    </button>
                   </div>
 
                   {cancelPayoutType === 'UPI' ? (

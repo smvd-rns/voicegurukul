@@ -213,18 +213,33 @@ export function calculateDynamicCampCost(
     }
   }
 
-  // Custom Facility / Other Charges
+  // Custom Facility / Miscellaneous Other Charges (Calculated on per-day basis if user selects fewer days)
   let acCost = 0;
   const configuredFee = Number(accConfig.ac_charge ?? 0);
-  if (configuredFee > 0 && wantsAcc && !isFreeAcc) {
-    if (accConfig.peak_start_date) {
-      const peakStart = Number(accConfig.peak_start_date);
-      const lastDateNum = parseInt(lastDateStr, 10);
-      if (!isNaN(lastDateNum) && !isNaN(peakStart) && lastDateNum >= peakStart) {
-        acCost = configuredFee;
-      }
-    } else {
+  const billingType = accConfig.ac_charge_billing_type || 'per_day';
+  const appliesTo = accConfig.ac_charge_applies_to || 'accommodation';
+  const isEligibleForCharge = appliesTo === 'all' ? !isFreeAcc : (wantsAcc && !isFreeAcc);
+
+  if (configuredFee > 0 && isEligibleForCharge) {
+    if (billingType === 'fixed') {
       acCost = configuredFee;
+    } else {
+      // Per day basis: if user selected e.g. 7 days of meals out of 10, charge for 7 days
+      if (accConfig.peak_start_date) {
+        let activeDaysInPeak = 0;
+        const peakStart = Number(accConfig.peak_start_date);
+        const peakEnd = Number(accConfig.peak_end_date || '999');
+        for (let d = firstMeal.dayIndex; d <= lastMeal.dayIndex && d < mealPricing.length; d++) {
+          const dayDateNum = Number(mealPricing[d].date);
+          if (dayDateNum >= peakStart && dayDateNum <= peakEnd) {
+            activeDaysInPeak++;
+          }
+        }
+        acCost = configuredFee * Math.max(1, activeDaysInPeak);
+      } else {
+        const selectedMealDays = Math.max(1, lastMeal.dayIndex - firstMeal.dayIndex + 1);
+        acCost = configuredFee * selectedMealDays;
+      }
     }
   }
 

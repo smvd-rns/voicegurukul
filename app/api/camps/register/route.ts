@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { query } from '@/lib/db';
-import { CampRegistration, Camp } from '@/types';
+import { CampRegistration, Camp, CenterIdtCode } from '@/types';
 import { calculateDynamicCampCost } from '@/lib/camp-cost';
 import { isCampManagerialUser } from '@/lib/utils/roles';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
@@ -22,9 +22,11 @@ export async function POST(req: NextRequest) {
       razorpay_payment_id,
       razorpay_order_id,
       razorpay_signature,
-      deductionSource,
       passcode,
     } = body;
+    let deductionSource = body.deductionSource;
+
+    const sessionUser = await getAuthUserFromCookies();
 
     if (!campId || !Array.isArray(entries) || entries.length === 0) {
       return NextResponse.json({ error: 'Valid camp ID and participant entries are required' }, { status: 400 });
@@ -59,8 +61,7 @@ export async function POST(req: NextRequest) {
 
     // 1.5 Enforce Student single-registration restriction
     if (entries.length > 1) {
-      const sessionUser = await getAuthUserFromCookies();
-      const resolvedUserId = body.callerUserId || sessionUser?.id;
+      const resolvedUserId = sessionUser?.id;
       if (!resolvedUserId) {
         return NextResponse.json({
           error: 'Registering multiple attendees is restricted to center managers. Please log in to your account.'
@@ -175,9 +176,8 @@ export async function POST(req: NextRequest) {
 
     // 2.5 Recalculate true cost on the server to prevent client-side price tampering
     const isLate = Boolean(
-      camp.late_fee_config?.enabled &&
-      camp.late_fee_config?.start_date &&
-      now >= new Date(camp.late_fee_config.start_date)
+      (Number(camp.late_fee) > 0 && camp.late_fee_start_date && now >= new Date(camp.late_fee_start_date)) ||
+      (camp.late_fee_config?.enabled && camp.late_fee_config?.start_date && now >= new Date(camp.late_fee_config.start_date))
     );
 
     let serverBaseTotal = 0;
@@ -261,18 +261,183 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (paymentMethod === 'IDT') {
-      if (!deductionSource || !passcode) {
-        return NextResponse.json({ error: 'Both deduction source VOICE and passcode are required for IDT' }, { status: 400 });
+      if (!passcode) {
+        return NextResponse.json({ error: 'IDT authorization passcode is required' }, { status: 400 });
       }
 
-      const allowedPasscodes: string[] = camp.payment_config?.idt_passcodes || [];
       const cleanInputCode = String(passcode).trim();
-      const isValidPasscode = allowedPasscodes.some(
-        (code) => String(code).trim().toLowerCase() === cleanInputCode.toLowerCase()
+      const centerCodes: CenterIdtCode[] = camp.payment_config?.center_idt_codes || [];
+      const matchedCenterCode = centerCodes.find(
+        (c) => c.code && c.code.trim().toLowerCase() === cleanInputCode.toLowerCase()
       );
 
-      if (!isValidPasscode) {
-        return NextResponse.json({ error: 'Invalid IDT Authorization Key. Please contact Central VOICE.' }, { status: 403 });
+      if (matchedCenterCode) {
+        // Cross-verification: verify WHO is entering this code strictly via session
+        const callerUserId = sessionUser?.id;
+
+        if (!callerUserId) {
+          return NextResponse.json({
+            error: 'IDT Payment requires an authenticated center manager account. Please log in before proceeding.'
+          }, { status: 403 });
+        }
+
+        const userRes = await query(
+          'SELECT id, name, email, role, center, current_center, other_center FROM users WHERE id = $1',
+          [callerUserId]
+        );
+
+        if (userRes.rows.length === 0) {
+          return NextResponse.json({ error: 'Caller user account not found.' }, { status: 403 });
+        }
+
+        const u = userRes.rows[0];
+        const userRoles: number[] = (Array.isArray(u.role) ? u.role : [u.role])
+          .map((r: any) => Number(r))
+          .filter((r: number) => !isNaN(r));
+
+        const isSuperAdmin = userRoles.includes(8);
+
+        if (!isSuperAdmin) {
+          // Collect all strictly assigned leadership locations (temples and centers) for this manager.
+          // Note: Personal devotee home/living center (users.center) is NOT included because IDT
+          // deduction authority is tied strictly to managerial leadership allocations.
+          const userCenters = new Set<string>();
+
+          try {
+            const assignedLoc = await getManagerAssignedLocations(callerUserId, userRoles);
+            (assignedLoc.assignedTempleNames || []).forEach(tn => { if (tn) userCenters.add(tn.trim()); });
+            (assignedLoc.assignedCenterNames || []).forEach(cn => { if (cn) userCenters.add(cn.trim()); });
+            (assignedLoc.directlyAssignedCenterNames || []).forEach(cn => { if (cn) userCenters.add(cn.trim()); });
+          } catch (locErr) {
+            console.warn('getManagerAssignedLocations error in IDT check:', locErr);
+          }
+
+          try {
+            const tAlloc = await query(
+              `SELECT name FROM temples 
+               WHERE managing_director_id = $1 
+                  OR director_id = $1 
+                  OR central_voice_manager_id = $1 
+                  OR yp_id = $1`,
+              [callerUserId]
+            );
+            tAlloc.rows.forEach(r => { if (r.name) userCenters.add(r.name.trim()); });
+          } catch (tErr) {
+            console.warn('Temple allocation lookup error in IDT check:', tErr);
+          }
+
+          try {
+            const cAlloc = await query(
+              `SELECT name, temple_name FROM centers 
+               WHERE project_manager_id = $1 
+                  OR project_advisor_id = $1 
+                  OR acting_manager_id = $1 
+                  OR oc_id = $1 
+                  OR care_giver_id = $1 
+                  OR youth_preacher_id = $1 
+                  OR internal_manager_id = $1 
+                  OR preaching_coordinator_id = $1 
+                  OR $1 = ANY(preaching_coordinator_ids)
+                  OR accountant_id = $1 
+                  OR kitchen_head_id = $1 
+                  OR study_in_charge_id = $1 
+                  OR event_admin_id = $1
+                  OR $1 = ANY(grihstha_counselor_ids)
+                  OR $1 = ANY(easy_incharge_ids)
+                  OR $1 = ANY(prerna_incharge_ids)`,
+              [callerUserId]
+            );
+            cAlloc.rows.forEach(r => { 
+              if (r.name) userCenters.add(r.name.trim()); 
+              if (r.temple_name) userCenters.add(r.temple_name.trim());
+            });
+          } catch (allocErr) {
+            console.warn('Center allocation lookup error in IDT check:', allocErr);
+          }
+
+          try {
+            const ucRes = await query(
+              `SELECT c.name, c.temple_name FROM user_centers uc JOIN centers c ON uc.center_id = c.id WHERE uc.user_id = $1`,
+              [callerUserId]
+            );
+            ucRes.rows.forEach(r => { 
+              if (r.name) userCenters.add(r.name.trim()); 
+              if (r.temple_name) userCenters.add(r.temple_name.trim());
+            });
+          } catch (ucErr) {
+            console.warn('user_centers lookup error in IDT check:', ucErr);
+          }
+
+          // Strict normalized matching helper: verifies exact names, normalized names, and parentheses acronyms
+          const matchesLocation = (assignedLocName: string, targetCenterName: string): boolean => {
+            const a = assignedLocName.trim().toLowerCase();
+            const b = targetCenterName.trim().toLowerCase();
+            if (a === b) return true;
+
+            const normalize = (str: string) =>
+              str
+                .toLowerCase()
+                .replace(/\b(temple|center|voice|dept|department|iskcon)\b/g, '')
+                .replace(/[^a-z0-9]/g, '')
+                .trim();
+
+            const aNorm = normalize(a);
+            const bNorm = normalize(b);
+            if (aNorm && bNorm && aNorm === bNorm) return true;
+
+            // Extract acronym / abbreviation inside parentheses e.g. "Govindas Girls Department (GGD)" -> "ggd"
+            const extractParen = (str: string) => {
+              const m = str.match(/\(([^)]+)\)/);
+              return m ? normalize(m[1]) : '';
+            };
+            const aParen = extractParen(a);
+            const bParen = extractParen(b);
+
+            if (aParen && (aParen === bNorm || aParen === aNorm)) return true;
+            if (bParen && (bParen === aNorm || bParen === bNorm)) return true;
+
+            return false;
+          };
+
+          const isAuthorized = Array.from(userCenters).some((uc) =>
+            matchesLocation(uc, matchedCenterCode.center_name)
+          );
+
+          if (!isAuthorized) {
+            const userCenterList = Array.from(userCenters).filter(Boolean);
+            const userCenterDisplay = userCenterList.length > 0
+              ? userCenterList.map(c => c.toUpperCase()).join(', ')
+              : 'Unassigned Location';
+
+            return NextResponse.json({
+              error: `Cross-verification failed: IDT Authorization Code "${cleanInputCode}" is generated exclusively for "${matchedCenterCode.center_name}". Your account is assigned to "${userCenterDisplay}". Only the code generated for your assigned center can be used.`
+            }, { status: 403 });
+          }
+        }
+
+        // Auto-assign the verified center name as deduction source
+        deductionSource = matchedCenterCode.center_name;
+      } else {
+        // Code is not matched in center-specific codes
+        if (centerCodes.length > 0) {
+          return NextResponse.json({
+            error: `Invalid IDT Passcode "${cleanInputCode}". Please enter the specific IDT authorization code generated for your center.`
+          }, { status: 403 });
+        }
+
+        // Fallback for legacy camps without center-specific codes
+        if (!deductionSource) {
+          return NextResponse.json({ error: 'Both deduction source VOICE and passcode are required for IDT' }, { status: 400 });
+        }
+
+        const allowedPasscodes: string[] = camp.payment_config?.idt_passcodes || [];
+        const isValidPasscode = allowedPasscodes.some(
+          (code) => String(code).trim().toLowerCase() === cleanInputCode.toLowerCase()
+        );
+
+        if (!isValidPasscode) {
+          return NextResponse.json({ error: 'Invalid IDT Authorization Key. Please contact Central VOICE.' }, { status: 403 });
+        }
       }
     } else if (paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT') {
       const screenshot = body.payment_screenshot_url || body.paymentScreenshotUrl;
@@ -299,8 +464,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Resolve logged-in manager's assigned center & temple, with personal profile fallback
-    const sessionUser = await getAuthUserFromCookies();
-    const resolvedCallerId = body.callerUserId || sessionUser?.id;
+    const resolvedCallerId = sessionUser?.id;
     let managerAssignedCenter = '';
     let managerAssignedTemple = '';
     let managerCurrentTemple = 'ISKCON NVCC • PUNE';
@@ -366,6 +530,7 @@ export async function POST(req: NextRequest) {
     const paymentStatus = isPendingVerification ? 'processing' : 'completed';
     const screenshotUrl = body.payment_screenshot_url || body.paymentScreenshotUrl || null;
     const transactionRef = body.transaction_ref || body.transactionRef || null;
+    const transactionDate = body.transaction_date || body.transactionDate || null;
 
     for (const entry of entries) {
       const entryPocName = entry.poc_name || entry.pocName || body.pocName || body.poc_name || 'Participant';
@@ -505,7 +670,7 @@ export async function POST(req: NextRequest) {
           meal_cost, acc_cost, ac_cost, late_fee, entry_cost, total_cost,
           discount_amount, coupon_code,
           payment_method, payment_status, payment_id, order_id, deduction_source, passcode,
-          payment_screenshot_url, transaction_ref
+          payment_screenshot_url, transaction_ref, transaction_date
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9,
@@ -516,7 +681,7 @@ export async function POST(req: NextRequest) {
           $24, $25, $26, $27, $28, $29,
           $30, $31,
           $32, $33, $34, $35, $36, $37,
-          $38, $39
+          $38, $39, $40
         ) RETURNING *
       `;
 
@@ -559,7 +724,8 @@ export async function POST(req: NextRequest) {
         paymentMethod === 'IDT' ? deductionSource : (deductionSource || (cleanCouponCode ? `Coupon: ${cleanCouponCode}` : (paymentMethod === 'ROLE_WAIVER' ? 'Role Waiver' : null))),
         paymentMethod === 'IDT' ? passcode : null,
         screenshotUrl,
-        transactionRef
+        transactionRef,
+        transactionDate
       ];
 
       const res = await query(sql, values);
@@ -572,6 +738,10 @@ export async function POST(req: NextRequest) {
       if (!entryEmail) continue;
 
       const entryParticipantName = entry.participant_name || entry.participantName || entry.poc_name || 'Participant';
+      const matchingReg = insertedRecords.find(r => 
+        (r.email || '').trim().toLowerCase() === entryEmail && 
+        (r.participant_name || '').trim().toLowerCase() === entryParticipantName.trim().toLowerCase()
+      ) || insertedRecords.find(r => (r.email || '').trim().toLowerCase() === entryEmail) || insertedRecords[0];
       const rawPhone = String(entry.whatsapp || entry.phone || entry.poc_contact || '');
       const entryWhatsapp = rawPhone.replace(/[^0-9]/g, '').slice(-10);
       const entryBirthDate = entry.birth_date || entry.birthDate || entry.dob || null;
@@ -717,7 +887,7 @@ export async function POST(req: NextRequest) {
             ]
           );
 
-          // Asynchronously dispatch welcome email with login credentials
+          // Asynchronously dispatch welcome email with login credentials & embedded digital pass
           sendCampDevoteeWelcomeAccountEmail({
             userEmail: entryEmail,
             userName: entryParticipantName,
@@ -726,10 +896,25 @@ export async function POST(req: NextRequest) {
             trackName: entryCampTrack,
             centerName: studentCenter,
             templeName: studentTemple,
-            isExistingAccount: false
+            isExistingAccount: false,
+            emailInstructions: camp.email_instructions || undefined,
+            emailLinks: camp.email_links || undefined,
+            registrationId: matchingReg?.id,
+            userPhone: entryWhatsapp || matchingReg?.whatsapp || '',
+            campStartDate: camp.start_date,
+            campEndDate: camp.end_date,
+            venue: camp.venue,
+            mealInfo: {
+              firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
+              firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
+              lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
+              lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
+              dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
+              accommodation: matchingReg?.accommodation || entry.accommodation,
+            },
           }).catch((mailErr) => console.error('Failed to send welcome email to new student:', mailErr));
         } else {
-          // B. Devotee ALREADY exists: Prevent duplicate account creation, send registration confirmation email
+          // B. Devotee ALREADY exists: Prevent duplicate account creation, send registration confirmation email with pass
           const rawEntryRounds = entry.rounds !== undefined && entry.rounds !== null && entry.rounds !== ''
             ? parseInt(String(entry.rounds), 10)
             : null;
@@ -770,7 +955,22 @@ export async function POST(req: NextRequest) {
             trackName: entryCampTrack,
             centerName: studentCenter,
             templeName: studentTemple,
-            isExistingAccount: true
+            isExistingAccount: true,
+            emailInstructions: camp.email_instructions || undefined,
+            emailLinks: camp.email_links || undefined,
+            registrationId: matchingReg?.id,
+            userPhone: entryWhatsapp || matchingReg?.whatsapp || userCheck.rows[0].whatsapp || '',
+            campStartDate: camp.start_date,
+            campEndDate: camp.end_date,
+            venue: camp.venue,
+            mealInfo: {
+              firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
+              firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
+              lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
+              lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
+              dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
+              accommodation: matchingReg?.accommodation || entry.accommodation,
+            },
           }).catch((mailErr) => console.error('Failed to send camp registration email to existing student:', mailErr));
         }
       } catch (accErr) {

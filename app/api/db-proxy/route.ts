@@ -130,6 +130,14 @@ export async function POST(req: NextRequest) {
         if (!session) {
           return NextResponse.json({ data: null, error: 'Unauthorized: Login required to view donations' }, { status: 401 });
         }
+
+        // Non-admins can only view donations linked to their own tag_user_id
+        if (!isSuperAdmin && !isHigherAdmin) {
+          const targetTagId = filters?.find((f: any) => f.col === 'tag_user_id')?.val;
+          if (!targetTagId || targetTagId !== session.userId) {
+            return NextResponse.json({ data: null, error: 'Forbidden: You can only view your own donations' }, { status: 403 });
+          }
+        }
       }
 
       // Rule A-2: Camp Registrations, Refunds & Allocations Protection
@@ -174,12 +182,19 @@ export async function POST(req: NextRequest) {
         if (!session) {
           return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
         }
-        // Normal students can only write their own reports
-        if (method !== 'select' && !isSuperAdmin && !isCounselor) {
-          const reportUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
-                               (updateData && updateData.user_id);
-          if (reportUserId && reportUserId !== session.userId) {
-            return NextResponse.json({ data: null, error: 'Forbidden: Cannot submit sadhana report for another user' }, { status: 403 });
+        // Normal students can only view or write their own reports
+        if (!isSuperAdmin && !isHigherAdmin && !isCounselor) {
+          if (method === 'select') {
+            const reportUserId = filters?.find((f: any) => f.col === 'user_id')?.val;
+            if (!reportUserId || reportUserId !== session.userId) {
+              return NextResponse.json({ data: null, error: 'Forbidden: You can only view your own sadhana reports' }, { status: 403 });
+            }
+          } else {
+            const reportUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
+                                 (updateData && updateData.user_id);
+            if (reportUserId && reportUserId !== session.userId) {
+              return NextResponse.json({ data: null, error: 'Forbidden: Cannot submit sadhana report for another user' }, { status: 403 });
+            }
           }
         }
       }
@@ -194,12 +209,31 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ data: null, error: 'Forbidden: Invalid sender_id' }, { status: 403 });
           }
         }
+        if (method === 'select' && !isSuperAdmin && !isHigherAdmin) {
+          const hasRecipientFilter = filters?.some((f: any) => 
+            f.col === 'recipient_ids' && (
+              (f.type === 'overlaps' && Array.isArray(f.val) && f.val.includes(session.userId)) ||
+              (f.type === 'in' && Array.isArray(f.val) && f.val.includes(session.userId)) ||
+              (f.val === session.userId)
+            )
+          );
+          const hasSenderFilter = filters?.some((f: any) => f.col === 'sender_id' && f.val === session.userId);
+          const hasOrScope = orFilters?.some((c: string) => typeof c === 'string' && c.includes(session.userId));
+          
+          if (!hasRecipientFilter && !hasSenderFilter && !hasOrScope) {
+            return NextResponse.json({ data: null, error: 'Forbidden: You can only access messages sent to or by your account' }, { status: 403 });
+          }
+        }
       }
 
       // Rule F: Users Table Defense
       if (table === 'users') {
         if (method === 'delete' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Only Super Admins can delete users' }, { status: 403 });
+        }
+
+        if (method === 'insert' && !isSuperAdmin && !isHigherAdmin) {
+          return NextResponse.json({ data: null, error: 'Forbidden: Direct user insertion blocked. Use registration endpoint.' }, { status: 403 });
         }
 
         // Block password_hash injection/updates via db-proxy
@@ -222,8 +256,31 @@ export async function POST(req: NextRequest) {
         // Non-admins can only update their own profile
         if (method === 'update' && !isSuperAdmin && !isHigherAdmin) {
           const targetId = filters?.find((f: any) => f.col === 'id')?.val;
-          if (targetId && targetId !== session?.userId) {
+          if (!targetId || targetId !== session?.userId) {
             return NextResponse.json({ data: null, error: 'Forbidden: Cannot edit another user profile' }, { status: 403 });
+          }
+        }
+
+        // Protect SELECT on users table from unauthorized data dumping
+        if (method === 'select' && !isSuperAdmin && !isHigherAdmin) {
+          const isDonationSlugQuery = filters?.some((f: any) => f.col === 'donation_slug' && f.val);
+          const isAuthEmailCheck = !session && singleRow && selectCols === 'id' && filters?.some((f: any) => f.col === 'email');
+
+          if (isDonationSlugQuery) {
+            // Public / authenticated donation lookup allowed for active collector
+          } else if (isAuthEmailCheck) {
+            // Unauthenticated signup email existence check allowed
+          } else if (session) {
+            if (!isCounselor) {
+              // Ordinary devotees can only select their own user profile record
+              const targetId = filters?.find((f: any) => f.col === 'id')?.val;
+              if (!targetId || targetId !== session.userId) {
+                return NextResponse.json({ data: null, error: 'Forbidden: You can only query your own user profile' }, { status: 403 });
+              }
+            }
+            // Counselors can query users assigned to them
+          } else {
+            return NextResponse.json({ data: null, error: 'Unauthorized: Login required to view user profiles' }, { status: 401 });
           }
         }
       }
@@ -238,15 +295,25 @@ export async function POST(req: NextRequest) {
 
       // Rule H: User Profile Details Protection
       if (table === 'user_profile_details') {
-        if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
+        if (!isSuperAdmin && !isHigherAdmin) {
           if (!session) {
             return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
           }
-          const targetUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
-                               (updateData && updateData.user_id) ||
-                               filters?.find((f: any) => f.col === 'user_id')?.val;
-          if (targetUserId && targetUserId !== session.userId) {
-            return NextResponse.json({ data: null, error: 'Forbidden: Cannot edit another user profile details' }, { status: 403 });
+
+          if (method === 'select') {
+            if (!isCounselor) {
+              const targetUserId = filters?.find((f: any) => f.col === 'user_id')?.val;
+              if (!targetUserId || targetUserId !== session.userId) {
+                return NextResponse.json({ data: null, error: 'Forbidden: You can only access your own profile details' }, { status: 403 });
+              }
+            }
+          } else {
+            const targetUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
+                                 (updateData && updateData.user_id) ||
+                                 filters?.find((f: any) => f.col === 'user_id')?.val;
+            if (!targetUserId || targetUserId !== session.userId) {
+              return NextResponse.json({ data: null, error: 'Forbidden: Cannot edit another user profile details' }, { status: 403 });
+            }
           }
         }
       }
@@ -543,6 +610,35 @@ export async function POST(req: NextRequest) {
         if ('password_hash' in resultData) {
           delete (resultData as any).password_hash;
         }
+      }
+    }
+
+    // CRITICAL SECURITY: Never leak secret IDT passcodes or private promo codes to non-super-admin callers!
+    if (table === 'camps' && !isSuperAdmin && !isHigherAdmin && resultData) {
+      const sanitizeCamp = (row: any) => {
+        if (!row) return;
+        if (row.payment_config && typeof row.payment_config === 'object') {
+          // Deep clone to prevent mutating original object reference
+          row.payment_config = { ...row.payment_config };
+          delete row.payment_config.idt_passcodes;
+          if (Array.isArray(row.payment_config.center_idt_codes)) {
+            // Strip the secret passcode string, keep center_name for authorized center listing
+            row.payment_config.center_idt_codes = row.payment_config.center_idt_codes.map((c: any) => ({
+              center_name: c?.center_name
+            }));
+          }
+        }
+        if (row.special_waivers && typeof row.special_waivers === 'object') {
+          row.special_waivers = { ...row.special_waivers };
+          // Do not leak secret coupons list to client browser; validation is done via validateCampCouponAction
+          delete row.special_waivers.coupons;
+        }
+      };
+
+      if (Array.isArray(resultData)) {
+        resultData.forEach(sanitizeCamp);
+      } else if (typeof resultData === 'object') {
+        sanitizeCamp(resultData);
       }
     }
 

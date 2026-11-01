@@ -143,15 +143,20 @@ export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'u
       throw new Error(`A camp with slug "${slug}" already exists. Please choose a different title or slug.`);
     }
 
-    // Ensure camp columns exist if migration 043 was not manually executed yet
+    // Ensure camp columns exist if migration 043 / 055 was not manually executed yet
     try {
       await query(`
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS poster_url TEXT;
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS criteria_message TEXT;
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS banner_message TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS require_poc BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS default_poc_name TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS default_poc_contact TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS email_instructions TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS email_links JSONB DEFAULT '[]'::jsonb;
       `);
     } catch (e: any) {
-      console.warn('Notice: DDL auto-check for camp poster columns:', e?.message);
+      console.warn('Notice: DDL auto-check for camp poster/poc/email columns:', e?.message);
     }
 
     let res;
@@ -163,14 +168,18 @@ export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'u
           registration_start_date, late_fee_start_date, registration_deadline,
           late_fee, tracks, participant_types, meal_pricing,
           accommodation_pricing, special_waivers, payment_config, refund_config,
-          eligible_centers, poster_url, criteria_message, banner_message
+          eligible_centers, poster_url, criteria_message, banner_message,
+          require_poc, default_poc_name, default_poc_contact,
+          email_instructions, email_links
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7,
           $8, $9, $10,
           $11, $12, $13, $14,
           $15, $16, $17, $18,
-          $19, $20, $21, $22
+          $19, $20, $21, $22,
+          $23, $24, $25,
+          $26, $27
         ) RETURNING *
       `;
 
@@ -196,7 +205,12 @@ export async function createCampAction(data: Omit<Camp, 'id' | 'created_at' | 'u
         JSON.stringify(data.eligible_centers || []),
         data.poster_url || null,
         data.criteria_message || null,
-        data.banner_message || null
+        data.banner_message || null,
+        Boolean(data.require_poc),
+        data.default_poc_name || null,
+        data.default_poc_contact || null,
+        data.email_instructions || null,
+        JSON.stringify(data.email_links || [])
       ]);
     } catch (insertErr: any) {
       if (
@@ -266,15 +280,20 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
       throw new Error('Forbidden: Super Admin privileges required to update camp configurations');
     }
 
-    // Ensure camp columns exist if migration 043 was not manually executed yet
+    // Ensure camp columns exist if migration 043 / 055 was not manually executed yet
     try {
       await query(`
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS poster_url TEXT;
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS criteria_message TEXT;
         ALTER TABLE camps ADD COLUMN IF NOT EXISTS banner_message TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS require_poc BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS default_poc_name TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS default_poc_contact TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS email_instructions TEXT;
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS email_links JSONB DEFAULT '[]'::jsonb;
       `);
     } catch (e: any) {
-      console.warn('Notice: DDL auto-check for camp poster columns:', e?.message);
+      console.warn('Notice: DDL auto-check for camp poster/poc/email columns:', e?.message);
     }
 
     let res;
@@ -302,8 +321,13 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
           poster_url = COALESCE($19, poster_url),
           criteria_message = COALESCE($20, criteria_message),
           banner_message = COALESCE($21, banner_message),
+          require_poc = COALESCE($22, require_poc),
+          default_poc_name = COALESCE($23, default_poc_name),
+          default_poc_contact = COALESCE($24, default_poc_contact),
+          email_instructions = COALESCE($25, email_instructions),
+          email_links = COALESCE($26, email_links),
           updated_at = NOW()
-        WHERE id = $22
+        WHERE id = $27
         RETURNING *
       `;
 
@@ -329,6 +353,11 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
         data.poster_url !== undefined ? data.poster_url : null,
         data.criteria_message !== undefined ? data.criteria_message : null,
         data.banner_message !== undefined ? data.banner_message : null,
+        data.require_poc !== undefined ? Boolean(data.require_poc) : null,
+        data.default_poc_name !== undefined ? data.default_poc_name : null,
+        data.default_poc_contact !== undefined ? data.default_poc_contact : null,
+        data.email_instructions !== undefined ? data.email_instructions : null,
+        data.email_links !== undefined ? JSON.stringify(data.email_links) : null,
         id
       ]);
     } catch (updateErr: any) {
@@ -589,6 +618,65 @@ export async function verifyAndApproveCampRegistrationAction(
 }
 
 /**
+ * Super Admin / Payment Desk: Reject an ITT / IDT transfer registration
+ */
+export async function rejectCampRegistrationAction(
+  registrationId: string,
+  reason: string
+) {
+  try {
+    const { user, isSuperAdmin, campAllocations } = await verifyAdminAuth();
+
+    const regLookup = await query('SELECT camp_id FROM camp_registrations WHERE id = $1', [registrationId]);
+    if (regLookup.rows.length === 0) {
+      return { success: false, error: 'Registration record not found' };
+    }
+    const campId = regLookup.rows[0].camp_id;
+
+    if (!isSuperAdmin) {
+      const hasPerm = campAllocations.some(a => a.camp_id === campId && ['payment_approvals', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Payment Approvals desk permission required to reject registrations for this camp.' };
+      }
+    }
+
+    const adminIdentifier = user.email || user.id;
+    const cleanReason = (reason || 'Transfer verification rejected by admin').trim();
+
+    const sql = `
+      UPDATE camp_registrations
+      SET 
+        payment_status = 'rejected',
+        is_cancelled = true,
+        cancelled_at = NOW(),
+        cancellation_reason = $1,
+        verified_at = NOW(),
+        verified_by = $2,
+        updated_at = NOW()
+      WHERE id = $3
+      RETURNING *
+    `;
+
+    const res = await query(sql, [
+      cleanReason,
+      adminIdentifier,
+      registrationId
+    ]);
+
+    if (res.rows.length === 0) {
+      return { success: false, error: 'Registration record not found' };
+    }
+
+    const reg = res.rows[0];
+    revalidatePath(`/dashboard/admin/camps/${reg.camp_id}/registrations`);
+    return { success: true, registration: reg as CampRegistration };
+  } catch (error: any) {
+    console.error('rejectCampRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Super Admin: Verify and approve an entire payment batch (ITT, IDT, or Manual)
  */
 export async function verifyAndApproveCampBatchAction(
@@ -630,7 +718,8 @@ export async function verifyAndApproveCampBatchAction(
         verified_at = NOW(),
         verified_by = $3,
         updated_at = NOW()
-      WHERE group_id = $4 OR payment_id = $4 OR id::text = $4
+      WHERE (group_id = $4 OR payment_id = $4 OR id::text = $4)
+        AND COALESCE(is_cancelled, false) = false
       RETURNING camp_id
     `;
 
@@ -656,6 +745,215 @@ export async function verifyAndApproveCampBatchAction(
 }
 
 /**
+ * Super Admin / Payment Desk: Reject an entire payment batch (ITT, IDT, or Manual)
+ */
+export async function rejectCampBatchAction(
+  batchId: string,
+  reason: string
+) {
+  try {
+    const { user, isSuperAdmin, campAllocations } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      const checkRes = await query(
+        'SELECT camp_id FROM camp_registrations WHERE group_id = $1 OR payment_id = $1 OR id::text = $1 LIMIT 1',
+        [batchId]
+      );
+      if (checkRes.rows.length === 0) {
+        return { success: false, error: 'No matching transaction records found.' };
+      }
+      const targetCampId = checkRes.rows[0].camp_id;
+      const hasPerm = campAllocations.some(a => a.camp_id === targetCampId && ['payment_approvals', 'both'].includes(a.permission_type));
+      if (!hasPerm) {
+        return { success: false, error: 'Forbidden: Payment Approvals desk permission required to reject batches for this camp.' };
+      }
+    }
+
+    const adminIdentifier = user.email || user.id;
+    const cleanReason = (reason || 'Payment batch rejected by admin').trim();
+
+    const sql = `
+      UPDATE camp_registrations
+      SET 
+        payment_status = 'rejected',
+        is_cancelled = true,
+        cancelled_at = NOW(),
+        cancellation_reason = $1,
+        verified_at = NOW(),
+        verified_by = $2,
+        updated_at = NOW()
+      WHERE group_id = $3 OR payment_id = $3 OR id::text = $3
+      RETURNING camp_id
+    `;
+
+    const res = await query(sql, [
+      cleanReason,
+      adminIdentifier,
+      batchId
+    ]);
+
+    if (res.rows.length === 0) {
+      return { success: false, error: 'No matching transaction records found to reject.' };
+    }
+
+    const campId = res.rows[0].camp_id;
+    revalidatePath(`/dashboard/admin/camps/${campId}/registrations`);
+    revalidatePath(`/dashboard/admin/camps`);
+    return { success: true, count: res.rows.length };
+  } catch (error: any) {
+    console.error('rejectCampBatchAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Manager / Devotee / Admin: Directly cancel one or more registrations from a PENDING IDT batch
+ * before the Accounts Department executes the inter-department transfer.
+ * 
+ * Since money has NOT been transferred between temple accounts yet:
+ * - No monetary refund or payout bank/UPI details are required.
+ * - The batch total is reduced automatically so Accounts only transfers for active attendees.
+ * - Devotees are marked as is_cancelled = true, payment_status = 'cancelled'.
+ * - Strictly restricted to payment_method === 'IDT' in pending status.
+ */
+export async function cancelPendingIdtRegistrationAction(
+  registrationIds: string[],
+  reason?: string,
+  callerUserId?: string
+) {
+  try {
+    if (!registrationIds || registrationIds.length === 0) {
+      return { success: false, error: 'No registrations specified to cancel.' };
+    }
+
+    const regRes = await query(
+      `SELECT * FROM camp_registrations WHERE id = ANY($1::uuid[])`,
+      [registrationIds]
+    );
+
+    if (regRes.rows.length === 0) {
+      return { success: false, error: 'No matching registrations found.' };
+    }
+
+    const regs = regRes.rows as CampRegistration[];
+
+    // Security Check: Verify caller identity & authorization strictly from authenticated session
+    const callerUser = await getAuthUserFromCookies().catch(() => null);
+    const resolvedUserId = callerUser?.id;
+    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+      isSuperAdmin: false,
+      isManager: false,
+      assignedTempleNames: [],
+      assignedCenterNames: [],
+    };
+    let authUserEmail = '';
+    let authUserPhone = '';
+
+    if (resolvedUserId) {
+      try {
+        const uRes = await query('SELECT id, email, phone, role FROM users WHERE id = $1', [resolvedUserId]);
+        const dbUser = uRes.rows[0];
+        authUserEmail = (dbUser?.email || callerUser?.email || '').trim().toLowerCase();
+        authUserPhone = (dbUser?.phone || '').replace(/\D/g, '').slice(-10);
+
+        const role = dbUser?.role;
+        const roles = (Array.isArray(role) ? role : [role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
+        managerLoc = await getManagerAssignedLocations(resolvedUserId, roles);
+      } catch {
+        // ignore
+      }
+    }
+
+    for (const reg of regs) {
+      // 1. Must be IDT
+      const method = (reg.payment_method || '').toUpperCase();
+      if (method !== 'IDT') {
+        return {
+          success: false,
+          error: `Attendee "${reg.participant_name}" registered via ${reg.payment_method}. Pre-transfer direct cancellation is strictly reserved for IDT. For Razorpay/ITT, please use standard refund request.`
+        };
+      }
+
+      // 2. Must be pending (unapproved)
+      if (reg.payment_status === 'completed' || reg.payment_status === 'refunded') {
+        return {
+          success: false,
+          error: `Attendee "${reg.participant_name}" has already been approved & confirmed by Accounts. Cancellation now requires a formal refund request.`
+        };
+      }
+
+      if (reg.is_cancelled) {
+        return {
+          success: false,
+          error: `Attendee "${reg.participant_name}" has already been cancelled.`
+        };
+      }
+
+      // 3. Authorization check
+      const regEmail = (reg.email || '').trim().toLowerCase();
+      const regPhone = (reg.whatsapp || '').replace(/\D/g, '').slice(-10);
+      const regPocPhone = (reg.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+      let isAuthorized = false;
+      if (managerLoc.isSuperAdmin) {
+        isAuthorized = true;
+      } else if (managerLoc.isManager) {
+        const isOwn = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+        const lowerTemples = managerLoc.assignedTempleNames.map(t => t.trim().toLowerCase()).filter(Boolean);
+        const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
+        const pt = (reg.parent_temple || '').trim().toLowerCase();
+        const vn = (reg.voice_name || '').trim().toLowerCase();
+
+        const inAssignedTemple = lowerTemples.some(t => pt === t);
+        const inAssignedCenter = lowerCenters.some(c => vn === c);
+        isAuthorized = isOwn || inAssignedTemple || inAssignedCenter;
+      } else if (resolvedUserId) {
+        isAuthorized = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+      } else {
+        isAuthorized = true;
+      }
+
+      if (!isAuthorized) {
+        return {
+          success: false,
+          error: `Unauthorized: You do not have permission to cancel attendee "${reg.participant_name}".`
+        };
+      }
+    }
+
+    const cleanReason = (reason || 'Cancelled by manager/devotee prior to IDT transfer approval').trim();
+
+    await query(
+      `UPDATE camp_registrations
+       SET is_cancelled = true,
+           cancelled_at = NOW(),
+           cancellation_reason = $1,
+           payment_status = 'cancelled',
+           updated_at = NOW()
+       WHERE id = ANY($2::uuid[])`,
+      [cleanReason, registrationIds]
+    );
+
+    const campIds = Array.from(new Set(regs.map(r => r.camp_id)));
+    for (const cId of campIds) {
+      revalidatePath(`/dashboard/admin/camps/${cId}/registrations`);
+    }
+    revalidatePath(`/dashboard/camp`);
+    revalidatePath(`/dashboard/admin/camps`);
+
+    return { success: true, count: regs.length };
+  } catch (error: any) {
+    console.error('cancelPendingIdtRegistrationAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get all refund requests for a specific camp (Admin)
  */
 export async function getCampRefundRequestsAction(campId: string) {
@@ -673,9 +971,48 @@ export async function getCampRefundRequestsAction(campId: string) {
     const sql = `
       SELECT r.*, 
         c.title AS camp_title,
-        c.slug AS camp_slug
+        c.slug AS camp_slug,
+        orig_pay.payment_method,
+        orig_pay.deduction_source,
+        orig_pay.passcode,
+        orig_pay.payment_id,
+        orig_pay.order_id,
+        orig_pay.transaction_ref,
+        orig_pay.payment_screenshot_url,
+        orig_pay.payment_status AS orig_payment_status,
+        orig_pay.verified_at AS orig_verified_at,
+        orig_pay.verified_by AS orig_verified_by,
+        orig_pay.payment_date AS orig_payment_date,
+        orig_pay.coupon_code AS orig_coupon_code,
+        orig_pay.discount_amount AS orig_discount_amount,
+        orig_pay.parent_temple AS orig_parent_temple,
+        orig_pay.voice_name AS orig_voice_name
       FROM camp_refund_requests r
       JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT 
+          cr.payment_method,
+          cr.deduction_source,
+          cr.passcode,
+          cr.payment_id,
+          cr.order_id,
+          cr.transaction_ref,
+          cr.payment_screenshot_url,
+          cr.payment_status,
+          cr.verified_at,
+          cr.verified_by,
+          cr.payment_date,
+          cr.coupon_code,
+          cr.discount_amount,
+          cr.parent_temple,
+          cr.voice_name
+        FROM camp_registrations cr
+        WHERE cr.id = r.registration_id 
+           OR cr.cancellation_id = r.id
+           OR (r.group_id IS NOT NULL AND cr.group_id = r.group_id)
+        ORDER BY cr.created_at ASC
+        LIMIT 1
+      ) orig_pay ON true
       WHERE r.camp_id = $1
       ORDER BY r.created_at DESC
     `;
@@ -954,7 +1291,7 @@ export async function lookupCampRegistrationsAction(
 
     // Security check: Check authenticated session & managerial roles
     const sessionUser = await getAuthUserFromCookies().catch(() => null);
-    const resolvedUserId = callerUserId || sessionUser?.id;
+    const resolvedUserId = sessionUser?.id;
 
     let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
       isSuperAdmin: false,
@@ -1049,10 +1386,12 @@ export async function lookupCampRegistrationsAction(
     const pendingUnapproved = regRes.rows.filter(r => r.payment_status !== 'completed' && !r.is_cancelled && r.payment_status !== 'refunded');
     const confirmedRegs = regRes.rows.filter(r => r.payment_status === 'completed' || r.is_cancelled || r.payment_status === 'refunded');
 
-    if (confirmedRegs.length === 0 && pendingUnapproved.length > 0) {
+    const hasPendingIdt = pendingUnapproved.some(r => (r.payment_method || '').toUpperCase() === 'IDT');
+
+    if (confirmedRegs.length === 0 && pendingUnapproved.length > 0 && !hasPendingIdt) {
       return {
         success: false,
-        error: 'This booking is currently awaiting payment approval (IDT/ITT) and has not been confirmed yet. Registrations cannot be cancelled or refunded until payment is approved and confirmed.'
+        error: 'This booking is currently awaiting payment approval (ITT) and has not been confirmed yet. Registrations cannot be cancelled or refunded until payment is approved and confirmed.'
       };
     }
 
@@ -1191,7 +1530,7 @@ export async function submitCampRefundRequestAction(
 
     // Security Check: Verify Ownership & Prevent Cancellation / Refund Hijacking
     const callerUser = await getAuthUserFromCookies().catch(() => null);
-    const resolvedUserId = callerUserId || callerUser?.id;
+    const resolvedUserId = callerUser?.id;
     let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
       isSuperAdmin: false,
       isManager: false,
@@ -1225,10 +1564,13 @@ export async function submitCampRefundRequestAction(
       }
 
       if (reg.payment_status !== 'completed') {
-        return {
-          success: false,
-          error: `Attendee "${reg.participant_name}" is currently awaiting payment approval (${reg.payment_status}) and is not confirmed yet. Neither the devotee nor the manager can cancel or apply for a refund on an unconfirmed registration.`
-        };
+        const isIdt = (reg.payment_method || '').toUpperCase() === 'IDT';
+        if (!isIdt) {
+          return {
+            success: false,
+            error: `Attendee "${reg.participant_name}" is currently awaiting payment approval (${reg.payment_status}) and is not confirmed yet. Neither the devotee nor the manager can cancel or apply for a refund on an unconfirmed registration.`
+          };
+        }
       }
 
       const regEmail = (reg.email || '').trim().toLowerCase();
@@ -1303,54 +1645,64 @@ export async function submitCampRefundRequestAction(
     let totalBaseFeeRefund = 0;
     let totalMealRefund = 0;
     let totalAccRefund = 0;
+    let totalLateFee = 0;
 
     const cancelledRegistrationsSummary: any[] = [];
 
     for (const reg of regs) {
       const originalTotal = Number(reg.total_cost || 0);
-      totalOriginalAmount += originalTotal;
+      const discount = Number(reg.discount_amount || 0);
+      const isFree = ['COUPON', 'ROLE_WAIVER', 'FREE'].includes((reg.payment_method || '').toUpperCase()) || discount >= originalTotal;
+      const actualPaid = isFree ? 0 : Math.max(0, originalTotal - discount);
+      totalOriginalAmount += actualPaid;
+
+      const lateFee = Number(reg.late_fee || 0);
+      totalLateFee += lateFee;
 
       const entryCost = Number(reg.entry_cost || 0);
-      const discount = Number(reg.discount_amount || 0);
       const netEntryCost = Math.max(0, entryCost - discount);
 
       const mealCost = Number(reg.meal_cost || 0);
       const accCost = Number(reg.acc_cost || 0) + Number(reg.ac_cost || 0);
 
-      // Base fee is any net fee excluding meals & accommodation (e.g. token fee, camp overhead)
+      // Base fee is any net fee excluding meals, stay, and late fee
       const baseCost = Math.max(0, netEntryCost - mealCost - accCost);
 
-      // Base fee refund based on tier percent
-      const thisBaseRefund = Math.round(baseCost * (baseRefundPercent / 100));
+      // For 100% free passes / role waivers (volunteers, mentors, full coupons), refund is strictly ₹0
+      const thisBaseRefund = isFree ? 0 : Math.round(baseCost * (baseRefundPercent / 100));
       totalBaseFeeRefund += thisBaseRefund;
 
-      // Meal refund based on tier percent
-      const thisMealRefund = refundConfig.refund_meals !== false 
+      const thisMealRefund = (!isFree && refundConfig.refund_meals !== false)
         ? Math.round(mealCost * (baseRefundPercent / 100)) 
         : 0;
       totalMealRefund += thisMealRefund;
 
-      // Acc refund based on tier percent
-      const thisAccRefund = refundConfig.refund_accommodation !== false 
+      const thisAccRefund = (!isFree && refundConfig.refund_accommodation !== false)
         ? Math.round(accCost * (baseRefundPercent / 100)) 
         : 0;
       totalAccRefund += thisAccRefund;
 
-      const regRefund = Math.min(originalTotal, thisBaseRefund + thisMealRefund + thisAccRefund);
+      // Refund can strictly NEVER exceed actual net cash paid by devotee (minus non-refundable late fee)
+      const maxEligible = Math.max(0, actualPaid - lateFee);
+      const regRefund = Math.min(maxEligible, thisBaseRefund + thisMealRefund + thisAccRefund);
 
       cancelledRegistrationsSummary.push({
         reg_id: reg.id,
         participant_name: reg.participant_name,
         camp_track: reg.camp_track,
         original_total: originalTotal,
+        actual_paid: actualPaid,
+        discount_amount: discount,
         base_cost: baseCost,
         meal_cost: mealCost,
         acc_cost: accCost,
-        refund_amount: regRefund
+        late_fee: lateFee,
+        refund_amount: regRefund,
+        notes: isFree ? 'Free pass / 100% waiver (₹0 refund)' : lateFee > 0 ? `Late fee ₹${lateFee} non-refundable` : undefined
       });
     }
 
-    const calculatedRefundAmount = Math.min(totalOriginalAmount, totalBaseFeeRefund + totalMealRefund + totalAccRefund);
+    const calculatedRefundAmount = Math.min(Math.max(0, totalOriginalAmount - totalLateFee), totalBaseFeeRefund + totalMealRefund + totalAccRefund);
 
     // 4. Insert Refund Request
     const insertSql = `
@@ -1360,25 +1712,30 @@ export async function submitCampRefundRequestAction(
         cancellation_type, cancelled_registrations,
         original_total_amount, refund_amount, breakdown,
         payout_type, upi_id, account_name, account_number, bank_name, ifsc_code,
-        reason, status
+        reason, status, admin_notes
       ) VALUES (
         $1, $2, $3,
         $4, $5, $6,
         $7, $8,
         $9, $10, $11,
         $12, $13, $14, $15, $16, $17,
-        $18, 'pending'
+        $18, 'pending', $19
       ) RETURNING *
     `;
 
     const primaryReg = regs[0];
+    const initialAdminNote = totalLateFee > 0 && calculatedRefundAmount === 0
+      ? `Registration included ₹${totalLateFee} late fee which is strictly non-refundable.`
+      : null;
+
     const breakdown = {
       base_fee_refund: totalBaseFeeRefund,
       meal_refund: totalMealRefund,
       acc_refund: totalAccRefund,
+      late_fee: totalLateFee,
       tier_label: tierLabel,
       base_refund_percent: baseRefundPercent,
-      non_refundable_fee: Math.max(0, totalOriginalAmount - calculatedRefundAmount)
+      non_refundable_fee: totalLateFee + Math.max(0, (totalOriginalAmount - totalLateFee) - calculatedRefundAmount)
     };
 
     const insertRes = await query(insertSql, [
@@ -1399,7 +1756,8 @@ export async function submitCampRefundRequestAction(
       data.account_number?.trim() || null,
       data.bank_name?.trim() || null,
       data.ifsc_code?.trim() || null,
-      data.reason?.trim() || null
+      data.reason?.trim() || null,
+      initialAdminNote
     ]);
 
     const newRefundReq = insertRes.rows[0];
@@ -1461,10 +1819,23 @@ export async function getAllCampTransactionsAction() {
         MAX(r.verified_by) AS verified_by,
         MIN(r.created_at) AS created_at,
         COUNT(r.id)::int AS participant_count,
-        COALESCE(SUM(r.total_cost), 0)::numeric AS total_amount,
+        COALESCE(SUM(r.total_cost), 0)::numeric AS gross_amount,
+        COALESCE(SUM(
+          CASE 
+            WHEN r.payment_method IN ('COUPON', 'ROLE_WAIVER', 'FREE') THEN 0
+            ELSE GREATEST(0, r.total_cost - COALESCE(r.discount_amount, 0))
+          END
+        ), 0)::numeric AS total_amount,
         COALESCE(SUM(r.meal_cost), 0)::numeric AS total_meal_cost,
         COALESCE(SUM(r.acc_cost + COALESCE(r.ac_cost, 0)), 0)::numeric AS total_acc_cost,
-        COALESCE(SUM(r.discount_amount), 0)::numeric AS total_discount,
+        COALESCE(SUM(r.late_fee), 0)::numeric AS total_late_fee,
+        COALESCE(SUM(r.entry_cost), 0)::numeric AS total_entry_cost,
+        COALESCE(SUM(
+          CASE
+            WHEN r.payment_method IN ('COUPON', 'ROLE_WAIVER', 'FREE') THEN r.total_cost
+            ELSE COALESCE(r.discount_amount, 0)
+          END
+        ), 0)::numeric AS total_discount,
         MAX(r.coupon_code) AS coupon_code,
         JSON_AGG(
           json_build_object(
@@ -1485,6 +1856,10 @@ export async function getAllCampTransactionsAction() {
             'total_cost', r.total_cost,
             'meal_cost', r.meal_cost,
             'acc_cost', r.acc_cost,
+            'ac_cost', r.ac_cost,
+            'late_fee', r.late_fee,
+            'entry_cost', r.entry_cost,
+            'discount_amount', r.discount_amount,
             'is_cancelled', r.is_cancelled,
             'payment_status', r.payment_status
           )
@@ -1500,33 +1875,58 @@ export async function getAllCampTransactionsAction() {
 
     // Fetch all refunds across camps to cross-reference
     const refundsSql = `
-      SELECT r.*, c.title AS camp_title, c.slug AS camp_slug
+      SELECT r.*, 
+        c.title AS camp_title, 
+        c.slug AS camp_slug,
+        orig_pay.payment_method,
+        orig_pay.deduction_source,
+        orig_pay.passcode,
+        orig_pay.payment_id,
+        orig_pay.order_id,
+        orig_pay.transaction_ref,
+        orig_pay.payment_screenshot_url,
+        orig_pay.payment_status AS orig_payment_status,
+        orig_pay.verified_at AS orig_verified_at,
+        orig_pay.verified_by AS orig_verified_by,
+        orig_pay.payment_date AS orig_payment_date,
+        orig_pay.coupon_code AS orig_coupon_code,
+        orig_pay.discount_amount AS orig_discount_amount,
+        orig_pay.parent_temple AS orig_parent_temple,
+        orig_pay.voice_name AS orig_voice_name
       FROM camp_refund_requests r
       JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT 
+          cr.payment_method,
+          cr.deduction_source,
+          cr.passcode,
+          cr.payment_id,
+          cr.order_id,
+          cr.transaction_ref,
+          cr.payment_screenshot_url,
+          cr.payment_status,
+          cr.verified_at,
+          cr.verified_by,
+          cr.payment_date,
+          cr.coupon_code,
+          cr.discount_amount,
+          cr.parent_temple,
+          cr.voice_name
+        FROM camp_registrations cr
+        WHERE cr.id = r.registration_id 
+           OR cr.cancellation_id = r.id
+           OR (r.group_id IS NOT NULL AND cr.group_id = r.group_id)
+        ORDER BY cr.created_at ASC
+        LIMIT 1
+      ) orig_pay ON true
       ORDER BY r.created_at DESC
     `;
     const refundsRes = await query(refundsSql);
     const allRefunds = refundsRes.rows as (CampRefundRequest & { camp_title: string; camp_slug: string })[];
 
-    // Map refunds to transactions
-    const refundMapByGroupId = new Map<string, CampRefundRequest>();
-    const refundMapByRegId = new Map<string, CampRefundRequest>();
     for (const ref of allRefunds) {
       if (ref.payout_date && (ref.payout_date as any) instanceof Date) {
         ref.payout_date = (ref.payout_date as unknown as Date).toISOString().split('T')[0];
-      }
-      if (ref.group_id) {
-        refundMapByGroupId.set(ref.group_id, ref);
-      }
-      if (ref.registration_id) {
-        refundMapByRegId.set(ref.registration_id, ref);
-      }
-      if (Array.isArray(ref.cancelled_registrations)) {
-        for (const cr of ref.cancelled_registrations) {
-          if (cr.reg_id) {
-            refundMapByRegId.set(cr.reg_id, ref);
-          }
-        }
       }
     }
 
@@ -1540,27 +1940,55 @@ export async function getAllCampTransactionsAction() {
 
     for (const t of transactions) {
       // Numerical conversions
+      t.gross_amount = Number((t as any).gross_amount || t.total_amount || 0);
       t.total_amount = Number(t.total_amount || 0);
       t.total_meal_cost = Number(t.total_meal_cost || 0);
       t.total_acc_cost = Number(t.total_acc_cost || 0);
+      t.total_late_fee = Number((t as any).total_late_fee || 0);
+      t.total_entry_cost = Number((t as any).total_entry_cost || 0);
       t.total_discount = Number(t.total_discount || 0);
       t.participant_count = Number(t.participant_count || 0);
 
-      // Match refund
-      if (t.txn_id && refundMapByGroupId.has(t.txn_id)) {
-        t.refund = refundMapByGroupId.get(t.txn_id);
-      } else if (Array.isArray(t.participants)) {
-        for (const p of t.participants) {
-          if (p.id && refundMapByRegId.has(p.id)) {
-            t.refund = refundMapByRegId.get(p.id);
-            break;
+      // Match refund accurately for this transaction's participants
+      const participantIds = Array.isArray(t.participants) ? t.participants.map(p => p.id) : [];
+      let txRefundAmount = 0;
+      let matchedRefund: CampRefundRequest | null = null;
+
+      for (const ref of allRefunds) {
+        let isMatch = false;
+        if (ref.group_id && ref.group_id === t.txn_id) {
+          isMatch = true;
+        }
+        if (ref.registration_id && participantIds.includes(ref.registration_id)) {
+          isMatch = true;
+        }
+
+        // Sum up specific refund items for this transaction
+        if (Array.isArray(ref.cancelled_registrations)) {
+          for (const cr of ref.cancelled_registrations) {
+            if (participantIds.includes(cr.reg_id)) {
+              isMatch = true;
+              if (cr.refund_amount != null) {
+                txRefundAmount += Number(cr.refund_amount);
+              }
+            }
+          }
+        }
+
+        if (isMatch) {
+          matchedRefund = ref;
+          if (txRefundAmount === 0 && ref.refund_amount) {
+            txRefundAmount = Math.min(t.total_amount, Number(ref.refund_amount));
           }
         }
       }
 
+      t.refund = matchedRefund;
+      t.transaction_refund_amount = txRefundAmount > 0 ? txRefundAmount : (matchedRefund ? Number(matchedRefund.refund_amount || 0) : 0);
+
       if (t.payment_status === 'completed' || t.payment_status === 'refunded') {
         totalCollected += t.total_amount;
-        totalGrossFee += (t.total_meal_cost + t.total_acc_cost);
+        totalGrossFee += t.gross_amount;
         totalDiscounts += t.total_discount;
         if (t.total_discount > 0 || t.coupon_code) {
           totalCouponsCount++;
@@ -1615,9 +2043,48 @@ export async function getAllCampRefundsAction() {
     const sql = `
       SELECT r.*, 
         c.title AS camp_title,
-        c.slug AS camp_slug
+        c.slug AS camp_slug,
+        orig_pay.payment_method,
+        orig_pay.deduction_source,
+        orig_pay.passcode,
+        orig_pay.payment_id,
+        orig_pay.order_id,
+        orig_pay.transaction_ref,
+        orig_pay.payment_screenshot_url,
+        orig_pay.payment_status AS orig_payment_status,
+        orig_pay.verified_at AS orig_verified_at,
+        orig_pay.verified_by AS orig_verified_by,
+        orig_pay.payment_date AS orig_payment_date,
+        orig_pay.coupon_code AS orig_coupon_code,
+        orig_pay.discount_amount AS orig_discount_amount,
+        orig_pay.parent_temple AS orig_parent_temple,
+        orig_pay.voice_name AS orig_voice_name
       FROM camp_refund_requests r
       JOIN camps c ON c.id = r.camp_id
+      LEFT JOIN LATERAL (
+        SELECT 
+          cr.payment_method,
+          cr.deduction_source,
+          cr.passcode,
+          cr.payment_id,
+          cr.order_id,
+          cr.transaction_ref,
+          cr.payment_screenshot_url,
+          cr.payment_status,
+          cr.verified_at,
+          cr.verified_by,
+          cr.payment_date,
+          cr.coupon_code,
+          cr.discount_amount,
+          cr.parent_temple,
+          cr.voice_name
+        FROM camp_registrations cr
+        WHERE cr.id = r.registration_id 
+           OR cr.cancellation_id = r.id
+           OR (r.group_id IS NOT NULL AND cr.group_id = r.group_id)
+        ORDER BY cr.created_at ASC
+        LIMIT 1
+      ) orig_pay ON true
       ORDER BY r.created_at DESC
     `;
 
@@ -1657,7 +2124,7 @@ export async function getAllCentersForCampConfigAction() {
 export async function getActiveCampsForUserAction(clientUserId?: string) {
   try {
     const sessionUser = await getAuthUserFromCookies().catch(() => null);
-    const resolvedUserId = clientUserId || sessionUser?.id;
+    const resolvedUserId = sessionUser?.id;
 
     const sql = `
       SELECT 
@@ -1727,7 +2194,7 @@ export async function getActiveCampsForUserAction(clientUserId?: string) {
     if (caller.hierarchy?.currentCenter?.name) addCenter(caller.hierarchy.currentCenter.name);
 
     // If manager, also check manager assigned centers
-    const isManagerRole = roles.some((r: any) => [9, 10, 11, 12, 13, 14, 15, 16, 17].includes(Number(r)));
+    const isManagerRole = roles.some((r: any) => [8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(Number(r)));
     if (isManagerRole) {
       try {
         const managerLoc = await getManagerAssignedLocations(caller.id, roles);
@@ -1767,7 +2234,7 @@ export async function getActiveCampsForUserAction(clientUserId?: string) {
 export async function getUserCampRegistrationsAction(identifier?: { email?: string; phone?: string; callerUserId?: string }) {
   try {
     const sessionUser = await getAuthUserFromCookies().catch(() => null);
-    const resolvedUserId = identifier?.callerUserId || sessionUser?.id;
+    const resolvedUserId = sessionUser?.id;
     if (!resolvedUserId) {
       return { success: false, error: 'Authentication required' };
     }
@@ -1776,8 +2243,8 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
     const dbUser = uRes.rows[0];
     const roles = (Array.isArray(dbUser?.role) ? dbUser.role : [dbUser?.role]).map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
 
-    const cleanEmail = (dbUser?.email || sessionUser?.email || identifier?.email || '').trim().toLowerCase();
-    const rawPhone = dbUser?.phone || identifier?.phone || '';
+    const cleanEmail = (dbUser?.email || sessionUser?.email || '').trim().toLowerCase();
+    const rawPhone = dbUser?.phone || '';
     const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10);
 
     const managerLoc = await getManagerAssignedLocations(resolvedUserId, roles);
@@ -1797,6 +2264,7 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
           c.start_date AS camp_start_date,
           c.end_date AS camp_end_date,
           c.refund_config AS camp_refund_config,
+          c.payment_config AS camp_payment_config,
           c.meal_pricing AS camp_meal_pricing,
           c.tracks AS camp_tracks,
           u.current_center AS user_current_center,
@@ -1873,6 +2341,7 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
       camp_start_date: string;
       camp_end_date: string;
       camp_refund_config?: any;
+      camp_payment_config?: any;
       camp_meal_pricing?: any[];
       camp_tracks?: any[];
       is_own_registration: boolean;
@@ -3907,7 +4376,7 @@ export async function getGlobalPrasadamAuditAction() {
 export async function getCenterDevoteesForCampRegistrationAction(campId?: string, clientUserId?: string) {
   try {
     const user = await getAuthUserFromCookies();
-    const userId = user?.id || clientUserId;
+    const userId = user?.id;
     if (!userId) {
       return { success: false, error: 'Authentication required' };
     }
@@ -4235,6 +4704,50 @@ export async function superAdminUpdateCampRegistrationAction(
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Secure Server-side Promo Code Validator:
+ * Validates a single submitted coupon code without leaking the entire list of
+ * admin promo codes, VIP vouchers, or 100% discount codes to the client browser.
+ */
+export async function validateCampCouponAction(campId: string, couponCode: string) {
+  try {
+    if (!campId || !couponCode || !couponCode.trim()) {
+      return { success: false, error: 'Please enter a valid coupon code.' };
+    }
+
+    const cleanCode = couponCode.trim().toUpperCase();
+    const campRes = await query('SELECT special_waivers FROM camps WHERE id = $1', [campId]);
+    if (campRes.rows.length === 0) {
+      return { success: false, error: 'Camp event not found.' };
+    }
+
+    const coupons: any[] = campRes.rows[0].special_waivers?.coupons || [];
+    const matched = coupons.find(c => String(c.code).trim().toUpperCase() === cleanCode);
+
+    if (!matched) {
+      return { success: false, error: `Promo code "${cleanCode}" is invalid or expired.` };
+    }
+
+    if (matched.max_uses && (Number(matched.used_count) || 0) >= matched.max_uses) {
+      return { success: false, error: `Promo code "${cleanCode}" has reached its maximum usage limit.` };
+    }
+
+    return {
+      success: true,
+      coupon: {
+        code: matched.code,
+        discount_type: matched.discount_type,
+        discount_value: Number(matched.discount_value),
+        label: matched.label || `${matched.discount_value}${matched.discount_type === 'PERCENT' ? '%' : '₹'} Off`
+      }
+    };
+  } catch (error: any) {
+    console.error('validateCampCouponAction error:', error);
+    return { success: false, error: error.message || 'Failed to validate promo code.' };
+  }
+}
+
 
 
 

@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 
     // Auth: Require valid session — this endpoint returns PII (names, phones, emails, payment data)
     const authUser = await getAuthUserFromRequest(req);
-    const resolvedUserId = callerUserId || authUser?.id;
+    const resolvedUserId = authUser?.id;
 
     if (!resolvedUserId) {
       return NextResponse.json({ error: 'Unauthorized: Login required to look up registrations' }, { status: 401 });

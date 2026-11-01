@@ -12,7 +12,7 @@ import {
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
   Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette, QrCode,
-  Upload, UploadCloud
+  Upload, UploadCloud, Sparkles, XCircle, UserCheck, Mail, Link2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -20,7 +20,7 @@ import { getThumbnailUrl } from '@/lib/utils/google-drive';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampStaffRoleManagementModal from '@/components/camps/CampStaffRoleManagementModal';
 import AdminGlobalPrasadamAuditTab from '@/components/camps/AdminGlobalPrasadamAuditTab';
-import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest } from '@/types';
+import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest, CenterIdtCode, CampEmailLink } from '@/types';
 import {
   getCampsAction,
   createCampAction,
@@ -32,6 +32,7 @@ import {
   getAllCampTransactionsAction,
   getAllCampRefundsAction,
   verifyAndApproveCampBatchAction,
+  rejectCampBatchAction,
   getAllCentersForCampConfigAction
 } from './actions';
 
@@ -253,6 +254,12 @@ export default function AdminCampsPage() {
   // Center restriction config state
   const [availableCenters, setAvailableCenters] = useState<{ id: string; name: string; temple_name?: string }[]>([]);
   const [centerSearchFilter, setCenterSearchFilter] = useState('');
+  const [idtCenterSearch, setIdtCenterSearch] = useState('');
+  const [copiedCenterCode, setCopiedCenterCode] = useState<string | null>(null);
+  const [showLegacyPasscodes, setShowLegacyPasscodes] = useState(false);
+  const [addCenterSearchQuery, setAddCenterSearchQuery] = useState('');
+  const [isAddCenterDropdownOpen, setIsAddCenterDropdownOpen] = useState(false);
+  const addCenterRef = React.useRef<HTMLDivElement | null>(null);
 
   // Custom Delete Confirmation Modal State
   const [deleteModal, setDeleteModal] = useState<{
@@ -281,6 +288,11 @@ export default function AdminCampsPage() {
     poster_url: '',
     criteria_message: '',
     banner_message: '',
+    require_poc: false,
+    default_poc_name: '',
+    default_poc_contact: '',
+    email_instructions: '',
+    email_links: [] as CampEmailLink[],
     start_date: '',
     end_date: '',
     registration_start_date: '',
@@ -310,6 +322,8 @@ export default function AdminCampsPage() {
       peak_end_date: '',
       ac_charge: 0,
       facility_charge_label: '',
+      ac_charge_billing_type: 'per_day' as 'per_day' | 'fixed',
+      ac_charge_applies_to: 'accommodation' as 'accommodation' | 'all',
       allow_female_cv_accommodation: false
     },
     special_waivers: {
@@ -327,6 +341,7 @@ export default function AdminCampsPage() {
       enable_idt: true,
       allow_student_idt: false,
       idt_passcodes_str: '16, 26, 36, 46, 56, AT123, NITW456, CV108, IITH101, GGD202, VSSUT303, VIT404, MTH505, BEC606, NITR707, MV808, WG909, VIIT1010, KYC1111, KVM1212, KSV1313, VTL108',
+      center_idt_codes: [] as CenterIdtCode[],
       enable_itt: false,
       allow_student_itt: false,
       allowed_managerial_roles: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -385,6 +400,16 @@ export default function AdminCampsPage() {
       }
     };
     fetchCenters();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutsideAddCenter = (e: MouseEvent) => {
+      if (addCenterRef.current && !addCenterRef.current.contains(e.target as Node)) {
+        setIsAddCenterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutsideAddCenter);
+    return () => document.removeEventListener('mousedown', handleClickOutsideAddCenter);
   }, []);
 
   const loadAuditData = async () => {
@@ -551,6 +576,7 @@ export default function AdminCampsPage() {
     let pendingVerificationCount = 0;
 
     for (const t of filteredTransactions) {
+      const gross = Number((t as any).gross_amount || (Number(t.total_amount || 0) + Number(t.total_discount || 0)));
       const amt = Number(t.total_amount || 0);
       const disc = Number(t.total_discount || 0);
       const count = Number(t.participant_count || 0);
@@ -559,8 +585,8 @@ export default function AdminCampsPage() {
 
       if (t.payment_status === 'completed' || t.payment_status === 'refunded') {
         totalCollected += amt;
-        // True Gross Value = Net Paid + Subsidized Discounts
-        totalGrossFee += (amt + disc);
+        // True Gross Camp Value before discounts
+        totalGrossFee += gross;
         totalDiscounts += disc;
         if (disc > 0 || t.coupon_code) {
           totalCouponsCount++;
@@ -709,6 +735,36 @@ export default function AdminCampsPage() {
       }
     } catch (err: any) {
       setBatchVerifyError(err.message || 'Error occurred during verification.');
+    } finally {
+      setBatchVerifyLoading(false);
+    }
+  };
+
+  const handleRejectBatch = async () => {
+    if (!selectedTxn?.txn_id) return;
+    const reason = batchVerifyRemarks.trim() || 'Payment batch rejected by administrator';
+    if (!window.confirm(`Are you sure you want to reject this payment batch (${selectedTxn.txn_id})? Registrations will be marked as rejected.`)) {
+      return;
+    }
+
+    setBatchVerifyLoading(true);
+    setBatchVerifyError(null);
+    try {
+      const res = await rejectCampBatchAction(selectedTxn.txn_id, reason);
+      if (res.success) {
+        setBatchVerifySuccess(true);
+        setSelectedTxn(prev => prev ? {
+          ...prev,
+          payment_status: 'rejected',
+          verified_by: userData?.email || 'Super Admin',
+          verified_at: new Date().toISOString()
+        } : null);
+        loadAuditData();
+      } else {
+        setBatchVerifyError(res.error || 'Failed to reject payment batch.');
+      }
+    } catch (err: any) {
+      setBatchVerifyError(err.message || 'Error occurred during rejection.');
     } finally {
       setBatchVerifyLoading(false);
     }
@@ -866,6 +922,11 @@ export default function AdminCampsPage() {
       poster_url: '',
       criteria_message: '',
       banner_message: '',
+      require_poc: false,
+      default_poc_name: '',
+      default_poc_contact: '',
+      email_instructions: '',
+      email_links: [],
       venue: 'Central VOICE, Pune',
       status: 'active',
       start_date: '',
@@ -897,6 +958,8 @@ export default function AdminCampsPage() {
         peak_end_date: '',
         ac_charge: 0,
         facility_charge_label: '',
+        ac_charge_billing_type: 'per_day' as 'per_day' | 'fixed',
+        ac_charge_applies_to: 'accommodation' as 'accommodation' | 'all',
         allow_female_cv_accommodation: false
       },
       special_waivers: {
@@ -914,6 +977,7 @@ export default function AdminCampsPage() {
         enable_idt: true,
         allow_student_idt: false,
         idt_passcodes_str: '16, 26, 36, 46, 56, AT123, NITW456, CV108, IITH101, GGD202, VSSUT303, VIT404, MTH505, BEC606, NITR707, MV808, WG909, VIIT1010, KYC1111, KVM1212, KSV1313, VTL108',
+        center_idt_codes: [] as CenterIdtCode[],
         enable_itt: false,
         allow_student_itt: false,
         allowed_managerial_roles: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -974,6 +1038,11 @@ export default function AdminCampsPage() {
       poster_url: camp.poster_url || '',
       criteria_message: camp.criteria_message || '',
       banner_message: camp.banner_message || '',
+      require_poc: Boolean(camp.require_poc),
+      default_poc_name: camp.default_poc_name || '',
+      default_poc_contact: camp.default_poc_contact || '',
+      email_instructions: camp.email_instructions || '',
+      email_links: Array.isArray(camp.email_links) ? camp.email_links : [],
       venue: camp.venue || 'Central VOICE, Pune',
       status: camp.status,
       start_date: formatDateForInput(camp.start_date),
@@ -993,6 +1062,8 @@ export default function AdminCampsPage() {
         peak_end_date: camp.accommodation_pricing?.peak_end_date ?? '',
         ac_charge: camp.accommodation_pricing?.ac_charge ?? 0,
         facility_charge_label: camp.accommodation_pricing?.facility_charge_label || '',
+        ac_charge_billing_type: (camp.accommodation_pricing?.ac_charge_billing_type || 'per_day') as 'per_day' | 'fixed',
+        ac_charge_applies_to: (camp.accommodation_pricing?.ac_charge_applies_to || 'accommodation') as 'accommodation' | 'all',
         allow_female_cv_accommodation: Boolean(camp.accommodation_pricing?.allow_female_cv_accommodation)
       },
       special_waivers: {
@@ -1010,6 +1081,7 @@ export default function AdminCampsPage() {
         enable_idt: camp.payment_config?.enable_idt ?? true,
         allow_student_idt: camp.payment_config?.allow_student_idt ?? false,
         idt_passcodes_str: passcodes.join(', '),
+        center_idt_codes: camp.payment_config?.center_idt_codes || [],
         enable_itt: camp.payment_config?.enable_itt ?? false,
         allow_student_itt: camp.payment_config?.allow_student_itt ?? false,
         allowed_managerial_roles: camp.payment_config?.allowed_managerial_roles ?? [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -1043,6 +1115,181 @@ export default function AdminCampsPage() {
     setIsModalOpen(true);
   };
 
+  // Center-Wise IDT Passcode Management Helpers
+  const generateUniqueCodeForCenter = (centerName: string, existingCodes: string[]): string => {
+    const clean = centerName.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    let prefix = '';
+    if (words.length > 1) {
+      prefix = words.map(w => w[0]).join('').toUpperCase().slice(0, 5);
+    } else {
+      prefix = clean.slice(0, 4).toUpperCase();
+    }
+    if (prefix.length < 2) prefix = 'IDT';
+
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const num = Math.floor(1000 + Math.random() * 9000);
+      const candidate = `${prefix}-${num}`;
+      if (!existingCodes.map(c => c.toLowerCase()).includes(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+    return `${prefix}-${Date.now().toString().slice(-4)}`;
+  };
+
+  const handleAddSpecificCenter = (centerName: string, centerId?: string) => {
+    const cleanName = centerName.trim();
+    if (!cleanName) return;
+
+    const currentCodes: CenterIdtCode[] = [...(formData.payment_config.center_idt_codes || [])];
+    if (currentCodes.some(c => c.center_name.toLowerCase() === cleanName.toLowerCase())) {
+      return; // Already in IDT list
+    }
+
+    const matchingDbCenter = availableCenters.find(c => c.name.toLowerCase() === cleanName.toLowerCase());
+    const existingCodeList = currentCodes.map(c => c.code);
+    const newCode = generateUniqueCodeForCenter(cleanName, existingCodeList);
+
+    const updated: CenterIdtCode[] = [
+      ...currentCodes,
+      {
+        center_id: centerId || matchingDbCenter?.id,
+        center_name: cleanName,
+        code: newCode
+      }
+    ];
+
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: updated
+      }
+    }));
+
+    setAddCenterSearchQuery('');
+    setIsAddCenterDropdownOpen(false);
+  };
+
+  const handleRemoveCenterFromIdt = (centerName: string) => {
+    const currentCodes: CenterIdtCode[] = [...(formData.payment_config.center_idt_codes || [])];
+    const updated = currentCodes.filter(
+      c => c.center_name.toLowerCase() !== centerName.toLowerCase()
+    );
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: updated
+      }
+    }));
+  };
+
+  const handleAddAllAvailableCentersToIdt = () => {
+    const currentCodes: CenterIdtCode[] = [...(formData.payment_config.center_idt_codes || [])];
+    const codeList = currentCodes.map(c => c.code);
+
+    const updated: CenterIdtCode[] = [...currentCodes];
+    for (const center of availableCenters) {
+      const exists = updated.some(
+        c => c.center_name.toLowerCase() === center.name.toLowerCase() || (center.id && c.center_id === center.id)
+      );
+      if (!exists) {
+        const newCode = generateUniqueCodeForCenter(center.name, codeList);
+        codeList.push(newCode);
+        updated.push({
+          center_id: center.id,
+          center_name: center.name,
+          code: newCode
+        });
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: updated
+      }
+    }));
+  };
+
+  const handleClearAllIdtCenters = () => {
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: []
+      }
+    }));
+  };
+
+  const handleRegenerateCenterCode = (centerId: string | undefined, centerName: string) => {
+    const currentCodes: CenterIdtCode[] = [...(formData.payment_config.center_idt_codes || [])];
+    const otherCodes = currentCodes
+      .filter(c => c.center_name.toLowerCase() !== centerName.toLowerCase())
+      .map(c => c.code);
+
+    const newCode = generateUniqueCodeForCenter(centerName, otherCodes);
+
+    let found = false;
+    const updated = currentCodes.map(c => {
+      if (c.center_name.toLowerCase() === centerName.toLowerCase() || (centerId && c.center_id === centerId)) {
+        found = true;
+        return { ...c, code: newCode };
+      }
+      return c;
+    });
+
+    if (!found) {
+      updated.push({
+        center_id: centerId,
+        center_name: centerName,
+        code: newCode
+      });
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: updated
+      }
+    }));
+  };
+
+  const handleUpdateCenterCode = (centerId: string | undefined, centerName: string, newCode: string) => {
+    const currentCodes: CenterIdtCode[] = [...(formData.payment_config.center_idt_codes || [])];
+    let found = false;
+    const updated = currentCodes.map(c => {
+      if (c.center_name.toLowerCase() === centerName.toLowerCase() || (centerId && c.center_id === centerId)) {
+        found = true;
+        return { ...c, code: newCode.toUpperCase() };
+      }
+      return c;
+    });
+    if (!found) {
+      updated.push({
+        center_id: centerId,
+        center_name: centerName,
+        code: newCode.toUpperCase()
+      });
+    }
+    setFormData(prev => ({
+      ...prev,
+      payment_config: {
+        ...prev.payment_config,
+        center_idt_codes: updated
+      }
+    }));
+  };
+
+  const handleCopyCenterCode = (centerName: string, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCenterCode(centerName);
+    setTimeout(() => setCopiedCenterCode(null), 2000);
+  };
+
   const posterFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [posterUploading, setPosterUploading] = useState(false);
   const [posterUploadError, setPosterUploadError] = useState<string | null>(null);
@@ -1069,6 +1316,7 @@ export default function AdminCampsPage() {
       uploadData.append('file', file);
       uploadData.append('action', 'upload');
       uploadData.append('userName', (userData as any)?.name || 'Admin');
+      uploadData.append('folderName', 'Camps Thumbnails');
 
       const res = await fetch('/api/upload/google-drive', {
         method: 'POST',
@@ -1089,6 +1337,19 @@ export default function AdminCampsPage() {
         ...prev,
         poster_url: driveUrl
       }));
+
+      // Prepend to library images if already populated
+      setPosterLibraryImages((prev) => [
+        {
+          id: `drive-${Date.now()}`,
+          name: file.name,
+          url: driveUrl,
+          thumbnailUrl: driveUrl,
+          source: 'drive',
+          createdTime: new Date().toISOString()
+        },
+        ...prev.filter(p => p.url !== driveUrl)
+      ]);
     } catch (err: any) {
       console.error('Google Drive photo upload failed:', err);
       setPosterUploadError(err?.message || 'Error uploading photo to Google Drive');
@@ -1099,6 +1360,97 @@ export default function AdminCampsPage() {
       }
     }
   };
+
+  // Poster & Thumbnail Library state
+  const [isPosterLibraryOpen, setIsPosterLibraryOpen] = useState(false);
+  const [loadingPosterLibrary, setLoadingPosterLibrary] = useState(false);
+  const [posterLibraryImages, setPosterLibraryImages] = useState<{
+    id: string;
+    name: string;
+    url: string;
+    thumbnailUrl: string;
+    source: 'drive' | 'camp';
+    createdTime?: string;
+  }[]>([]);
+  const [posterLibrarySearch, setPosterLibrarySearch] = useState('');
+  const [posterLibrarySourceFilter, setPosterLibrarySourceFilter] = useState<'all' | 'drive' | 'camp'>('all');
+
+  const openPosterLibrary = async () => {
+    setIsPosterLibraryOpen(true);
+    setLoadingPosterLibrary(true);
+    setPosterLibrarySearch('');
+    setPosterLibrarySourceFilter('all');
+
+    try {
+      const seenUrls = new Set<string>();
+      const combined: {
+        id: string;
+        name: string;
+        url: string;
+        thumbnailUrl: string;
+        source: 'drive' | 'camp';
+        createdTime?: string;
+      }[] = [];
+
+      // 1. Fetch images from Google Drive folder "Camps Thumbnails"
+      try {
+        const res = await fetch('/api/upload/google-drive?folderName=Camps+Thumbnails');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.files)) {
+          json.files.forEach((f: any) => {
+            if (f.url && !seenUrls.has(f.url)) {
+              seenUrls.add(f.url);
+              combined.push({
+                id: `drive-${f.id}`,
+                name: f.name || 'Drive Poster',
+                url: f.url,
+                thumbnailUrl: f.thumbnailUrl || f.url,
+                source: 'drive',
+                createdTime: f.createdTime,
+              });
+            }
+          });
+        }
+      } catch (driveErr) {
+        console.warn('Could not fetch drive poster files:', driveErr);
+      }
+
+      // 2. Gather all existing posters from loaded camps
+      camps.forEach((c) => {
+        if (c.poster_url && c.poster_url.trim()) {
+          const u = c.poster_url.trim();
+          if (!seenUrls.has(u)) {
+            seenUrls.add(u);
+            combined.push({
+              id: `camp-${c.id}`,
+              name: `${c.title} Poster`,
+              url: u,
+              thumbnailUrl: getThumbnailUrl(u) || u,
+              source: 'camp',
+              createdTime: c.created_at,
+            });
+          }
+        }
+      });
+
+      setPosterLibraryImages(combined);
+    } catch (err) {
+      console.error('Error opening poster library:', err);
+    } finally {
+      setLoadingPosterLibrary(false);
+    }
+  };
+
+  const filteredLibraryImages = posterLibraryImages.filter((img) => {
+    if (posterLibrarySourceFilter !== 'all' && img.source !== posterLibrarySourceFilter) {
+      return false;
+    }
+    if (posterLibrarySearch.trim()) {
+      const q = posterLibrarySearch.toLowerCase();
+      return img.name.toLowerCase().includes(q) || img.url.toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   const handleSaveCamp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1118,6 +1470,11 @@ export default function AdminCampsPage() {
         poster_url: formData.poster_url || undefined,
         criteria_message: formData.criteria_message || undefined,
         banner_message: formData.banner_message || undefined,
+        require_poc: Boolean(formData.require_poc),
+        default_poc_name: formData.default_poc_name || undefined,
+        default_poc_contact: formData.default_poc_contact || undefined,
+        email_instructions: formData.email_instructions || undefined,
+        email_links: formData.email_links || [],
         venue: formData.venue,
         status: formData.status,
         start_date: formData.start_date,
@@ -1136,7 +1493,11 @@ export default function AdminCampsPage() {
           surcharge_percent: Number(formData.payment_config.surcharge_percent) || 0,
           enable_idt: formData.payment_config.enable_idt,
           allow_student_idt: Boolean(formData.payment_config.allow_student_idt),
-          idt_passcodes: passcodes,
+          idt_passcodes: Array.from(new Set([
+            ...passcodes,
+            ...(formData.payment_config.center_idt_codes || []).map(c => c.code.trim()).filter(Boolean)
+          ])),
+          center_idt_codes: formData.payment_config.center_idt_codes || [],
           enable_itt: formData.payment_config.enable_itt,
           allow_student_itt: Boolean(formData.payment_config.allow_student_itt),
           allowed_managerial_roles: formData.payment_config.allowed_managerial_roles || [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -2188,22 +2549,22 @@ export default function AdminCampsPage() {
                       <span className="text-[10px] text-emerald-700">Bank &amp; Gateway Inflow</span>
                     </div>
 
-                    {/* 4. Total Refunded */}
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Refunded</span>
-                      <div className="text-xl sm:text-2xl font-black text-rose-600 mt-1">
+                    {/* 4. Total Cash Refunded */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200 shadow-xs">
+                      <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Total Refunded</span>
+                      <div className="text-xl sm:text-2xl font-black text-purple-700 mt-1">
                         ₹{dynamicStats.total_refunded.toLocaleString('en-IN')}
                       </div>
-                      <span className="text-[10px] text-slate-400">Approved Payouts</span>
+                      <span className="text-[10px] text-purple-900 font-medium">Approved Payouts Sent</span>
                     </div>
 
                     {/* 5. Net Retained Revenue */}
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Net Revenue</span>
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-indigo-50 to-slate-50 border border-indigo-200 shadow-xs">
+                      <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider block">Net Revenue</span>
                       <div className="text-xl sm:text-2xl font-black text-indigo-700 mt-1">
                         ₹{dynamicStats.net_revenue.toLocaleString('en-IN')}
                       </div>
-                      <span className="text-[10px] text-slate-400">Final Balanced Tally</span>
+                      <span className="text-[10px] text-indigo-950 font-medium">Cash Received - Refunded</span>
                     </div>
 
                     {/* 6. Total Attendees & Batches */}
@@ -2613,13 +2974,15 @@ export default function AdminCampsPage() {
                                           ₹{t.total_amount.toLocaleString('en-IN')}
                                         </span>
                                         {t.total_discount > 0 && (
-                                          <span className="text-[10px] line-through text-slate-400 font-semibold" title="Original Fee before discount">
-                                            ₹{(t.total_amount + t.total_discount).toLocaleString('en-IN')}
+                                          <span className="text-[10px] line-through text-slate-400 font-semibold" title="Original Billed Fee before discount">
+                                            ₹{((t.gross_amount || (t.total_amount + t.total_discount))).toLocaleString('en-IN')}
                                           </span>
                                         )}
                                       </div>
                                       <div className="text-[10px] text-slate-400">
                                         Meals: ₹{t.total_meal_cost} | Stay: ₹{t.total_acc_cost}
+                                        {Boolean(t.total_late_fee) && ` | Late: ₹${t.total_late_fee}`}
+                                        {Boolean(t.total_entry_cost) && ` | Kit: ₹${t.total_entry_cost}`}
                                       </div>
                                       {t.total_discount > 0 && (
                                         <div className="text-[10px] font-bold text-orange-700 flex items-center gap-1 mt-0.5">
@@ -2634,12 +2997,12 @@ export default function AdminCampsPage() {
                                       {t.refund?.status === 'refunded' ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
                                           <Undo2 className="w-3 h-3" />
-                                          Refunded (₹{t.refund.refund_amount})
+                                          Refunded (₹{Number(t.transaction_refund_amount != null ? t.transaction_refund_amount : t.refund.refund_amount).toLocaleString('en-IN')})
                                         </span>
                                       ) : t.refund?.status === 'pending' ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
                                           <Undo2 className="w-3 h-3" />
-                                          Refund Pending (₹{t.refund.refund_amount})
+                                          Refund Pending (₹{Number(t.transaction_refund_amount != null ? t.transaction_refund_amount : t.refund.refund_amount).toLocaleString('en-IN')})
                                         </span>
                                       ) : t.refund?.status === 'rejected' ? (
                                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -3093,20 +3456,59 @@ export default function AdminCampsPage() {
                   <div className="text-slate-400 text-[11px] truncate">{selectedTxn.email}</div>
                 </div>
 
-                {/* Financial Summary */}
-                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200/80">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Total Payment (₹)</span>
-                  <div className="text-2xl font-black text-emerald-800 mt-1">
+                {/* Financial Summary & Itemized Division */}
+                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Net Cash Paid (₹)</span>
+                    <span className="text-xs font-black text-slate-500">
+                      Billed Gross: ₹{((selectedTxn.gross_amount || (selectedTxn.total_amount + selectedTxn.total_discount))).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-800">
                     ₹{selectedTxn.total_amount.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-[10px] text-emerald-700 mt-0.5">
-                    Meals: ₹{selectedTxn.total_meal_cost} | Stay: ₹{selectedTxn.total_acc_cost}
-                  </div>
-                  {selectedTxn.total_discount > 0 && (
-                    <div className="text-[10px] text-orange-700 font-bold">
-                      Discount: ₹{selectedTxn.total_discount} {selectedTxn.coupon_code ? `(${selectedTxn.coupon_code})` : ''}
+                  
+                  {/* Detailed Sectional Division */}
+                  <div className="pt-2 border-t border-emerald-200/60 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Prasadam (Meals):</span>
+                      <strong className="text-slate-900">₹{selectedTxn.total_meal_cost}</strong>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Room Stay / Acc:</span>
+                      <strong className="text-slate-900">₹{selectedTxn.total_acc_cost}</strong>
+                    </div>
+                    {Boolean(selectedTxn.total_late_fee) && (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span>Late Fee:</span>
+                        <strong className="text-slate-900">₹{selectedTxn.total_late_fee}</strong>
+                      </div>
+                    )}
+                    {Boolean(selectedTxn.total_entry_cost) && (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span>Kit / Material Fee:</span>
+                        <strong className="text-slate-900">₹{selectedTxn.total_entry_cost}</strong>
+                      </div>
+                    )}
+                    {selectedTxn.total_discount > 0 && (
+                      <div className="flex items-center justify-between text-orange-700 col-span-2">
+                        <span>Coupon / Waiver:</span>
+                        <strong className="text-orange-800">-₹{selectedTxn.total_discount} {selectedTxn.coupon_code ? `(${selectedTxn.coupon_code})` : ''}</strong>
+                      </div>
+                    )}
+                    {selectedTxn.payment_method === 'RAZORPAY' && (
+                      <div className="flex items-center justify-between text-blue-700 col-span-2">
+                        <span>Gateway Charge (~2%):</span>
+                        <strong className="text-blue-800">~₹{Math.round(selectedTxn.total_amount * 0.02)}</strong>
+                      </div>
+                    )}
+                    {selectedTxn.refund && (
+                      <div className="flex items-center justify-between text-purple-700 col-span-2 font-bold pt-1 border-t border-emerald-200/40">
+                        <span>Refund Disbursed:</span>
+                        <span>₹{Number(selectedTxn.transaction_refund_amount != null ? selectedTxn.transaction_refund_amount : selectedTxn.refund.refund_amount)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Payment Gateway / Method */}
@@ -3314,6 +3716,16 @@ export default function AdminCampsPage() {
                   )}
 
                   <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={batchVerifyLoading}
+                      onClick={handleRejectBatch}
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      title="Reject this payment batch"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Reject Batch</span>
+                    </button>
                     <button
                       type="button"
                       disabled={batchVerifyLoading}
@@ -3761,7 +4173,7 @@ export default function AdminCampsPage() {
                           className="hidden"
                         />
 
-                        {/* Upload to Google Drive Button & Direct Link Input */}
+                        {/* Upload to Google Drive Button, Library Button & Direct Link Input */}
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2">
                           <button
                             type="button"
@@ -3780,6 +4192,16 @@ export default function AdminCampsPage() {
                                 <span>Upload to Google Drive</span>
                               </>
                             )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={openPosterLibrary}
+                            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border-2 border-purple-200 hover:border-purple-300 text-purple-700 hover:text-purple-900 text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                            title="Choose from previously uploaded posters & thumbnails"
+                          >
+                            <ImageIcon className="w-4 h-4 text-purple-600" />
+                            <span>Choose from Library</span>
                           </button>
 
                           <div className="flex-1 relative">
@@ -3810,9 +4232,15 @@ export default function AdminCampsPage() {
                           </div>
                         )}
 
-                        <p className="text-[10px] text-slate-500">
-                          Upload directly to Google Drive or paste an existing link. Photos are automatically converted into fast CDN images for promotional banners and devotee passes across the website.
-                        </p>
+                        <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-200/80 text-[11px] text-purple-900 space-y-1">
+                          <div className="font-bold flex items-center gap-1.5 text-purple-950">
+                            <span>📁 Dedicated Google Drive Folder:</span>
+                            <span className="font-mono bg-white px-2 py-0.5 rounded border border-purple-200 text-purple-800">Camps Thumbnails</span>
+                          </div>
+                          <p className="text-slate-600 text-[10.5px] leading-relaxed">
+                            <strong>Recommended Dimensions:</strong> <strong>16:9 banner</strong> (e.g. <strong>1200 × 675 px</strong> or <strong>1600 × 900 px</strong>) so the entire artwork is fully visible without top/bottom cropping. Accepts PNG, JPG, WebP up to 15MB.
+                          </p>
+                        </div>
 
                         {/* Live Photo Preview */}
                         {formData.poster_url && (
@@ -3832,37 +4260,214 @@ export default function AdminCampsPage() {
                         )}
                       </div>
 
+                      {/* 1. Camp Promotional / Welcome Message (Above criteria, concise limit) */}
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 mb-1">
-                          Basic Eligibility Criteria (Audience Requirements)
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={formData.criteria_message || ''}
-                          onChange={(e) => setFormData({ ...formData, criteria_message: e.target.value })}
-                          placeholder="e.g. Open for devotees chanting minimum 4 rounds daily. Recommended age: 18–35. Bachelor &amp; Married tracks available."
-                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">
-                          Displayed as an eligibility highlight badge on the camp card and in the presentation overview.
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-800 mb-1">
-                          Camp Promotional / Welcome Message (Color Presentation View)
+                        <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                          <span>Camp Promotional / Welcome Message</span>
+                          <span className={`text-[10.5px] font-mono font-semibold ${(formData.banner_message || '').length > 200 ? 'text-amber-600' : 'text-slate-400'}`}>
+                            {(formData.banner_message || '').length} / 220 chars
+                          </span>
                         </label>
                         <textarea
                           rows={3}
+                          maxLength={220}
                           value={formData.banner_message || ''}
                           onChange={(e) => setFormData({ ...formData, banner_message: e.target.value })}
                           placeholder="e.g. Join 300+ youth devotees for a blissful 4-day spiritual immersion filled with uplifting kirtans, transformative seminars, and sattvic feasts!"
-                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
+                          className="w-full min-h-[85px] px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs sm:text-[13px] font-medium shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
                         />
-                        <p className="text-[10px] text-slate-500 mt-1">
-                          Shown in a colorful presentation section when devotees click &quot;Explore Camp&quot;.
+                        <p className="text-[10.5px] text-slate-500 mt-1">
+                          Short, catchy welcome note shown on the camp card &amp; presentation view. Limited to 220 characters to keep the card compact and uncluttered.
                         </p>
                       </div>
+
+                      {/* 2. Basic Eligibility Criteria (Full rules & breakdown) */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                          <span>Basic Eligibility Criteria (Audience Requirements)</span>
+                          <span className="text-[10px] text-slate-400 font-normal">Full rules &amp; fee breakdown</span>
+                        </label>
+                        <textarea
+                          rows={6}
+                          value={formData.criteria_message || ''}
+                          onChange={(e) => setFormData({ ...formData, criteria_message: e.target.value })}
+                          placeholder="e.g. 1. Registration is mandatory with fees as follows:&#10;a. 📌 Breakfast: ₹40, Lunch: ₹100...&#10;b. 🏠 Accommodation Option:&#10;i. Central VOICE floor: ₹150/day..."
+                          className="w-full min-h-[140px] px-4 py-3 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs sm:text-[13px] font-medium shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed resize-y"
+                        />
+                        <p className="text-[10.5px] text-slate-500 mt-1">
+                          Displayed with structured formatting in the &quot;Explore Camp&quot; presentation modal. Supports numbered points (1.), letters (a.), and Roman numerals (i.). Drag corner to expand.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel: Registration Email Guidelines, Custom Announcement & Dynamic Action Links */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/50 via-teal-50/20 to-slate-50 border border-emerald-200/90 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
+                      <div>
+                        <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-emerald-600" />
+                          Registration Email Guidelines &amp; Dynamic Action Links
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1">
+                          Configure special announcements, arrival instructions, and dynamic action buttons (WhatsApp groups, Docs, Videos, Maps) sent to registered devotees.
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100/80 text-emerald-900 border border-emerald-300">
+                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                        Automated Devotee Email
+                      </span>
+                    </div>
+
+                    {/* Standard Pass & QR Entry Notice Banner */}
+                    <div className="p-3.5 rounded-xl bg-white/90 border border-emerald-200 flex items-start gap-3 shadow-xs">
+                      <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                        <QrCode className="w-4 h-4" />
+                      </div>
+                      <div className="text-xs space-y-1">
+                        <p className="font-bold text-emerald-900">
+                          Automatic Pass &amp; Entry Guidelines Included:
+                        </p>
+                        <p className="text-slate-600 leading-relaxed text-[11.5px]">
+                          All welcome emails automatically inform devotees to <strong>bring their Camp Pass (printed copy or digital on mobile)</strong>, and remind them that their <strong>QR code will be scanned at the registration desk for issuing wristbands</strong> and at the <strong>Prasadam counter for meals</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 1. Custom Email Instructions / Announcement */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
+                        <span>Special Camp Announcement / Instructions (Optional)</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Included in confirmation email</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={formData.email_instructions || ''}
+                        onChange={(e) => setFormData({ ...formData, email_instructions: e.target.value })}
+                        placeholder="e.g. Please report at NVCC Gate 2 by 7:30 AM. Bring your own water bottle, notebook, and pen. Bedding will be provided at the ashram."
+                        className="w-full min-h-[85px] px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs sm:text-[13px] font-medium shadow-xs hover:border-emerald-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all placeholder:text-slate-400 leading-relaxed"
+                      />
+                      <p className="text-[10.5px] text-slate-500">
+                        Highlighted notice box inside the devotee welcome email for arrival instructions, packing lists, or special ashram rules.
+                      </p>
+                    </div>
+
+                    {/* 2. Dynamic Action Links Repeater */}
+                    <div className="space-y-3 pt-2 border-t border-emerald-200/60">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-800">
+                            Dynamic Action Links &amp; Buttons (WhatsApp, Docs, Videos, Maps)
+                          </label>
+                          <p className="text-[10.5px] text-slate-500">
+                            Buttons rendered with high visibility plus direct clickable URLs for easy access on any email client.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newLink: CampEmailLink = {
+                              id: `link-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                              title: '',
+                              url: '',
+                              type: 'whatsapp'
+                            };
+                            setFormData({
+                              ...formData,
+                              email_links: [...(formData.email_links || []), newLink]
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Link / Button
+                        </button>
+                      </div>
+
+                      {/* Links List */}
+                      {(!formData.email_links || formData.email_links.length === 0) ? (
+                        <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-white/60 text-center text-xs text-slate-500">
+                          No custom links added yet. Click &quot;Add Link / Button&quot; to add WhatsApp group links, Google Drive guidelines, YouTube videos, or venue Google Maps.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {formData.email_links.map((link, idx) => (
+                            <div
+                              key={link.id || idx}
+                              className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-2.5"
+                            >
+                              <div className="w-full md:w-36 shrink-0">
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">
+                                  Type
+                                </label>
+                                <select
+                                  value={link.type || 'whatsapp'}
+                                  onChange={(e) => {
+                                    const updated = [...(formData.email_links || [])];
+                                    updated[idx] = { ...updated[idx], type: e.target.value as any };
+                                    setFormData({ ...formData, email_links: updated });
+                                  }}
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none"
+                                >
+                                  <option value="whatsapp">💬 WhatsApp</option>
+                                  <option value="document">📄 Document / PDF</option>
+                                  <option value="video">▶️ YouTube / Video</option>
+                                  <option value="map">📍 Location / Map</option>
+                                  <option value="website">🔗 Website / Other</option>
+                                </select>
+                              </div>
+
+                              <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">
+                                  Button Label / Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={link.title}
+                                  onChange={(e) => {
+                                    const updated = [...(formData.email_links || [])];
+                                    updated[idx] = { ...updated[idx], title: e.target.value };
+                                    setFormData({ ...formData, email_links: updated });
+                                  }}
+                                  placeholder="e.g. Join Official Camp WhatsApp Group"
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 focus:border-emerald-500 outline-none"
+                                />
+                              </div>
+
+                              <div className="flex-[1.5]">
+                                <label className="block text-[10px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">
+                                  Target URL (Destination)
+                                </label>
+                                <input
+                                  type="url"
+                                  value={link.url}
+                                  onChange={(e) => {
+                                    const updated = [...(formData.email_links || [])];
+                                    updated[idx] = { ...updated[idx], url: e.target.value };
+                                    setFormData({ ...formData, email_links: updated });
+                                  }}
+                                  placeholder="e.g. https://chat.whatsapp.com/..."
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 focus:border-emerald-500 outline-none font-mono text-[11px]"
+                                />
+                              </div>
+
+                              <div className="shrink-0 flex items-end justify-end md:self-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (formData.email_links || []).filter((_, i) => i !== idx);
+                                    setFormData({ ...formData, email_links: updated });
+                                  }}
+                                  title="Remove link"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -4026,6 +4631,31 @@ export default function AdminCampsPage() {
                         })()
                       )}
                     </div>
+                  </div>
+
+                  {/* Panel 6: POC Contact Details Requirement */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50/70 via-slate-50 to-orange-50/50 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div>
+                      <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-amber-600" />
+                        POC Contact Details (Point of Contact Requirement)
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
+                        When enabled, anyone registering for this camp (managers or devotees) will be prompted for their center&apos;s Point of Contact (POC Name and Mobile Number) as Step 1 before adding attendee registrations.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.require_poc)}
+                        onChange={(e) => setFormData({ ...formData, require_poc: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                      <span className="ml-2.5 text-xs font-bold text-slate-800">
+                        {formData.require_poc ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </label>
                   </div>
                 </div>
               )}
@@ -4915,8 +5545,15 @@ export default function AdminCampsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                          Other / Miscellaneous Charge (₹)
+                        <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                          <span>
+                            {formData.accommodation_pricing.ac_charge_billing_type === 'fixed'
+                              ? 'Other / Misc Charge (₹ Flat)'
+                              : 'Other / Misc Charge (₹ / day)'}
+                          </span>
+                          <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-extrabold border border-amber-200">
+                            {formData.accommodation_pricing.ac_charge_billing_type === 'fixed' ? 'Fixed Fee' : 'Per Day Rate'}
+                          </span>
                         </label>
                         <input
                           type="number"
@@ -4928,12 +5565,63 @@ export default function AdminCampsPage() {
                               ac_charge: Number(e.target.value)
                             }
                           })}
-                          placeholder="0 or 400"
+                          placeholder="0 or 50"
                           className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all"
                         />
                         <span className="text-[10px] text-slate-500 mt-1 block">
-                          Set to 0 if this camp does not have any extra charges.
+                          {formData.accommodation_pricing.ac_charge_billing_type === 'fixed'
+                            ? 'Flat fixed charge applied once per registration.'
+                            : 'Charged per day based on selected days (e.g. 7 days out of 10 = 7 × ₹rate).'}
                         </span>
+                      </div>
+
+                      {/* Billing Basis & Applicability Controls */}
+                      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-200/70">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                            Charge Basis (Pricing Model)
+                          </label>
+                          <select
+                            value={formData.accommodation_pricing.ac_charge_billing_type || 'per_day'}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              accommodation_pricing: {
+                                ...formData.accommodation_pricing,
+                                ac_charge_billing_type: e.target.value as 'per_day' | 'fixed'
+                              }
+                            })}
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 outline-none cursor-pointer"
+                          >
+                            <option value="per_day">📅 Per Day (Selected Meal/Stay Days) — Recommended</option>
+                            <option value="fixed">🔒 Fixed One-Time Charge (Flat)</option>
+                          </select>
+                          <span className="text-[9.5px] text-slate-500 mt-0.5 block">
+                            If devotee books 7 days out of 10, they only pay for 7 days.
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                            Applicable To
+                          </label>
+                          <select
+                            value={formData.accommodation_pricing.ac_charge_applies_to || 'accommodation'}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              accommodation_pricing: {
+                                ...formData.accommodation_pricing,
+                                ac_charge_applies_to: e.target.value as 'accommodation' | 'all'
+                              }
+                            })}
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 outline-none cursor-pointer"
+                          >
+                            <option value="accommodation">🏠 Devotees Opting for CV Accommodation</option>
+                            <option value="all">👥 All Registered Devotees (Meals &amp; Stay)</option>
+                          </select>
+                          <span className="text-[9.5px] text-slate-500 mt-0.5 block">
+                            Choose who gets billed for this miscellaneous charge.
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -5018,7 +5706,7 @@ export default function AdminCampsPage() {
                       </p>
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-1.5">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                        <span>This option is only available to ISKCON NVCC connected centers.</span>
+                        <span>Available to authorized ISKCON & VOICE connected centers.</span>
                       </div>
 
                       {/* Access restriction toggle */}
@@ -5116,26 +5804,306 @@ export default function AdminCampsPage() {
                     </div>
                   )}
 
-                  {/* IDT Passcodes Section */}
+                  {/* Center-Wise IDT Passcodes Section */}
                   {formData.payment_config.enable_idt && (
-                    <div className="p-5 rounded-2xl border border-slate-200/90 bg-slate-50/80 space-y-2">
-                      <label className="block text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <Key className="w-4 h-4 text-amber-600" />
-                        Authorized IDT Passcodes (Comma-separated)
-                      </label>
-                      <p className="text-xs text-slate-500">
-                        Devotees selecting IDT will need to enter one of these secret codes to register without online payment. (Only ISKCON NVCC connected centers).
-                      </p>
-                      <textarea
-                        rows={2}
-                        value={formData.payment_config.idt_passcodes_str}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          payment_config: { ...formData.payment_config, idt_passcodes_str: e.target.value }
-                        })}
-                        placeholder="CV108, AT123, NITW456..."
-                        className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-mono font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                      />
+                    <div className="p-5 rounded-2xl border-2 border-amber-300/80 bg-amber-50/30 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <Key className="w-4 h-4 text-amber-600" />
+                            Eligible Centers &amp; Auto-Generated IDT Passcodes
+                          </label>
+                          <p className="text-[11px] text-slate-600 mt-0.5">
+                            Only centers you add to this list are authorized to use IDT. Devotees and managers from unlisted centers will not be permitted to use IDT.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleAddAllAvailableCentersToIdt}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                            title="Add all registered centers at once"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Add All Centers
+                          </button>
+                          {(formData.payment_config.center_idt_codes || []).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleClearAllIdtCenters}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-all cursor-pointer"
+                              title="Remove all centers from IDT eligibility"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Searchable Add Center Row */}
+                      <div className="p-3.5 rounded-xl bg-white border border-amber-200 shadow-xs space-y-2">
+                        <label className="text-[11px] font-bold text-slate-800 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Plus className="w-3.5 h-3.5 text-amber-600" />
+                            Search &amp; Add Center to IDT:
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-normal">
+                            Type to search any center, or type an external center name
+                          </span>
+                        </label>
+
+                        <div className="relative" ref={addCenterRef}>
+                          <div className="relative flex items-center">
+                            <Search className="w-4 h-4 text-amber-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              type="text"
+                              value={addCenterSearchQuery}
+                              onChange={(e) => {
+                                setAddCenterSearchQuery(e.target.value);
+                                setIsAddCenterDropdownOpen(true);
+                              }}
+                              onFocus={() => setIsAddCenterDropdownOpen(true)}
+                              placeholder="Search center by name or temple (e.g. Narhe, GGD, Mayapur)..."
+                              className="w-full pl-9 pr-24 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 text-xs font-semibold focus:border-amber-500 focus:bg-white outline-none transition-all placeholder:text-slate-400"
+                            />
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                              {addCenterSearchQuery && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAddCenterSearchQuery('');
+                                    setIsAddCenterDropdownOpen(false);
+                                  }}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setIsAddCenterDropdownOpen(!isAddCenterDropdownOpen)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-amber-800 bg-amber-100/80 hover:bg-amber-200 rounded-lg cursor-pointer transition-colors"
+                              >
+                                {isAddCenterDropdownOpen ? 'Close ▴' : 'Browse ▾'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Search Results / Autocomplete Suggestions Dropdown */}
+                          {isAddCenterDropdownOpen && (() => {
+                            const remainingCenters = availableCenters.filter(
+                              c => !(formData.payment_config.center_idt_codes || []).some(
+                                existing => existing.center_name.toLowerCase() === c.name.toLowerCase()
+                              )
+                            );
+
+                            const q = addCenterSearchQuery.trim().toLowerCase();
+                            const filtered = q
+                              ? remainingCenters.filter(
+                                  c => c.name.toLowerCase().includes(q) || (c.temple_name && c.temple_name.toLowerCase().includes(q))
+                                )
+                              : remainingCenters;
+
+                            const alreadyInIdt = (formData.payment_config.center_idt_codes || []).some(
+                              c => c.center_name.toLowerCase() === q
+                            );
+
+                            return (
+                              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl border-2 border-amber-300 shadow-2xl max-h-64 overflow-y-auto z-50 p-1.5 space-y-1">
+                                {filtered.length > 0 ? (
+                                  filtered.map(c => (
+                                    <button
+                                      key={c.id || c.name}
+                                      type="button"
+                                      onClick={() => handleAddSpecificCenter(c.name, c.id)}
+                                      className="w-full text-left px-3 py-2 hover:bg-amber-50 rounded-lg flex items-center justify-between group transition-colors cursor-pointer border border-transparent hover:border-amber-200"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="text-xs font-bold text-slate-900 group-hover:text-amber-900 truncate">
+                                          {c.name}
+                                        </span>
+                                        {c.temple_name && (
+                                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 truncate group-hover:bg-amber-100/60">
+                                            {c.temple_name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[11px] font-bold text-amber-600 group-hover:text-amber-800 shrink-0 flex items-center gap-1 bg-amber-50 group-hover:bg-amber-100 px-2.5 py-0.5 rounded-md">
+                                        <Plus className="w-3 h-3" /> Add
+                                      </span>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="py-3 px-2 text-center text-xs text-slate-500">
+                                    {q ? `No registered centers match "${addCenterSearchQuery}".` : 'All registered centers are already added to IDT.'}
+                                  </div>
+                                )}
+
+                                {/* Option to add custom / external center if typed */}
+                                {q && !alreadyInIdt && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddSpecificCenter(addCenterSearchQuery.trim())}
+                                    className="w-full text-left px-3 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-950 rounded-lg flex items-center justify-between transition-colors border border-dashed border-amber-400 cursor-pointer mt-1"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Plus className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <span className="text-xs font-bold truncate">
+                                        Add &quot;{addCenterSearchQuery.trim()}&quot; as New / External Center
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] font-bold bg-amber-600 text-white px-2.5 py-1 rounded-md shrink-0 shadow-xs">
+                                      + Add to IDT
+                                    </span>
+                                  </button>
+                                )}
+
+                                {q && alreadyInIdt && (
+                                  <div className="p-2 text-center text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg">
+                                    ✓ &quot;{addCenterSearchQuery}&quot; is already authorized in the IDT list below.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Search & Stats Bar */}
+                      <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                        <div className="relative flex-1 w-full">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={idtCenterSearch}
+                            onChange={(e) => setIdtCenterSearch(e.target.value)}
+                            placeholder="Filter authorized centers..."
+                            className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:border-amber-500 outline-none"
+                          />
+                        </div>
+                        <div className="text-[11px] font-bold text-amber-950 px-2.5 py-1.5 bg-amber-100/70 rounded-lg border border-amber-200 shrink-0">
+                          {(formData.payment_config.center_idt_codes || []).length} Centers Authorized for IDT
+                        </div>
+                      </div>
+
+                      {/* Configured Centers List */}
+                      <div className="max-h-72 overflow-y-auto space-y-2 pr-1 rounded-xl border border-amber-200/60 bg-white/70 p-2.5">
+                        {(formData.payment_config.center_idt_codes || []).length === 0 ? (
+                          <div className="text-center py-7 px-4 rounded-xl border border-dashed border-amber-200 bg-amber-50/40 space-y-1">
+                            <Building2 className="w-7 h-7 mx-auto text-amber-500/70" />
+                            <p className="text-xs font-bold text-slate-800">No centers authorized for IDT yet</p>
+                            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                              Only centers added above can use IDT. Select a center from the dropdown or click &quot;Add All Centers&quot; to authorize centers.
+                            </p>
+                          </div>
+                        ) : (
+                          (formData.payment_config.center_idt_codes || [])
+                            .filter(c => {
+                              if (!idtCenterSearch.trim()) return true;
+                              const q = idtCenterSearch.toLowerCase();
+                              return c.center_name.toLowerCase().includes(q);
+                            })
+                            .map(cEntry => {
+                              const dbMatch = availableCenters.find(
+                                ac => ac.name.toLowerCase() === cEntry.center_name.toLowerCase() || (cEntry.center_id && ac.id === cEntry.center_id)
+                              );
+                              const templeName = dbMatch?.temple_name;
+                              const isCopied = copiedCenterCode === cEntry.center_name;
+
+                              return (
+                                <div
+                                  key={cEntry.center_name}
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 bg-white hover:border-amber-300 transition-colors shadow-xs"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-slate-900 truncate">
+                                        {cEntry.center_name}
+                                      </span>
+                                      {templeName && (
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 truncate">
+                                          {templeName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <input
+                                      type="text"
+                                      value={cEntry.code}
+                                      onChange={(e) => handleUpdateCenterCode(cEntry.center_id, cEntry.center_name, e.target.value)}
+                                      placeholder="Enter code"
+                                      className="w-32 px-2.5 py-1 text-xs font-mono font-bold tracking-wider text-amber-900 uppercase bg-amber-50/70 border border-amber-200 rounded-lg focus:border-amber-500 outline-none"
+                                    />
+
+                                    <button
+                                      type="button"
+                                      title="Regenerate unique code for this center"
+                                      onClick={() => handleRegenerateCenterCode(cEntry.center_id, cEntry.center_name)}
+                                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-amber-100 hover:text-amber-800 text-slate-600 transition-colors cursor-pointer"
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={!cEntry.code}
+                                      title="Copy passcode"
+                                      onClick={() => handleCopyCenterCode(cEntry.center_name, cEntry.code)}
+                                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                        isCopied
+                                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 disabled:opacity-40'
+                                      }`}
+                                    >
+                                      {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      title="Remove center from IDT"
+                                      onClick={() => handleRemoveCenterFromIdt(cEntry.center_name)}
+                                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-400 transition-colors cursor-pointer ml-1"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+
+                      {/* Advanced / Legacy Passcodes Accordion */}
+                      <div className="pt-2 border-t border-amber-200/60">
+                        <button
+                          type="button"
+                          onClick={() => setShowLegacyPasscodes(!showLegacyPasscodes)}
+                          className="text-[11px] font-bold text-amber-800 hover:text-amber-900 flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{showLegacyPasscodes ? '▾ Hide' : '▸ Show'} Legacy / Fallback Passcodes (Optional)</span>
+                        </button>
+                        {showLegacyPasscodes && (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-[10px] text-slate-500">
+                              Comma-separated general passcodes that work regardless of center assignment (for testing or backwards compatibility):
+                            </p>
+                            <textarea
+                              rows={2}
+                              value={formData.payment_config.idt_passcodes_str}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                payment_config: { ...formData.payment_config, idt_passcodes_str: e.target.value }
+                              })}
+                              placeholder="CV108, AT123, NITW456..."
+                              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -5679,6 +6647,266 @@ export default function AdminCampsPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Camp Poster & Thumbnail Library Modal */}
+      {isPosterLibraryOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 via-white to-indigo-50 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <span>Camp Poster &amp; Thumbnail Library</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                      {posterLibraryImages.length} {posterLibraryImages.length === 1 ? 'item' : 'items'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Pick any previously uploaded camp poster or Google Drive image with a single click.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPosterLibraryOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search, Filter Tabs & Actions */}
+            <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Search */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={posterLibrarySearch}
+                  onChange={(e) => setPosterLibrarySearch(e.target.value)}
+                  placeholder="Search posters by name or camp..."
+                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                />
+                {posterLibrarySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPosterLibrarySearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Source Filters & Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex rounded-xl bg-slate-200/70 p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setPosterLibrarySourceFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      posterLibrarySourceFilter === 'all'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All ({posterLibraryImages.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosterLibrarySourceFilter('drive')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      posterLibrarySourceFilter === 'drive'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Drive Folder ({posterLibraryImages.filter(i => i.source === 'drive').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosterLibrarySourceFilter('camp')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      posterLibrarySourceFilter === 'camp'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Camps ({posterLibraryImages.filter(i => i.source === 'camp').length})
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={loadingPosterLibrary}
+                  onClick={openPosterLibrary}
+                  title="Reload posters"
+                  className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-600 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingPosterLibrary ? 'animate-spin text-purple-600' : ''}`} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => posterFileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span>Upload New</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Gallery Grid Body */}
+            <div className="flex-1 overflow-y-auto p-6 min-h-[320px] max-h-[58vh]">
+              {loadingPosterLibrary ? (
+                <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-500">
+                  <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                  <p className="text-xs font-semibold">Loading thumbnail library from Google Drive &amp; Camps...</p>
+                </div>
+              ) : filteredLibraryImages.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-200 rounded-2xl">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3">
+                    <ImageIcon className="w-7 h-7" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-1">No thumbnails found</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mb-4">
+                    {posterLibrarySearch
+                      ? 'No items match your search filter. Try clearing the search query.'
+                      : 'No previously uploaded posters detected yet. Upload your first poster directly to Google Drive.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => posterFileInputRef.current?.click()}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-purple-500/20"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Upload Poster Now</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {filteredLibraryImages.map((img) => {
+                    const isSelected = formData.poster_url === img.url;
+                    return (
+                      <div
+                        key={img.id}
+                        onClick={() => {
+                          setFormData({ ...formData, poster_url: img.url });
+                          setIsPosterLibraryOpen(false);
+                        }}
+                        className={`group relative rounded-2xl border-2 transition-all cursor-pointer overflow-hidden flex flex-col ${
+                          isSelected
+                            ? 'border-purple-600 ring-4 ring-purple-500/20 shadow-lg bg-purple-50/30'
+                            : 'border-slate-200 hover:border-purple-300 hover:shadow-md bg-white'
+                        }`}
+                      >
+                        {/* 16:9 Image Preview container */}
+                        <div className="relative w-full aspect-video bg-slate-900 overflow-hidden">
+                          <img
+                            src={img.thumbnailUrl}
+                            alt={img.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              // Fallback if thumbnail fails
+                              (e.target as HTMLImageElement).src = img.url;
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+
+                          {/* Source badge */}
+                          <div className="absolute top-2 left-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md bg-black/60 text-white border border-white/20">
+                              {img.source === 'drive' ? '📁 Google Drive' : '🏕️ Camp Poster'}
+                            </span>
+                          </div>
+
+                          {/* Selected Checkmark */}
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>Active</span>
+                            </div>
+                          )}
+
+                          {/* Hover Overlay Button */}
+                          <div className="absolute inset-0 bg-purple-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-3">
+                            <span className="px-3.5 py-1.5 rounded-xl bg-white text-purple-700 text-xs font-bold shadow-md transform translate-y-2 group-hover:translate-y-0 transition-transform flex items-center gap-1.5">
+                              <CheckCircle className="w-3.5 h-3.5 text-purple-600" />
+                              <span>{isSelected ? 'Currently Selected' : 'Use This Poster'}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Image Metadata Caption */}
+                        <div className="p-2.5 flex items-center justify-between gap-2 border-t border-slate-100 bg-white">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-800 truncate" title={img.name}>
+                              {img.name}
+                            </p>
+                            {img.createdTime && (
+                              <p className="text-[10px] text-slate-400 font-medium">
+                                {new Date(img.createdTime).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </p>
+                            )}
+                          </div>
+                          {isSelected ? (
+                            <span className="shrink-0 p-1 rounded-full bg-emerald-100 text-emerald-700">
+                              <CheckCircle className="w-4 h-4" />
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-[11px] font-bold text-purple-600 group-hover:underline">
+                              Select
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {formData.poster_url ? (
+                  <>
+                    <img
+                      src={getThumbnailUrl(formData.poster_url) || formData.poster_url}
+                      alt="Current"
+                      className="w-10 h-6 object-cover rounded border border-slate-300 shrink-0"
+                    />
+                    <div className="text-[11px] text-slate-600 truncate font-medium">
+                      <span className="font-bold text-slate-800">Current: </span>
+                      <span className="font-mono text-[10.5px]">{formData.poster_url}</span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-500 italic">No poster currently selected</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsPosterLibraryOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -9,13 +9,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized: Session required' }, { status: 401 });
         }
 
+        const supabase = getAdminClient();
+        const { data: requesterDb } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', requester.id)
+            .single();
+
+        const roles: number[] = (Array.isArray(requesterDb?.role) ? requesterDb.role : [requesterDb?.role]).map((r: any) => Number(r));
+        const isAuthorized = roles.some((r: number) => [2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 31].includes(r));
+        if (!isAuthorized) {
+            return NextResponse.json({ error: 'Forbidden: Leadership or administrative role required' }, { status: 403 });
+        }
+
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://voicegurukul.com';
         const { userId } = await request.json();
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
-
-        const supabase = getAdminClient();
         
         const { data: user, error } = await supabase
             .from('users')

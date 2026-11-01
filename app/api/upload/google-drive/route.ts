@@ -200,6 +200,21 @@ export async function POST(request: Request) {
     const userName = formData.get('userName') as string;
     let targetFolderId = formData.get('folderId') as string || FOLDER_ID;
 
+    // Handle dynamic folder creation by name (e.g. 'Camps Thumbnails' or 'Policies')
+    const requestedFolderName = formData.get('folderName') as string;
+    if (requestedFolderName) {
+      try {
+        const mainFolderId = process.env.MAIN_DRIVE_FOLDER_ID || FOLDER_ID;
+        let resolvedFolderId = await findFolder(requestedFolderName, mainFolderId);
+        if (!resolvedFolderId) {
+          resolvedFolderId = await createFolder(requestedFolderName, mainFolderId);
+        }
+        targetFolderId = resolvedFolderId;
+      } catch (folderError: any) {
+        console.warn(`Failed to resolve/create ${requestedFolderName} folder, falling back:`, folderError.message);
+      }
+    }
+
     // Handle stale policy folder ID or dynamic policy folder fallback
     const STALE_POLICY_FOLDER_ID = '1b94q4-8wVGVU_pv4AUVpTFMrnfY9v2ng';
     if (targetFolderId === STALE_POLICY_FOLDER_ID) {
@@ -281,5 +296,55 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+// GET endpoint to list images from a Google Drive folder (e.g. 'Camps Thumbnails' library)
+export async function GET(request: Request) {
+  try {
+    const user = await getAuthUserFromRequest(request);
+    if (!user || !user.id) {
+      return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const folderName = searchParams.get('folderName') || 'Camps Thumbnails';
+    const mainFolderId = process.env.MAIN_DRIVE_FOLDER_ID || FOLDER_ID;
+
+    let folderId = await findFolder(folderName, mainFolderId);
+    const drive = await getDriveClient();
+    if (!folderId) {
+      const folderRes = await drive.files.list({
+        q: `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+      });
+      if (folderRes.data.files && folderRes.data.files.length > 0) {
+        folderId = folderRes.data.files[0].id!;
+      }
+    }
+    if (!folderId) {
+      return NextResponse.json({ success: true, files: [] });
+    }
+
+    const response = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+      fields: 'files(id, name, webViewLink, thumbnailLink, createdTime)',
+      orderBy: 'createdTime desc',
+      pageSize: 50,
+    });
+
+    const files = (response.data.files || []).map((f: any) => ({
+      id: f.id,
+      name: f.name,
+      createdTime: f.createdTime,
+      url: `https://lh3.googleusercontent.com/d/${f.id}=s1600`,
+      thumbnailUrl: `https://lh3.googleusercontent.com/d/${f.id}=s400`,
+    }));
+
+    return NextResponse.json({ success: true, files });
+  } catch (error: any) {
+    console.error('Error listing files from Google Drive:', error);
+    return NextResponse.json({ success: false, error: error.message, files: [] });
   }
 }
