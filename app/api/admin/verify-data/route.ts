@@ -254,22 +254,29 @@ export async function POST(request: NextRequest) {
             }
 
             // Execute update via raw Droplet DB query
+            // IMPORTANT: Only update users whose verification_status is not already set to target statusVal.
+            // This prevents duplicate Welcome Emails if an approval request is triggered multiple times.
             const statusVal = action === 'approve' ? 'approved' : 'rejected';
             const reasonVal = action === 'reject' ? (reason || null) : null;
             const now = new Date().toISOString();
 
-            await dbQuery(
-                `UPDATE users SET verification_status = $1, rejection_reason = $2, reviewed_at = $3, reviewed_by = $4 WHERE id = ANY($5::uuid[])`,
+            const updateRes = await dbQuery(
+                `UPDATE users 
+                 SET verification_status = $1, rejection_reason = $2, reviewed_at = $3, reviewed_by = $4 
+                 WHERE id = ANY($5::uuid[]) AND (verification_status IS DISTINCT FROM $1)
+                 RETURNING id`,
                 [statusVal, reasonVal, now, user.id, targetIds]
             );
 
-            // Side Effects (Emails & Membership IDs)
+            const newlyUpdatedIds: string[] = (updateRes.rows || []).map((r: any) => r.id);
+
+            // Side Effects (Emails & Membership IDs) - ONLY execute for users whose status actually changed
             const { sendApprovalNotification, sendRejectionNotification } = await import('@/lib/utils/email');
 
             if (action === 'approve') {
                 const { generateMembershipIdForUser } = await import('@/lib/utils/membership');
 
-                for (const userId of targetIds) {
+                for (const userId of newlyUpdatedIds) {
                     try {
                         // Generate Membership ID first if not present
                         let membershipId: string | undefined = undefined;
@@ -291,7 +298,7 @@ export async function POST(request: NextRequest) {
                     }
                 }
             } else if (action === 'reject') {
-                for (const userId of targetIds) {
+                for (const userId of newlyUpdatedIds) {
                     try {
                         const userRes = await dbQuery('SELECT email, name FROM users WHERE id = $1', [userId]);
                         const userDetails = userRes.rows[0];

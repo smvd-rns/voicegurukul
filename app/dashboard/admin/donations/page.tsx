@@ -27,11 +27,29 @@ import {
   UserCheck,
   MapPin,
   RotateCcw,
-  Phone
+  Phone,
+  HeartHandshake,
+  UserPlus,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/config';
-import { fetchAllDonations } from './actions';
+import { 
+  fetchAllDonations,
+  fetchBehalfDevotees,
+  searchUsersForBehalf,
+  addBehalfDevotee,
+  deleteBehalfDevotee,
+  toggleBehalfDevoteeStatus,
+  fetchBehalfChangeRequests,
+  approveBehalfChangeRequest,
+  rejectBehalfChangeRequest,
+  adminResetUserBehalf
+} from './actions';
 
 // Custom Modal Component for Secure Gateway Toggle
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, gateway, isLoading }: any) => {
@@ -112,7 +130,32 @@ export default function AdminDonationsPage() {
   const [centers, setCenters] = useState<string[]>([]);
   const [usersWithoutSlugs, setUsersWithoutSlugs] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [activeTab, setActiveTab] = useState<'donations' | 'missing-links'>('donations');
+  const [activeTab, setActiveTab] = useState<'donations' | 'behalf-list' | 'missing-links'>('donations');
+
+  // Behalf Devotees Management State
+  const [behalfDevotees, setBehalfDevotees] = useState<any[]>([]);
+  const [loadingBehalfDevotees, setLoadingBehalfDevotees] = useState(false);
+  const [behalfSearchTerm, setBehalfSearchTerm] = useState('');
+  const [isAddDevoteeModalOpen, setIsAddDevoteeModalOpen] = useState(false);
+  const [devoteeSearchQuery, setDevoteeSearchQuery] = useState('');
+  const [devoteeSearchResults, setDevoteeSearchResults] = useState<any[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [isAddingDevotee, setIsAddingDevotee] = useState(false);
+  const [manualDevoteeMode, setManualDevoteeMode] = useState(false);
+  const [manualDevoteeForm, setManualDevoteeForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    center: '',
+    temple: ''
+  });
+  const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Behalf Change Requests State
+  const [behalfSubTab, setBehalfSubTab] = useState<'devotees' | 'requests'>('devotees');
+  const [behalfChangeRequests, setBehalfChangeRequests] = useState<any[]>([]);
+  const [loadingChangeRequests, setLoadingChangeRequests] = useState(false);
+  const [isProcessingRequest, setIsProcessingRequest] = useState<string | null>(null);
   
   // Helper to extract parent and current center/temple for any donation
   const getDonationCenters = (donation: any) => {
@@ -130,6 +173,7 @@ export default function AdminDonationsPage() {
   // Filtering State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCollector, setSelectedCollector] = useState('all');
+  const [selectedOnBehalf, setSelectedOnBehalf] = useState('all');
   const [selectedCurrentTemple, setSelectedCurrentTemple] = useState('all');
   const [selectedCurrentCenter, setSelectedCurrentCenter] = useState('all');
   const [selectedParentTemple, setSelectedParentTemple] = useState('all');
@@ -242,6 +286,7 @@ export default function AdminDonationsPage() {
         d.tag_user_id || 
         ''
       ).toLowerCase();
+      const onBehalfName = (d.on_behalf_of_name || d.metadata?.on_behalf_of?.name || '').toLowerCase();
 
       const matchesSearch = !search || 
         name.includes(search) || 
@@ -250,9 +295,21 @@ export default function AdminDonationsPage() {
         pan.includes(search) || 
         tx.includes(search) ||
         collectorName.includes(search) ||
-        collectorSlug.includes(search);
+        collectorSlug.includes(search) ||
+        onBehalfName.includes(search);
 
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
+      
+      const matchesOnBehalf = selectedOnBehalf === 'all'
+        ? true
+        : selectedOnBehalf === 'direct'
+          ? (!d.on_behalf_of_id && !d.on_behalf_of_name)
+          : selectedOnBehalf === 'any_behalf'
+            ? Boolean(d.on_behalf_of_id || d.on_behalf_of_name)
+            : (
+                d.on_behalf_of_id === selectedOnBehalf ||
+                (d.on_behalf_of_name && behalfDevotees.find(bd => bd.id === selectedOnBehalf)?.name?.toLowerCase() === d.on_behalf_of_name.toLowerCase())
+              );
       
       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
       const matchesCurrentTemple = selectedCurrentTemple === 'all' || currentTemple === selectedCurrentTemple;
@@ -266,25 +323,27 @@ export default function AdminDonationsPage() {
           ? (d.payment_status === 'captured' || d.payment_status === 'success')
           : d.payment_status === selectedStatus;
 
-      return matchesSearch && matchesCollector && matchesCurrentTemple && matchesCurrentCenter && matchesParentTemple && matchesParentCenter && matchesStatus;
+      return matchesSearch && matchesCollector && matchesOnBehalf && matchesCurrentTemple && matchesCurrentCenter && matchesParentTemple && matchesParentCenter && matchesStatus;
     });
-  }, [donations, searchTerm, selectedCollector, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus, collectors]);
+  }, [donations, searchTerm, selectedCollector, selectedOnBehalf, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus, collectors, behalfDevotees]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (searchTerm.trim()) count++;
     if (selectedCollector !== 'all') count++;
+    if (selectedOnBehalf !== 'all') count++;
     if (selectedCurrentTemple !== 'all') count++;
     if (selectedCurrentCenter !== 'all') count++;
     if (selectedParentTemple !== 'all') count++;
     if (selectedParentCenter !== 'all') count++;
     if (selectedStatus !== 'captured') count++;
     return count;
-  }, [searchTerm, selectedCollector, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus]);
+  }, [searchTerm, selectedCollector, selectedOnBehalf, selectedCurrentTemple, selectedCurrentCenter, selectedParentTemple, selectedParentCenter, selectedStatus]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedCollector('all');
+    setSelectedOnBehalf('all');
     setSelectedCurrentTemple('all');
     setSelectedCurrentCenter('all');
     setSelectedParentTemple('all');
@@ -302,6 +361,26 @@ export default function AdminDonationsPage() {
       avgDonation: filteredDonations.length ? Math.round(total / filteredDonations.length) : 0
     };
   }, [filteredDonations]);
+
+  const filteredBehalfDevotees = useMemo(() => {
+    if (!behalfSearchTerm.trim()) return behalfDevotees;
+    const q = behalfSearchTerm.toLowerCase().trim();
+    return behalfDevotees.filter(d => 
+      (d.name || '').toLowerCase().includes(q) ||
+      (d.email || '').toLowerCase().includes(q) ||
+      (d.phone || '').toLowerCase().includes(q) ||
+      (d.center || '').toLowerCase().includes(q) ||
+      (d.temple || '').toLowerCase().includes(q)
+    );
+  }, [behalfDevotees, behalfSearchTerm]);
+
+  const behalfTotalRaised = useMemo(() => {
+    return behalfDevotees.reduce((acc, curr) => acc + (parseFloat(curr.total_raised) || 0), 0);
+  }, [behalfDevotees]);
+
+  const behalfTotalContributions = useMemo(() => {
+    return behalfDevotees.reduce((acc, curr) => acc + (parseInt(curr.donation_count) || 0), 0);
+  }, [behalfDevotees]);
 
   const formatDonationDate = (donation: any) => {
     const raw = donation.created_at || donation.metadata?.timestamp || donation.metadata?.created_at;
@@ -346,6 +425,7 @@ export default function AdminDonationsPage() {
       'Donor Address',
       'Collector Name',
       'Collector Slug',
+      'On Behalf Of Devotee',
       'Collector Parent Center',
       'Collector Parent Temple',
       'Collector Current Center',
@@ -380,6 +460,7 @@ export default function AdminDonationsPage() {
         escapeCsv(d.donor_address || d.address || ''),
         escapeCsv(collector?.name || 'System Executive'),
         escapeCsv(collectorSlug),
+        escapeCsv(d.on_behalf_of_name || 'Direct / None'),
         escapeCsv(parentCenter),
         escapeCsv(parentTemple),
         escapeCsv(currentCenter),
@@ -412,6 +493,8 @@ export default function AdminDonationsPage() {
   useEffect(() => {
     fetchData();
     fetchUsersWithoutSlugs();
+    loadBehalfDevotees();
+    loadBehalfChangeRequests();
   }, []);
 
   const checkUser = async () => {
@@ -526,7 +609,7 @@ export default function AdminDonationsPage() {
       setLoading(false);
     }
   };
-  
+
   const fetchUsersWithoutSlugs = async () => {
     setLoadingUsers(true);
     try {
@@ -545,6 +628,200 @@ export default function AdminDonationsPage() {
       console.error('Error fetching users without slugs:', err);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+  
+  const loadBehalfDevotees = async () => {
+    setLoadingBehalfDevotees(true);
+    try {
+      const res = await fetchBehalfDevotees();
+      if (res.success && res.devotees) {
+        setBehalfDevotees(res.devotees);
+      } else if (res.error) {
+        console.error('Error fetching behalf devotees:', res.error);
+      }
+    } catch (err: any) {
+      console.error('Error in loadBehalfDevotees:', err);
+    } finally {
+      setLoadingBehalfDevotees(false);
+    }
+  };
+
+  const loadBehalfChangeRequests = async () => {
+    setLoadingChangeRequests(true);
+    try {
+      const res = await fetchBehalfChangeRequests();
+      if (res.success && res.requests) {
+        setBehalfChangeRequests(res.requests);
+      }
+    } catch (err) {
+      console.error('Error fetching behalf change requests:', err);
+    } finally {
+      setLoadingChangeRequests(false);
+    }
+  };
+
+  const handleApproveChangeRequest = async (userId: string) => {
+    setIsProcessingRequest(userId);
+    try {
+      const res = await approveBehalfChangeRequest(userId);
+      if (res.success) {
+        setFeedbackNotice({ type: 'success', message: 'Behalf change request approved successfully!' });
+        await loadBehalfChangeRequests();
+        await loadBehalfDevotees();
+      } else {
+        setFeedbackNotice({ type: 'error', message: res.error || 'Failed to approve request' });
+      }
+    } catch (err: any) {
+      setFeedbackNotice({ type: 'error', message: err.message || 'Error approving request' });
+    } finally {
+      setIsProcessingRequest(null);
+    }
+  };
+
+  const handleRejectChangeRequest = async (userId: string) => {
+    if (!confirm('Are you sure you want to reject this behalf change request?')) return;
+    setIsProcessingRequest(userId);
+    try {
+      const res = await rejectBehalfChangeRequest(userId);
+      if (res.success) {
+        setFeedbackNotice({ type: 'success', message: 'Behalf change request rejected.' });
+        await loadBehalfChangeRequests();
+      } else {
+        setFeedbackNotice({ type: 'error', message: res.error || 'Failed to reject request' });
+      }
+    } catch (err: any) {
+      setFeedbackNotice({ type: 'error', message: err.message || 'Error rejecting request' });
+    } finally {
+      setIsProcessingRequest(null);
+    }
+  };
+
+  const handleAdminResetUserBehalf = async (userId: string, userName: string) => {
+    if (!confirm(`Are you sure you want to unlock/reset the behalf selection for ${userName}? They will be able to choose afresh.`)) return;
+    setIsProcessingRequest(userId);
+    try {
+      const res = await adminResetUserBehalf(userId);
+      if (res.success) {
+        setFeedbackNotice({ type: 'success', message: `Behalf selection reset for ${userName}.` });
+        await loadBehalfChangeRequests();
+      } else {
+        setFeedbackNotice({ type: 'error', message: res.error || 'Failed to reset behalf' });
+      }
+    } catch (err: any) {
+      setFeedbackNotice({ type: 'error', message: err.message || 'Error resetting behalf' });
+    } finally {
+      setIsProcessingRequest(null);
+    }
+  };
+
+  const handleSearchDevoteeUsers = async (val: string) => {
+    setDevoteeSearchQuery(val);
+    if (!val || val.trim().length < 2) {
+      setDevoteeSearchResults([]);
+      return;
+    }
+    setIsSearchingUsers(true);
+    try {
+      const res = await searchUsersForBehalf(val.trim());
+      if (res.success && res.users) {
+        setDevoteeSearchResults(res.users);
+      }
+    } catch (err) {
+      console.error('Error searching users for behalf:', err);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  };
+
+  const handleSelectAndAddDevotee = async (selectedUser: any) => {
+    setIsAddingDevotee(true);
+    setFeedbackNotice(null);
+    try {
+      const res = await addBehalfDevotee({
+        userId: selectedUser.id,
+        name: selectedUser.name || 'Devotee',
+        email: selectedUser.email || undefined,
+        phone: selectedUser.phone || undefined,
+        center: selectedUser.current_center || selectedUser.center || selectedUser.parent_center || undefined,
+        temple: selectedUser.current_temple || selectedUser.parent_temple || undefined,
+      });
+
+      if (!res.success) {
+        setFeedbackNotice({ type: 'error', message: res.error || 'Failed to add devotee' });
+      } else {
+        setFeedbackNotice({ type: 'success', message: `${selectedUser.name} added to Behalf Collection list!` });
+        await loadBehalfDevotees();
+        setIsAddDevoteeModalOpen(false);
+        setDevoteeSearchQuery('');
+        setDevoteeSearchResults([]);
+      }
+    } catch (err: any) {
+      setFeedbackNotice({ type: 'error', message: err.message || 'Error adding devotee' });
+    } finally {
+      setIsAddingDevotee(false);
+    }
+  };
+
+  const handleManualAddDevotee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualDevoteeForm.name.trim()) {
+      alert('Devotee name is required');
+      return;
+    }
+    setIsAddingDevotee(true);
+    setFeedbackNotice(null);
+    try {
+      const res = await addBehalfDevotee({
+        name: manualDevoteeForm.name.trim(),
+        email: manualDevoteeForm.email.trim() || undefined,
+        phone: manualDevoteeForm.phone.trim() || undefined,
+        center: manualDevoteeForm.center.trim() || undefined,
+        temple: manualDevoteeForm.temple.trim() || undefined,
+      });
+
+      if (!res.success) {
+        setFeedbackNotice({ type: 'error', message: res.error || 'Failed to add devotee' });
+      } else {
+        setFeedbackNotice({ type: 'success', message: `${manualDevoteeForm.name} added to Behalf Collection list!` });
+        await loadBehalfDevotees();
+        setIsAddDevoteeModalOpen(false);
+        setManualDevoteeForm({ name: '', email: '', phone: '', center: '', temple: '' });
+      }
+    } catch (err: any) {
+      setFeedbackNotice({ type: 'error', message: err.message || 'Error adding devotee' });
+    } finally {
+      setIsAddingDevotee(false);
+    }
+  };
+
+  const handleToggleDevoteeStatus = async (id: string, currentStatus: boolean) => {
+    try {
+      // Optimistic update
+      setBehalfDevotees(prev => prev.map(d => d.id === id ? { ...d, is_active: !currentStatus } : d));
+      const res = await toggleBehalfDevoteeStatus(id, !currentStatus);
+      if (!res.success) {
+        alert(res.error || 'Failed to update devotee status');
+        await loadBehalfDevotees();
+      }
+    } catch (err) {
+      console.error('Error toggling status:', err);
+      await loadBehalfDevotees();
+    }
+  };
+
+  const handleDeleteDevotee = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from the Behalf Devotees list?`)) return;
+    try {
+      setBehalfDevotees(prev => prev.filter(d => d.id !== id));
+      const res = await deleteBehalfDevotee(id);
+      if (!res.success) {
+        alert(res.error || 'Failed to delete devotee');
+        await loadBehalfDevotees();
+      }
+    } catch (err) {
+      console.error('Error deleting devotee:', err);
+      await loadBehalfDevotees();
     }
   };
 
@@ -699,6 +976,24 @@ export default function AdminDonationsPage() {
         >
           <CreditCard className="w-3.5 h-3.5" />
           Live Audit Log
+        </button>
+        <button
+          onClick={() => setActiveTab('behalf-list')}
+          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 relative whitespace-nowrap ${
+            activeTab === 'behalf-list' 
+              ? 'bg-orange-600 text-white shadow-sm' 
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          }`}
+        >
+          <HeartHandshake className="w-3.5 h-3.5" />
+          Behalf Name List
+          {behalfDevotees.length > 0 && (
+            <span className={`w-4 h-4 text-[9px] flex items-center justify-center rounded-full ml-1 ${
+              activeTab === 'behalf-list' ? 'bg-white text-orange-600 font-black' : 'bg-orange-100 text-orange-800 font-bold'
+            }`}>
+              {behalfDevotees.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('missing-links')}
@@ -892,7 +1187,7 @@ export default function AdminDonationsPage() {
             </div>
 
             {/* 3. Collector Section */}
-            <div className="flex items-center gap-2 xl:w-56 shrink-0 p-2 rounded-xl bg-gray-50 border border-gray-100">
+            <div className="flex items-center gap-2 xl:w-52 shrink-0 p-2 rounded-xl bg-gray-50 border border-gray-100">
               <div className="relative group w-full">
                 <select
                   value={selectedCollector}
@@ -910,6 +1205,28 @@ export default function AdminDonationsPage() {
                 <UserCheck className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               </div>
             </div>
+
+            {/* 4. On Behalf Of Section */}
+            <div className="flex items-center gap-2 xl:w-52 shrink-0 p-2 rounded-xl bg-purple-50/50 border border-purple-100">
+              <div className="relative group w-full">
+                <select
+                  value={selectedOnBehalf}
+                  onChange={(e) => {
+                    setSelectedOnBehalf(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-purple-950 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all appearance-none cursor-pointer pr-7 shadow-sm"
+                >
+                  <option value="all">All Behalf / Direct</option>
+                  <option value="direct">Direct Only (No Behalf)</option>
+                  <option value="any_behalf">Any On Behalf</option>
+                  {behalfDevotees.map(d => (
+                    <option key={d.id} value={d.id}>Behalf: {d.name}</option>
+                  ))}
+                </select>
+                <HeartHandshake className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-purple-500 pointer-events-none" />
+              </div>
+            </div>
           </div>
 
           {/* Audit View - Table or Grid */}
@@ -921,6 +1238,11 @@ export default function AdminDonationsPage() {
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/80">
                       <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Collector</th>
+                      <th className="px-5 py-3 text-[10px] font-extrabold text-purple-700 uppercase tracking-wider whitespace-nowrap">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> On Behalf Of
+                        </span>
+                      </th>
                       <th className="px-5 py-3 text-[10px] font-extrabold text-orange-600 uppercase tracking-wider whitespace-nowrap">
                         <span className="flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
@@ -970,7 +1292,22 @@ export default function AdminDonationsPage() {
                             </div>
                           </td>
 
-                          {/* 2. Collector Parent Column */}
+                          {/* 2. On Behalf Of Column */}
+                          <td className="px-5 py-3.5">
+                            {donation.on_behalf_of_name ? (
+                              <div className="flex flex-col gap-1 min-w-[130px]">
+                                <span className="font-bold text-[10px] text-purple-900 bg-purple-50 border border-purple-200/90 px-2 py-0.5 rounded-md flex items-center gap-1.5 w-fit whitespace-nowrap shadow-sm">
+                                  <HeartHandshake className="w-3 h-3 text-purple-600 shrink-0" />
+                                  {donation.on_behalf_of_name}
+                                </span>
+                                <span className="text-[8px] font-bold text-purple-600 tracking-wider uppercase pl-0.5">Authorized Behalf</span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 font-medium italic">Direct (None)</span>
+                            )}
+                          </td>
+
+                          {/* 3. Collector Parent Column */}
                           <td className="px-5 py-3.5">
                             <div className="flex flex-col gap-1 min-w-[140px]">
                               <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
@@ -1152,6 +1489,15 @@ export default function AdminDonationsPage() {
                         )}
                       </div>
 
+                      {donation.on_behalf_of_name && (
+                        <div className="flex items-center gap-1.5 bg-purple-50 p-2 rounded-xl border border-purple-200">
+                          <HeartHandshake className="w-3 h-3 text-purple-600 shrink-0" />
+                          <span className="text-[10px] font-bold text-purple-900 tracking-tight">
+                            On Behalf Of: {donation.on_behalf_of_name}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Separate spaces for Collector Parent and Collector Current */}
                       <div className="grid grid-cols-2 gap-2">
                          <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
@@ -1230,6 +1576,20 @@ export default function AdminDonationsPage() {
                            <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
                          </div>
                        </div>
+
+                       {donation.on_behalf_of_name && (
+                         <div className="mb-4 px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between">
+                           <div className="flex items-center gap-1.5 min-w-0">
+                             <HeartHandshake className="w-4 h-4 text-purple-600 shrink-0" />
+                             <span className="text-xs font-bold text-purple-900 truncate">
+                               On Behalf: {donation.on_behalf_of_name}
+                             </span>
+                           </div>
+                           <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded shrink-0">
+                             Behalf
+                           </span>
+                         </div>
+                       )}
                        
                        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-4">
                           <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-sm font-bold text-orange-700 border border-orange-200/80 shadow-sm shrink-0">
@@ -1338,6 +1698,390 @@ export default function AdminDonationsPage() {
         </>
       )}
 
+      {activeTab === 'behalf-list' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Behalf Devotees Management Header */}
+          <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xl shadow-gray-200/40 p-5 sm:p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-purple-50 rounded-xl border border-purple-200/80">
+                    <HeartHandshake className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                    Donation Collection Behalf Name List
+                    <span className="px-2.5 py-0.5 bg-purple-50 rounded-full text-[10px] text-purple-700 font-bold border border-purple-200">
+                      {behalfDevotees.length} Authorized
+                    </span>
+                  </h2>
+                </div>
+                <p className="text-gray-500 text-xs max-w-2xl">
+                  Devotees listed here appear in the personal donation link generator as authorized recipients. Users who appear in this list also gain a dedicated ledger on their donation dashboard to track contributions collected on their behalf.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setFeedbackNotice(null);
+                  setDevoteeSearchQuery('');
+                  setDevoteeSearchResults([]);
+                  setIsAddDevoteeModalOpen(true);
+                }}
+                className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-purple-700 transition-all flex items-center gap-2 group shadow-md shadow-purple-600/20 whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                Issue New Devotee
+              </button>
+            </div>
+
+            {/* Sub-Tab Switcher: Authorized Devotees vs Change Requests */}
+            <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
+              <button
+                onClick={() => setBehalfSubTab('devotees')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                  behalfSubTab === 'devotees'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <HeartHandshake className="w-4 h-4" />
+                Authorized Devotees ({behalfDevotees.length})
+              </button>
+
+              <button
+                onClick={() => setBehalfSubTab('requests')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 relative ${
+                  behalfSubTab === 'requests'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                Change Requests
+                {behalfChangeRequests.length > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                    behalfSubTab === 'requests'
+                      ? 'bg-white text-purple-700'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {behalfChangeRequests.length} Pending
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {behalfSubTab === 'devotees' && (
+              <>
+                {/* Quick Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-800">Total Devotees</span>
+                    <span className="text-2xl font-black text-gray-900 mt-1">{behalfDevotees.length}</span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Active Recipients</span>
+                    <span className="text-2xl font-black text-emerald-700 mt-1">
+                      {behalfDevotees.filter(d => d.is_active).length}
+                    </span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-orange-50/60 border border-orange-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-800">Raised On Behalf</span>
+                    <span className="text-xl sm:text-2xl font-black text-gray-900 mt-1">
+                      ₹{behalfTotalRaised.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-800">Contributions</span>
+                    <span className="text-2xl font-black text-blue-700 mt-1">{behalfTotalContributions}</span>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative mb-5">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={behalfSearchTerm}
+                    onChange={(e) => setBehalfSearchTerm(e.target.value)}
+                    placeholder="Search authorized devotees by name, email, phone, center or temple..."
+                    className="w-full bg-gray-50/70 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all placeholder:text-gray-400"
+                  />
+                </div>
+
+                {/* Devotees List / Table */}
+                {loadingBehalfDevotees ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Loading Devotees...</p>
+                  </div>
+                ) : filteredBehalfDevotees.length === 0 ? (
+                  <div className="py-16 text-center space-y-3 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                    <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto border border-purple-100 shadow-inner">
+                      <HeartHandshake className="w-7 h-7 text-purple-500" />
+                    </div>
+                    <h3 className="text-gray-900 font-bold text-sm tracking-tight">
+                      {behalfSearchTerm ? 'No matching devotees found' : 'No Behalf Devotees Issued Yet'}
+                    </h3>
+                    <p className="text-gray-500 text-xs max-w-sm mx-auto">
+                      {behalfSearchTerm 
+                        ? 'Try adjusting your search criteria.' 
+                        : 'Click "Issue New Devotee" above to add registered users or create custom devotee entries.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50/80">
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Authorized Devotee</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Center & Temple</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Funds Raised on Behalf</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Status</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {filteredBehalfDevotees.map((devotee) => (
+                          <tr key={devotee.id} className="hover:bg-purple-50/20 transition-colors group">
+                            {/* 1. Devotee Identity */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3 min-w-[200px]">
+                                <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-xs font-bold text-purple-700 border border-purple-200/80 shrink-0 shadow-sm">
+                                  {devotee.name ? devotee.name.charAt(0).toUpperCase() : 'D'}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-gray-900 font-bold text-xs truncate flex items-center gap-1.5">
+                                    {devotee.name}
+                                    {devotee.user_id && (
+                                      <span className="text-[8px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-extrabold uppercase">
+                                        Member
+                                      </span>
+                                    )}
+                                  </span>
+                                  {devotee.email && (
+                                    <span className="text-[10px] text-gray-500 truncate flex items-center gap-1 font-medium">
+                                      <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                                      {devotee.email}
+                                    </span>
+                                  )}
+                                  {devotee.phone && (
+                                    <span className="text-[10px] text-gray-600 truncate flex items-center gap-1 font-semibold mt-0.5">
+                                      <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                      {devotee.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 2. Center & Temple */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex flex-col gap-1 min-w-[130px]">
+                                <span className="font-bold text-[10px] text-stone-800 bg-stone-100 border border-stone-200/90 px-2 py-0.5 rounded-md w-fit whitespace-nowrap">
+                                  {devotee.center || 'No Center'}
+                                </span>
+                                {devotee.temple && (
+                                  <span className="text-[9px] text-orange-700 font-semibold px-1.5 py-0.2 bg-orange-50 border border-orange-200/80 rounded w-fit whitespace-nowrap">
+                                    {devotee.temple}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 3. Funds Raised */}
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex flex-col items-end gap-0.5">
+                                <div className="flex items-center gap-0.5 text-gray-900 font-black text-sm sm:text-base">
+                                  <IndianRupee className="w-3 h-3 text-purple-600" />
+                                  {Number(devotee.total_raised || 0).toLocaleString('en-IN')}
+                                </div>
+                                <span className="text-[9px] font-bold text-gray-500">
+                                  {devotee.donation_count || 0} donations
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* 4. Active Status Toggle */}
+                            <td className="px-5 py-3.5 text-center">
+                              <button
+                                onClick={() => handleToggleDevoteeStatus(devotee.id, devotee.is_active)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${
+                                  devotee.is_active
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                                }`}
+                                title={devotee.is_active ? 'Click to deactivate' : 'Click to activate'}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${devotee.is_active ? 'bg-emerald-600 animate-pulse' : 'bg-gray-400'}`}></span>
+                                {devotee.is_active ? 'Active' : 'Disabled'}
+                              </button>
+                            </td>
+
+                            {/* 5. Actions */}
+                            <td className="px-5 py-3.5 text-right">
+                              <button
+                                onClick={() => handleDeleteDevotee(devotee.id, devotee.name)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Remove from Behalf List"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {behalfSubTab === 'requests' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 tracking-tight">Behalf Link Change Requests</h3>
+                    <p className="text-gray-500 text-xs">Review requests from users who wish to change their locked donation collection devotee.</p>
+                  </div>
+                  <button
+                    onClick={() => loadBehalfChangeRequests()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all shadow-sm"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Refresh Requests
+                  </button>
+                </div>
+
+                {loadingChangeRequests ? (
+                  <div className="py-16 flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Loading Requests...</p>
+                  </div>
+                ) : behalfChangeRequests.length === 0 ? (
+                  <div className="py-16 text-center space-y-3 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                    <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto border border-purple-100 shadow-inner">
+                      <Check className="w-7 h-7 text-purple-600" />
+                    </div>
+                    <h3 className="text-gray-900 font-bold text-sm tracking-tight">No Pending Change Requests</h3>
+                    <p className="text-gray-500 text-xs max-w-sm mx-auto">
+                      All user behalf link assignments are currently up-to-date and approved.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50/80">
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Collector User</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Current Locked Behalf</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-purple-700 uppercase tracking-wider whitespace-nowrap">Requested New Behalf</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Reason & Date</th>
+                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {behalfChangeRequests.map((req) => (
+                          <tr key={req.id} className="hover:bg-purple-50/20 transition-colors group">
+                            {/* User details */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex flex-col min-w-[160px]">
+                                <span className="font-bold text-xs text-gray-900 truncate">{req.name}</span>
+                                {req.email && (
+                                  <span className="text-[10px] text-gray-500 truncate flex items-center gap-1 font-medium">
+                                    <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                                    {req.email}
+                                  </span>
+                                )}
+                                {req.phone && (
+                                  <span className="text-[10px] text-gray-600 truncate flex items-center gap-1 font-semibold mt-0.5">
+                                    <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    {req.phone}
+                                  </span>
+                                )}
+                                {(req.current_center || req.center) && (
+                                  <span className="text-[8px] bg-gray-100 border border-gray-200 text-gray-600 px-1.5 py-0.2 rounded font-semibold w-fit mt-0.5">
+                                    {req.current_center || req.center}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Current Locked Behalf */}
+                            <td className="px-5 py-3.5">
+                              <span className="font-bold text-xs text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-md inline-block">
+                                {req.selected_behalf_name || 'None'}
+                              </span>
+                            </td>
+
+                            {/* Requested New Behalf */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-black text-xs text-purple-900 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-md inline-block shadow-sm">
+                                  {req.behalf_change_request_name}
+                                </span>
+                                <span className="text-[8px] font-bold text-purple-600 tracking-wider uppercase">Pending Approval</span>
+                              </div>
+                            </td>
+
+                            {/* Reason & Date */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex flex-col gap-0.5 max-w-[220px]">
+                                <p className="text-xs text-gray-700 font-medium line-clamp-2">
+                                  {req.behalf_change_request_reason ? `"${req.behalf_change_request_reason}"` : <span className="text-gray-400 italic">No reason provided</span>}
+                                </p>
+                                {req.behalf_change_requested_at && (
+                                  <span className="text-[9px] text-gray-400 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {new Date(req.behalf_change_requested_at).toLocaleDateString('en-IN', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  disabled={isProcessingRequest === req.id}
+                                  onClick={() => handleApproveChangeRequest(req.id)}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1"
+                                >
+                                  {isProcessingRequest === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                  Approve
+                                </button>
+                                <button
+                                  disabled={isProcessingRequest === req.id}
+                                  onClick={() => handleRejectChangeRequest(req.id)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  disabled={isProcessingRequest === req.id}
+                                  onClick={() => handleAdminResetUserBehalf(req.id, req.name)}
+                                  className="px-2 py-1.5 text-gray-400 hover:text-gray-700 rounded-lg text-[10px] font-bold tracking-wider hover:bg-gray-100 transition-all"
+                                  title="Reset / Clear Selection"
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'missing-links' && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xl shadow-gray-200/40 overflow-hidden p-5 sm:p-6">
@@ -1432,6 +2176,224 @@ export default function AdminDonationsPage() {
         gateway={selectedGateway}
         isLoading={isToggling}
       />
+
+      {/* Modal: Issue Devotee For Behalf Collection */}
+      {isAddDevoteeModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2rem] shadow-2xl border border-white max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            {/* Modal Header */}
+            <div className="bg-purple-600 p-6 text-white relative flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <HeartHandshake className="w-5 h-5 text-purple-200" />
+                  <h2 className="text-xl font-black tracking-tight">Issue Behalf Devotee</h2>
+                </div>
+                <p className="text-purple-100 text-xs font-medium">
+                  Authorize a devotee so users can collect donations on their behalf.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddDevoteeModalOpen(false)}
+                className="p-1 rounded-lg text-purple-200 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Feedback Notice */}
+              {feedbackNotice && (
+                <div className={`p-3 rounded-xl text-xs font-bold border flex items-center gap-2 ${
+                  feedbackNotice.type === 'error'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}>
+                  {feedbackNotice.type === 'error' ? <XCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                  <span>{feedbackNotice.message}</span>
+                </div>
+              )}
+
+              {/* Toggle Mode: Search User vs Manual Form */}
+              <div className="flex rounded-xl bg-gray-100 p-1 border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setManualDevoteeMode(false)}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    !manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Select from Users
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManualDevoteeMode(true)}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Enter Manually
+                </button>
+              </div>
+
+              {!manualDevoteeMode ? (
+                /* Search Users Section */
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={devoteeSearchQuery}
+                      onChange={(e) => handleSearchDevoteeUsers(e.target.value)}
+                      placeholder="Type name, email, or phone of registered devotee..."
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all placeholder:text-gray-400"
+                    />
+                    {isSearchingUsers && (
+                      <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 animate-spin" />
+                    )}
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                    {devoteeSearchResults.map((u) => {
+                      const alreadyAdded = behalfDevotees.some(bd => bd.user_id === u.id);
+                      return (
+                        <div
+                          key={u.id}
+                          className="p-3 bg-gray-50 rounded-xl border border-gray-200/80 flex items-center justify-between gap-3 hover:bg-purple-50/40 hover:border-purple-200 transition-all"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{u.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{u.email}</p>
+                            <div className="flex gap-1.5 mt-1">
+                              {u.center && (
+                                <span className="text-[8px] bg-white border border-gray-200 text-gray-600 px-1.5 py-0.2 rounded font-semibold truncate">
+                                  {u.center}
+                                </span>
+                              )}
+                              {u.phone && (
+                                <span className="text-[8px] text-emerald-700 font-semibold truncate">
+                                  {u.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            disabled={alreadyAdded || isAddingDevotee}
+                            onClick={() => handleSelectAndAddDevotee(u)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 shrink-0 ${
+                              alreadyAdded
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm'
+                            }`}
+                          >
+                            {alreadyAdded ? 'Issued' : '+ Issue'}
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {devoteeSearchQuery.trim().length >= 2 && !isSearchingUsers && devoteeSearchResults.length === 0 && (
+                      <div className="p-4 text-center text-xs text-gray-500">
+                        No registered members matched &ldquo;{devoteeSearchQuery}&rdquo;. You can switch to &ldquo;Enter Manually&rdquo; above.
+                      </div>
+                    )}
+                    {devoteeSearchQuery.trim().length < 2 && (
+                      <div className="p-4 text-center text-xs text-gray-400">
+                        Type at least 2 characters to search registered users.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Manual Entry Form */
+                <form onSubmit={handleManualAddDevotee} className="space-y-3.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Devotee Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={manualDevoteeForm.name}
+                      onChange={(e) => setManualDevoteeForm({ ...manualDevoteeForm, name: e.target.value })}
+                      placeholder="e.g. Radheshyam Das"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={manualDevoteeForm.email}
+                        onChange={(e) => setManualDevoteeForm({ ...manualDevoteeForm, email: e.target.value })}
+                        placeholder="devotee@example.com"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={manualDevoteeForm.phone}
+                        onChange={(e) => setManualDevoteeForm({ ...manualDevoteeForm, phone: e.target.value })}
+                        placeholder="+91 9876543210"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                        Center Name
+                      </label>
+                      <input
+                        type="text"
+                        value={manualDevoteeForm.center}
+                        onChange={(e) => setManualDevoteeForm({ ...manualDevoteeForm, center: e.target.value })}
+                        placeholder="e.g. Pune Camp"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                        Temple Name
+                      </label>
+                      <input
+                        type="text"
+                        value={manualDevoteeForm.temple}
+                        onChange={(e) => setManualDevoteeForm({ ...manualDevoteeForm, temple: e.target.value })}
+                        placeholder="e.g. ISKCON NVCC"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-100 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isAddingDevotee || !manualDevoteeForm.name.trim()}
+                    className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-purple-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 mt-4 shadow-md shadow-purple-600/20"
+                  >
+                    {isAddingDevotee ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Add Devotee to Behalf List
+                  </button>
+                </form>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

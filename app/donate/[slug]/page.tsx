@@ -68,6 +68,8 @@ export default function DonationPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [activeGateway, setActiveGateway] = useState('razorpay');
   const [imageError, setImageError] = useState(false);
+  const [onBehalfOfId, setOnBehalfOfId] = useState<string | null>(null);
+  const [onBehalfOfName, setOnBehalfOfName] = useState<string | null>(null);
 
   const [formData, setFormData] = useState(() => {
     let initialAmount = '';
@@ -175,6 +177,18 @@ export default function DonationPage() {
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const behalfParam = params.get('behalf') || params.get('on_behalf_of');
+      const behalfNameParam = params.get('behalf_name');
+      if (behalfParam) {
+        setOnBehalfOfId(behalfParam);
+        if (behalfNameParam) {
+          setOnBehalfOfName(decodeURIComponent(behalfNameParam));
+        } else if (supabase) {
+          supabase.from('donation_behalf_devotees').select('name').eq('id', behalfParam).maybeSingle().then(({ data }: any) => {
+            if (data?.name) setOnBehalfOfName(data.name);
+          });
+        }
+      }
       const camp = params.get('camp') || params.get('for') || params.get('activity');
       if (camp) {
         setPaymentForParam(camp);
@@ -230,7 +244,9 @@ export default function DonationPage() {
             ashram: targetUser.ashram,
             website: websiteHost,
             websiteUrl: websiteUrl,
-            paymentFor: paymentForParam
+            paymentFor: paymentForParam,
+            onBehalfOfId,
+            onBehalfOfName
           })
         });
         const orderData = await orderRes.json();
@@ -330,7 +346,9 @@ export default function DonationPage() {
             ashram: targetUser.ashram,
             website: websiteHost,
             websiteUrl: websiteUrl,
-            paymentFor: paymentForParam
+            paymentFor: paymentForParam,
+            onBehalfOfId,
+            onBehalfOfName
           })
         });
         const orderData = await orderRes.json();
@@ -536,6 +554,20 @@ export default function DonationPage() {
                 </p>
               </div>
             </div>
+
+            {/* On Behalf Of Banner */}
+            {onBehalfOfName && (
+              <div className="mx-6 mt-4 p-3.5 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border border-amber-200/90 rounded-2xl flex items-center gap-3 shadow-sm">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-inner">
+                  <HeartHandshake className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-700">Donation Collection On Behalf Of</p>
+                  <p className="text-sm font-black text-amber-950 truncate">{onBehalfOfName}</p>
+                </div>
+              </div>
+            )}
+
             <div className="px-6 py-5 bg-white">
               {error && (
                 <motion.div

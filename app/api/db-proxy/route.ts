@@ -111,7 +111,8 @@ export async function POST(req: NextRequest) {
         'membership_cards', 'membership_ids', 'platform_settings', 'profile_update_requests',
         'counselor_requests', 'voice_manager_requests', 'bc_voice_manager_requests',
         'event_responses', 'events', 'event_materials', 'rate_limits',
-        'camp_kitchen_extra_meals'
+        'camp_kitchen_extra_meals',
+        'donation_behalf_devotees'
       ]);
 
       if (!ALLOWED_CLIENT_TABLES.has(table)) {
@@ -286,7 +287,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Rule G: Organizational, Role Allocation & Platform Settings Tables
-      const orgTables = ['counselors', 'event_admin_allocations', 'user_centers', 'membership_cards', 'platform_settings'];
+      const orgTables = ['counselors', 'event_admin_allocations', 'user_centers', 'membership_cards', 'platform_settings', 'donation_behalf_devotees'];
       if (orgTables.includes(table)) {
         if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Super Admin access required' }, { status: 403 });

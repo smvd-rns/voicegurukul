@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 3000}`;
     const body = await req.json();
-    const { amount, donorName, donorEmail, donorMobile, donorAddress, donorPan, targetUserId, slug, center, temple, ashram } = body;
+    const { amount, donorName, donorEmail, donorMobile, donorAddress, donorPan, targetUserId, slug, center, temple, ashram, onBehalfOfId, onBehalfOfName } = body;
 
     const easebuzzKey = process.env.EASEBUZZ_KEY;
     const easebuzzSalt = process.env.EASEBUZZ_SALT;
@@ -116,8 +116,11 @@ export async function POST(req: Request) {
       center: primaryCenter,
       temple: primaryTemple,
       ashram: collectorAshram !== 'N/A' ? collectorAshram : null,
+      on_behalf_of_id: onBehalfOfId || null,
+      on_behalf_of_name: onBehalfOfName || null,
       metadata: {
         payment_for: body.paymentFor || body.payment_for || 'Donation',
+        on_behalf_of: (onBehalfOfId || onBehalfOfName) ? { id: onBehalfOfId, name: onBehalfOfName } : null,
         category: (body.paymentFor || body.payment_for || 'Donation').toLowerCase().includes('camp') ? 'Camp' : 'Donation',
         website: detectedWebsite,
         website_url: detectedUrl,

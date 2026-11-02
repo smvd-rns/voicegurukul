@@ -950,7 +950,7 @@ export default function UserApprovalsPage() {
                 onAssignRole={() => {}}
                 onStatusChange={async (targetUser, newStatus) => {
                     if (newStatus === 'approved') {
-                        confirmApproveUser();
+                        setConfirmApprove({ isOpen: true, userId: targetUser.id });
                     } else if (newStatus === 'rejected') {
                         handleRejectClick(targetUser.id);
                     }

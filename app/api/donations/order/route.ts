@@ -16,6 +16,8 @@ export async function POST(req: Request) {
       targetUserId,
       collectorSlug,
       paymentFor = 'Donation',
+      onBehalfOfId,
+      onBehalfOfName,
       website: clientWebsite,
       websiteUrl: clientWebsiteUrl
     } = body;
@@ -157,8 +159,11 @@ export async function POST(req: Request) {
       center: primaryCenter,
       temple: primaryTemple,
       ashram: collectorAshram !== 'N/A' ? collectorAshram : null,
+      on_behalf_of_id: onBehalfOfId || null,
+      on_behalf_of_name: onBehalfOfName || null,
       metadata: {
         payment_for: paymentForTitle,
+        on_behalf_of: (onBehalfOfId || onBehalfOfName) ? { id: onBehalfOfId, name: onBehalfOfName } : null,
         category: paymentForTitle.toLowerCase().includes('camp') ? 'Camp' : 'Donation',
         website: detectedWebsite,
         website_url: detectedUrl,
