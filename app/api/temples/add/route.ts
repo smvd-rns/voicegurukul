@@ -44,20 +44,23 @@ export async function POST(request: Request) {
 
         let isVerified = true;
 
-        const { checkRateLimit } = await import('@/lib/rate-limit');
-        const rateLimit = await checkRateLimit(request, userId, {
-            action: 'add_temple',
-            limit: 20,
-            windowMs: 60 * 60 * 1000,
-            blockDurationMs: 6 * 60 * 60 * 1000
-        });
-
-        if (rateLimit.blocked) {
-            return NextResponse.json({
-                error: rateLimit.message,
-                retryAfter: rateLimit.retryAfter
-            }, { status: 429 });
-        }
+    const isSuperAdmin = numRoles.includes(8) || roles.includes('super_admin');
+    if (!isSuperAdmin) {
+          const { checkRateLimit } = await import('@/lib/rate-limit');
+          const rateLimit = await checkRateLimit(request, userId, {
+              action: 'add_temple',
+              limit: 20,
+              windowMs: 60 * 60 * 1000,
+              blockDurationMs: 6 * 60 * 60 * 1000
+          });
+  
+          if (rateLimit.blocked) {
+              return NextResponse.json({
+                  error: rateLimit.message,
+                  retryAfter: rateLimit.retryAfter
+              }, { status: 429 });
+          }
+    }
 
         // Sanitize logic (simplified)
         const sanitize = (str: string) => str ? str.trim() : '';

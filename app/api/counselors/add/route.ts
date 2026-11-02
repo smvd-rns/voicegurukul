@@ -42,19 +42,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: Insufficient privileges to add counselors' }, { status: 403 });
     }
 
-    const { checkRateLimit } = await import('@/lib/rate-limit');
-    const rateLimit = await checkRateLimit(request, userId, {
-      action: 'add_counselor',
-      limit: 20, // Max 20 counselors
-      windowMs: 60 * 60 * 1000, // 1 hour window
-      blockDurationMs: 6 * 60 * 60 * 1000 // 6 hours block
-    });
-
-    if (rateLimit.blocked) {
-      return NextResponse.json({
-        error: rateLimit.message,
-        retryAfter: rateLimit.retryAfter
-      }, { status: 429 });
+    const isSuperAdmin = numRoles.includes(8) || roles.includes('super_admin');
+    if (!isSuperAdmin) {
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+      const rateLimit = await checkRateLimit(request, userId, {
+        action: 'add_counselor',
+        limit: 20, // Max 20 counselors
+        windowMs: 60 * 60 * 1000, // 1 hour window
+        blockDurationMs: 6 * 60 * 60 * 1000 // 6 hours block
+      });
+  
+      if (rateLimit.blocked) {
+        return NextResponse.json({
+          error: rateLimit.message,
+          retryAfter: rateLimit.retryAfter
+        }, { status: 429 });
+      }
     }
 
     // Sanitize inputs

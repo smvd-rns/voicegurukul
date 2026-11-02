@@ -100,19 +100,22 @@ export async function POST(request: Request) {
           }
         }
 
-    const { checkRateLimit } = await import('@/lib/rate-limit');
-    const rateLimit = await checkRateLimit(request, userId, {
-      action: 'add_center',
-      limit: 20, // Max 20 centers
-      windowMs: 60 * 60 * 1000, // 1 hour window
-      blockDurationMs: 6 * 60 * 60 * 1000 // 6 hours block
-    });
-
-    if (rateLimit.blocked) {
-      return NextResponse.json({
-        error: rateLimit.message,
-        retryAfter: rateLimit.retryAfter
-      }, { status: 429 });
+    const isSuperAdmin = numRoles.includes(8) || roles.includes('super_admin');
+    if (!isSuperAdmin) {
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+      const rateLimit = await checkRateLimit(request, userId, {
+        action: 'add_center',
+        limit: 20, // Max 20 centers
+        windowMs: 60 * 60 * 1000, // 1 hour window
+        blockDurationMs: 6 * 60 * 60 * 1000 // 6 hours block
+      });
+  
+      if (rateLimit.blocked) {
+        return NextResponse.json({
+          error: rateLimit.message,
+          retryAfter: rateLimit.retryAfter
+        }, { status: 429 });
+      }
     }
 
     // Sanitize inputs
