@@ -117,7 +117,11 @@ export async function PATCH(
             initiatedName,
             spiritualMasterName,
             rounds,
-            introducedToKcIn
+            introducedToKcIn,
+            otherCenter,
+            otherTemple,
+            otherCounselor,
+            ashram
         } = body;
 
         const setClauses: string[] = ['updated_at = NOW()'];
@@ -189,6 +193,22 @@ export async function PATCH(
         if (introducedToKcIn !== undefined) {
             setClauses.push(`introduced_to_kc_in = $${valIndex++}`);
             values.push(introducedToKcIn || null);
+        }
+        if (otherCenter !== undefined) {
+            setClauses.push(`other_center = $${valIndex++}`);
+            values.push(otherCenter || null);
+        }
+        if (otherTemple !== undefined) {
+            setClauses.push(`other_temple = $${valIndex++}`);
+            values.push(otherTemple || null);
+        }
+        if (otherCounselor !== undefined) {
+            setClauses.push(`other_counselor = $${valIndex++}`);
+            values.push(otherCounselor || null);
+        }
+        if (ashram !== undefined) {
+            setClauses.push(`ashram = $${valIndex++}`);
+            values.push(ashram || null);
         }
 
         values.push(targetUserId);

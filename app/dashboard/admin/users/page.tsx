@@ -5,26 +5,26 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase/config';
-import { updateUser, getUsersByRole, getUsersByHierarchy, getUsersByCenterIds } from '@/lib/supabase/users';
-import { getBCVoiceManagerRequestByUserId } from '@/lib/supabase/bc-voice-manager-requests';
+import { updateUser, getUsersByHierarchy } from '@/lib/supabase/users';
 import { getTemplesFromSupabase } from '@/lib/supabase/temples';
 import { getCentersFromSupabase, CenterData } from '@/lib/supabase/centers';
 import { getCounselorsFromSupabase, CounselorData } from '@/lib/supabase/counselors';
 import { User, UserRole, TempleData } from '@/types';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
 import {
-  Search, Filter, MapPin, Building2, MoreVertical,
-  Shield, UserCheck, Briefcase, Mail, Phone, ExternalLink,
-  Landmark, Users, Crown, Pencil
+  Search, Filter, MapPin, Building2,
+  Shield, Mail, Phone,
+  Landmark, Users, Crown, Pencil, Eye
 } from 'lucide-react';
-import { getRoleDisplayName, getHighestRole, hasRole, getRoleHierarchyNumber, roleNumberToName } from '@/lib/utils/roles';
+import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import StatsSection from './StatsSection';
 import RoleAssignmentModal from './RoleAssignmentModal';
 import EditUserProfileModal from './EditUserProfileModal';
+import UserDetailsModal from './UserDetailsModal';
 import { toast } from 'react-hot-toast';
 
 // Extended filter types
-type FilterType = 'all' | 'pending' | 'leadership' | 'management' | 'field' | 'student';
+type FilterType = 'all' | 'pending' | 'other_none' | 'other_center' | 'leadership' | 'management' | 'field' | 'student';
 
 // Camp Options Mapping
 const CAMP_OPTIONS = [
@@ -51,8 +51,8 @@ export default function UsersPage() {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // New Filter State
-  const [selectedRole, setSelectedRole] = useState<string>(''); // For specific role dropdown
+  // Dropdown Filter States
+  const [selectedRole, setSelectedRole] = useState<string>('');
   const [selectedCamp, setSelectedCamp] = useState('');
   const [selectedTemple, setSelectedTemple] = useState('');
   const [selectedCenter, setSelectedCenter] = useState('');
@@ -66,8 +66,12 @@ export default function UsersPage() {
   // Modal State
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<User | null>(null);
 
   // Pagination State
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -95,7 +99,6 @@ export default function UsersPage() {
 
           // 1. Fetch Users logic
           if (currentUserRoles.includes('super_admin') || currentUserRoles.includes(8)) {
-            // Super admin gets everyone
             fetchedUsers = await getUsersByHierarchy({});
           } else {
             fetchedUsers = [];
@@ -126,16 +129,26 @@ export default function UsersPage() {
   // Filtering Logic (Client-side filtering of Users)
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
+      const hierarchy = user.hierarchy || {};
+
       // 1. Text Search
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const matchName = user.name?.toLowerCase().includes(query);
+        const otherCenter = (user.otherCenter || hierarchy.otherCenter || (user as any).other_center || '').toLowerCase();
+        const otherTemple = (user.otherTemple || hierarchy.otherTemple || (user as any).other_temple || '').toLowerCase();
+        const otherCounselor = (user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor || '').toLowerCase();
+        const initiatedName = (hierarchy.initiatedName || '').toLowerCase();
+
+        const matchName = user.name?.toLowerCase().includes(query) || initiatedName.includes(query);
         const matchEmail = user.email?.toLowerCase().includes(query);
         const matchPhone = user.phone?.toLowerCase().includes(query);
         const matchLocation = (
-          user.hierarchy?.city?.toLowerCase().includes(query) ||
-          user.hierarchy?.center?.toLowerCase().includes(query) ||
-          user.hierarchy?.currentTemple?.toLowerCase().includes(query)
+          hierarchy.city?.toLowerCase().includes(query) ||
+          hierarchy.center?.toLowerCase().includes(query) ||
+          hierarchy.currentTemple?.toLowerCase().includes(query) ||
+          otherCenter.includes(query) ||
+          otherTemple.includes(query) ||
+          otherCounselor.includes(query)
         );
 
         if (!matchName && !matchEmail && !matchPhone && !matchLocation) return false;
@@ -145,7 +158,6 @@ export default function UsersPage() {
       // Role Filter
       if (selectedRole) {
         const userRoles = Array.isArray(user.role) ? user.role : [user.role];
-        // Check if user has the selected role (handling string vs number)
         const hasSelectedRole = userRoles.some(r => {
           const rNum = getRoleHierarchyNumber(r);
           const selectedNum = getRoleHierarchyNumber(selectedRole as any);
@@ -159,27 +171,69 @@ export default function UsersPage() {
         if (!(user as any)[selectedCamp]) return false;
       }
 
-      // Temple Filter
+      // Temple Filter (Supports '__other__' and '__none__')
       if (selectedTemple) {
-        const userTemple = user.hierarchy?.currentTemple || user.parentTemple || user.currentTemple;
-        if (!userTemple || userTemple.trim().toLowerCase() !== selectedTemple.trim().toLowerCase()) return false;
+        const userTemple = hierarchy.currentTemple || user.parentTemple || user.currentTemple;
+        const hasOtherTemple = user.otherTemple || hierarchy.otherTemple || (user as any).other_temple || userTemple === 'Other';
+
+        if (selectedTemple === '__other__') {
+          if (!hasOtherTemple) return false;
+        } else if (selectedTemple === '__none__') {
+          if (userTemple && userTemple !== 'None' && !hasOtherTemple) return false;
+        } else {
+          if (!userTemple || userTemple.trim().toLowerCase() !== selectedTemple.trim().toLowerCase()) return false;
+        }
       }
 
-      // Center Filter
+      // Center Filter (Supports '__other__' and '__none__')
       if (selectedCenter) {
-        const userCenter = user.hierarchy?.center || user.hierarchy?.currentCenter || user.currentCenter || user.parentCenter;
-        if (!userCenter || userCenter.trim().toLowerCase() !== selectedCenter.trim().toLowerCase()) return false;
+        const userCenter = hierarchy.center || hierarchy.currentCenter || user.currentCenter || user.parentCenter;
+        const hasOtherCenter = user.otherCenter || hierarchy.otherCenter || (user as any).other_center || userCenter === 'Other';
+
+        if (selectedCenter === '__other__') {
+          if (!hasOtherCenter) return false;
+        } else if (selectedCenter === '__none__') {
+          if (userCenter && userCenter !== 'None' && !hasOtherCenter) return false;
+        } else {
+          if (!userCenter || userCenter.trim().toLowerCase() !== selectedCenter.trim().toLowerCase()) return false;
+        }
       }
 
-      // Counselor Filter
+      // Counselor Filter (Supports '__other__' and '__none__')
       if (selectedCounselor) {
-        const userCounselor = user.hierarchy?.counselor || user.hierarchy?.otherCounselor ||
-          user.hierarchy?.brahmachariCounselor || user.hierarchy?.grihasthaCounselor;
-        if (userCounselor !== selectedCounselor) return false;
+        const userCounselor = hierarchy.counselor || hierarchy.otherCounselor ||
+          hierarchy.brahmachariCounselor || hierarchy.grihasthaCounselor || user.otherCounselor || (user as any).other_counselor;
+        const hasOtherCounselor = user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor || userCounselor === 'Other';
+
+        if (selectedCounselor === '__other__') {
+          if (!hasOtherCounselor) return false;
+        } else if (selectedCounselor === '__none__') {
+          if (userCounselor && userCounselor !== 'None' && !hasOtherCounselor) return false;
+        } else {
+          if (userCounselor !== selectedCounselor) return false;
+        }
       }
 
       // 3. Status Filters (Pills)
       if (filterType === 'pending') return user.verificationStatus === 'pending';
+
+      if (filterType === 'other_center') {
+        const userCenter = hierarchy.center || hierarchy.currentCenter || user.currentCenter || user.parentCenter;
+        return Boolean(user.otherCenter || hierarchy.otherCenter || (user as any).other_center || userCenter === 'Other');
+      }
+
+      if (filterType === 'other_none') {
+        const userCenter = hierarchy.center || hierarchy.currentCenter || user.currentCenter || user.parentCenter;
+        const isCenterOtherOrNone = !userCenter || userCenter === 'None' || userCenter === 'Other' || Boolean(user.otherCenter || hierarchy.otherCenter || (user as any).other_center);
+
+        const userTemple = hierarchy.currentTemple || user.parentTemple || user.currentTemple;
+        const isTempleOtherOrNone = !userTemple || userTemple === 'None' || userTemple === 'Other' || Boolean(user.otherTemple || hierarchy.otherTemple || (user as any).other_temple);
+
+        const userCounselor = hierarchy.counselor || hierarchy.otherCounselor || hierarchy.brahmachariCounselor || hierarchy.grihasthaCounselor;
+        const isCounselorOtherOrNone = !userCounselor || userCounselor === 'None' || userCounselor === 'Other' || Boolean(user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor);
+
+        return isCenterOtherOrNone || isTempleOtherOrNone || isCounselorOtherOrNone;
+      }
 
       if (!selectedRole && filterType !== 'all') {
         const userRoles = Array.isArray(user.role) ? user.role : [user.role];
@@ -207,47 +261,33 @@ export default function UsersPage() {
   }, [users, searchQuery, selectedRole, selectedTemple, selectedCenter, selectedCounselor, selectedCamp, filterType]);
 
   // Derived Options for Dropdowns (Cascading from DB Lists)
-
-  // 1. Centers: Filter centersList based on selectedTemple (by name or ID)
   const availableCenters = useMemo(() => {
-    if (!selectedTemple) return centersList;
+    if (!selectedTemple || selectedTemple === '__other__' || selectedTemple === '__none__') return centersList;
 
-    // Find the temple object for the selected name
     const templeObj = templesList.find(
       t => t.name?.trim().toLowerCase() === selectedTemple.trim().toLowerCase() || t.id === selectedTemple
     );
 
-    // Filter centers that strictly match this temple
     return centersList.filter(c => {
-      // Match by ID if possible
       if (templeObj && c.temple_id && c.temple_id === templeObj.id) return true;
       if (c.temple_id && c.temple_id === selectedTemple) return true;
-      // Match by name as fallback
       if (c.temple_name && c.temple_name.trim().toLowerCase() === selectedTemple.trim().toLowerCase()) return true;
       return false;
     });
   }, [centersList, selectedTemple, templesList]);
 
-  // 2. Counselors: Filter counselorsList based on selectedCenter (by City)
   const availableCounselors = useMemo(() => {
-    if (!selectedCenter) return counselorsList;
+    if (!selectedCenter || selectedCenter === '__other__' || selectedCenter === '__none__') return counselorsList;
 
-    // Find center object
     const centerObj = centersList.find(c => c.name === selectedCenter);
-
     if (centerObj) {
-      // Filter counselors who are in the same city as the center
-      // Note: This is an approximation since counselors aren't strictly linked to center IDs in the DB yet
       return counselorsList.filter(co => co.city === centerObj.city);
     }
-
     return counselorsList;
   }, [counselorsList, selectedCenter, centersList]);
 
-
   // All Roles List for Dropdown
   const allRolesList = useMemo(() => {
-    // Generate list from 17 down to 1
     const roles = [];
     for (let i = 17; i >= 1; i--) {
       roles.push({
@@ -257,7 +297,6 @@ export default function UsersPage() {
     }
     return roles;
   }, []);
-
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!window.confirm(`Are you sure you want to permanently delete user ${userName}? This action cannot be undone.`)) {
@@ -270,20 +309,20 @@ export default function UsersPage() {
         return;
       }
 
-      const { data: sessionData } = await supabase?.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token || '';
 
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         }
       });
-      
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete user');
-      
+
       toast.success('User deleted successfully');
       setUsers(users.filter(u => u.id !== userId));
     } catch (error: any) {
@@ -298,7 +337,26 @@ export default function UsersPage() {
     setIsEditProfileModalOpen(true);
   };
 
-  const handleSaveUserProfile = async (userId: string, updatedData: Partial<User>) => {
+  const handleViewDetails = (user: User) => {
+    setSelectedUserDetails(user);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleStatusChange = async (targetUser: User, newStatus: 'approved' | 'pending' | 'rejected') => {
+    try {
+      await updateUser(targetUser.id, { verificationStatus: newStatus });
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, verificationStatus: newStatus } : u));
+      if (selectedUserDetails && selectedUserDetails.id === targetUser.id) {
+        setSelectedUserDetails({ ...selectedUserDetails, verificationStatus: newStatus });
+      }
+      toast.success(`User status changed to ${newStatus}`);
+    } catch (err: any) {
+      console.error('Failed to update status:', err);
+      toast.error(err.message || 'Failed to update user status');
+    }
+  };
+
+  const handleSaveUserProfile = async (userId: string, updatedData: Partial<User> & Record<string, any>) => {
     try {
       await updateUser(userId, updatedData);
 
@@ -321,6 +379,10 @@ export default function UsersPage() {
             currentCenter: updatedData.currentCenter || updatedData.hierarchy?.currentCenter,
             parentTemple: updatedData.parentTemple || updatedData.hierarchy?.parentTemple,
             parentCenter: updatedData.parentCenter || updatedData.hierarchy?.parentCenter,
+            otherCenter: updatedData.otherCenter || updatedData.hierarchy?.otherCenter,
+            otherTemple: updatedData.otherTemple || updatedData.hierarchy?.otherTemple,
+            otherCounselor: updatedData.otherCounselor || updatedData.hierarchy?.otherCounselor,
+            ashram: updatedData.ashram || updatedData.hierarchy?.ashram,
             counselor: updatedData.hierarchy?.counselor,
             counselorId: updatedData.hierarchy?.counselorId,
             initiationStatus: updatedData.hierarchy?.initiationStatus,
@@ -350,6 +412,17 @@ export default function UsersPage() {
         })
       );
 
+      if (selectedUserDetails && selectedUserDetails.id === userId) {
+        setSelectedUserDetails(prev => prev ? {
+          ...prev,
+          ...updatedData,
+          hierarchy: {
+            ...(prev.hierarchy || {}),
+            ...(updatedData.hierarchy || {})
+          }
+        } : null);
+      }
+
       toast.success('User profile updated successfully');
     } catch (err: any) {
       console.error('Error saving user profile:', err);
@@ -370,7 +443,6 @@ export default function UsersPage() {
       if (!userToUpdate) return;
 
       const oldRoles = (Array.isArray(userToUpdate.role) ? userToUpdate.role : [userToUpdate.role]) as any[];
-      const addedRoles = newRoles.filter(r => !oldRoles.includes(r));
       const removedRoles = oldRoles.filter(r => !newRoles.includes(r));
 
       // 1. Update the user role
@@ -381,16 +453,10 @@ export default function UsersPage() {
         return;
       }
 
-      // Check if roles were removed and cleanup centers table
-      // Roles to check: Project Manager (15), Project Advisor (14), Acting Manager (16)
-      // If user had these roles but now doesn't, set corresponding fields in centers table to null
-
       const hadPM = oldRoles.some((r: any) => getRoleHierarchyNumber(r) === 15);
       const hasPM = newRoles.some((r: any) => getRoleHierarchyNumber(r) === 15);
-
       const hadPA = oldRoles.some((r: any) => getRoleHierarchyNumber(r) === 14);
       const hasPA = newRoles.some((r: any) => getRoleHierarchyNumber(r) === 14);
-
       const hadAM = oldRoles.some((r: any) => getRoleHierarchyNumber(r) === 16);
       const hasAM = newRoles.some((r: any) => getRoleHierarchyNumber(r) === 16);
 
@@ -415,65 +481,55 @@ export default function UsersPage() {
         }).eq('acting_manager_id', userId);
       }
 
-      // toast.success('Roles updated successfully'); // This line was not in the original, but was in the instruction. I will add it.
-
       // 2. Sync with Temples Table if needed
-      if (supabase) {
-        // Handle Grants/Updates
-        const roleToColumn: Record<number, { id: string, name: string }> = {
-          11: { id: 'managing_director_id', name: 'managing_director_name' },
-          12: { id: 'director_id', name: 'director_name' },
-          13: { id: 'central_voice_manager_id', name: 'central_voice_manager_name' },
-          21: { id: 'yp_id', name: 'yp_name' }
-        };
+      const roleToColumn: Record<number, { id: string, name: string }> = {
+        11: { id: 'managing_director_id', name: 'managing_director_name' },
+        12: { id: 'director_id', name: 'director_name' },
+        13: { id: 'central_voice_manager_id', name: 'central_voice_manager_name' },
+        21: { id: 'yp_id', name: 'yp_name' }
+      };
 
-        for (const roleId of [11, 12, 13, 21]) {
-          if ((newRoles as any[]).includes(roleId) && templeId) {
-            const config = roleToColumn[roleId];
-            // Set user as director for THIS temple
-            await supabase
-              .from('temples')
-              .update({
-                [config.id]: userId,
-                [config.name]: userToUpdate.name
-              })
-              .eq('id', templeId);
+      for (const roleId of [11, 12, 13, 21]) {
+        if ((newRoles as any[]).includes(roleId) && templeId) {
+          const config = roleToColumn[roleId];
+          await supabase
+            .from('temples')
+            .update({
+              [config.id]: userId,
+              [config.name]: userToUpdate.name
+            })
+            .eq('id', templeId);
 
-            // OPTIONAL: Clear them from OTHER temples for this specific role? 
-            // Usually a person is MD of only one temple. 
-            await supabase
-              .from('temples')
-              .update({ [config.id]: null, [config.name]: null })
-              .eq(config.id, userId)
-              .not('id', 'eq', templeId);
-          }
+          await supabase
+            .from('temples')
+            .update({ [config.id]: null, [config.name]: null })
+            .eq(config.id, userId)
+            .not('id', 'eq', templeId);
         }
+      }
 
-        // Handle Revocations
-        for (const roleId of removedRoles) {
-          const rNum = getRoleHierarchyNumber(roleId as any);
-          if (roleToColumn[rNum]) {
-            const config = roleToColumn[rNum];
-            // Clear user from ANY temple where they held this role
-            await supabase
-              .from('temples')
-              .update({ [config.id]: null, [config.name]: null })
-              .eq(config.id, userId);
-          }
+      for (const roleId of removedRoles) {
+        const rNum = getRoleHierarchyNumber(roleId as any);
+        if (roleToColumn[rNum]) {
+          const config = roleToColumn[rNum];
+          await supabase
+            .from('temples')
+            .update({ [config.id]: null, [config.name]: null })
+            .eq(config.id, userId);
         }
       }
 
       // Refresh local state
       setUsers(users.map(u => u.id === userId ? { ...u, role: newRoles } : u));
 
-      // Update temples list to reflect new assignments
       const updatedTemples = await getTemplesFromSupabase();
       setTemplesList(updatedTemples);
 
-      // If self-update
       if (userId === userData?.id) {
         refreshUserData();
       }
+
+      toast.success('Roles updated successfully');
     } catch (error) {
       console.error('Error updating roles and assignments:', error);
       alert('Failed to update roles/temple assignment');
@@ -487,12 +543,10 @@ export default function UsersPage() {
     currentPage * itemsPerPage
   );
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, selectedRole, selectedTemple, selectedCenter, selectedCounselor, selectedCamp, filterType, itemsPerPage]);
 
-  // Header/Filter visibility for mobile
   const [showFilters, setShowFilters] = useState(false);
 
   if (loading) {
@@ -532,7 +586,7 @@ export default function UsersPage() {
       {/* Stats Section */}
       <StatsSection users={users} />
 
-      {/* Controls Section - Clean, non-sticky to prevent scroll clipping */}
+      {/* Controls Section */}
       <div className="bg-white rounded-2xl p-3.5 md:p-4 shadow-sm border border-gray-100 flex flex-col gap-3">
         {/* Top Filter Bar */}
         <div className="flex flex-col md:flex-row gap-2.5 md:gap-3 items-stretch md:items-center">
@@ -541,7 +595,7 @@ export default function UsersPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search by name, email, phone, role, temple..."
+              placeholder="Search by legal name, spiritual name, email, phone, temple, other center..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-orange-300 focus:ring-2 focus:ring-orange-100 placeholder:text-gray-400 text-xs md:text-sm font-semibold transition-all"
@@ -587,8 +641,9 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* Advanced Filters */}
+        {/* Advanced Filters (With None and Other options) */}
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2.5 border-t border-gray-50 transition-all ${showFilters ? 'block' : 'hidden lg:grid'}`}>
+          {/* Temple Filter */}
           <div className="relative">
             <select
               value={selectedTemple}
@@ -600,11 +655,15 @@ export default function UsersPage() {
               className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Temples</option>
+              <option value="__other__">⚠️ Other Temple (Custom specified)</option>
+              <option value="__none__">⚪ None / Unassigned Temple</option>
+              <option disabled>──────────</option>
               {templesList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
             </select>
             <Landmark className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
+          {/* Center Filter */}
           <div className="relative">
             <select
               value={selectedCenter}
@@ -615,11 +674,15 @@ export default function UsersPage() {
               className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Centers</option>
+              <option value="__other__">⚠️ Other Center (Custom specified)</option>
+              <option value="__none__">⚪ None / Unassigned Center</option>
+              <option disabled>──────────</option>
               {availableCenters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
+          {/* Counselor Filter */}
           <div className="relative sm:col-span-2 lg:col-span-1">
             <select
               value={selectedCounselor}
@@ -627,6 +690,9 @@ export default function UsersPage() {
               className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-sm hover:border-gray-200 transition-colors"
             >
               <option value="">All Counselors</option>
+              <option value="__other__">⚠️ Other Counselor (Custom specified)</option>
+              <option value="__none__">⚪ None / No Counselor</option>
+              <option disabled>──────────</option>
               {availableCounselors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
             <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -639,9 +705,12 @@ export default function UsersPage() {
           {[
             { id: 'all', label: 'Reset' },
             { id: 'pending', label: 'Pending Approval' },
+            { id: 'other_none', label: '⚠️ Other / None' },
+            { id: 'other_center', label: 'Other Center' },
             ...(!selectedRole ? [
               { id: 'leadership', label: 'Leadership' },
               { id: 'management', label: 'Management' },
+              { id: 'student', label: 'Students' },
             ] : []),
           ].map((pill) => (
             <button
@@ -675,14 +744,28 @@ export default function UsersPage() {
             const highestRole = getHighestRole(user.role || 'student');
             const roleName = getRoleDisplayName(highestRole);
             const isPending = user.verificationStatus === 'pending';
+            const hierarchy = user.hierarchy || {};
+
+            // Resolved Center, Temple, Counselor
+            const otherCenterText = user.otherCenter || hierarchy.otherCenter || (user as any).other_center;
+            const rawCenter = hierarchy.currentCenter || hierarchy.center || user.currentCenter || user.parentCenter;
+            const isOtherCenter = rawCenter === 'Other' || Boolean(otherCenterText);
+
+            const otherTempleText = user.otherTemple || hierarchy.otherTemple || (user as any).other_temple;
+            const rawTemple = hierarchy.currentTemple || user.currentTemple || user.parentTemple;
+            const isOtherTemple = rawTemple === 'Other' || Boolean(otherTempleText);
+
+            const otherCounselorText = user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor;
+            const rawCounselor = hierarchy.counselor || hierarchy.brahmachariCounselor || hierarchy.grihasthaCounselor;
+            const isOtherCounselor = rawCounselor === 'Other' || Boolean(otherCounselorText);
 
             return (
               <div
                 key={user.id}
-                className="group relative bg-white rounded-xl md:rounded-2xl p-3 md:px-4 md:py-3 border border-gray-100 transition-all duration-200 hover:shadow-md hover:border-gray-200 flex flex-col md:flex-row md:items-center gap-3"
+                className="group relative bg-white rounded-xl md:rounded-2xl p-3 md:px-4 md:py-3.5 border border-gray-100 transition-all duration-200 hover:shadow-md hover:border-gray-200 flex flex-col md:flex-row md:items-center gap-3.5"
               >
                 {/* Left: Avatar & Primary Info */}
-                <div className="flex items-center gap-3 md:w-1/4 lg:w-1/5 shrink-0">
+                <div className="flex items-center gap-3 md:w-1/4 lg:w-1/4 shrink-0">
                   <div className="relative">
                     <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-100 shadow-inner flex items-center justify-center text-sm font-bold text-gray-400 overflow-hidden">
                       <span className="text-gray-400 text-sm font-bold">
@@ -702,16 +785,21 @@ export default function UsersPage() {
                       <Shield className="w-2.5 h-2.5 text-orange-500" />
                     </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight truncate" title={user.name}>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-snug break-words" title={user.name}>
                       {user.name || 'Unknown User'}
                     </h3>
+                    {hierarchy.initiatedName && (
+                      <p className="text-[10px] font-semibold text-amber-700 leading-tight">
+                        {hierarchy.initiatedName}
+                      </p>
+                    )}
                     <p className="text-orange-600 font-black text-[9px] uppercase tracking-wider truncate mt-0.5">{roleName}</p>
                   </div>
                 </div>
 
-                {/* Middle: Contact Info */}
-                <div className="flex flex-col sm:flex-row md:flex-1 gap-2 sm:gap-4 md:gap-4 lg:gap-8">
+                {/* Middle: Contact Info & Allocation */}
+                <div className="flex flex-col sm:flex-row md:flex-1 gap-2.5 sm:gap-4 md:gap-4 lg:gap-6">
                   {/* Email & Phone */}
                   <div className="space-y-0.5 min-w-0 sm:w-1/2 md:w-auto">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500">
@@ -726,22 +814,50 @@ export default function UsersPage() {
                     )}
                   </div>
 
-                  {/* Location */}
-                  <div className="flex items-start gap-1.5 text-[11px] font-bold text-gray-400 min-w-0 sm:w-1/2 md:w-auto">
-                    <MapPin className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-0.5" />
-                    <span className="truncate leading-relaxed" title={`${user.hierarchy?.center || ''}, ${user.hierarchy?.currentTemple || ''}`}>
-                      {user.hierarchy?.center || user.hierarchy?.currentTemple ? (
-                        <>
-                          {user.hierarchy?.center && <div>{user.hierarchy.center}</div>}
-                          {user.hierarchy?.currentTemple && <div className="text-[10px] opacity-70">{user.hierarchy.currentTemple}</div>}
-                        </>
-                      ) : 'No Location Recorded'}
-                    </span>
+                  {/* Location & Organization Badges */}
+                  <div className="flex flex-col gap-1 text-[11px] font-medium min-w-0 sm:w-1/2 md:w-auto flex-1">
+                    {/* Temple Display */}
+                    <div className="flex items-center gap-1.5 text-gray-500">
+                      <Landmark className="w-3 h-3 text-gray-400 shrink-0" />
+                      {isOtherTemple ? (
+                        <span className="px-1.5 py-0.2 bg-amber-50 text-amber-800 border border-amber-200 rounded font-semibold text-[10px]">
+                          Other Temple: {otherTempleText || 'Unspecified'}
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-700 truncate">{rawTemple || 'No Temple'}</span>
+                      )}
+                    </div>
+
+                    {/* Center Display */}
+                    <div className="flex items-center gap-1.5 text-gray-500">
+                      <Building2 className="w-3 h-3 text-gray-400 shrink-0" />
+                      {isOtherCenter ? (
+                        <span className="px-1.5 py-0.2 bg-amber-50 text-amber-800 border border-amber-200 rounded font-semibold text-[10px]">
+                          Other Center: {otherCenterText || 'Unspecified'}
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-700 truncate">{rawCenter || 'No Center'}</span>
+                      )}
+                    </div>
+
+                    {/* Counselor Display if assigned or other */}
+                    {(rawCounselor || isOtherCounselor) && (
+                      <div className="flex items-center gap-1.5 text-gray-400 text-[10px]">
+                        <Users className="w-3 h-3 text-gray-400 shrink-0" />
+                        {isOtherCounselor ? (
+                          <span className="px-1.5 py-0.2 bg-orange-50 text-orange-800 border border-orange-200 rounded font-semibold">
+                            Other Counselor: {otherCounselorText || 'Unspecified'}
+                          </span>
+                        ) : (
+                          <span className="truncate">Counselor: {rawCounselor}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Right: Status & Actions */}
-                <div className="flex items-center justify-between md:justify-end gap-2 md:gap-2.5 md:w-auto shrink-0 border-t md:border-t-0 pt-2.5 md:pt-0 mt-1 md:mt-0">
+                <div className="flex items-center justify-between md:justify-end gap-2 md:gap-2 md:w-auto shrink-0 border-t md:border-t-0 pt-2.5 md:pt-0 mt-1 md:mt-0">
                   {/* Status Badge */}
                   <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${isPending
                     ? 'bg-amber-50 text-amber-600 border-amber-100'
@@ -751,10 +867,20 @@ export default function UsersPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {/* View Details Button */}
+                    <button
+                      onClick={() => handleViewDetails(user)}
+                      className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 border border-gray-200 shadow-2xs"
+                      title="View Full Profile Details"
+                    >
+                      <Eye className="w-3 h-3 text-gray-500" />
+                      <span>Details</span>
+                    </button>
+
                     {/* Edit Profile Button */}
                     <button
                       onClick={() => handleEditProfile(user)}
-                      className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 border border-orange-200/60 shadow-sm"
+                      className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 border border-orange-200/60 shadow-2xs"
                       title="Edit User Profile"
                     >
                       <Pencil className="w-3 h-3" />
@@ -773,7 +899,7 @@ export default function UsersPage() {
                     {/* Delete User Button */}
                     <button
                       onClick={() => handleDeleteUser(user.id, user.name || 'Unknown User')}
-                      className="p-1.5 text-red-500 hover:text-white hover:bg-red-500 rounded-xl transition-all active:scale-95 flex items-center justify-center border border-gray-100 hover:border-red-500 shadow-sm"
+                      className="p-1.5 text-red-500 hover:text-white hover:bg-red-500 rounded-xl transition-all active:scale-95 flex items-center justify-center border border-gray-100 hover:border-red-500 shadow-2xs"
                       title="Delete User"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -796,6 +922,7 @@ export default function UsersPage() {
                 setSelectedTemple('');
                 setSelectedCenter('');
                 setSelectedCounselor('');
+                setSelectedCamp('');
                 setSearchQuery('');
               }}
               className="mt-4 text-orange-600 font-black text-xs hover:underline uppercase tracking-widest"
@@ -846,7 +973,26 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Edit User Profile Modal */}
+      {/* User Details Modal (Superadmin Full View) */}
+      <UserDetailsModal
+        isOpen={isDetailsModalOpen}
+        user={selectedUserDetails}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedUserDetails(null);
+        }}
+        onEditProfile={(user) => {
+          setIsDetailsModalOpen(false);
+          handleEditProfile(user);
+        }}
+        onAssignRole={(user) => {
+          setIsDetailsModalOpen(false);
+          handleEditRole(user);
+        }}
+        onStatusChange={handleStatusChange}
+      />
+
+      {/* Edit User Profile Modal (Superadmin Edit) */}
       <EditUserProfileModal
         isOpen={isEditProfileModalOpen}
         user={userToEdit}

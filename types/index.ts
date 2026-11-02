@@ -169,6 +169,7 @@ export interface User {
   // Health fields
   healthChronicDisease?: string;
   bv_group?: string;
+  ashram?: string;
 }
 
 export interface EducationEntry {
