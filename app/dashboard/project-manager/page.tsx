@@ -898,9 +898,9 @@ export default function ProjectManagerDashboard() {
             loadPendingUsers();
             loadStats(currentCenter, currentTemple);
             setSelectedPendingUserIds(prev => prev.filter(id => id !== userId));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error verifying user:', error);
-            toast.error('Failed to update user status');
+            toast.error(error?.message || 'Failed to update user status');
         }
     };
 
@@ -932,9 +932,9 @@ export default function ProjectManagerDashboard() {
             loadPendingUsers();
             loadStats(currentCenter, currentTemple);
             setSelectedPendingUserIds([]);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error in bulk verification:', error);
-            toast.error('Bulk update failed');
+            toast.error(error?.message || 'Bulk update failed');
         }
     };
 
