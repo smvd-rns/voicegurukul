@@ -255,7 +255,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
       if (!isNaN(parsed.getTime())) {
         return parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
       }
-    } catch {}
+    } catch { }
     return d;
   };
 
@@ -291,8 +291,8 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             mealFilter === 'Breakfast'
               ? dayMatrix.breakfast
               : mealFilter === 'Lunch'
-              ? dayMatrix.lunch
-              : dayMatrix.dinner;
+                ? dayMatrix.lunch
+                : dayMatrix.dinner;
 
           if (!mealObj || !mealObj.eligible) return false;
           if (statusFilter === 'TAKEN' && !mealObj.punched) return false;
@@ -682,31 +682,31 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-200">
-      {/* Top Banner / Actions: Compact on Mobile */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-lg shadow-amber-600/15">
-        <div className="space-y-0.5 sm:space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[9px] sm:text-[11px] font-black uppercase tracking-wider">
-            <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-200" />
+      {/* Top Banner / Actions: Compact on Mobile & 13"-14" Laptops */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-md shadow-amber-600/15">
+        <div className="space-y-0.5">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+            <Utensils className="w-3 h-3 text-amber-200" />
             <span>Super Admin &bull; Prasadam &amp; Kitchen Audit</span>
           </div>
-          <h2 className="text-base sm:text-xl md:text-2xl font-black tracking-tight text-white leading-tight">
+          <h2 className="text-sm sm:text-lg md:text-xl font-black tracking-tight text-white leading-tight">
             Global Kitchen Headcount &amp; Devotee Meal Ledger
           </h2>
-          <p className="text-[11px] sm:text-xs text-amber-100 max-w-2xl hidden sm:block">
+          <p className="text-[10px] sm:text-[11px] text-amber-100 max-w-2xl hidden sm:block line-clamp-1">
             Tally expected meals across all retreats, audit which devotees took prasadam at what time,
             and monitor extra guest buffers with center, temple, and track filters.
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {onOpenScanner && (
             <button
               onClick={onOpenScanner}
               type="button"
-              className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-2xs transition-all hover:scale-[1.02] cursor-pointer"
               title="Launch QR Pass Scanner"
             >
-              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+              <QrCode className="w-3.5 h-3.5 text-amber-400" />
               <span>Gate Scanner</span>
             </button>
           )}
@@ -714,49 +714,47 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
           <button
             onClick={loadData}
             type="button"
-            className="p-1.5 sm:p-2.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl sm:rounded-2xl transition-all shadow-xs cursor-pointer"
+            className="p-1.5 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-lg sm:rounded-xl transition-all shadow-2xs cursor-pointer"
             title="Refresh Audit Data"
           >
-            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           <button
             onClick={handleExportExcel}
             type="button"
-            className="inline-flex items-center gap-1 px-3 sm:px-5 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] cursor-pointer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-xs shadow-2xs transition-all hover:scale-[1.02] cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Export (.xlsx)</span>
           </button>
         </div>
       </div>
 
       {/* DISTINCT 2 SECTIONS SWITCHER: Compact on Mobile */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-3 gap-2 sm:gap-3 flex-wrap">
-        <div className="flex items-center bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-2 flex-wrap">
+        <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
           <button
             type="button"
             onClick={() => setActiveSection('devotees')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeSection === 'devotees'
+            className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeSection === 'devotees'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
-            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <Users className="w-3.5 h-3.5 shrink-0" />
             <span>Devotee Prasadam Attendance</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSection('kitchen')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeSection === 'kitchen'
+            className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeSection === 'kitchen'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
-            <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
+            <Utensils className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>Daily Kitchen Headcount &amp; Tally</span>
           </button>
         </div>
@@ -833,11 +831,10 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               <button
                 type="button"
                 onClick={() => setDateFilter('all')}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  dateFilter === 'all'
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${dateFilter === 'all'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 All Dates
               </button>
@@ -846,11 +843,10 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   key={d}
                   type="button"
                   onClick={() => setDateFilter(d)}
-                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    dateFilter === d
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${dateFilter === d
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   {getDateLabel(d)}
                 </button>
@@ -1293,11 +1289,10 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
               <button
                 type="button"
                 onClick={() => setDateFilter('all')}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  dateFilter === 'all'
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${dateFilter === 'all'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 All Dates
               </button>
@@ -1306,11 +1301,10 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                   key={d}
                   type="button"
                   onClick={() => setDateFilter(d)}
-                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    dateFilter === d
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${dateFilter === d
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   {getDateLabel(d)}
                 </button>
@@ -1318,95 +1312,95 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
           </div>
 
-          {/* 2. DYNAMIC DEVOTEE SUMMARY CARDS: Compact on Mobile */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5">
+          {/* 2. DYNAMIC DEVOTEE SUMMARY CARDS: Compact on Mobile & 13"-14" Laptops */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
             {/* Card 1: Total Expected Meals */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs transition-all hover:border-slate-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs transition-all hover:border-slate-300">
+              <span className="text-[9px] sm:text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">
                 Total Meals Scheduled
               </span>
-              <div className="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
+              <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 mt-0.5">
                 {devoteeStats.totalScheduledMeals.toLocaleString('en-IN')}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate block mt-0.5">
                 {devoteeStats.devoteeCount} Devotees &bull; {devoteeStats.dateLabel}
               </span>
             </div>
 
             {/* Card 2: Prasadam Taken */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-emerald-50/70 border border-emerald-200/80 shadow-xs transition-all hover:border-emerald-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs transition-all hover:border-emerald-300">
+              <span className="text-[9px] sm:text-[9.5px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center justify-between">
                 <span>Prasadam Taken</span>
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               </span>
-              <div className="text-lg sm:text-2xl font-black text-emerald-800 mt-0.5 sm:mt-1">
+              <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-800 mt-0.5">
                 {(devoteeStats.totalTakenMeals + guestCountForScope).toLocaleString('en-IN')}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-medium truncate block mt-0.5">
                 {devoteeStats.totalTakenMeals} Devotees + {guestCountForScope} Guests
               </span>
             </div>
 
             {/* Card 3: Guests Honored (No QR) */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-indigo-50/70 border border-indigo-200/80 shadow-xs transition-all hover:border-indigo-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center gap-1">
-                <PlusCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 shadow-2xs transition-all hover:border-indigo-300">
+              <span className="text-[9px] sm:text-[9.5px] font-bold text-indigo-700 uppercase tracking-wider block flex items-center justify-between">
                 <span>Guests Honored</span>
+                <PlusCircle className="w-3 h-3 text-indigo-600" />
               </span>
-              <div className="text-lg sm:text-2xl font-black text-indigo-900 mt-0.5 sm:mt-1">
+              <div className="text-sm sm:text-base lg:text-lg font-black text-indigo-900 mt-0.5">
                 +{guestCountForScope}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-indigo-700 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-indigo-700 font-medium truncate block mt-0.5">
                 Walk-ins, drivers &amp; VIPs honored
               </span>
             </div>
 
             {/* Card 4: Remaining / Pending */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-amber-50/80 border border-amber-200/80 shadow-xs transition-all hover:border-amber-300">
-              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center gap-1">
-                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 shadow-2xs transition-all hover:border-amber-300">
+              <span className="text-[9px] sm:text-[9.5px] font-bold text-amber-700 uppercase tracking-wider block flex items-center justify-between">
                 <span>Remaining / Pending</span>
+                <Clock className="w-3 h-3 text-amber-600" />
               </span>
-              <div className="text-lg sm:text-2xl font-black text-amber-900 mt-0.5 sm:mt-1">
+              <div className="text-sm sm:text-base lg:text-lg font-black text-amber-900 mt-0.5">
                 {devoteeStats.totalRemainingMeals.toLocaleString('en-IN')}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate block">
+              <span className="text-[9px] sm:text-[10px] text-amber-700 font-medium truncate block mt-0.5">
                 {devoteeStats.pendingRate}% pending honoring
               </span>
             </div>
 
             {/* Card 5: Session Breakdown */}
-            <div className="p-2.5 sm:p-4 rounded-xl sm:rounded-3xl bg-slate-900 text-white shadow-xs border border-slate-800 transition-all hover:border-slate-700 flex flex-col justify-between">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900 text-white shadow-2xs border border-slate-800 transition-all hover:border-slate-700 flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                  Session Headcounts
+                <span className="text-[9px] sm:text-[9.5px] font-bold text-amber-400 uppercase tracking-wider block">
+                  Session Counts
                 </span>
                 <span className="text-[8px] sm:text-[9px] text-slate-400 font-mono">
                   {devoteeStats.dateLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-4 gap-1 text-center mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-slate-800">
+              <div className="grid grid-cols-4 gap-1 text-center mt-0.5 pt-0.5 border-t border-slate-800">
                 <div>
-                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-amber-300 uppercase block">BF</span>
-                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-bold text-amber-300 uppercase block">BF</span>
+                  <span className="text-[10px] sm:text-[11px] font-black text-white" title={`${devoteeStats.bf.taken} Devotees + ${guestByMeal.bf} Guests`}>
                     {devoteeStats.bf.taken + guestByMeal.bf}/{devoteeStats.bf.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-orange-300 uppercase block">LN</span>
-                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-bold text-orange-300 uppercase block">LN</span>
+                  <span className="text-[10px] sm:text-[11px] font-black text-white" title={`${devoteeStats.ln.taken} Devotees + ${guestByMeal.ln} Guests`}>
                     {devoteeStats.ln.taken + guestByMeal.ln}/{devoteeStats.ln.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-indigo-300 uppercase block">DN</span>
-                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-bold text-indigo-300 uppercase block">DN</span>
+                  <span className="text-[10px] sm:text-[11px] font-black text-white" title={`${devoteeStats.dn.taken} Devotees + ${guestByMeal.dn} Guests`}>
                     {devoteeStats.dn.taken + guestByMeal.dn}/{devoteeStats.dn.eligible}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[7.5px] sm:text-[8.5px] font-bold text-cyan-300 uppercase block">MILK</span>
-                  <span className="text-[10px] sm:text-xs font-black text-white" title={`${devoteeStats.ml.taken} Devotees + ${guestByMeal.ml} Guests`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-bold text-cyan-300 uppercase block">ML</span>
+                  <span className="text-[10px] sm:text-[11px] font-black text-white" title={`${devoteeStats.ml.taken} Devotees + ${guestByMeal.ml} Guests`}>
                     {devoteeStats.ml.taken + guestByMeal.ml}/{devoteeStats.ml.eligible}
                   </span>
                 </div>
@@ -1429,19 +1423,19 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse min-w-[950px]">
-                <thead className="bg-slate-50 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <table className="w-full text-left text-xs border-collapse min-w-[900px]">
+                <thead className="bg-slate-50 text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Token #</th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">Devotee Details</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Camp Title</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Sub-Camp Track</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3">Center &amp; Temple</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Breakfast</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Lunch</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Dinner</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">Milk</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-right">Camp Total</th>
+                    <th className="py-2 px-2 text-center">Token #</th>
+                    <th className="py-2 px-2.5 sm:px-3">Devotee Details</th>
+                    <th className="py-2 px-2 sm:px-2.5">Camp Title</th>
+                    <th className="py-2 px-2 sm:px-2.5">Sub-Camp Track</th>
+                    <th className="py-2 px-2 sm:px-2.5">Center &amp; Temple</th>
+                    <th className="py-2 px-2 text-center">Breakfast</th>
+                    <th className="py-2 px-2 text-center">Lunch</th>
+                    <th className="py-2 px-2 text-center">Dinner</th>
+                    <th className="py-2 px-2 text-center">Milk</th>
+                    <th className="py-2 px-2 sm:px-2.5 text-right">Camp Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1469,15 +1463,15 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                         const isPunched = mealData.punched;
                         const timeStr = mealData.punchedAt
                           ? new Date(mealData.punchedAt).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: true
-                            })
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true
+                          })
                           : null;
 
                         return (
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex flex-col items-center gap-0.5">
                             <button
                               type="button"
                               onClick={() =>
@@ -1489,27 +1483,26 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 )
                               }
                               disabled={togglingPunchId === `${d.regId}_${dateFilter}_${mealName}`}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
-                                isPunched
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border transition-all cursor-pointer ${isPunched
                                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
                                   : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                              }`}
+                                }`}
                               title={isPunched ? 'Click to Unmark' : 'Click to Mark Taken'}
                             >
                               {isPunched ? (
                                 <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                                   <span>Taken</span>
                                 </>
                               ) : (
                                 <>
-                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <Clock className="w-2.5 h-2.5 text-amber-600" />
                                   <span>Not Taken</span>
                                 </>
                               )}
                             </button>
                             {timeStr && (
-                              <span className="text-[9px] font-bold text-slate-500 font-mono">
+                              <span className="text-[8.5px] font-bold text-slate-500 font-mono">
                                 {timeStr}
                               </span>
                             )}
@@ -1545,14 +1538,14 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                       return (
                         <tr key={d.regId} className="hover:bg-slate-50/70 transition-colors">
                           {/* Token # */}
-                          <td className="py-3 px-3 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded-xl bg-slate-100 font-black text-slate-800 text-xs">
+                          <td className="py-2 px-2 text-center">
+                            <span className="inline-block px-1.5 py-0.2 rounded-lg bg-slate-100 font-black text-slate-800 text-xs">
                               #{d.token || '—'}
                             </span>
                           </td>
 
                           {/* Devotee Details */}
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-2.5 sm:px-3">
                             <div className="font-bold text-slate-900">{d.name}</div>
                             <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                               📞 {d.phone || 'No phone'}
@@ -1565,21 +1558,21 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Camp Title */}
-                          <td className="py-3 px-3">
+                          <td className="py-2 px-2 sm:px-2.5">
                             <span className="font-semibold text-slate-800 truncate block max-w-[140px]" title={d.campTitle}>
                               {d.campTitle}
                             </span>
                           </td>
 
                           {/* Sub-Camp Track */}
-                          <td className="py-3 px-3">
-                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px] whitespace-nowrap">
+                          <td className="py-2 px-2 sm:px-2.5">
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[9.5px] whitespace-nowrap">
                               {d.track}
                             </span>
                           </td>
 
                           {/* Center & Temple (Resolved with POC Fallback) */}
-                          <td className="py-3 px-3">
+                          <td className="py-2 px-2 sm:px-2.5">
                             <div className="flex items-center gap-1 font-semibold text-slate-800 text-xs">
                               <Building className="w-3 h-3 text-slate-400" />
                               <span>{d.center || 'None'}</span>
@@ -1591,7 +1584,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Breakfast */}
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2 px-2 text-center">
                             {dateFilter && dateFilter !== 'all' ? (
                               renderMealPill('Breakfast', dayMatrix?.breakfast)
                             ) : (
@@ -1599,7 +1592,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 <span className={`text-xs font-bold ${bfTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
                                   {bfTaken} / {bfEligible}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-semibold">
+                                <span className="text-[8.5px] text-slate-400 font-semibold">
                                   {bfEligible > 0 ? `${Math.round((bfTaken / bfEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
@@ -1607,7 +1600,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Lunch */}
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2 px-2 text-center">
                             {dateFilter && dateFilter !== 'all' ? (
                               renderMealPill('Lunch', dayMatrix?.lunch)
                             ) : (
@@ -1615,7 +1608,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 <span className={`text-xs font-bold ${lnTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
                                   {lnTaken} / {lnEligible}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-semibold">
+                                <span className="text-[8.5px] text-slate-400 font-semibold">
                                   {lnEligible > 0 ? `${Math.round((lnTaken / lnEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
@@ -1623,7 +1616,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Dinner */}
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2 px-2 text-center">
                             {dateFilter && dateFilter !== 'all' ? (
                               renderMealPill('Dinner', dayMatrix?.dinner)
                             ) : (
@@ -1631,7 +1624,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 <span className={`text-xs font-bold ${dnTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
                                   {dnTaken} / {dnEligible}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-semibold">
+                                <span className="text-[8.5px] text-slate-400 font-semibold">
                                   {dnEligible > 0 ? `${Math.round((dnTaken / dnEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
@@ -1639,7 +1632,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Milk */}
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2 px-2 text-center">
                             {dateFilter && dateFilter !== 'all' ? (
                               renderMealPill('Milk', dayMatrix?.milk)
                             ) : (
@@ -1647,7 +1640,7 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                                 <span className={`text-xs font-bold ${mlTaken > 0 ? 'text-emerald-700 font-black' : 'text-slate-700'}`}>
                                   {mlTaken} / {mlEligible}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-semibold">
+                                <span className="text-[8.5px] text-slate-400 font-semibold">
                                   {mlEligible > 0 ? `${Math.round((mlTaken / mlEligible) * 100)}%` : '—'}
                                 </span>
                               </div>
@@ -1655,11 +1648,11 @@ export default function AdminGlobalPrasadamAuditTab({ onOpenScanner }: GlobalAud
                           </td>
 
                           {/* Camp Total */}
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2 px-2 sm:px-2.5 text-right">
                             <span className="font-black text-slate-900 block">
                               {d.takenCount} / {d.eligibleCount}
                             </span>
-                            <span className="text-[10px] text-emerald-700 font-semibold block">
+                            <span className="text-[9.5px] text-emerald-700 font-semibold block">
                               {d.eligibleCount > 0 ? `${Math.round((d.takenCount / d.eligibleCount) * 100)}% Taken` : ''}
                             </span>
                           </td>

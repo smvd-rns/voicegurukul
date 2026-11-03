@@ -408,19 +408,21 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
                                             <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Temple</span>
                                             <span className="text-sm font-bold text-gray-700 sm:text-right">{(user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'Not set'}</span>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Center</span>
-                                            <span className="text-sm font-bold text-gray-700 sm:text-right">
-                                                {(() => {
-                                                    const center = (user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || (user.hierarchy?.center as any)?.name || user.hierarchy?.center;
-                                                    const other = user.hierarchy?.otherCenter;
-                                                    if (center === 'Other' || (!center && other)) {
-                                                        return <span className="text-rose-600">Other: {other}</span>;
-                                                    }
-                                                    return center || (other ? `Other: ${other}` : 'Not set');
-                                                })()}
-                                            </span>
-                                        </div>
+                                        {user.hierarchy?.ashram !== 'Brahmachari' && user.hierarchy?.ashram !== 'Grihastha' && (
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
+                                                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Center</span>
+                                                <span className="text-sm font-bold text-gray-700 sm:text-right">
+                                                    {(() => {
+                                                        const center = (user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || (user.hierarchy?.center as any)?.name || user.hierarchy?.center;
+                                                        const other = user.hierarchy?.otherCenter;
+                                                        if (center === 'Other' || (!center && other)) {
+                                                            return <span className="text-rose-600">Other: {other}</span>;
+                                                        }
+                                                        return center || (other ? `Other: ${other}` : 'Not set');
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
                                             <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Counselor</span>
                                             <span className="text-sm font-bold text-gray-700 sm:text-right">

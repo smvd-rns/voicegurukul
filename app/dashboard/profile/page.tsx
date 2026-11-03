@@ -1273,7 +1273,11 @@ export default function ProfilePage() {
       }
 
       if (formData.currentTemple) hierarchy.currentTemple = sanitizeTextInput(formData.currentTemple.trim());
-      if (formData.currentCenter === 'Other') {
+      if (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha') {
+        hierarchy.currentCenter = null;
+        hierarchy.otherCenter = null;
+        hierarchy.center = null;
+      } else if (formData.currentCenter === 'Other') {
         hierarchy.currentCenter = 'Other';
         hierarchy.otherCenter = cleanOtherCenter;
         hierarchy.center = cleanOtherCenter || 'Other';
@@ -1382,11 +1386,15 @@ export default function ProfilePage() {
         parent_center: formData.parentCenter === 'Other' ? 'Other' : (formData.parentCenter ? sanitizeTextInput(formData.parentCenter.trim()) : null),
         other_parent_center: formData.parentCenter === 'Other' ? cleanOtherParentCenter : null,
         current_temple: formData.currentTemple ? sanitizeTextInput(formData.currentTemple.trim()) : null,
-        current_center: formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null),
+        current_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
+          ? null
+          : (formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null)),
         counselor: formData.counselor ? sanitizeTextInput(formData.counselor.trim()) : null,
         counselor_id: formData.counselorId || null,
         other_counselor: formData.counselor === 'Other' ? (formData.otherCounselor ? sanitizeTextInput(formData.otherCounselor.trim()) : null) : null,
-        other_center: formData.currentCenter === 'Other' ? cleanOtherCenter : null,
+        other_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
+          ? null
+          : (formData.currentCenter === 'Other' ? cleanOtherCenter : null),
         // Relative contact info
         relative_1_name: formData.relative1Name ? sanitizeTextInput(formData.relative1Name.trim()) : null,
         relative_1_relationship: formData.relative1Relationship || null,
@@ -2521,53 +2529,58 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Current Center
-                      </label>
-                      {renderPendingBadge('currentCenter')}
-                    </div>
-                    <SearchableSelect
-                      options={[
-                        { id: 'None', name: 'None' },
-                        ...centers.map(c => ({ id: c.name, name: c.name })),
-                        { id: 'Other', name: formData.otherCenter ? `Other (${formData.otherCenter})` : 'Other' },
-                        ...(formData.currentCenter && formData.currentCenter !== 'None' && formData.currentCenter !== 'Other' && !centers.some(c => c.name === formData.currentCenter)
-                          ? [{ id: formData.currentCenter, name: formData.currentCenter }]
-                          : [])
-                      ]}
-                      value={formData.currentCenter}
-                      onChange={(value) => {
-                        if (value === 'Other') {
-                          setFormData({ ...formData, currentCenter: value, center: formData.otherCenter || 'Other' });
-                        } else {
-                          setFormData({ ...formData, currentCenter: value, center: value });
-                        }
-                      }}
-                      placeholder="Select Current Center"
-                      disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None' || isFieldPending('currentCenter')}
-                    />
-                  </div>
-
-                  {formData.currentCenter === 'Other' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                          Other Center Name
-                        </label>
-                        {renderPendingBadge('otherCenter')}
+                  {/* Current Center - Hidden for Brahmachari & Grihastha */}
+                  {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
+                    <>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                            Current Center
+                          </label>
+                          {renderPendingBadge('currentCenter')}
+                        </div>
+                        <SearchableSelect
+                          options={[
+                            { id: 'None', name: 'None' },
+                            ...centers.map(c => ({ id: c.name, name: c.name })),
+                            { id: 'Other', name: formData.otherCenter ? `Other (${formData.otherCenter})` : 'Other' },
+                            ...(formData.currentCenter && formData.currentCenter !== 'None' && formData.currentCenter !== 'Other' && !centers.some(c => c.name === formData.currentCenter)
+                              ? [{ id: formData.currentCenter, name: formData.currentCenter }]
+                              : [])
+                          ]}
+                          value={formData.currentCenter}
+                          onChange={(value) => {
+                            if (value === 'Other') {
+                              setFormData({ ...formData, currentCenter: value, center: formData.otherCenter || 'Other' });
+                            } else {
+                              setFormData({ ...formData, currentCenter: value, center: value });
+                            }
+                          }}
+                          placeholder="Select Current Center"
+                          disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None' || isFieldPending('currentCenter')}
+                        />
                       </div>
-                      <input
-                        id="otherCenter"
-                        type="text"
-                        disabled={isFieldPending('otherCenter')}
-                        value={formData.otherCenter}
-                        onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
-                        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border ${isFieldPending('otherCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                        placeholder="Type center name"
-                      />
-                    </div>
+
+                      {formData.currentCenter === 'Other' && (
+                        <div className="animate-fadeIn">
+                          <div className="flex items-center justify-between mb-2">
+                            <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                              Other Center Name
+                            </label>
+                            {renderPendingBadge('otherCenter')}
+                          </div>
+                          <input
+                            id="otherCenter"
+                            type="text"
+                            disabled={isFieldPending('otherCenter')}
+                            value={formData.otherCenter}
+                            onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
+                            className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border ${isFieldPending('otherCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                            placeholder="Type center name"
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

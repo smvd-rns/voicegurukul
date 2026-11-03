@@ -1208,10 +1208,22 @@ function CampDashboardContent() {
   const myPassesCount = useMemo(() => userRegistrations.filter(r => r.is_own_registration).length, [userRegistrations]);
   const assignedPassesCount = useMemo(() => userRegistrations.filter(r => !r.is_own_registration).length, [userRegistrations]);
 
-  // Unique camps found across all user registrations for quick camp filtering
+  // Base scoped passes by manager view (all / mine / assigned)
+  const scopedRegistrations = useMemo(() => {
+    if (isManager && passViewFilter !== 'all') {
+      if (passViewFilter === 'mine') {
+        return userRegistrations.filter(r => r.is_own_registration);
+      } else {
+        return userRegistrations.filter(r => !r.is_own_registration);
+      }
+    }
+    return userRegistrations;
+  }, [userRegistrations, isManager, passViewFilter]);
+
+  // 1. Cascading Main Camps List: Derived from scoped passes
   const registeredCampsList = useMemo(() => {
     const map = new Map<string, { id: string; title: string; count: number }>();
-    userRegistrations.forEach((r) => {
+    scopedRegistrations.forEach((r) => {
       const cId = r.camp_id || r.camp_title || 'unknown';
       const cTitle = r.camp_title || 'Camp Pass';
       if (!map.has(cId)) {
@@ -1220,7 +1232,7 @@ function CampDashboardContent() {
       map.get(cId)!.count += 1;
     });
     return Array.from(map.values());
-  }, [userRegistrations]);
+  }, [scopedRegistrations]);
 
   // All unique camps available for cancellation (combining active camps and registered camps)
   const cancellationCamps = useMemo(() => {
@@ -1251,10 +1263,14 @@ function CampDashboardContent() {
     return Array.from(map.values());
   }, [activeCamps, userRegistrations]);
 
-  // Unique subcamps / tracks found across all user registrations
+  // 2. Cascading Subcamps / Tracks List: Dynamically scoped by selected Main Camp
   const registeredTracksList = useMemo(() => {
+    const list = passCampFilter === 'all'
+      ? scopedRegistrations
+      : scopedRegistrations.filter((r) => (r.camp_id || r.camp_title) === passCampFilter);
+
     const map = new Map<string, { id: string; name: string; count: number }>();
-    userRegistrations.forEach((r) => {
+    list.forEach((r) => {
       const trackName = (r.camp_track || 'General Attendee').trim();
       const trackKey = trackName.toLowerCase();
       if (!map.has(trackKey)) {
@@ -1263,15 +1279,23 @@ function CampDashboardContent() {
       map.get(trackKey)!.count += 1;
     });
     return Array.from(map.values());
-  }, [userRegistrations]);
+  }, [scopedRegistrations, passCampFilter]);
 
-  // Status counts for status filter pills
+  // 3. Cascading Status Counts: Dynamically scoped by both Main Camp and Sub-Camp
   const passStatusCounts = useMemo(() => {
+    let list = scopedRegistrations;
+    if (passCampFilter !== 'all') {
+      list = list.filter((r) => (r.camp_id || r.camp_title) === passCampFilter);
+    }
+    if (passSubcampFilter !== 'all') {
+      list = list.filter((r) => ((r.camp_track || 'General Attendee').trim().toLowerCase()) === passSubcampFilter.toLowerCase());
+    }
+
     let confirmed = 0;
     let pending = 0;
     let cancelled = 0;
 
-    userRegistrations.forEach((reg) => {
+    list.forEach((reg) => {
       const refund = userRefunds.find(
         (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
       );
@@ -1290,8 +1314,8 @@ function CampDashboardContent() {
       }
     });
 
-    return { confirmed, pending, cancelled, all: userRegistrations.length };
-  }, [userRegistrations, userRefunds]);
+    return { confirmed, pending, cancelled, all: list.length };
+  }, [scopedRegistrations, passCampFilter, passSubcampFilter, userRefunds]);
 
   const displayedRegistrations = useMemo(() => {
     let list = userRegistrations;
@@ -2583,29 +2607,29 @@ function CampDashboardContent() {
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
 
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-28 sm:pb-12">
-        {/* Header Greeting Banner - Medium Devotional Purple & Shading Theme */}
-        <div className="bg-gradient-to-r from-purple-800 via-indigo-900 to-purple-950 rounded-2xl sm:rounded-3xl text-white shadow-xl relative overflow-hidden transition-all p-4 sm:p-6 md:p-7 border border-purple-500/30">
-          <div className="absolute -right-8 -bottom-8 w-64 h-64 bg-purple-400/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute left-1/3 -top-12 w-48 h-48 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-5">
+      <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4 pb-20 sm:pb-10">
+        {/* Header Greeting Banner - Compact Devotional Purple Theme */}
+        <div className="bg-gradient-to-r from-purple-800 via-indigo-900 to-purple-950 rounded-xl sm:rounded-2xl text-white shadow-lg relative overflow-hidden transition-all p-3 sm:p-4 md:p-4.5 border border-purple-500/30">
+          <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-purple-400/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute left-1/3 -top-12 w-36 h-36 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/25 backdrop-blur-md text-purple-200 text-[10px] sm:text-[11px] font-bold mb-1.5 sm:mb-2 border border-purple-400/40 shadow-xs">
-                <Tent className="w-3.5 h-3.5 text-purple-300" />
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/25 backdrop-blur-md text-purple-200 text-[9.5px] sm:text-[10px] font-bold mb-1 border border-purple-400/40 shadow-xs">
+                <Tent className="w-3 h-3 text-purple-300" />
                 <span>{activeTab === 'register' ? 'Camp Registration' : 'Devotee Camp Portal'}</span>
               </div>
-              <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight leading-tight text-white font-display">
+              <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight leading-tight text-white font-display">
                 {activeTab === 'register' && selectedCamp ? selectedCamp.title : 'Camp Retreats & Registrations'}
               </h1>
-              <p className="text-purple-100/90 text-[11px] sm:text-sm mt-1 max-w-xl line-clamp-1 sm:line-clamp-none font-medium">
-                Hare Krishna, <span className="font-bold text-purple-200 underline decoration-purple-400/60">{userData?.name || user?.email}</span>! Explore upcoming youth camps, register passes, and manage your booked retreats.
+              <p className="text-purple-100/90 text-[10.5px] sm:text-xs mt-0.5 max-w-lg line-clamp-1 font-medium">
+                Hare Krishna, <span className="font-bold text-purple-200 underline decoration-purple-400/60">{userData?.name || user?.email}</span>! Explore youth camps, register passes, and manage your booked retreats.
               </p>
 
               {allocatedCamps.length > 0 && (
-                <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-950/80 text-purple-200 text-[10px] sm:text-[11px] font-bold border border-purple-500/40 shadow-xs">
-                    <Shield className="w-3.5 h-3.5 text-purple-300 shrink-0" />
-                    <span>Delegated Staff ({allocatedCamps.length} Camp{allocatedCamps.length > 1 ? 's' : ''})</span>
+                <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-200 text-[9.5px] sm:text-[10px] font-bold border border-purple-500/40 shadow-xs">
+                    <Shield className="w-3 h-3 text-purple-300 shrink-0" />
+                    <span>Delegated Staff ({allocatedCamps.length})</span>
                   </span>
                   <button
                     type="button"
@@ -2613,7 +2637,7 @@ function CampDashboardContent() {
                       setActiveTab('staff');
                       setSelectedCamp(null);
                     }}
-                    className="inline-flex items-center gap-1 px-3.5 py-1 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white text-[10.5px] sm:text-xs font-black shadow-md shadow-emerald-950/30 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white text-[10px] font-black shadow-md shadow-emerald-950/30 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <span>Open Staff Desk &rarr;</span>
                   </button>
@@ -2621,20 +2645,20 @@ function CampDashboardContent() {
               )}
             </div>
 
-            {/* Quick Profile Pill: Compact on mobile */}
-            <div className="bg-black/30 backdrop-blur-md rounded-2xl border border-white/15 text-[10px] sm:text-xs flex flex-wrap md:flex-col items-center md:items-start gap-x-3 gap-y-1 w-full md:w-auto shrink-0 p-3 sm:p-3.5 shadow-xs">
-              <div className="flex items-center gap-2 text-white">
-                <UserCheck className="w-3.5 h-3.5 text-purple-300 shrink-0" />
-                <span className="font-bold text-white truncate text-[11px] sm:text-xs">{userData?.name || 'Devotee'}</span>
+            {/* Quick Profile Pill: Compact on all devices */}
+            <div className="bg-black/30 backdrop-blur-md rounded-xl border border-white/15 text-[10px] sm:text-[11px] flex flex-wrap md:flex-col items-center md:items-start gap-x-3 gap-y-0.5 w-full md:w-auto shrink-0 p-2 sm:p-2.5 shadow-xs">
+              <div className="flex items-center gap-1.5 text-white">
+                <UserCheck className="w-3 h-3 text-purple-300 shrink-0" />
+                <span className="font-bold text-white truncate">{userData?.name || 'Devotee'}</span>
               </div>
-              <div className="flex items-center gap-2 text-purple-100/80">
-                <Phone className="w-3.5 h-3.5 text-purple-300 shrink-0" />
-                <span className="truncate text-[11px] sm:text-xs font-medium">{userData?.phone || 'No phone set'}</span>
+              <div className="flex items-center gap-1.5 text-purple-100/80">
+                <Phone className="w-3 h-3 text-purple-300 shrink-0" />
+                <span className="truncate font-medium">{userData?.phone || 'No phone set'}</span>
               </div>
               {userData?.hierarchy?.center && (
-                <div className="flex items-center gap-2 text-purple-100/80">
-                  <Building className="w-3.5 h-3.5 text-purple-300 shrink-0" />
-                  <span className="truncate text-[11px] sm:text-xs font-medium">{userData.hierarchy.center}</span>
+                <div className="flex items-center gap-1.5 text-purple-100/80">
+                  <Building className="w-3 h-3 text-purple-300 shrink-0" />
+                  <span className="truncate font-medium">{userData.hierarchy.center}</span>
                 </div>
               )}
             </div>
@@ -2774,7 +2798,7 @@ function CampDashboardContent() {
                     >
                       <div>
                         {/* Camp Poster Header */}
-                        <div className="relative h-48 sm:h-56 w-full overflow-hidden bg-slate-900">
+                        <div className="relative h-40 sm:h-44 md:h-48 w-full overflow-hidden bg-slate-900">
                           {posterUrl ? (
                             <img
                               src={posterUrl}
@@ -2812,6 +2836,13 @@ function CampDashboardContent() {
                               <span className="font-bold text-purple-800">📣 Notice: </span>
                               <span className="line-clamp-2 inline">{camp.banner_message}</span>
                             </div>
+                          )}
+
+                          {/* Camp Description Snippet */}
+                          {camp.description && (
+                            <p className="text-[11px] sm:text-xs text-gray-500 line-clamp-2 leading-relaxed font-normal">
+                              {camp.description}
+                            </p>
                           )}
 
                           {/* Dates */}
@@ -3062,147 +3093,117 @@ function CampDashboardContent() {
                     </div>
                   )}
 
-                  {/* Right Side: Status Filter Pills & Search */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                    {/* Status Filter Pills: Segmented control fitting perfectly on mobile */}
-                    <div className="flex items-center rounded-lg sm:rounded-xl bg-slate-200/70 p-0.5 text-[10px] sm:text-[11px] font-bold w-full sm:w-auto shrink-0">
+                  {/* Right Side: Search Input */}
+                  <div className="relative w-full sm:w-64 md:w-72 shrink-0">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
+                    <input
+                      type="text"
+                      value={passSearchTerm}
+                      onChange={(e) => setPassSearchTerm(e.target.value)}
+                      placeholder="Search attendee, mobile..."
+                      style={{ paddingLeft: '32px', paddingRight: '30px' }}
+                      className="w-full py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                    />
+                    {passSearchTerm && (
                       <button
                         type="button"
-                        onClick={() => setPassStatusFilter('all')}
-                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all ${
-                          passStatusFilter === 'all'
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        onClick={() => setPassSearchTerm('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 cursor-pointer z-10"
+                        title="Clear Search"
                       >
-                        All ({passStatusCounts.all})
+                        <X className="w-3 h-3" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setPassStatusFilter('confirmed')}
-                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
-                          passStatusFilter === 'confirmed'
-                            ? 'bg-white text-emerald-800 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span>Confirmed ({passStatusCounts.confirmed})</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPassStatusFilter('pending')}
-                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
-                          passStatusFilter === 'pending'
-                            ? 'bg-white text-amber-800 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                        <span>Pending ({passStatusCounts.pending})</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPassStatusFilter('cancelled')}
-                        className={`flex-1 sm:flex-initial text-center justify-center px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1 ${
-                          passStatusFilter === 'cancelled'
-                            ? 'bg-white text-rose-800 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                        <span>Cancelled ({passStatusCounts.cancelled})</span>
-                      </button>
-                    </div>
-
-                    {/* Search Input - Compact on mobile */}
-                    <div className="relative w-full sm:w-56 md:w-64 shrink-0">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
-                      <input
-                        type="text"
-                        value={passSearchTerm}
-                        onChange={(e) => setPassSearchTerm(e.target.value)}
-                        placeholder="Search attendee, mobile..."
-                        style={{ paddingLeft: '32px', paddingRight: '30px' }}
-                        className="w-full py-1 sm:py-1.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs h-7.5 sm:h-auto"
-                      />
-                      {passSearchTerm && (
-                        <button
-                          type="button"
-                          onClick={() => setPassSearchTerm('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 cursor-pointer z-10"
-                          title="Clear Search"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Subcamp / Track Filter Pills & Camp Filter Row - Sleek & Compact */}
-                <div className="flex flex-wrap items-center justify-between gap-1.5 px-0.5">
-                  {/* Subcamp / Track Pills */}
-                  {registeredTracksList.length > 0 && (
-                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                      <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 shrink-0 flex items-center gap-1">
-                        <Tag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
-                        <span>Camp:</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setPassSubcampFilter('all')}
-                        className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
-                          passSubcampFilter === 'all'
-                            ? 'bg-slate-900 text-white shadow-2xs'
-                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span>All</span>
-                        <span className="text-[9px] opacity-75 font-mono">({userRegistrations.length})</span>
-                      </button>
-                      {registeredTracksList.map((t, idx) => {
-                        const tTheme = SUBCAMP_COLOR_PALETTES[idx % SUBCAMP_COLOR_PALETTES.length];
-                        const isSelected = passSubcampFilter.toLowerCase() === t.id.toLowerCase();
-                        return (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setPassSubcampFilter(isSelected ? 'all' : t.id)}
-                            className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
-                              isSelected
-                                ? `${tTheme.stubGradient} text-white shadow-xs ring-1 sm:ring-2 ring-purple-400/40`
-                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isSelected ? 'bg-white' : tTheme.dotColor}`} />
-                            <span className="truncate max-w-[120px] sm:max-w-[140px]">{t.name}</span>
-                            <span className="text-[9px] opacity-75 font-mono">({t.count})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                {/* Cascading Dropdowns: 1. Main Camp -> 2. Sub-Camp -> 3. Status */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    {/* 1. Main Camp Filter Dropdown */}
+                    {registeredCampsList.length > 0 && (
+                      <div className="relative w-full sm:w-52 md:w-56">
+                        <select
+                          value={passCampFilter}
+                          onChange={(e) => {
+                            const newCamp = e.target.value;
+                            setPassCampFilter(newCamp);
+                            // Cascading reset: If current subcamp doesn't exist in the selected main camp, reset to all
+                            if (passSubcampFilter !== 'all') {
+                              const validTracks = scopedRegistrations
+                                .filter((r) => newCamp === 'all' || (r.camp_id || r.camp_title) === newCamp)
+                                .map((r) => (r.camp_track || 'General Attendee').trim().toLowerCase());
+                              if (!validTracks.includes(passSubcampFilter.toLowerCase())) {
+                                setPassSubcampFilter('all');
+                              }
+                            }
+                          }}
+                          className="w-full appearance-none pl-8 pr-8 py-1.5 sm:py-2 bg-white border border-slate-200 hover:border-purple-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs cursor-pointer transition-all"
+                        >
+                          <option value="all">🏕️ All Main Camps ({scopedRegistrations.length})</option>
+                          {registeredCampsList.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.title} ({c.count})
+                            </option>
+                          ))}
+                        </select>
+                        <Filter className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    )}
 
-                  {/* Camp Filter Dropdown (if multiple camps exist) */}
-                  {registeredCampsList.length > 1 && (
-                    <div className="relative shrink-0 w-full sm:w-48 self-end sm:self-auto ml-auto">
+                    {/* 2. Sub-Camp / Track Filter Dropdown (Cascades based on Main Camp) */}
+                    <div className="relative w-full sm:w-56 md:w-60">
                       <select
-                        value={passCampFilter}
-                        onChange={(e) => setPassCampFilter(e.target.value)}
-                        className="w-full appearance-none pl-7 pr-7 py-1 sm:py-1.5 bg-white border border-slate-200 hover:border-purple-300 rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs cursor-pointer transition-all h-7.5 sm:h-auto"
+                        value={passSubcampFilter}
+                        onChange={(e) => setPassSubcampFilter(e.target.value)}
+                        className="w-full appearance-none pl-8 pr-8 py-1.5 sm:py-2 bg-white border border-slate-200 hover:border-amber-400 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-2xs cursor-pointer transition-all"
                       >
-                        <option value="all">🏕️ All Camps ({userRegistrations.length})</option>
-                        {registeredCampsList.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title} ({c.count})
+                        <option value="all">🎯 All Sub-Camps ({registeredTracksList.reduce((acc, t) => acc + t.count, 0)})</option>
+                        {registeredTracksList.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.count})
                           </option>
                         ))}
                       </select>
-                      <Filter className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Tag className="w-3.5 h-3.5 text-amber-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
-                  )}
+
+                    {/* 3. Status Filter Dropdown (Cascades based on Main Camp & Sub-Camp) */}
+                    <div className="relative w-full sm:w-44 md:w-48">
+                      <select
+                        value={passStatusFilter}
+                        onChange={(e) => setPassStatusFilter(e.target.value as 'all' | 'confirmed' | 'pending' | 'cancelled')}
+                        className="w-full appearance-none pl-8 pr-8 py-1.5 sm:py-2 bg-white border border-slate-200 hover:border-emerald-400 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs cursor-pointer transition-all"
+                      >
+                        <option value="all">📋 All Statuses ({passStatusCounts.all})</option>
+                        <option value="confirmed">🟢 Confirmed ({passStatusCounts.confirmed})</option>
+                        <option value="pending">🟡 Pending ({passStatusCounts.pending})</option>
+                        <option value="cancelled">🔴 Cancelled ({passStatusCounts.cancelled})</option>
+                      </select>
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+
+                    {/* 4. Quick Reset if any filter or search query is active */}
+                    {(passCampFilter !== 'all' || passSubcampFilter !== 'all' || passStatusFilter !== 'all' || passSearchTerm) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPassCampFilter('all');
+                          setPassSubcampFilter('all');
+                          setPassStatusFilter('all');
+                          setPassSearchTerm('');
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                        title="Reset all filters"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Reset Filters</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -3294,7 +3295,7 @@ function CampDashboardContent() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3.5 sm:gap-4">
                 {displayedRegistrations.map((reg) => {
                   const refund = userRefunds.find(
                     (ref) => ref.registration_id === reg.id ||
@@ -3323,7 +3324,7 @@ function CampDashboardContent() {
                       className={`group rounded-xl sm:rounded-2xl border ${theme.cardBorder} ${theme.cardBg} shadow-xs hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col sm:flex-row items-stretch`}
                     >
                       {/* Left Ticket Stub Section with dynamic color gradient - Compact on mobile */}
-                      <div className={`${theme.stubGradient} text-white px-3 py-2 sm:p-4 flex sm:flex-col items-center justify-between sm:justify-center text-center sm:w-36 shrink-0 relative overflow-hidden border-b sm:border-b-0 sm:border-r ${theme.stubBorder}`}>
+                      <div className={`${theme.stubGradient} text-white px-2.5 py-2 sm:p-3.5 flex sm:flex-col items-center justify-between sm:justify-center text-center sm:w-28 md:w-30 shrink-0 relative overflow-hidden border-b sm:border-b-0 sm:border-r ${theme.stubBorder}`}>
                         <div className={`absolute -left-6 -top-6 w-20 h-20 ${theme.stubGlow} rounded-full blur-xl pointer-events-none`} />
                         <div className="flex sm:flex-col items-center gap-1.5 sm:gap-2 z-10">
                           <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full ${theme.stubIconBg} backdrop-blur-md flex items-center justify-center font-bold`}>
@@ -3349,7 +3350,7 @@ function CampDashboardContent() {
                       </div>
 
                       {/* Main Ticket Information - Compact on mobile */}
-                      <div className="p-2.5 sm:p-4 flex-1 flex flex-col justify-between space-y-1.5 sm:space-y-2.5">
+                      <div className="p-2.5 sm:p-3.5 flex-1 min-w-0 flex flex-col justify-between space-y-1.5 sm:space-y-2">
                         <div>
                           <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                             <div className="min-w-0 flex-1">
@@ -3367,7 +3368,7 @@ function CampDashboardContent() {
                               {refund?.status === 'refunded' ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                                   <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                  {Number(refund.refund_amount) > 0 ? `Refunded (₹${Number(refund.refund_amount).toLocaleString('en-IN')})` : 'Cancelled (Non-refundable)'}
+                                  {Number(refund.refund_amount) > 0 ? `Refunded (₹${Number(refund.refund_amount).toLocaleString('en-IN')})` : 'Cancelled'}
                                 </span>
                               ) : (isPendingRefund || refund?.status === 'pending') ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
@@ -3412,22 +3413,22 @@ function CampDashboardContent() {
                         </div>
 
                         {/* Bottom Actions: Digital Pass View, Amount & Refund View */}
-                        <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex items-center justify-between gap-1.5">
-                          <div>
+                        <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
                             <span className="text-gray-400 block text-[8px] sm:text-[9px] uppercase font-bold tracking-wider leading-none">Paid Amount</span>
                             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                               <span className={`font-black ${theme.paidAccent} text-xs sm:text-sm leading-tight`}>
                                 ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
                               </span>
                               {Number(reg.late_fee || 0) > 0 && (
-                                <span className="text-[8px] sm:text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300" title={`Includes ₹${reg.late_fee} Late Fee (Non-refundable)`}>
+                                <span className="text-[8px] sm:text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap" title={`Includes ₹${reg.late_fee} Late Fee (Non-refundable)`}>
                                   ₹{reg.late_fee} Late Fee
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {isCompleted && !isCancelled && (
                               <button
                                 type="button"
@@ -3766,27 +3767,27 @@ function CampDashboardContent() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left 2 Cols: Profile Card & Attendee Form */}
-                <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-                  {/* Saved Draft Notification Banner */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 xl:gap-6">
+                {/* Left Cols: Profile Card & Attendee Form */}
+                <div className="lg:col-span-8 space-y-4 sm:space-y-5">
+                  {/* Saved Draft Notification Banner - Compact & Clean */}
                   {activeDraft && (
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in fade-in">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-200/90 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300/80">
-                          <BookmarkCheck className="w-5 h-5 text-amber-800" />
+                    <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-50 via-amber-100/50 to-orange-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shadow-2xs animate-in fade-in">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded-lg bg-amber-200/90 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300">
+                          <BookmarkCheck className="w-4 h-4 text-amber-800" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <h4 className="text-xs sm:text-sm font-black text-amber-950">
-                              Saved Registration Progress Found ({activeDraft.entries?.length || 0} Devotees)
+                            <h4 className="text-xs sm:text-sm font-black text-amber-950 truncate">
+                              Saved Draft ({activeDraft.entries?.length || 0} {activeDraft.entries?.length === 1 ? 'Devotee' : 'Devotees'})
                             </h4>
-                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[9.5px]">
-                              Saved Draft
+                            <span className="px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-900 font-extrabold text-[9px] shrink-0 border border-amber-300/80">
+                              In Progress
                             </span>
                           </div>
-                          <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
-                            Last saved on <strong>{formatDisplayDateTime(activeDraft.updated_at)}</strong>. Continue where you left off or start fresh.
+                          <p className="text-[10.5px] text-amber-800/90 leading-tight truncate mt-0.5">
+                            Saved on <strong>{formatDisplayDateTime(activeDraft.updated_at)}</strong> • Click Resume to restore
                           </p>
                         </div>
                       </div>
@@ -3794,16 +3795,16 @@ function CampDashboardContent() {
                         <button
                           type="button"
                           onClick={handleDiscardDraft}
-                          className="px-3 py-1.5 rounded-xl border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-xs cursor-pointer transition-colors"
+                          className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs cursor-pointer transition-colors shadow-2xs"
                         >
                           Discard
                         </button>
                         <button
                           type="button"
                           onClick={handleResumeDraft}
-                          className="px-3.5 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
+                          className="px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors active:scale-95"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
+                          <RotateCcw className="w-3.5 h-3.5 shrink-0" />
                           <span>Resume Progress</span>
                         </button>
                       </div>
@@ -4285,17 +4286,18 @@ function CampDashboardContent() {
                                   />
                                 </div>
 
+                                {/* Row 3: Daily Rounds & Camp Track (symmetrical alignment) */}
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5">
-                                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>No. of Rounds Chanting *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between gap-1">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span className="whitespace-nowrap">Daily Rounds <span className="text-amber-600">*</span></span>
                                     </span>
-                                    {formData.rounds && (
-                                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
-                                        {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'} / day
+                                    {formData.rounds ? (
+                                      <span className="text-[9.5px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300 shrink-0 whitespace-nowrap">
+                                        {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'}
                                       </span>
-                                    )}
+                                    ) : null}
                                   </label>
                                   <input
                                     type="number"
@@ -4305,20 +4307,20 @@ function CampDashboardContent() {
                                     value={formData.rounds}
                                     onChange={handleFormChange}
                                     required
-                                    placeholder="e.g. 16 (Daily chanting rounds)"
+                                    placeholder="e.g. 16"
                                     className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-xs font-semibold text-slate-900 shadow-2xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
                                   />
                                 </div>
 
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5">
-                                      <Tent className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Camp *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between gap-1">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <Tent className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span className="whitespace-nowrap">Camp Track <span className="text-amber-600">*</span></span>
                                     </span>
                                     {selectedCamp.tracks && selectedCamp.tracks.length > availableTracksForDevotee.length && (
-                                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                        ({availableTracksForDevotee.length}/{selectedCamp.tracks.length} eligible)
+                                      <span className="text-[9.5px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200/80 shrink-0 whitespace-nowrap">
+                                        {availableTracksForDevotee.length}/{selectedCamp.tracks.length} eligible
                                       </span>
                                     )}
                                   </label>
@@ -4336,11 +4338,12 @@ function CampDashboardContent() {
                                       ))
                                     )}
                                   </select>
-                                  {selectedCamp.tracks && selectedCamp.tracks.length > availableTracksForDevotee.length && (
-                                    <p className="mt-1 text-[10px] text-slate-500 italic">
-                                      * Camps requiring higher chanting rounds (e.g. 16 rounds) unlock once chanting rounds meet requirement.
-                                    </p>
-                                  )}
+                                </div>
+
+                                {/* Spanning Sub-camps note for manual entry */}
+                                <div className="sm:col-span-2 -mt-1 px-3 py-1.5 bg-amber-50/60 border border-amber-200/60 rounded-lg text-[10.5px] text-amber-900 flex items-center gap-2">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Sub-camps with minimum round criteria (e.g. Nistha) appear dynamically based on daily chanting rounds.</span>
                                 </div>
 
                                 <div>
@@ -4479,11 +4482,11 @@ function CampDashboardContent() {
                                 <span>Devotee Details</span>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5">
-                                    <User className="w-3.5 h-3.5 text-amber-600" />
-                                    <span>Participant Full Name *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                                    <User className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>Participant Full Name <span className="text-amber-600">*</span></span>
                                     {!isManager && (
                                       <span className="text-[10px] text-slate-400 font-normal ml-1">(Your Profile)</span>
                                     )}
@@ -4515,17 +4518,18 @@ function CampDashboardContent() {
                                   />
                                 </div>
 
+                                {/* Row 2: Daily Rounds & Camp Track (symmetrical alignment) */}
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5">
-                                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>No. of Rounds Chanting *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between gap-1">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span className="whitespace-nowrap">Daily Rounds <span className="text-amber-600">*</span></span>
                                     </span>
-                                    {formData.rounds && (
-                                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
-                                        {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'} / day
+                                    {formData.rounds ? (
+                                      <span className="text-[9.5px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300 shrink-0 whitespace-nowrap">
+                                        {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'}
                                       </span>
-                                    )}
+                                    ) : null}
                                   </label>
                                   <input
                                     type="number"
@@ -4535,23 +4539,20 @@ function CampDashboardContent() {
                                     value={formData.rounds}
                                     onChange={handleFormChange}
                                     required
-                                    placeholder="e.g. 16 (Daily chanting rounds)"
+                                    placeholder="e.g. 16"
                                     className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all shadow-2xs"
                                   />
-                                  <span className="text-[10px] text-slate-400 mt-1 block">
-                                    Sub-camps with minimum round limitations (e.g. Nistha) appear dynamically based on your daily chanting rounds.
-                                  </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5">
-                                      <Tent className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Camp *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center justify-between gap-1">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <Tent className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span className="whitespace-nowrap">Camp Track <span className="text-amber-600">*</span></span>
                                     </span>
                                     {selectedCamp.tracks && selectedCamp.tracks.length > availableTracksForDevotee.length && (
-                                      <span className="text-[10px] font-bold text-amber-700">
-                                        ({availableTracksForDevotee.length}/{selectedCamp.tracks.length} eligible)
+                                      <span className="text-[9.5px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200/80 shrink-0 whitespace-nowrap">
+                                        {availableTracksForDevotee.length}/{selectedCamp.tracks.length} eligible
                                       </span>
                                     )}
                                   </label>
@@ -4578,20 +4579,28 @@ function CampDashboardContent() {
                                       })
                                     )}
                                   </select>
-                                  {isCurrentTrackAlreadyRegistered && (
-                                    <p className="mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-1.5 flex items-center gap-1.5">
-                                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                      <span>
-                                        {isManager && selectedDevotee ? selectedDevotee.name : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another camp.
-                                      </span>
-                                    </p>
-                                  )}
                                 </div>
 
+                                {/* Spanning Sub-camps note so inputs above are perfectly level */}
+                                <div className="sm:col-span-2 -mt-1 px-3 py-1.5 bg-amber-50/60 border border-amber-200/60 rounded-lg text-[10.5px] text-amber-900 flex items-center gap-2">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Sub-camps with minimum round criteria (e.g. Nistha) appear dynamically based on daily chanting rounds.</span>
+                                </div>
+
+                                {isCurrentTrackAlreadyRegistered && (
+                                  <div className="sm:col-span-2 -mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                                    <span>
+                                      {isManager && selectedDevotee ? selectedDevotee.name : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another camp.
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Row 3: Gender / Category & Age */}
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5">
-                                    <Users className="w-3.5 h-3.5 text-amber-600" />
-                                    <span>Gender / Category *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                                    <Users className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>Gender / Category <span className="text-amber-600">*</span></span>
                                   </label>
                                   <select
                                     name="gender"
@@ -4607,9 +4616,9 @@ function CampDashboardContent() {
                                 </div>
 
                                 <div>
-                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                                    <span>Age (Years) *</span>
+                                  <label className="block text-slate-700 font-bold text-xs mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                                    <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>Age (Years) <span className="text-amber-600">*</span></span>
                                   </label>
                                   <input
                                     type="number"
@@ -4694,22 +4703,23 @@ function CampDashboardContent() {
                           )}
 
                           {/* SECTION: MEALS & STAY ITINERARY */}
-                          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-50/40 via-slate-50 to-amber-50/20 border-2 border-slate-300 shadow-xs space-y-3">
+                          <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-50/40 via-slate-50 to-amber-50/20 border border-slate-300 shadow-xs space-y-3">
                             <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200">
                               <Utensils className="w-4 h-4 text-amber-600" />
                               <span>Meals &amp; Stay Itinerary</span>
                             </div>
 
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+                            {/* Row 1: Arrival & Departure Schedule (2x2 on laptops, 4-across on wide screens) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
                               <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Arrival Meal Date *
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
+                                  Arrival Meal Date <span className="text-amber-600">*</span>
                                 </label>
                                 <select
                                   name="firstMealDate"
                                   value={formData.firstMealDate}
                                   onChange={handleFormChange}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                 >
                                   {(selectedCamp.meal_pricing || []).map((m) => (
                                     <option key={String(m.date)} value={String(m.date)}>
@@ -4720,14 +4730,14 @@ function CampDashboardContent() {
                               </div>
 
                               <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Arrival Meal Slot *
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
+                                  Arrival Meal Slot <span className="text-amber-600">*</span>
                                 </label>
                                 <select
                                   name="firstMealType"
                                   value={formData.firstMealType}
                                   onChange={handleFormChange}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                 >
                                   <option value="Breakfast">Breakfast</option>
                                   <option value="Lunch">Lunch</option>
@@ -4736,14 +4746,14 @@ function CampDashboardContent() {
                               </div>
 
                               <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Departure Meal Date *
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
+                                  Departure Meal Date <span className="text-amber-600">*</span>
                                 </label>
                                 <select
                                   name="lastMealDate"
                                   value={formData.lastMealDate}
                                   onChange={handleFormChange}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                 >
                                   {(selectedCamp.meal_pricing || []).map((m) => (
                                     <option key={String(m.date)} value={String(m.date)}>
@@ -4754,30 +4764,33 @@ function CampDashboardContent() {
                               </div>
 
                               <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Departure Meal Slot *
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
+                                  Departure Meal Slot <span className="text-amber-600">*</span>
                                 </label>
                                 <select
                                   name="lastMealType"
                                   value={formData.lastMealType}
                                   onChange={handleFormChange}
-                                  className="w-full px-3 py-2 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                 >
                                   <option value="Breakfast">Breakfast</option>
                                   <option value="Lunch">Lunch</option>
                                   <option value="Dinner">Dinner</option>
                                 </select>
                               </div>
+                            </div>
 
+                            {/* Row 2: Perfectly In-Line 50/50 Preferences & Accommodation */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-2.5 border-t border-slate-200">
                               <div>
-                                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-0.5">
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
                                   Dinner Meal Preference
                                 </label>
                                 <select
                                   name="dinnerType"
                                   value={formData.dinnerType}
                                   onChange={handleFormChange}
-                                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                 >
                                   <option value="Dinner Meal">Complete Dinner Meal</option>
                                   <option value="Only Milk">Only Milk</option>
@@ -4785,11 +4798,11 @@ function CampDashboardContent() {
                               </div>
 
                               <div>
-                                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-0.5">
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1 whitespace-nowrap">
                                   Accommodation from CV
                                 </label>
                                 {formData.gender.startsWith('Female') && !selectedCamp.accommodation_pricing?.allow_female_cv_accommodation ? (
-                                  <div className="px-2 py-1.5 rounded-lg bg-slate-200/70 text-xs text-slate-700 font-semibold border border-slate-300 truncate">
+                                  <div className="px-2.5 py-1.5 rounded-lg bg-slate-200/70 text-xs text-slate-700 font-semibold border border-slate-300 truncate">
                                     External (Matajis)
                                   </div>
                                 ) : (
@@ -4797,7 +4810,7 @@ function CampDashboardContent() {
                                     name="accommodation"
                                     value={formData.accommodation}
                                     onChange={handleFormChange}
-                                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
                                   >
                                     <option value="Yes">Yes, need CV accommodation</option>
                                     <option value="No">No, do not need</option>
@@ -4943,7 +4956,7 @@ function CampDashboardContent() {
                 </div>
 
                 {/* Right Col: Booking Summary & Checkout */}
-                <div className="space-y-4">
+                <div className="lg:col-span-4 space-y-4">
                   <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 p-3.5 sm:p-5 shadow-xs space-y-3 sticky top-20">
                     <h3 className="text-xs sm:text-sm font-bold text-gray-900 pb-2 border-b border-gray-100">
                       Booking Summary
@@ -5046,29 +5059,29 @@ function CampDashboardContent() {
                         )}
                       </button>
                     ) : (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <button
-                          type="button"
-                          onClick={handleSaveDraft}
-                          disabled={savingDraft || entries.length === 0}
-                          className="sm:w-2/5 py-2.5 sm:py-3 rounded-xl font-bold text-xs border-2 border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-900 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Save progress now and resume anytime from any device"
-                        >
-                          {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-700" />}
-                          <span>{savingDraft ? 'Saving...' : `Save Progress (${entries.length})`}</span>
-                        </button>
+                      <div className="flex flex-col gap-2">
                         <button
                           type="button"
                           onClick={handleProceedToPayment}
                           disabled={entries.length === 0 || !isDevoteeEligibleForCamp}
-                          className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          className={`w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
                             entries.length > 0 && isDevoteeEligibleForCamp
-                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30'
+                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30 active:scale-[0.99]'
                               : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
                           }`}
                         >
-                          <CreditCard className="w-4 h-4" />
-                          <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
+                          <CreditCard className="w-4 h-4 shrink-0" />
+                          <span className="truncate">Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveDraft}
+                          disabled={savingDraft || entries.length === 0}
+                          className="w-full py-2 rounded-xl font-bold text-xs border border-amber-300 bg-amber-50/80 hover:bg-amber-100 text-amber-900 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Save progress now and resume anytime from any device"
+                        >
+                          {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Save className="w-3.5 h-3.5 text-amber-700 shrink-0" />}
+                          <span>{savingDraft ? 'Saving...' : `Save Progress (${entries.length})`}</span>
                         </button>
                       </div>
                     )}
@@ -6670,7 +6683,7 @@ function CampDashboardContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-purple-200 overflow-hidden max-h-[92vh] flex flex-col">
             {/* Modal Hero / Poster Banner: Fully visible uncropped photo */}
-            <div className="relative h-60 sm:h-80 w-full bg-slate-950 shrink-0 overflow-hidden flex items-center justify-center">
+            <div className="relative h-36 sm:h-44 md:h-48 w-full bg-slate-950 shrink-0 overflow-hidden flex items-center justify-center">
               {selectedPreviewCamp.poster_url ? (
                 <>
                   {/* Ambient blurred backdrop so letterboxing looks rich and seamless */}
@@ -6719,16 +6732,29 @@ function CampDashboardContent() {
             </div>
 
             {/* Scrollable Content Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+            <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3 text-xs sm:text-sm">
               {/* Colorful Announcement / Welcome Message */}
               {selectedPreviewCamp.banner_message && (
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/60 to-purple-50 border border-purple-200/80 shadow-xs space-y-1">
+                <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-purple-50 via-indigo-50/60 to-purple-50 border border-purple-200/80 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-purple-900 font-bold text-xs uppercase tracking-wider">
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span>Special Camp Announcement</span>
                   </div>
                   <p className="text-slate-800 text-xs sm:text-sm font-semibold leading-relaxed">
                     {selectedPreviewCamp.banner_message}
+                  </p>
+                </div>
+              )}
+
+              {/* Camp Description / About Retreat Section */}
+              {selectedPreviewCamp.description && (
+                <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-blue-50/80 border border-blue-200/80 shadow-xs space-y-1">
+                  <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs uppercase tracking-wider">
+                    <Info className="w-3.5 h-3.5 text-blue-600" />
+                    <span>About this Camp & Retreat</span>
+                  </div>
+                  <p className="text-slate-800 text-xs sm:text-sm font-normal leading-relaxed whitespace-pre-line">
+                    {selectedPreviewCamp.description}
                   </p>
                 </div>
               )}

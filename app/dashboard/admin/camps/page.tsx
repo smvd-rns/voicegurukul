@@ -7,7 +7,7 @@ import {
   Tent, Plus, Calendar, MapPin, Users, DollarSign,
   ExternalLink, Edit, Trash2, ArrowLeft, CheckCircle,
   Clock, AlertCircle, Shield, Key, Utensils, Home,
-  CreditCard, Loader2, RefreshCw, X, ChevronRight,
+  CreditCard, Loader2, RefreshCw, X, ChevronRight, ChevronDown,
   Filter, Archive, Tag, Gift, Percent, Landmark, Building2, AlertTriangle,
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
@@ -209,6 +209,7 @@ export default function AdminCampsPage() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditSubView, setAuditSubView] = useState<'transactions' | 'refunds'>('transactions');
+  const [showFinancialSummary, setShowFinancialSummary] = useState(false);
 
   // Audit Filters
   const [auditSearch, setAuditSearch] = useState('');
@@ -2000,89 +2001,30 @@ export default function AdminCampsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafcff] p-3 sm:p-6 lg:p-8 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-[#fafcff] p-2.5 sm:p-4 lg:p-6 text-slate-800">
+      <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4">
         
-        {/* Top Header: Compact on Mobile */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-200/80">
-          <div>
+        {/* Streamlined Top Navigation Bar: Admin Center, Primary Views, & Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-1 sm:p-1.5 rounded-xl border border-slate-200/90 shadow-2xs">
+          <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar max-w-full pb-0.5 sm:pb-0">
             <Link
               href="/dashboard/admin"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-600 mb-1 transition-colors font-semibold"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-600 hover:text-amber-600 rounded-lg hover:bg-slate-50 transition-colors font-bold whitespace-nowrap shrink-0 border border-slate-200"
+              title="Return to Admin Center"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Admin Center
+              <span>Admin</span>
             </Link>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2 sm:gap-3">
-              <span className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20">
-                <Tent className="w-5 h-5 sm:w-6 sm:h-6" />
-              </span>
-              Camp &amp; Retreat Management
-            </h1>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">
-              Host new camps, dynamically customize meal rates, room stay charges, IDT keys &amp; access historical attendee data.
-            </p>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
-            <button
-              onClick={() => {
-                if (mainView === 'camps') loadCamps();
-                else loadAuditData();
-              }}
-              className="p-1.5 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-lg sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer"
-              title="Refresh"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${(loading || auditLoading) ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* QR Code Pass Scanner Button */}
-            <button
-              onClick={() => setIsQrScannerOpen(true)}
-              className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-xs shadow-md shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
-            >
-              <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-              <span>Scan Pass</span>
-            </button>
-
-            {/* Super Admin Staff & Role Management */}
-            {isSuperAdmin && (
-              <button
-                onClick={() => setIsStaffModalOpen(true)}
-                className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-full text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                title="Assign camp staff and custom privileges"
-              >
-                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
-                <span className="hidden sm:inline">Camp Staff &amp; Roles</span>
-                <span className="sm:hidden">Staff</span>
-              </button>
-            )}
-
-            {mainView === 'camps' && isSuperAdmin && (
-              <button
-                onClick={openCreateModal}
-                className="inline-flex items-center gap-1 sm:gap-2 px-3.5 sm:px-6 py-1.5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-full text-xs shadow-md shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>Host Camp</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Primary View Navigation Switcher: Compact on Mobile */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto pb-1 lg:pb-0">
             <button
               onClick={() => setMainView('camps')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 mainView === 'camps'
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Tent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Tent className="w-3.5 h-3.5" />
               <span>Camp Retreats ({totalCamps})</span>
             </button>
 
@@ -2092,19 +2034,16 @@ export default function AdminCampsPage() {
                   setMainView('audit');
                   if (transactions.length === 0) loadAuditData();
                 }}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   mainView === 'audit'
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                <span>Financial Audit &amp; Transactions</span>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Super Admin
-                </span>
+                <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                <span>Financial Audit</span>
                 {auditStats && (auditStats.pending_verifications > 0 || auditStats.pending_refunds > 0) && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-500 text-white">
                     {auditStats.pending_verifications + auditStats.pending_refunds}
                   </span>
                 )}
@@ -2114,104 +2053,116 @@ export default function AdminCampsPage() {
             {isSuperAdmin && (
               <button
                 onClick={() => setMainView('prasadam')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   mainView === 'prasadam'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Utensils className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300" />
-                <span>Prasadam Audit &amp; Kitchen Ledger</span>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Super Admin
-                </span>
+                <Utensils className="w-3.5 h-3.5 text-amber-300" />
+                <span>Prasadam Audit</span>
               </button>
             )}
           </div>
 
-          {mainView === 'audit' && (
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            <button
+              onClick={() => {
+                if (mainView === 'camps') loadCamps();
+                else loadAuditData();
+              }}
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${(loading || auditLoading) ? 'animate-spin' : ''}`} />
+            </button>
+
+            {/* QR Code Pass Scanner Button */}
+            <button
+              onClick={() => setIsQrScannerOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
+            >
+              <QrCode className="w-3.5 h-3.5 text-amber-400" />
+              <span>Scan Pass</span>
+            </button>
+
+            {/* Super Admin Staff & Role Management */}
+            {isSuperAdmin && (
               <button
-                onClick={loadAuditData}
-                disabled={auditLoading}
-                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg sm:rounded-xl transition-all cursor-pointer"
+                onClick={() => setIsStaffModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg text-xs shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                title="Assign camp staff and custom privileges"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${auditLoading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
+                <Users className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden md:inline">Staff &amp; Roles</span>
+                <span className="md:hidden">Staff</span>
               </button>
+            )}
+
+            {mainView === 'camps' && isSuperAdmin && (
               <button
-                onClick={() => auditSubView === 'transactions' ? handleExportTransactions('xlsx') : handleExportRefunds('xlsx')}
-                disabled={auditSubView === 'transactions' ? filteredTransactions.length === 0 : filteredRefunds.length === 0}
-                className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                title="Export filtered records as Microsoft Excel (.xlsx)"
+                onClick={openCreateModal}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-lg text-xs shadow-xs shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Export Excel</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Host Camp</span>
               </button>
-              <button
-                onClick={() => auditSubView === 'transactions' ? handleExportTransactions('csv') : handleExportRefunds('csv')}
-                disabled={auditSubView === 'transactions' ? filteredTransactions.length === 0 : filteredRefunds.length === 0}
-                className="inline-flex items-center gap-1 px-3 sm:px-3.5 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                title="Export filtered records as CSV (.csv)"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* VIEW 1: CAMPS RETREAT MANAGEMENT */}
         {mainView === 'camps' && (
           <>
 
-        {/* Stats Row: Compact on Mobile */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+        {/* Stats Row: Compact on Mobile & 13"-14" Laptops */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               <span>All Camps</span>
-              <Tent className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+              <Tent className="w-3.5 h-3.5 text-amber-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2">{totalCamps}</div>
-            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Total Hosted Retreats</span>
+            <div className="text-base sm:text-xl font-black text-slate-900 mt-0.5 sm:mt-1">{totalCamps}</div>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">Total Hosted Retreats</span>
           </div>
 
-          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               <span>Active Camps</span>
-              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-emerald-600 mt-1 sm:mt-2">{activeCamps}</div>
-            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Accepting Registrations</span>
+            <div className="text-base sm:text-xl font-black text-emerald-600 mt-0.5 sm:mt-1">{activeCamps}</div>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">Accepting Registrations</span>
           </div>
 
-          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               <span>Devotees Registered</span>
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
+              <Users className="w-3.5 h-3.5 text-indigo-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2">{totalRegistrations}</div>
-            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Across All Camps</span>
+            <div className="text-base sm:text-xl font-black text-slate-900 mt-0.5 sm:mt-1">{totalRegistrations}</div>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">Across All Camps</span>
           </div>
 
-          <div className="p-3 sm:p-5 rounded-xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="p-2.5 sm:p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               <span>Total Laxmi</span>
-              <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+              <DollarSign className="w-3.5 h-3.5 text-amber-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-amber-600 mt-1 sm:mt-2 truncate">
+            <div className="text-base sm:text-xl font-black text-amber-600 mt-0.5 sm:mt-1 truncate">
               ₹{Number(totalRevenue).toLocaleString('en-IN')}
             </div>
-            <span className="text-[9px] sm:text-[11px] text-slate-400 block truncate">Collected Camp Laxmi</span>
+            <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">Collected Camp Laxmi</span>
           </div>
         </div>
 
         {/* STATUS FILTER TABS: Always access active & past camps */}
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-1 sm:pt-2">
-          <div className="flex items-center gap-1 sm:gap-1.5 p-1 bg-white border border-slate-200/90 rounded-xl sm:rounded-full shadow-xs text-xs font-bold overflow-x-auto no-scrollbar max-w-full">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+          <div className="flex items-center gap-1 p-0.5 bg-white border border-slate-200/90 rounded-xl sm:rounded-full shadow-2xs text-xs font-bold overflow-x-auto no-scrollbar max-w-full">
             <button
               onClick={() => setFilterTab('all')}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-xs ${
                 filterTab === 'all'
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2221,7 +2172,7 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('active')}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-xs ${
                 filterTab === 'active'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2231,7 +2182,7 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('completed')}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-xs ${
                 filterTab === 'completed'
                   ? 'bg-slate-800 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2241,7 +2192,7 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('draft')}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-xs ${
                 filterTab === 'draft'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2251,7 +2202,7 @@ export default function AdminCampsPage() {
             </button>
             <button
               onClick={() => setFilterTab('archived')}
-              className={`inline-flex items-center gap-1 px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-[11px] sm:text-xs ${
+              className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-full transition-all whitespace-nowrap shrink-0 text-xs ${
                 filterTab === 'archived'
                   ? 'bg-rose-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2262,7 +2213,7 @@ export default function AdminCampsPage() {
             </button>
           </div>
 
-          <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
             {filterTab === 'archived'
               ? 'Archived camps are kept here safely. You can restore them or permanently delete them.'
               : 'Past and concluded camps remain permanently accessible for reports & Excel downloads.'}
@@ -2270,7 +2221,7 @@ export default function AdminCampsPage() {
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center gap-2">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -2278,15 +2229,15 @@ export default function AdminCampsPage() {
 
         {/* Camps Grid */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <Loader2 className="w-8 h-8 text-amber-600 animate-spin mb-3" />
+          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <Loader2 className="w-7 h-7 text-amber-600 animate-spin mb-2" />
             <p className="text-xs text-slate-500 font-medium">Loading camps and configurations...</p>
           </div>
         ) : filteredCamps.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <Tent className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800">No Camps in this Category</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-6">
+          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <Tent className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <h3 className="text-sm font-bold text-slate-800">No Camps in this Category</h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
               {filterTab === 'completed'
                 ? 'No past completed camps yet.'
                 : 'Click Host New Camp to set up your retreat dates, tracks, and fees.'}
@@ -2294,15 +2245,15 @@ export default function AdminCampsPage() {
             {filterTab !== 'completed' && (
               <button
                 onClick={openCreateModal}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-full text-xs font-bold shadow-md shadow-orange-500/20"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-full text-xs font-bold shadow-xs shadow-orange-500/20"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 Host New Camp
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
             {filteredCamps.map((camp) => {
               const startDateStr = camp.start_date ? new Date(camp.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
               const endDateStr = camp.end_date ? new Date(camp.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -2311,17 +2262,17 @@ export default function AdminCampsPage() {
               return (
                 <div
                   key={camp.id}
-                  className={`rounded-2xl sm:rounded-3xl border p-3.5 sm:p-6 flex flex-col justify-between transition-all hover:shadow-md ${
+                  className={`rounded-xl sm:rounded-2xl border p-3 sm:p-4 flex flex-col justify-between transition-all hover:shadow-xs ${
                     isPastCamp
                       ? 'bg-slate-50/70 border-slate-200'
-                      : 'bg-white border-slate-200/90 shadow-xs'
+                      : 'bg-white border-slate-200/90 shadow-2xs'
                   }`}
                 >
                   <div>
                     {/* Header: Status Badge & Actions */}
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <div className="flex items-center justify-between mb-2">
                       <span
-                        className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wide ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
                           camp.status === 'active'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                             : camp.status === 'draft'
@@ -2343,83 +2294,83 @@ export default function AdminCampsPage() {
                         {camp.status.toUpperCase()}
                       </span>
 
-                      <div className="flex items-center gap-1 sm:gap-1.5">
+                      <div className="flex items-center gap-1">
                         {camp.status === 'archived' ? (
                           <>
                             <button
                               onClick={() => handleUnarchiveCamp(camp.id)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors shadow-2xs"
                               title="Restore Camp from Archive"
                             >
-                              <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-500" />
+                              <RefreshCw className="w-2.5 h-2.5 text-slate-500" />
                               <span>Restore</span>
                             </button>
                             <button
                               onClick={() => openEditModal(camp)}
-                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Edit Camp Config"
                             >
-                              <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             {/* In Archive: Keep Delete Option */}
                             <button
                               onClick={() => openDeleteModal(camp.id, camp.title)}
-                              className="p-1 sm:p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
                               title="Permanently Delete Camp"
                             >
-                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" />
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                             </button>
                           </>
                         ) : (
                           <>
                             <button
                               onClick={() => handleToggleStatus(camp.id, camp.status)}
-                              className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
+                              className="px-2 py-0.5 text-[10px] font-bold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
                               title="Toggle Active/Closed"
                             >
                               {camp.status === 'active' ? 'Close' : 'Reactivate'}
                             </button>
                             <button
                               onClick={() => openEditModal(camp)}
-                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Edit Camp Config"
                             >
-                              <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             {/* Regular Cards: Show Archive instead of Delete */}
                             <button
                               onClick={() => handleArchiveCamp(camp.id)}
-                              className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition-colors"
+                              className="p-1 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition-colors"
                               title="Archive Camp"
                             >
-                              <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <Archive className="w-3.5 h-3.5" />
                             </button>
                           </>
                         )}
                       </div>
                     </div>
 
-                    <h2 className="text-base sm:text-lg font-black text-slate-900 mb-1 sm:mb-1.5 line-clamp-1">
+                    <h2 className="text-sm sm:text-base font-black text-slate-900 mb-1 line-clamp-1">
                       {camp.title}
                     </h2>
-                    <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-2 mb-2.5 sm:mb-4 leading-relaxed">
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">
                       {camp.description || 'Spiritual retreat and youth development camp.'}
                     </p>
 
-                    <div className="space-y-1 sm:space-y-1.5 text-[11px] sm:text-xs text-slate-600 mb-3 sm:mb-6 bg-slate-50 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 font-medium">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="space-y-1 text-[10.5px] sm:text-[11px] text-slate-600 mb-2.5 bg-slate-50 p-2 sm:p-2.5 rounded-xl border border-slate-100 font-medium">
+                      <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="truncate">{startDateStr} &mdash; {endDateStr}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                         <span className="truncate">{camp.venue || 'Central VOICE, Pune'}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="flex items-center gap-1.5">
                         <Utensils className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                         <span>{(camp.meal_pricing || []).length} Scheduled Meal Days</span>
                       </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         <span className="truncate">
                           {camp.eligible_centers && camp.eligible_centers.length > 0
@@ -2432,26 +2383,26 @@ export default function AdminCampsPage() {
 
                   <div>
                     {/* Devotee Count & Collections: Permanent Records */}
-                    <div className="flex items-center justify-between py-2 sm:py-3 border-t border-slate-100 text-xs mb-2.5 sm:mb-4">
+                    <div className="flex items-center justify-between py-1.5 sm:py-2 border-t border-slate-100 text-xs mb-2">
                       <div>
-                        <span className="text-slate-400 block text-[10px] sm:text-[11px] font-semibold">Attendees</span>
-                        <span className="text-base sm:text-lg font-black text-slate-900">
+                        <span className="text-slate-400 block text-[9.5px] sm:text-[10px] font-semibold">Attendees</span>
+                        <span className="text-sm sm:text-base font-black text-slate-900">
                           {camp.registration_count || 0}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-slate-400 block text-[10px] sm:text-[11px] font-semibold">Collections</span>
-                        <span className="text-base sm:text-lg font-black text-emerald-600">
+                        <span className="text-slate-400 block text-[9.5px] sm:text-[10px] font-semibold">Collections</span>
+                        <span className="text-sm sm:text-base font-black text-emerald-600">
                           ₹{Number(camp.total_revenue || 0).toLocaleString('en-IN')}
                         </span>
                       </div>
                     </div>
 
                     {/* Action Links */}
-                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <Link
                         href={`/dashboard/admin/camps/${camp.id}/registrations`}
-                        className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
+                        className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs"
                       >
                         <Users className="w-3.5 h-3.5" />
                         <span>Attendees</span>
@@ -2459,7 +2410,7 @@ export default function AdminCampsPage() {
                       <Link
                         href={`/camps/${camp.slug}`}
                         target="_blank"
-                        className="flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-amber-600" />
                         <span>{isPastCamp ? 'Lookup' : 'Public Portal'}</span>
@@ -2487,117 +2438,119 @@ export default function AdminCampsPage() {
               </div>
             ) : (
               <>
-                {/* Financial Summary Cards with Complete Gross -> Discount -> Net Tally */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <Landmark className="w-4 h-4 text-amber-600" />
-                      <span>Financial Summary &amp; Reconciliation</span>
-                    </span>
+                {/* Financial Summary Cards with Complete Gross -> Discount -> Net Tally (Collapsible) */}
+                {showFinancialSummary && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Landmark className="w-4 h-4 text-amber-600" />
+                        <span>Financial Summary &amp; Reconciliation</span>
+                      </span>
 
-                    {isFilterActive ? (
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                          <Filter className="w-3 h-3 text-amber-600" />
-                          <span>Filtered View ({dynamicStats.total_transactions} Batches)</span>
+                      {isFilterActive ? (
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <Filter className="w-3 h-3 text-amber-600" />
+                            <span>Filtered View ({dynamicStats.total_transactions} Batches)</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleResetAuditFilters}
+                            className="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                          >
+                            Clear Filters
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                          All Records ({dynamicStats.total_transactions} Batches)
                         </span>
-                        <button
-                          type="button"
-                          onClick={handleResetAuditFilters}
-                          className="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                        All Records ({dynamicStats.total_transactions} Batches)
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
-                    {/* 1. Gross Camp Value (Before Discounts) */}
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gross Camp Value</span>
-                      <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-                        ₹{dynamicStats.total_gross_fee.toLocaleString('en-IN')}
-                      </div>
-                      <span className="text-[10px] text-slate-400">Total Value Before Waivers</span>
+                      )}
                     </div>
 
-                    {/* 2. Coupons & Discounts Given */}
-                    <div className="p-4 rounded-2xl bg-orange-50/70 border border-orange-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider block flex items-center gap-1">
-                        <Tag className="w-3 h-3 text-orange-600" />
-                        <span>Coupons / Discounts</span>
-                      </span>
-                      <div className="text-xl sm:text-2xl font-black text-orange-950 mt-1">
-                        -₹{dynamicStats.total_discounts.toLocaleString('en-IN')}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-2.5">
+                      {/* 1. Gross Camp Value (Before Discounts) */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gross Camp Value</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 mt-0.5">
+                          ₹{dynamicStats.total_gross_fee.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">Before Waivers</span>
                       </div>
-                      <span className="text-[10px] text-orange-700">
-                        {dynamicStats.total_coupons_count} {dynamicStats.total_coupons_count === 1 ? 'Batch Subsidized' : 'Batches Subsidized'}
-                      </span>
-                    </div>
 
-                    {/* 3. Net Cash Collected (Received in Bank/Gateway) */}
-                    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Net Cash Received</span>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-800 mt-1">
-                        ₹{dynamicStats.total_collected.toLocaleString('en-IN')}
+                      {/* 2. Coupons & Discounts Given */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/90 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-orange-700 uppercase tracking-wider block flex items-center justify-between">
+                          <span>Coupons / Discounts</span>
+                          <Tag className="w-3 h-3 text-orange-600" />
+                        </span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-orange-950 mt-0.5">
+                          -₹{dynamicStats.total_discounts.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-orange-700 block truncate mt-0.5">
+                          {dynamicStats.total_coupons_count} {dynamicStats.total_coupons_count === 1 ? 'Batch Subsidized' : 'Batches Subsidized'}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-emerald-700">Bank &amp; Gateway Inflow</span>
-                    </div>
 
-                    {/* 4. Total Cash Refunded */}
-                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200 shadow-xs">
-                      <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Total Refunded</span>
-                      <div className="text-xl sm:text-2xl font-black text-purple-700 mt-1">
-                        ₹{dynamicStats.total_refunded.toLocaleString('en-IN')}
+                      {/* 3. Net Cash Collected (Received in Bank/Gateway) */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/90 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Net Cash Received</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-800 mt-0.5">
+                          ₹{dynamicStats.total_collected.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-emerald-700 block truncate mt-0.5">Bank &amp; Gateway Inflow</span>
                       </div>
-                      <span className="text-[10px] text-purple-900 font-medium">Approved Payouts Sent</span>
-                    </div>
 
-                    {/* 5. Net Retained Revenue */}
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-indigo-50 to-slate-50 border border-indigo-200 shadow-xs">
-                      <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider block">Net Revenue</span>
-                      <div className="text-xl sm:text-2xl font-black text-indigo-700 mt-1">
-                        ₹{dynamicStats.net_revenue.toLocaleString('en-IN')}
+                      {/* 4. Total Cash Refunded */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-purple-50/50 border border-purple-200 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Total Refunded</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-purple-700 mt-0.5">
+                          ₹{dynamicStats.total_refunded.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-purple-900 font-medium block truncate mt-0.5">Approved Payouts Sent</span>
                       </div>
-                      <span className="text-[10px] text-indigo-950 font-medium">Cash Received - Refunded</span>
-                    </div>
 
-                    {/* 6. Total Attendees & Batches */}
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Devotees</span>
-                      <div className="text-xl sm:text-2xl font-black text-amber-600 mt-1">
-                        {dynamicStats.total_participants}
+                      {/* 5. Net Retained Revenue */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-200 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-900 uppercase tracking-wider block">Net Revenue</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-indigo-700 mt-0.5">
+                          ₹{dynamicStats.net_revenue.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-indigo-950 font-medium block truncate mt-0.5">Cash Inflow - Refunded</span>
                       </div>
-                      <span className="text-[10px] text-slate-400">in {dynamicStats.total_transactions} Batches</span>
-                    </div>
 
-                    {/* 7. Action Needed */}
-                    <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 shadow-xs">
-                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Action Needed</span>
-                      <div className="text-xl sm:text-2xl font-black text-amber-900 mt-1 flex items-center gap-1.5">
-                        <span>{dynamicStats.pending_verifications + dynamicStats.pending_refunds}</span>
-                        {(dynamicStats.pending_verifications + dynamicStats.pending_refunds > 0) && (
-                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                        )}
+                      {/* 6. Total Attendees & Batches */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Devotees</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-amber-600 mt-0.5">
+                          {dynamicStats.total_participants}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-slate-400 block truncate mt-0.5">in {dynamicStats.total_transactions} Batches</span>
                       </div>
-                      <span className="text-[10px] text-amber-700">
-                        {dynamicStats.pending_verifications} ITT | {dynamicStats.pending_refunds} Refunds
-                      </span>
+
+                      {/* 7. Action Needed */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/80 shadow-2xs">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Action Needed</span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-amber-900 mt-0.5 flex items-center gap-1.5">
+                          <span>{dynamicStats.pending_verifications + dynamicStats.pending_refunds}</span>
+                          {(dynamicStats.pending_verifications + dynamicStats.pending_refunds > 0) && (
+                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                          )}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-amber-700 block truncate mt-0.5">
+                          {dynamicStats.pending_verifications} ITT | {dynamicStats.pending_refunds} Refunds
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Sub-view Navigation Switcher & Ledger Exports */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => setAuditSubView('transactions')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         auditSubView === 'transactions'
                           ? 'bg-slate-900 text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -2609,7 +2562,7 @@ export default function AdminCampsPage() {
 
                     <button
                       onClick={() => setAuditSubView('refunds')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         auditSubView === 'refunds'
                           ? 'bg-slate-900 text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -2618,15 +2571,30 @@ export default function AdminCampsPage() {
                       <Undo2 className="w-3.5 h-3.5 text-rose-400" />
                       <span>Refund Requests Audit ({filteredRefunds.length})</span>
                       {auditRefunds.filter(r => r.status === 'pending').length > 0 && (
-                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white">
+                        <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-rose-500 text-white">
                           {auditRefunds.filter(r => r.status === 'pending').length}
                         </span>
                       )}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowFinancialSummary(!showFinancialSummary)}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                        showFinancialSummary
+                          ? 'bg-amber-50 text-amber-900 border-amber-300'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title={showFinancialSummary ? 'Hide financial summary cards' : 'Show financial summary cards'}
+                    >
+                      <Landmark className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Summary ({showFinancialSummary ? 'Hide' : 'Show'})</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showFinancialSummary ? 'rotate-180' : ''}`} />
+                    </button>
                   </div>
 
                   {/* Direct Ledger Export Action Buttons (Excel & CSV) */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -2636,7 +2604,7 @@ export default function AdminCampsPage() {
                           handleExportRefunds('xlsx');
                         }
                       }}
-                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
                       title={`Export ${auditSubView === 'transactions' ? 'Transactions' : 'Refunds'} to Excel (.xlsx)`}
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
@@ -2652,7 +2620,7 @@ export default function AdminCampsPage() {
                           handleExportRefunds('csv');
                         }
                       }}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
                       title={`Export ${auditSubView === 'transactions' ? 'Transactions' : 'Refunds'} to CSV (.csv)`}
                     >
                       <Download className="w-3.5 h-3.5 text-slate-600" />
@@ -2662,11 +2630,11 @@ export default function AdminCampsPage() {
                 </div>
 
                 {/* Filter and Search Bar */}
-                <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                     {/* Search */}
                     <div className="lg:col-span-2 relative">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={auditSearch}
@@ -2675,7 +2643,7 @@ export default function AdminCampsPage() {
                           setAuditPage(1);
                         }}
                         placeholder="Search by Payer Name, Phone, Email, UTR, Order ID, Passcode..."
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-amber-500 focus:bg-white transition-all"
+                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-amber-500 focus:bg-white transition-all font-medium"
                       />
                       {auditSearch && (
                         <button
@@ -2695,7 +2663,7 @@ export default function AdminCampsPage() {
                           setAuditCampFilter(e.target.value);
                           setAuditPage(1);
                         }}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                       >
                         <option value="all">All Camps ({camps.length})</option>
                         {camps.map(c => (
@@ -2713,7 +2681,7 @@ export default function AdminCampsPage() {
                             setAuditMethodFilter(e.target.value);
                             setAuditPage(1);
                           }}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                         >
                           <option value="all">All Payment Modes</option>
                           <option value="RAZORPAY">Razorpay Gateway</option>
@@ -2733,7 +2701,7 @@ export default function AdminCampsPage() {
                           setAuditStatusFilter(e.target.value);
                           setAuditPage(1);
                         }}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                       >
                         <option value="all">All Statuses</option>
                         <option value="completed">Completed</option>
@@ -2750,7 +2718,7 @@ export default function AdminCampsPage() {
                           setAuditDateFilter(e.target.value as any);
                           setAuditPage(1);
                         }}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                       >
                         <option value="all">Date: All Time</option>
                         <option value="today">Today</option>
@@ -2766,7 +2734,7 @@ export default function AdminCampsPage() {
                         <select
                           value={auditSortBy}
                           onChange={(e) => setAuditSortBy(e.target.value as any)}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                         >
                           <option value="date_desc">Sort: Newest First</option>
                           <option value="date_asc">Sort: Oldest First</option>
@@ -2805,53 +2773,53 @@ export default function AdminCampsPage() {
                     ) : (
                       <>
                         {/* Status & Method Color Guide Legend */}
-                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-semibold text-slate-700">
-                          <span className="font-bold flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-800">
-                            <Palette className="w-3.5 h-3.5 text-amber-600" />
+                        <div className="px-3 py-1 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-700">
+                          <span className="font-bold flex items-center gap-1 text-[9.5px] uppercase tracking-wider text-slate-800">
+                            <Palette className="w-3 h-3 text-amber-600" />
                             <span>Color Guide:</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-xs border border-emerald-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-2xs border border-emerald-600"></span>
                             <span className="text-emerald-950">Money In (Razorpay)</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-orange-500 shadow-xs border border-orange-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-2xs border border-orange-600"></span>
                             <span className="text-orange-950">Coupon / Discount</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-teal-500 shadow-xs border border-teal-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shadow-2xs border border-teal-600"></span>
                             <span className="text-teal-950">Inter-Temple (ITT)</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-sky-500 shadow-xs border border-sky-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shadow-2xs border border-sky-600"></span>
                             <span className="text-sky-950">Dept Transfer (IDT)</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-purple-500 shadow-xs border border-purple-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-2xs border border-purple-600"></span>
                             <span className="text-purple-950">Refunded</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-rose-500 shadow-xs border border-rose-600"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-2xs border border-rose-600"></span>
                             <span className="text-rose-950">Refund Pending</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-yellow-400 shadow-xs border border-yellow-500"></span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-2xs border border-yellow-500"></span>
                             <span className="text-yellow-950">Verification Pending</span>
                           </span>
                         </div>
 
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                               <tr>
-                                <th className="py-3.5 px-4">Date &amp; Time</th>
-                                <th className="py-3.5 px-4">Camp Retreat</th>
-                                <th className="py-3.5 px-4">Payer / POC</th>
-                                <th className="py-3.5 px-4 text-center">Attendees</th>
-                                <th className="py-3.5 px-4">Payment Method &amp; Ref</th>
-                                <th className="py-3.5 px-4">Amount Paid</th>
-                                <th className="py-3.5 px-4">Status</th>
-                                <th className="py-3.5 px-4 text-right">Audit</th>
+                                <th className="py-2 px-2.5">Date &amp; Time</th>
+                                <th className="py-2 px-2.5">Camp Retreat</th>
+                                <th className="py-2 px-2.5">Payer / POC</th>
+                                <th className="py-2 px-2.5 text-center">Attendees</th>
+                                <th className="py-2 px-2.5">Payment Method &amp; Ref</th>
+                                <th className="py-2 px-2.5">Amount Paid</th>
+                                <th className="py-2 px-2.5">Status</th>
+                                <th className="py-2 px-2.5 text-right">Audit</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -2898,13 +2866,13 @@ export default function AdminCampsPage() {
                                   return (
                                     <tr key={t.txn_id} className={`${rowShadeClass} transition-colors group`}>
                                     {/* Date & Time */}
-                                    <td className="py-3.5 px-4 whitespace-nowrap">
+                                    <td className="py-2 px-2.5 whitespace-nowrap">
                                       <div className="font-semibold text-slate-900">{formattedDate}</div>
                                       <div className="text-[10px] text-slate-400">{formattedTime}</div>
                                     </td>
 
                                     {/* Camp Title */}
-                                    <td className="py-3.5 px-4">
+                                    <td className="py-2 px-2.5">
                                       <Link
                                         href={`/camps/${t.camp_slug}`}
                                         target="_blank"
@@ -2917,14 +2885,14 @@ export default function AdminCampsPage() {
                                     </td>
 
                                     {/* Payer POC */}
-                                    <td className="py-3.5 px-4">
+                                    <td className="py-2 px-2.5">
                                       <div className="font-bold text-slate-900">{t.poc_name || 'Anonymous'}</div>
                                       <div className="text-[11px] text-slate-500 font-mono">{t.poc_contact || t.email}</div>
                                     </td>
 
                                     {/* Devotees Count */}
-                                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    <td className="py-2 px-2.5 text-center whitespace-nowrap">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
                                         <Users className="w-3 h-3" />
                                         {t.participant_count} {t.participant_count === 1 ? 'Devotee' : 'Devotees'}
                                       </span>
@@ -2936,7 +2904,7 @@ export default function AdminCampsPage() {
                                     </td>
 
                                     {/* Payment Method & Reference */}
-                                    <td className="py-3.5 px-4">
+                                    <td className="py-2 px-2.5">
                                       <div className="flex items-center gap-1.5">
                                         {t.payment_method === 'RAZORPAY' && (
                                           <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
@@ -2968,9 +2936,9 @@ export default function AdminCampsPage() {
                                     </td>
 
                                     {/* Amount Paid & Discount Breakdown */}
-                                    <td className="py-3.5 px-4 whitespace-nowrap">
+                                    <td className="py-2 px-2.5 whitespace-nowrap">
                                       <div className="flex items-baseline gap-1.5">
-                                        <span className="font-extrabold text-sm text-slate-900">
+                                        <span className="font-extrabold text-xs sm:text-sm text-slate-900">
                                           ₹{t.total_amount.toLocaleString('en-IN')}
                                         </span>
                                         {t.total_discount > 0 && (
@@ -2979,49 +2947,49 @@ export default function AdminCampsPage() {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-[10px] text-slate-400">
+                                      <div className="text-[9.5px] text-slate-400">
                                         Meals: ₹{t.total_meal_cost} | Stay: ₹{t.total_acc_cost}
                                         {Boolean(t.total_late_fee) && ` | Late: ₹${t.total_late_fee}`}
                                         {Boolean(t.total_entry_cost) && ` | Kit: ₹${t.total_entry_cost}`}
                                       </div>
                                       {t.total_discount > 0 && (
-                                        <div className="text-[10px] font-bold text-orange-700 flex items-center gap-1 mt-0.5">
-                                          <Tag className="w-3 h-3 text-orange-600 flex-shrink-0" />
+                                        <div className="text-[9.5px] font-bold text-orange-700 flex items-center gap-1 mt-0.5">
+                                          <Tag className="w-2.5 h-2.5 text-orange-600 flex-shrink-0" />
                                           <span>-₹{t.total_discount.toLocaleString('en-IN')} {t.coupon_code ? `(${t.coupon_code})` : 'Discount'}</span>
                                         </div>
                                       )}
                                     </td>
 
                                     {/* Status */}
-                                    <td className="py-3.5 px-4 whitespace-nowrap">
+                                    <td className="py-2 px-2.5 whitespace-nowrap">
                                       {t.refund?.status === 'refunded' ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
                                           <Undo2 className="w-3 h-3" />
                                           Refunded (₹{Number(t.transaction_refund_amount != null ? t.transaction_refund_amount : t.refund.refund_amount).toLocaleString('en-IN')})
                                         </span>
                                       ) : t.refund?.status === 'pending' ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
                                           <Undo2 className="w-3 h-3" />
                                           Refund Pending (₹{Number(t.transaction_refund_amount != null ? t.transaction_refund_amount : t.refund.refund_amount).toLocaleString('en-IN')})
                                         </span>
                                       ) : t.refund?.status === 'rejected' ? (
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                             <CheckCircle className="w-3 h-3" />
                                             Completed
                                           </span>
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200" title={`Refund rejected${t.refund.admin_notes ? `: ${t.refund.admin_notes}` : ''}`}>
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200" title={`Refund rejected${t.refund.admin_notes ? `: ${t.refund.admin_notes}` : ''}`}>
                                             <X className="w-2.5 h-2.5 text-rose-500" />
                                             Refund Rejected
                                           </span>
                                         </div>
                                       ) : t.payment_status === 'completed' ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                           <CheckCircle className="w-3 h-3" />
                                           Completed
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
                                           <Clock className="w-3 h-3 animate-spin" />
                                           Verification Pending
                                         </span>
@@ -3029,13 +2997,13 @@ export default function AdminCampsPage() {
                                     </td>
 
                                     {/* Inspect Action */}
-                                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                    <td className="py-2 px-2.5 text-right whitespace-nowrap">
                                       <button
                                         onClick={() => setSelectedTxn(t)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 rounded-xl font-bold text-xs transition-all shadow-2xs cursor-pointer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer"
                                         title="Inspect full transaction details"
                                       >
-                                        <Eye className="w-3.5 h-3.5" />
+                                        <Eye className="w-3 h-3" />
                                         <span>Inspect</span>
                                       </button>
                                     </td>
@@ -3159,17 +3127,17 @@ export default function AdminCampsPage() {
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                              <th className="py-3.5 px-4">Requested Date</th>
-                              <th className="py-3.5 px-4">Camp Retreat</th>
-                              <th className="py-3.5 px-4">Devotee Name &amp; Contact</th>
-                              <th className="py-3.5 px-4">Type &amp; Attendees</th>
-                              <th className="py-3.5 px-4">Refund Amount</th>
-                              <th className="py-3.5 px-4">Payout Account / UPI</th>
-                              <th className="py-3.5 px-4">Payout UTR</th>
-                              <th className="py-3.5 px-4">Status</th>
-                              <th className="py-3.5 px-4 text-right">Camp Portal</th>
+                              <th className="py-2 px-2.5">Requested Date</th>
+                              <th className="py-2 px-2.5">Camp Retreat</th>
+                              <th className="py-2 px-2.5">Devotee Name &amp; Contact</th>
+                              <th className="py-2 px-2.5">Type &amp; Attendees</th>
+                              <th className="py-2 px-2.5">Refund Amount</th>
+                              <th className="py-2 px-2.5">Payout Account / UPI</th>
+                              <th className="py-2 px-2.5">Payout UTR</th>
+                              <th className="py-2 px-2.5">Status</th>
+                              <th className="py-2 px-2.5 text-right">Camp Portal</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -3185,19 +3153,19 @@ export default function AdminCampsPage() {
 
                               return (
                                 <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
-                                  <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <td className="py-2 px-2.5 whitespace-nowrap">
                                     <div className="font-semibold text-slate-900">{reqDate}</div>
                                     <div className="text-[10px] text-slate-400">ID: {r.id.substring(0, 8)}...</div>
                                   </td>
-                                  <td className="py-3.5 px-4">
+                                  <td className="py-2 px-2.5">
                                     <div className="font-bold text-slate-900">{r.camp_title || 'Camp'}</div>
                                     <div className="text-[10px] text-slate-400 font-mono">/camps/{r.camp_slug}</div>
                                   </td>
-                                  <td className="py-3.5 px-4">
+                                  <td className="py-2 px-2.5">
                                     <div className="font-bold text-slate-900">{r.poc_name}</div>
                                     <div className="text-[11px] text-slate-500 font-mono">{r.poc_contact || r.email}</div>
                                   </td>
-                                  <td className="py-3.5 px-4">
+                                  <td className="py-2 px-2.5">
                                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                                       {r.cancellation_type}
                                     </span>
@@ -3205,15 +3173,15 @@ export default function AdminCampsPage() {
                                       {Array.isArray(r.cancelled_registrations) ? `${r.cancelled_registrations.length} Devotees` : '1 Devotee'}
                                     </div>
                                   </td>
-                                  <td className="py-3.5 px-4 whitespace-nowrap">
-                                    <div className="font-extrabold text-sm text-rose-600">
+                                  <td className="py-2 px-2.5 whitespace-nowrap">
+                                    <div className="font-extrabold text-xs sm:text-sm text-rose-600">
                                       ₹{Number(r.refund_amount || 0).toLocaleString('en-IN')}
                                     </div>
-                                    <div className="text-[10px] text-slate-400">
+                                    <div className="text-[9.5px] text-slate-400">
                                       Original: ₹{Number(r.original_total_amount || 0).toLocaleString('en-IN')}
                                     </div>
                                   </td>
-                                  <td className="py-3.5 px-4">
+                                  <td className="py-2 px-2.5">
                                     {r.payout_type === 'UPI' ? (
                                       <div>
                                         <span className="font-mono text-emerald-700 font-bold text-xs">{r.upi_id}</span>
@@ -3227,7 +3195,7 @@ export default function AdminCampsPage() {
                                       </div>
                                     )}
                                   </td>
-                                  <td className="py-3.5 px-4">
+                                  <td className="py-2 px-2.5">
                                     {r.payout_txn_ref ? (
                                       <div className="font-mono font-bold text-emerald-700 text-xs">
                                         {r.payout_txn_ref}
@@ -3237,9 +3205,9 @@ export default function AdminCampsPage() {
                                       <span className="text-slate-400 italic text-[11px]">Pending transfer</span>
                                     )}
                                   </td>
-                                  <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <td className="py-2 px-2.5 whitespace-nowrap">
                                     <span
-                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide ${
+                                      className={`px-2 py-0.5 rounded-full text-[9.5px] font-extrabold tracking-wide ${
                                         r.status === 'refunded'
                                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                           : r.status === 'rejected'
@@ -3250,10 +3218,10 @@ export default function AdminCampsPage() {
                                       {r.status.toUpperCase()}
                                     </span>
                                   </td>
-                                  <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap">
                                     <Link
                                       href={`/dashboard/admin/camps/${r.camp_id}/registrations`}
-                                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-all"
                                     >
                                       <span>Camp Refund Desk</span>
                                       <ChevronRight className="w-3.5 h-3.5" />

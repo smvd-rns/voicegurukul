@@ -1495,9 +1495,9 @@ export default function CampRegistrationsAdminPage() {
               <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               {userAccess.isSuperAdmin ? 'Back to Camps' : 'Back to Camp Staff Duty'}
             </Link>
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-3">
+            <h1 className="text-base sm:text-xl md:text-2xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
               <span>{camp?.title || 'Camp Attendees'}</span>
-              <span className={`text-[9px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full uppercase tracking-wider ${
+              <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                 camp?.status === 'active'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : 'bg-slate-200 text-slate-700'
@@ -1505,35 +1505,35 @@ export default function CampRegistrationsAdminPage() {
                 {camp?.status || 'Active'}
               </span>
             </h1>
-            <p className="text-[11px] sm:text-sm text-slate-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
-              Complete attendee ledger, Inter-Temple Transfer verification, fee contributions, and Excel (.xlsx) export.
+            <p className="text-[10.5px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1">
+              Complete attendee ledger, Inter-Temple Transfer verification, fee contributions, and Excel export.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               onClick={loadData}
-              className="p-1.5 sm:p-2.5 text-slate-600 bg-white border border-slate-200 rounded-lg sm:rounded-2xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer shrink-0"
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-xs cursor-pointer shrink-0"
               title="Refresh Records"
             >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             {(userAccess.isSuperAdmin || userAccess.canScan) && (
               <button
                 onClick={() => setIsQrScannerOpen(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-5 py-1.5 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
                 title="Scan Attendee Pass QR Code for Gate Entry & Meal Punch"
               >
-                <QrCode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                <QrCode className="w-3.5 h-3.5 text-amber-400" />
                 <span>Scan Pass</span>
               </button>
             )}
             {(userAccess.isSuperAdmin || userAccess.canAttendance || userAccess.canPaymentApprovals) && (
               <button
                 onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-6 py-1.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full text-[11px] sm:text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>Export Excel</span>
                 <span className="hidden sm:inline">(.xlsx)</span>
               </button>
@@ -1547,7 +1547,7 @@ export default function CampRegistrationsAdminPage() {
             <button
               type="button"
               onClick={() => setActiveView('registrations')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeView === 'registrations'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1593,7 +1593,7 @@ export default function CampRegistrationsAdminPage() {
             <button
               type="button"
               onClick={() => setActiveView('refunds')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer relative whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer relative whitespace-nowrap shrink-0 ${
                 activeView === 'refunds'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1614,7 +1614,7 @@ export default function CampRegistrationsAdminPage() {
             <button
               type="button"
               onClick={() => setActiveView('prasadam')}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-5 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeView === 'prasadam'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1695,7 +1695,7 @@ export default function CampRegistrationsAdminPage() {
                 {/* 1. Gross Camp Value (Total Booking Value Before Waivers) */}
                 <div className="p-2 sm:p-2.5 lg:p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
                   <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Gross Camp Value</span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-slate-900 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-slate-900 mt-0.5 block truncate">
                     ₹{grossBilledTotal.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-slate-500 font-medium truncate block mt-0.5">
@@ -1709,7 +1709,7 @@ export default function CampRegistrationsAdminPage() {
                     <Tag className="w-3 h-3 text-orange-600" />
                     <span>Coupons / Waivers</span>
                   </span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-orange-900 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-orange-900 mt-0.5 block truncate">
                     -₹{totalDiscounts.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-orange-800 font-medium block truncate mt-0.5">
@@ -1720,7 +1720,7 @@ export default function CampRegistrationsAdminPage() {
                 {/* 3. Net Cash Received (Actual Inflow in Bank & Gateway) */}
                 <div className="p-2 sm:p-2.5 lg:p-3 rounded-xl bg-emerald-50/70 border border-emerald-300 shadow-2xs">
                   <span className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Net Cash Received</span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-emerald-700 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-emerald-700 mt-0.5 block truncate">
                     ₹{totalGrossReceived.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-emerald-800 font-medium truncate block mt-0.5">
@@ -1733,7 +1733,7 @@ export default function CampRegistrationsAdminPage() {
                   displayAttendeeRefundAmount > 0 ? 'bg-purple-50/70 border-purple-200' : 'bg-white border-slate-200/80'
                 }`}>
                   <span className="text-[9px] sm:text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Total Refunded</span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-purple-700 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-purple-700 mt-0.5 block truncate">
                     ₹{displayAttendeeRefundAmount.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-purple-900 font-medium block truncate mt-0.5">
@@ -1744,7 +1744,7 @@ export default function CampRegistrationsAdminPage() {
                 {/* 5. Net Available Balance */}
                 <div className="p-2 sm:p-2.5 lg:p-3 rounded-xl bg-gradient-to-br from-indigo-500/10 via-indigo-50 to-slate-50 border border-indigo-300/80 shadow-2xs">
                   <span className="text-[9px] sm:text-[10px] font-bold text-indigo-900 uppercase tracking-wider block">Net Balance</span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-indigo-700 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-indigo-700 mt-0.5 block truncate">
                     ₹{netAvailableAmount.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-indigo-800 font-semibold block truncate mt-0.5">
@@ -1760,7 +1760,7 @@ export default function CampRegistrationsAdminPage() {
                     <span>Pending Verify</span>
                     {processingCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
                   </span>
-                  <span className="text-base sm:text-lg lg:text-xl font-black text-amber-700 mt-0.5 block truncate">
+                  <span className="text-sm sm:text-base lg:text-lg font-black text-amber-700 mt-0.5 block truncate">
                     ₹{totalPendingAmount.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[8px] sm:text-[9.5px] text-amber-800 font-semibold block truncate mt-0.5">
@@ -1836,103 +1836,6 @@ export default function CampRegistrationsAdminPage() {
           </div>
         </div>
 
-        {/* Quick Filter Bar: Attendance Status & Role Selection */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-2 pt-0.5 pb-0.5">
-          {/* Quick Attendance Status Segmented Toggle: 3-col grid on mobile, inline on desktop */}
-          <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-1 p-0.5 bg-slate-100/90 rounded-xl sm:rounded-full border border-slate-200/90 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setAttendanceFilter('all')}
-              className={`flex items-center justify-center gap-1 py-1 px-1.5 sm:px-3 rounded-lg sm:rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
-                attendanceFilter === 'all'
-                  ? 'bg-slate-800 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <span>All</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold ${attendanceFilter === 'all' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                {attendanceBaseRegistrations.length}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAttendanceFilter('coming')}
-              className={`flex items-center justify-center gap-1 py-1 px-1.5 sm:px-3 rounded-lg sm:rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
-                attendanceFilter === 'coming'
-                  ? 'bg-emerald-600 text-white shadow-xs font-black'
-                  : 'text-emerald-800 hover:bg-emerald-50'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${attendanceFilter === 'coming' ? 'bg-white' : 'bg-emerald-500'}`} />
-              <span>Coming</span>
-              <span className="hidden sm:inline">for Camp</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold ${attendanceFilter === 'coming' ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-900'}`}>
-                {comingCount}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAttendanceFilter('cancelled')}
-              className={`flex items-center justify-center gap-1 py-1 px-1.5 sm:px-3 rounded-lg sm:rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
-                attendanceFilter === 'cancelled'
-                  ? 'bg-rose-600 text-white shadow-xs font-black'
-                  : 'text-rose-800 hover:bg-rose-50'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${attendanceFilter === 'cancelled' ? 'bg-white' : 'bg-rose-500'}`} />
-              <span>Cancelled</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold ${attendanceFilter === 'cancelled' ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-900'}`}>
-                {cancelledCount}
-              </span>
-            </button>
-          </div>
-
-          {/* Role Filter Pills: Horizontally Scrollable on Mobile to prevent tall vertical stacking */}
-          <div className="w-full flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-0.5 px-0.5 scroll-smooth">
-            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider flex-shrink-0 mr-0.5">Role:</span>
-            <button
-              type="button"
-              onClick={() => setSelectedRole('all')}
-              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer border ${
-                selectedRole === 'all'
-                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50'
-              }`}
-            >
-              All Roles ({roleBaseRegistrations.length})
-            </button>
-            {allDistinctRoles.map((role: string) => {
-              const count = roleCounts[role] || 0;
-              const isSelected = selectedRole.toLowerCase() === role.toLowerCase();
-              return (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setSelectedRole(isSelected ? 'all' : role)}
-                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50'
-                  }`}
-                >
-                  <span>{role}</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold ${
-                      isSelected
-                        ? 'bg-white text-amber-700'
-                        : count > 0
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-slate-100 text-slate-400'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Table View: Clean, Uniform Row Heights */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs">
@@ -1955,15 +1858,15 @@ export default function CampRegistrationsAdminPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider">Participant</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Contact</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Temple &amp; VOICE</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Counselor</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Camp Track</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider">Itinerary</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-xs uppercase tracking-wider text-center">Acc.</th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider whitespace-nowrap">Payment</th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-[10px] sm:text-xs uppercase tracking-wider text-right whitespace-nowrap">Fee &amp; Status (₹)</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-3 text-[10px] sm:text-[11px] uppercase tracking-wider">Participant</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider">Contact</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider">Temple &amp; VOICE</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider">Counselor</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider">Camp Track</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider">Itinerary</th>
+                    <th className="py-2 px-1.5 sm:py-2.5 sm:px-2 text-[10px] sm:text-[11px] uppercase tracking-wider text-center">Acc.</th>
+                    <th className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] uppercase tracking-wider whitespace-nowrap">Payment</th>
+                    <th className="py-2 px-2.5 sm:py-2.5 sm:px-3 text-[10px] sm:text-[11px] uppercase tracking-wider text-right whitespace-nowrap">Fee &amp; Status (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2001,7 +1904,7 @@ export default function CampRegistrationsAdminPage() {
                     return (
                       <tr key={reg.id} className={`${rowHighlightClass} transition-colors`}>
                         {/* Participant */}
-                        <td className="py-2.5 px-3 sm:py-3 sm:px-4">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3">
                           <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                             <span>{reg.participant_name}</span>
                             <button
@@ -2065,7 +1968,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Contact */}
-                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5">
                           <div className="flex items-center gap-1 text-slate-800 font-medium">
                             <Phone className="w-3 h-3 text-slate-400" />
                             <span>{reg.whatsapp}</span>
@@ -2077,13 +1980,13 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Temple & VOICE */}
-                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-slate-700">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-slate-700">
                           <div className="font-semibold text-slate-900">{reg.voice_name || '—'}</div>
                           <div className="text-[10px] sm:text-[11px] text-slate-400">{reg.parent_temple || '—'}</div>
                         </td>
 
                         {/* Counselor & Center POC */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3 text-slate-700">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-slate-700">
                           <div className="font-semibold text-slate-900 leading-tight">{reg.counselor_name || '—'}</div>
                           {(reg.poc_name || reg.poc_contact) && (
                             <div className="mt-1 text-[10px] sm:text-[10.5px] leading-tight">
@@ -2106,7 +2009,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Camp Track */}
-                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5">
                           <span className="inline-block px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
                             {reg.camp_track}
                           </span>
@@ -2114,13 +2017,13 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Meal Span */}
-                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-[10px] sm:text-[11px] text-slate-600 whitespace-nowrap">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] text-slate-600 whitespace-nowrap">
                           <div>Arr: {reg.first_meal_date} ({reg.first_meal_type})</div>
                           <div>Dep: {reg.last_meal_date} ({reg.last_meal_type})</div>
                         </td>
 
                         {/* Accommodation */}
-                        <td className="py-2.5 px-2.5 sm:py-3 sm:px-3 text-center">
+                        <td className="py-2 px-1.5 sm:py-2.5 sm:px-2 text-center">
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold ${
                               reg.accommodation === 'Yes'
@@ -2133,7 +2036,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Payment & Proof: Compact, attractive 2-line layout */}
-                        <td className="py-2.5 px-2.5 whitespace-nowrap">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-2.5 whitespace-nowrap">
                           <div className="flex flex-col items-start gap-1">
                             {/* Top Line: Method badge */}
                             <span
@@ -2211,7 +2114,7 @@ export default function CampRegistrationsAdminPage() {
                         </td>
 
                         {/* Fee & Status: Sleek, compact & fully visible */}
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3 text-right whitespace-nowrap">
                           {isProcessing ? (
                             <div className="inline-flex flex-col items-end px-2.5 py-1 rounded-xl bg-amber-50/90 border border-amber-300 shadow-2xs">
                               <span className="text-xs font-black text-amber-950">
@@ -3014,7 +2917,7 @@ export default function CampRegistrationsAdminPage() {
         {/* Financial Summary & Reconciliation Cards (Matches Audit Desk Waterfall) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
           {/* Card 1: Gross Value (Total Transactions before discounts) */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between gap-1">
               <span className="text-[9.5px] sm:text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Total Transactions</span>
               {isBatchFilterActive && (
@@ -3023,7 +2926,7 @@ export default function CampRegistrationsAdminPage() {
                 </span>
               )}
             </div>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-slate-900 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 mt-0.5">
               ₹{(isBatchFilterActive ? grossBatchesAmount : grossBilledTotal).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium block truncate mt-0.5">
@@ -3036,12 +2939,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 2: Coupons & Special Waivers */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-orange-50/50 border border-orange-200/80 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-orange-50/50 border border-orange-200/80 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-orange-800 uppercase tracking-wider flex items-center justify-between">
               <span>Coupons / Waivers</span>
               <Tag className="w-3.5 h-3.5 text-orange-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-orange-700 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-orange-700 mt-0.5">
               -₹{(isBatchFilterActive ? totalDiscountAmount : totalDiscounts).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-orange-900 font-semibold block truncate mt-0.5">
@@ -3050,12 +2953,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 3: Net Cash Received (Actual Inflow in Bank & Gateway) */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-emerald-50/70 border border-emerald-300 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-300 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider flex items-center justify-between">
               <span>Net Cash Received</span>
               <Banknote className="w-3.5 h-3.5 text-emerald-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-emerald-700 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-700 mt-0.5">
               ₹{(isBatchFilterActive ? approvedBatchesAmount : totalGrossReceived).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-emerald-800 font-semibold block truncate mt-0.5">
@@ -3064,12 +2967,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 4: Razorpay Inflow */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider flex items-center justify-between">
               <span>Razorpay Gateway</span>
               <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-emerald-600 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-600 mt-0.5">
               ₹{razorpayAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-emerald-800 font-semibold block truncate mt-0.5">
@@ -3078,12 +2981,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 5: ITT & IDT Transfers */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-teal-800 uppercase tracking-wider flex items-center justify-between">
               <span>Transfers (ITT / IDT)</span>
               <Landmark className="w-3.5 h-3.5 text-teal-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-teal-700 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-teal-700 mt-0.5">
               ₹{(ittAmount + idtAmount).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium block truncate mt-0.5">
@@ -3092,12 +2995,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 6: Completed Refunds */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-purple-50/60 border border-purple-200 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-purple-50/60 border border-purple-200 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-purple-800 uppercase tracking-wider flex items-center justify-between">
               <span>Total Refunded</span>
               <Undo2 className="w-3.5 h-3.5 text-purple-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-purple-700 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-purple-700 mt-0.5">
               ₹{(isBatchFilterActive ? batchRefundAmount : completedRefundAmount).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-purple-900 font-semibold block truncate mt-0.5">
@@ -3106,12 +3009,12 @@ export default function CampRegistrationsAdminPage() {
           </div>
 
           {/* Card 7: Net Available Balance */}
-          <div className="p-2.5 sm:p-3 lg:p-3.5 rounded-xl sm:rounded-2xl bg-indigo-50/60 border border-indigo-200 shadow-2xs">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-200 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-indigo-900 uppercase tracking-wider flex items-center justify-between">
               <span>Net Available</span>
               <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
             </span>
-            <div className="text-base sm:text-lg lg:text-xl font-black text-indigo-700 mt-1">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-indigo-700 mt-0.5">
               ₹{(isBatchFilterActive ? batchNetAvailableAmount : netAvailableAmount).toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-indigo-800 font-semibold block truncate mt-0.5">
@@ -3221,7 +3124,7 @@ export default function CampRegistrationsAdminPage() {
         </div>
 
         {/* Color Guide Legend (Matches Financial Audit) */}
-        <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-slate-700 shadow-2xs">
+        <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-semibold text-slate-700 shadow-2xs">
           <span className="font-bold flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-800">
             <Tag className="w-3 h-3 text-amber-600" />
             <span>Color Guide:</span>
@@ -3269,13 +3172,13 @@ export default function CampRegistrationsAdminPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-3.5">Date &amp; Time</th>
-                    <th className="py-3 px-3.5">Center &amp; Payer / POC</th>
-                    <th className="py-3 px-3.5 text-center">Attendees in Batch</th>
-                    <th className="py-3 px-3.5">Payment Method &amp; Ref</th>
-                    <th className="py-3 px-3.5">Amount Paid</th>
-                    <th className="py-3 px-3.5">Status</th>
-                    <th className="py-3 px-3.5 text-right">Audit &amp; Action</th>
+                    <th className="py-2 px-2.5">Date &amp; Time</th>
+                    <th className="py-2 px-2.5">Center &amp; Payer / POC</th>
+                    <th className="py-2 px-2.5 text-center">Attendees in Batch</th>
+                    <th className="py-2 px-2.5">Payment Method &amp; Ref</th>
+                    <th className="py-2 px-2.5">Amount Paid</th>
+                    <th className="py-2 px-2.5">Status</th>
+                    <th className="py-2 px-2.5 text-right">Audit &amp; Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -3307,7 +3210,7 @@ export default function CampRegistrationsAdminPage() {
                       <React.Fragment key={b.key}>
                         <tr className={`${rowBorderClass} transition-colors`}>
                           {/* Date & Time */}
-                          <td className="py-3 px-3.5 whitespace-nowrap">
+                          <td className="py-2 px-2.5 whitespace-nowrap">
                             <div className="font-bold text-slate-900 text-xs">
                               {b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-IN', {
                                 day: '2-digit',
@@ -3330,7 +3233,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Center & Payer / POC */}
-                          <td className="py-3 px-3.5">
+                          <td className="py-2 px-2.5">
                             <div className="font-extrabold text-slate-900 text-xs leading-tight">
                               {b.centerName}
                             </div>
@@ -3360,7 +3263,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Attendees in Batch */}
-                          <td className="py-3 px-3.5 text-center">
+                          <td className="py-2 px-2.5 text-center">
                             <button
                               type="button"
                               onClick={() => setExpandedBatchId(isExpanded ? null : b.key)}
@@ -3382,7 +3285,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Payment Method & Ref */}
-                          <td className="py-3 px-3.5">
+                          <td className="py-2 px-2.5">
                             {b.isRazorpay ? (
                               <div className="space-y-1">
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 font-black text-[10.5px] uppercase tracking-wide">
@@ -3452,7 +3355,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Amount Paid & Itemized Division */}
-                          <td className="py-3 px-3.5 whitespace-nowrap">
+                          <td className="py-2 px-2.5 whitespace-nowrap">
                             <span className="text-sm font-black text-slate-900 block">
                               ₹{b.totalAmount.toLocaleString('en-IN')}
                             </span>
@@ -3477,7 +3380,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Status */}
-                          <td className="py-3 px-3.5 whitespace-nowrap">
+                          <td className="py-2 px-2.5 whitespace-nowrap">
                             {isPending ? (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 font-bold text-[10.5px]">
                                 <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
@@ -3530,7 +3433,7 @@ export default function CampRegistrationsAdminPage() {
                           </td>
 
                           {/* Audit & Action */}
-                          <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                          <td className="py-2 px-2.5 text-right whitespace-nowrap">
                             {isPending ? (
                               <div className="inline-flex items-center gap-1.5">
                                 <button

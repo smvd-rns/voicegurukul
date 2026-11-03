@@ -26,11 +26,13 @@ interface EditUserProfileModalProps {
 }
 
 const ASHRAM_OPTIONS = [
-  { value: 'Student', label: 'Student' },
-  { value: 'Brahmachari', label: 'Brahmachari' },
+  { value: 'Student and Not decided', label: 'Student and Not decided' },
+  { value: 'Working and Not Decided', label: 'Working and Not Decided' },
+  { value: 'Gauranga Sabha', label: 'Gauranga Sabha' },
+  { value: 'Nityananda Sabha', label: 'Nityananda Sabha' },
   { value: 'Grihastha', label: 'Grihastha' },
-  { value: 'Vanaprastha', label: 'Vanaprastha' },
-  { value: 'Sannyasa', label: 'Sannyasa' }
+  { value: 'Brahmachari', label: 'Brahmachari' },
+  { value: 'Staying Single (Not planning to marry)', label: 'Staying Single (Not planning to marry)' },
 ];
 
 const CAMPS_LIST = [
@@ -264,7 +266,9 @@ export default function EditUserProfileModal({
       setError('Please specify the name of the Other Temple or create it');
       return;
     }
-    if (formData.currentCenter === 'Other' && !formData.otherCenter.trim()) {
+    const isBrahmachariOrGrihastha = formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha';
+
+    if (!isBrahmachariOrGrihastha && formData.currentCenter === 'Other' && !formData.otherCenter.trim()) {
       setError('Please specify the name of the Other Center or create it');
       return;
     }
@@ -280,8 +284,12 @@ export default function EditUserProfileModal({
       const resolvedTemple = formData.currentTemple === 'Other' ? 'Other' : (formData.currentTemple || null);
       const resolvedOtherTemple = formData.currentTemple === 'Other' ? formData.otherTemple.trim() : null;
 
-      const resolvedCenter = formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter || null);
-      const resolvedOtherCenter = formData.currentCenter === 'Other' ? formData.otherCenter.trim() : null;
+      const resolvedCenter = isBrahmachariOrGrihastha
+        ? null
+        : (formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter || null));
+      const resolvedOtherCenter = isBrahmachariOrGrihastha
+        ? null
+        : (formData.currentCenter === 'Other' ? formData.otherCenter.trim() : null);
 
       const resolvedCounselor = formData.counselor === 'Other' ? 'Other' : (formData.counselor || null);
       const resolvedOtherCounselor = formData.counselor === 'Other' ? formData.otherCounselor.trim() : null;
@@ -478,65 +486,67 @@ export default function EditUserProfileModal({
                   )}
                 </div>
 
-                {/* Current Center */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Current Center</label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <select
-                      value={formData.currentCenter}
-                      onChange={e => {
-                        const newCenter = e.target.value;
-                        setFormData({
-                          ...formData,
-                          currentCenter: newCenter,
-                          otherCenter: newCenter === 'Other' ? formData.otherCenter : ''
-                        });
-                      }}
-                      className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                    >
-                      <option value="">None / Not Assigned</option>
-                      <option value="Other">⚠️ Other (Custom Center Name)</option>
-                      <option disabled>──────────</option>
-                      {formData.currentCenter && !availableCurrentCenters.some(c => c.name === formData.currentCenter) && formData.currentCenter !== 'Other' && (
-                        <option value={formData.currentCenter}>{formData.currentCenter} (Current)</option>
-                      )}
-                      {availableCurrentCenters.map(c => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {formData.currentCenter === 'Other' && (
-                    <div className="mt-2 p-3 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
-                      <label className="block text-[11px] font-bold text-orange-900">Custom Center Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.otherCenter}
-                        onChange={e => setFormData({ ...formData, otherCenter: e.target.value })}
-                        placeholder="e.g. FC Road BACE"
-                        className="w-full px-3 py-1.5 bg-white border border-orange-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-200"
-                      />
-                      {formData.otherCenter.trim() && (
-                        <div className="pt-2 border-t border-orange-200/60 flex items-center justify-between gap-2">
-                          <p className="text-[11px] text-orange-800">
-                            Register as new official center?
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleRegisterNewCenter}
-                            disabled={isRegisteringCenter}
-                            className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 shrink-0"
-                          >
-                            {isRegisteringCenter ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                            <span>Create Center</span>
-                          </button>
-                        </div>
-                      )}
+                {/* Current Center - Not applicable for Brahmachari or Grihastha */}
+                {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Current Center</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <select
+                        value={formData.currentCenter}
+                        onChange={e => {
+                          const newCenter = e.target.value;
+                          setFormData({
+                            ...formData,
+                            currentCenter: newCenter,
+                            otherCenter: newCenter === 'Other' ? formData.otherCenter : ''
+                          });
+                        }}
+                        className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
+                      >
+                        <option value="">None / Not Assigned</option>
+                        <option value="Other">⚠️ Other (Custom Center Name)</option>
+                        <option disabled>──────────</option>
+                        {formData.currentCenter && !availableCurrentCenters.some(c => c.name === formData.currentCenter) && formData.currentCenter !== 'Other' && (
+                          <option value={formData.currentCenter}>{formData.currentCenter} (Current)</option>
+                        )}
+                        {availableCurrentCenters.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
                     </div>
-                  )}
-                </div>
+
+                    {formData.currentCenter === 'Other' && (
+                      <div className="mt-2 p-3 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
+                        <label className="block text-[11px] font-bold text-orange-900">Custom Center Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.otherCenter}
+                          onChange={e => setFormData({ ...formData, otherCenter: e.target.value })}
+                          placeholder="e.g. FC Road BACE"
+                          className="w-full px-3 py-1.5 bg-white border border-orange-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-200"
+                        />
+                        {formData.otherCenter.trim() && (
+                          <div className="pt-2 border-t border-orange-200/60 flex items-center justify-between gap-2">
+                            <p className="text-[11px] text-orange-800">
+                              Register as new official center?
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleRegisterNewCenter}
+                              disabled={isRegisteringCenter}
+                              className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 shrink-0"
+                            >
+                              {isRegisteringCenter ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                              <span>Create Center</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Parent Temple */}
                 <div>
@@ -686,9 +696,24 @@ export default function EditUserProfileModal({
                   <label className="block text-xs font-bold text-gray-700 mb-1">Ashram</label>
                   <select
                     value={formData.ashram}
-                    onChange={e => setFormData({ ...formData, ashram: e.target.value })}
+                    onChange={e => {
+                      const newAshram = e.target.value;
+                      if (newAshram === 'Brahmachari' || newAshram === 'Grihastha') {
+                        setFormData({
+                          ...formData,
+                          ashram: newAshram,
+                          currentCenter: '',
+                          otherCenter: ''
+                        });
+                      } else {
+                        setFormData({ ...formData, ashram: newAshram });
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
                   >
+                    {formData.ashram && !ASHRAM_OPTIONS.some(a => a.value === formData.ashram) && (
+                      <option value={formData.ashram}>{formData.ashram}</option>
+                    )}
                     {ASHRAM_OPTIONS.map(a => (
                       <option key={a.value} value={a.value}>{a.label}</option>
                     ))}

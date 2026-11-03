@@ -337,32 +337,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Header */}
           <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between px-5 lg:px-4'} h-14 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]`}>
-            <Link 
-              href="/" 
-              className="flex items-center space-x-2.5 group hover:opacity-90 transition-opacity"
-              title="Go to Home Page"
-            >
-              {isCollapsed ? (
-                <span className="text-base font-black text-amber-400 font-display tracking-widest">VG</span>
-              ) : (
-                <div className="flex flex-col">
-                  <h1 className="text-sm lg:text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
-                    VOICE Gurukul
-                  </h1>
-                  <p className="text-[9px] font-bold text-amber-400/90 tracking-wider uppercase -mt-0.5 whitespace-nowrap">
-                    Rekindling Wisdom, Reviving Love
-                  </p>
-                </div>
-              )}
-            </Link>
-            {!isCollapsed && (
-              <button
-                onClick={toggleCollapse}
-                className="hidden lg:flex text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
-                title="Collapse Sidebar (Ctrl+B)"
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
+            {isCollapsed ? (
+              <div className="flex flex-col items-center gap-1.5 py-1">
+                <button
+                  onClick={toggleCollapse}
+                  className="hidden lg:flex text-amber-300 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-all cursor-pointer"
+                  title="Expand Sidebar (Ctrl+B)"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </button>
+                <Link 
+                  href="/" 
+                  className="text-xs font-black text-amber-400 font-display tracking-widest hover:text-white transition-colors"
+                  title="Go to Home Page"
+                >
+                  VG
+                </Link>
+              </div>
+            ) : (
+              <>
+                <Link 
+                  href="/" 
+                  className="flex items-center space-x-2.5 group hover:opacity-90 transition-opacity"
+                  title="Go to Home Page"
+                >
+                  <div className="flex flex-col">
+                    <h1 className="text-sm lg:text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
+                      VOICE Gurukul
+                    </h1>
+                    <p className="text-[9px] font-bold text-amber-400/90 tracking-wider uppercase -mt-0.5 whitespace-nowrap">
+                      Rekindling Wisdom, Reviving Love
+                    </p>
+                  </div>
+                </Link>
+                <button
+                  onClick={toggleCollapse}
+                  className="hidden lg:flex text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all cursor-pointer"
+                  title="Collapse Sidebar (Ctrl+B)"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
+              </>
             )}
             <button
               onClick={() => {
@@ -513,12 +528,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
         </div>
+
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-14 flex items-center px-3 sm:px-4 lg:px-6 flex-shrink-0 border-b border-gray-200/60 justify-between">
+        {/* Top bar: Hidden on Laptop/Desktop view (lg+) as Profile & Logout are already in the Left Sidebar */}
+        <div className="lg:hidden sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm h-14 flex items-center px-3 sm:px-4 flex-shrink-0 border-b border-gray-200/60 justify-between">
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggleCollapse}
@@ -584,6 +600,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
         </div>
+
+        {/* Pending Approval notice for Laptop/Desktop view */}
+        {isPending && (
+          <div className="hidden lg:flex items-center justify-center py-1.5 px-4 bg-amber-50 border-b border-amber-200 text-xs font-semibold text-amber-800">
+            <Clock className="w-3.5 h-3.5 text-amber-600 mr-1.5" />
+            <span>Approval Pending • Camps Accessible</span>
+          </div>
+        )}
 
         {/* Notification Permission Banner */}
         {showNotificationBanner && (

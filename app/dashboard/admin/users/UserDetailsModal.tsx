@@ -41,6 +41,9 @@ export default function UserDetailsModal({
   const isApproved = user.verificationStatus === 'approved';
   const isRejected = user.verificationStatus === 'rejected';
 
+  const userAshram = hierarchy.ashram || (user as any).ashram || '';
+  const isBrahmachariOrGrihastha = userAshram === 'Brahmachari' || userAshram === 'Grihastha';
+
   // Resolved Center / Temple / Counselor with "Other" recognition
   const otherCenterText = user.otherCenter || hierarchy.otherCenter || (user as any).other_center;
   const rawCenter = hierarchy.currentCenter || hierarchy.center || user.currentCenter || user.parentCenter;
@@ -98,9 +101,9 @@ export default function UserDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-gray-100 flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-300 flex flex-col max-h-[92vh] overflow-hidden">
         {/* Header */}
-        <div className="relative px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50/60 via-white to-gray-50/40">
+        <div className="relative px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-orange-50/70 via-white to-amber-50/40">
           <button
             onClick={onClose}
             className="absolute right-4 top-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
@@ -110,7 +113,7 @@ export default function UserDetailsModal({
 
           <div className="flex items-start gap-4 pr-10">
             {/* Avatar */}
-            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-200 border-2 border-white shadow-md flex items-center justify-center text-xl font-bold text-orange-700 overflow-hidden shrink-0">
+            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-200 border-2 border-slate-200 shadow-sm flex items-center justify-center text-xl font-bold text-orange-700 overflow-hidden shrink-0">
               {user.profileImage ? (
                 <Image
                   src={getSmallThumbnailUrl(user.profileImage) || ''}
@@ -163,13 +166,13 @@ export default function UserDetailsModal({
           </div>
 
           {/* Quick Contact & Action Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-100/80">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-200">
             <div className="flex items-center gap-2">
               {user.phone && (
                 <>
                   <a
                     href={`tel:${user.phone}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 transition-colors shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 transition-colors shadow-2xs"
                   >
                     <Phone className="w-3.5 h-3.5 text-gray-400" />
                     <span>Call {user.phone}</span>
@@ -180,7 +183,7 @@ export default function UserDetailsModal({
                       href={`https://wa.me/${cleanPhone}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200 transition-colors shadow-2xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold border border-emerald-300 transition-colors shadow-2xs"
                     >
                       <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                       <span>WhatsApp</span>
@@ -191,7 +194,7 @@ export default function UserDetailsModal({
               {user.email && (
                 <a
                   href={`mailto:${user.email}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 transition-colors shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 transition-colors shadow-2xs"
                 >
                   <Mail className="w-3.5 h-3.5 text-gray-400" />
                   <span>{user.email}</span>
@@ -227,7 +230,7 @@ export default function UserDetailsModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-100 px-6 gap-2 bg-white shrink-0">
+        <div className="flex border-b border-slate-200 px-6 gap-2 bg-white shrink-0">
           {[
             { id: 'profile', label: 'Overview & Organization', icon: UserIcon },
             { id: 'spiritual', label: 'Spiritual Details', icon: Sparkles },
@@ -254,19 +257,19 @@ export default function UserDetailsModal({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-gray-50/30">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 bg-slate-50/70">
           {/* TAB 1: Profile & Organization */}
           {activeTab === 'profile' && (
             <div className="space-y-4">
               {/* Special Warning if Other/None was chosen */}
-              {(isOtherCenter || isOtherTemple || isOtherCounselor || rawCenter === 'None') && (
+              {((!isBrahmachariOrGrihastha && (isOtherCenter || rawCenter === 'None')) || isOtherTemple || isOtherCounselor) && (
                 <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs">
                   <div className="font-bold flex items-center gap-1.5 text-amber-900 mb-1">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                     <span>Special Attention / Manual Review Required</span>
                   </div>
                   <div className="space-y-0.5 text-amber-800/90 pl-5">
-                    {isOtherCenter && (
+                    {!isBrahmachariOrGrihastha && isOtherCenter && (
                       <p>• Selected <strong>Other Center</strong>: <span className="font-semibold underline">{otherCenterText || 'No text provided'}</span></p>
                     )}
                     {isOtherTemple && (
@@ -275,7 +278,7 @@ export default function UserDetailsModal({
                     {isOtherCounselor && (
                       <p>• Selected <strong>Other Counselor</strong>: <span className="font-semibold underline">{otherCounselorText || 'No text provided'}</span></p>
                     )}
-                    {rawCenter === 'None' && (
+                    {!isBrahmachariOrGrihastha && rawCenter === 'None' && (
                       <p>• Center marked as <strong>None</strong></p>
                     )}
                   </div>
@@ -283,37 +286,39 @@ export default function UserDetailsModal({
               )}
 
               {/* Grid 1: Organization Allocation */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-orange-500" />
                   Center & Temple Hierarchy
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Temple</span>
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Current Temple</span>
                     <span className={`font-bold mt-0.5 block ${isOtherTemple ? 'text-amber-800' : 'text-gray-900'}`}>
                       {displayTemple}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Center</span>
-                    <span className={`font-bold mt-0.5 block ${isOtherCenter ? 'text-amber-800' : 'text-gray-900'}`}>
-                      {displayCenter}
-                    </span>
-                  </div>
+                  {!isBrahmachariOrGrihastha && (
+                    <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Current Center</span>
+                      <span className={`font-bold mt-0.5 block ${isOtherCenter ? 'text-amber-800' : 'text-gray-900'}`}>
+                        {displayCenter}
+                      </span>
+                    </div>
+                  )}
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Parent Temple</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Parent Temple</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {hierarchy.parentTemple || user.parentTemple || 'Not Specified'}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Parent Center</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Parent Center</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {hierarchy.parentCenter || user.parentCenter || 'Not Specified'}
                     </span>
                   </div>
@@ -321,40 +326,40 @@ export default function UserDetailsModal({
               </div>
 
               {/* Grid 2: Counselor & Sangha */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-orange-500" />
                   Counselor & Sangha Affiliation
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Assigned Counselor</span>
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Counselor</span>
                     <span className={`font-bold mt-0.5 block ${isOtherCounselor ? 'text-amber-800' : 'text-gray-900'}`}>
                       {displayCounselor}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ashram</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block capitalize">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ashram</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block capitalize">
                       {hierarchy.ashram || user.ashram || 'Student'}
                     </span>
                   </div>
 
                   {hierarchy.bv_group && (
-                    <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Bhakti Vriksha / Youth Group</span>
-                      <span className="font-bold text-gray-900 mt-0.5 block">
+                    <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Bhakti Vriksha / Youth Group</span>
+                      <span className="font-bold text-slate-900 mt-0.5 block">
                         {hierarchy.bv_group}
                       </span>
                     </div>
                   )}
 
                   {hierarchy.counselorGroup && (
-                    <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Counselor Group</span>
-                      <span className="font-bold text-gray-900 mt-0.5 block">
+                    <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Counselor Group</span>
+                      <span className="font-bold text-slate-900 mt-0.5 block">
                         {hierarchy.counselorGroup}
                       </span>
                     </div>
@@ -363,30 +368,30 @@ export default function UserDetailsModal({
               </div>
 
               {/* Grid 3: Personal Information */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-orange-500" />
                   Personal Information
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Date of Birth</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Date of Birth</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {user.birthDate || 'Not Provided'}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">User ID</span>
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">User ID</span>
                     <span className="font-mono text-[10px] text-gray-500 mt-0.5 block truncate" title={user.id}>
                       {user.id}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Assigned Roles</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Roles</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {Array.isArray(user.role) ? user.role.map(r => getRoleDisplayName(r)).join(', ') : roleName}
                     </span>
                   </div>
@@ -395,30 +400,30 @@ export default function UserDetailsModal({
 
               {/* Relatives / Emergency Contacts */}
               {(user.relative1Name || user.relative2Name || user.healthChronicDisease) && (
-                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                     <Heart className="w-3.5 h-3.5 text-rose-500" />
                     Emergency Contacts & Health
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     {user.relative1Name && (
-                      <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                      <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                           Relative 1 ({user.relative1Relationship || 'Family'})
                         </span>
-                        <span className="font-bold text-gray-900 mt-0.5 block">
+                        <span className="font-bold text-slate-900 mt-0.5 block">
                           {user.relative1Name} • {user.relative1Phone}
                         </span>
                       </div>
                     )}
 
                     {user.relative2Name && (
-                      <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                      <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                           Relative 2 ({user.relative2Relationship || 'Family'})
                         </span>
-                        <span className="font-bold text-gray-900 mt-0.5 block">
+                        <span className="font-bold text-slate-900 mt-0.5 block">
                           {user.relative2Name} • {user.relative2Phone}
                         </span>
                       </div>
@@ -439,44 +444,44 @@ export default function UserDetailsModal({
           {/* TAB 2: Spiritual Journey */}
           {activeTab === 'spiritual' && (
             <div className="space-y-4">
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-orange-500" />
                   Initiation & Practice
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Initiation Status</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block capitalize">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Initiation Status</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block capitalize">
                       {hierarchy.initiationStatus || 'Not Initiated'}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Initiated Spiritual Name</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Initiated Spiritual Name</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {hierarchy.initiatedName || 'None'}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Spiritual Master</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Spiritual Master</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {hierarchy.spiritualMasterName || 'None'}
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Daily Japa Rounds</span>
+                  <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Daily Japa Rounds</span>
                     <span className="font-bold text-orange-700 mt-0.5 block text-sm">
                       {hierarchy.rounds || '0'} Rounds
                     </span>
                   </div>
 
-                  <div className="sm:col-span-2 p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Introduced to Krishna Consciousness</span>
-                    <span className="font-bold text-gray-900 mt-0.5 block">
+                  <div className="sm:col-span-2 p-3 bg-slate-50/90 rounded-xl border border-slate-300 hover:border-slate-400 transition-colors">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Introduced to Krishna Consciousness</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">
                       {hierarchy.introducedToKcIn || user.introducedToKcIn || 'Not Specified'}
                     </span>
                   </div>
@@ -489,8 +494,8 @@ export default function UserDetailsModal({
           {activeTab === 'education' && (
             <div className="space-y-4">
               {/* Education */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <GraduationCap className="w-3.5 h-3.5 text-orange-500" />
                   Education Details
                 </h3>
@@ -498,7 +503,7 @@ export default function UserDetailsModal({
                 {user.education && user.education.length > 0 ? (
                   <div className="space-y-2">
                     {user.education.map((edu, idx) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                      <div key={idx} className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 text-xs">
                         <div className="font-bold text-gray-900">{edu.degreeBranch || 'Degree'}</div>
                         <div className="text-gray-600 mt-0.5">{edu.institution}</div>
                         {(edu.startYear || edu.endYear) && (
@@ -515,8 +520,8 @@ export default function UserDetailsModal({
               </div>
 
               {/* Work Experience */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                   <Briefcase className="w-3.5 h-3.5 text-orange-500" />
                   Work Experience
                 </h3>
@@ -524,7 +529,7 @@ export default function UserDetailsModal({
                 {user.workExperience && user.workExperience.length > 0 ? (
                   <div className="space-y-2">
                     {user.workExperience.map((work, idx) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                      <div key={idx} className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 text-xs">
                         <div className="font-bold text-gray-900">{work.position}</div>
                         <div className="text-gray-600 mt-0.5">{work.company} • {work.location}</div>
                         <div className="text-[10px] text-gray-400 mt-1">
@@ -539,14 +544,14 @@ export default function UserDetailsModal({
               </div>
 
               {/* Languages & Skills */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600">
                   Languages & Skills
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Languages</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Languages</span>
                     <div className="flex flex-wrap gap-1">
                       {user.languages && user.languages.length > 0 ? (
                         user.languages.map((l, i) => (
@@ -561,7 +566,7 @@ export default function UserDetailsModal({
                   </div>
 
                   <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Skills & Services</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Skills & Services</span>
                     <div className="flex flex-wrap gap-1">
                       {user.skills && user.skills.length > 0 ? (
                         user.skills.map((s, i) => (
@@ -582,8 +587,8 @@ export default function UserDetailsModal({
           {/* TAB 4: Camps Completed */}
           {activeTab === 'camps' && (
             <div className="space-y-4">
-              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center justify-between">
+              <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <Award className="w-3.5 h-3.5 text-orange-500" />
                     Completed Courses & Retreats
@@ -598,8 +603,8 @@ export default function UserDetailsModal({
                       <div
                         key={camp.key}
                         className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${isDone
-                            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950 font-semibold'
-                            : 'bg-gray-50/50 border-gray-100 text-gray-400'
+                            ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold'
+                            : 'bg-slate-50 border-slate-200 text-slate-400'
                           }`}
                       >
                         <span>{camp.name}</span>
@@ -618,7 +623,7 @@ export default function UserDetailsModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3.5 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-3.5 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-gray-500 font-medium">
             Superadmin Access: Full View
           </div>

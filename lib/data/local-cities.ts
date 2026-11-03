@@ -91,3 +91,38 @@ export const deleteCityFromLocal = async (state: string, cityName: string): Prom
     return false;
   }
 };
+
+// Update a city name in Supabase (admin only - server-side)
+export const updateCityInLocal = async (
+  state: string,
+  oldCityName: string,
+  newCityName: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    let authHeader = '';
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeader = `Bearer ${session.access_token}`;
+      }
+    }
+
+    const response = await fetch('/api/cities/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader && { 'Authorization': authHeader }),
+      },
+      body: JSON.stringify({ state, oldCityName, newCityName }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { success: false, error: data.error || 'Failed to update city' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating city:', error);
+    return { success: false, error: error.message || 'Failed to update city' };
+  }
+};

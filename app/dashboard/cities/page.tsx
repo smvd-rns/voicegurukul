@@ -1,98 +1,124 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Download, MapPin, ChevronDown, ChevronUp, X } from 'lucide-react';
-import { getCitiesFromLocal, getCitiesByStateFromLocal, addCityToLocal, deleteCityFromLocal } from '@/lib/data/local-cities';
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  AlertCircle,
+  CheckCircle,
+  Upload,
+  FileSpreadsheet,
+  Download,
+  MapPin,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Search,
+  Building2,
+  Globe,
+  Filter,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
+import {
+  getCitiesFromLocal,
+  addCityToLocal,
+  deleteCityFromLocal,
+  updateCityInLocal,
+} from '@/lib/data/local-cities';
 import { indianStates } from '@/lib/data/india-states';
-import { importAllIndianCities, importMappedCitiesOnly, getIndianCitiesCount, getCitiesPreview } from '@/lib/data/import-indian-cities';
-import { importAllCitiesFromTxt, getAllCitiesTxtCount } from '@/lib/data/import-all-cities-txt';
+import {
+  importAllIndianCities,
+  importMappedCitiesOnly,
+  getIndianCitiesCount,
+} from '@/lib/data/import-indian-cities';
+import {
+  importAllCitiesFromTxt,
+  getAllCitiesTxtCount,
+} from '@/lib/data/import-all-cities-txt';
 
 export default function CitiesPage() {
   const { userData } = useAuth();
   const router = useRouter();
+
   const [cities, setCities] = useState<Array<{ id: string; name: string; state: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // UI State
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importTab, setImportTab] = useState<'excel' | 'prepackaged'>('excel');
   const [filterState, setFilterState] = useState('');
-  const [newCity, setNewCity] = useState({
-    name: '',
-    state: '',
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'state'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Add City state
+  const [newCity, setNewCity] = useState({ name: '', state: '' });
+  const [addingCity, setAddingCity] = useState(false);
+
+  // Edit City Modal state
+  const [editingCity, setEditingCity] = useState<{ id: string; name: string; state: string } | null>(null);
+  const [editName, setEditName] = useState('');
+  const [updatingCity, setUpdatingCity] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // File Import state
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState({ processed: 0, total: 0, errors: 0 });
+
+  // Pre-packaged Datasets states
   const [importingFromWorldCities, setImportingFromWorldCities] = useState(false);
   const [availableCitiesCount, setAvailableCitiesCount] = useState<number | null>(null);
   const [importMode, setImportMode] = useState<'all' | 'mapped-only'>('mapped-only');
   const [importStats, setImportStats] = useState<{ mapped: number; unmapped: number }>({ mapped: 0, unmapped: 0 });
+
   const [importingFromTxt, setImportingFromTxt] = useState(false);
-  const [importingFromAllCityTxt, setImportingFromAllCityTxt] = useState(false);
   const [availableTxtCitiesCount, setAvailableTxtCitiesCount] = useState<number | null>(null);
-  const [showWorldCitiesImport, setShowWorldCitiesImport] = useState(true);
-  const [showTxtImport, setShowTxtImport] = useState(true);
-  const [txtImportCompleted, setTxtImportCompleted] = useState(false);
-  // Check localStorage for permanently removed import sections
-  const [hideWorldCitiesImport, setHideWorldCitiesImport] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('cities_import_world_cities_removed') === 'true';
-    }
-    return false;
-  });
-  const [hideTxtImport, setHideTxtImport] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('cities_import_txt_removed') === 'true';
-    }
-    return false;
-  });
-  const [hideAllCityTxtImport, setHideAllCityTxtImport] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('cities_import_all_city_txt_removed') === 'true';
-    }
-    return false;
-  });
+
+  const [importingFromAllCityTxt, setImportingFromAllCityTxt] = useState(false);
 
   const userRoles = userData?.role ? (Array.isArray(userData.role) ? userData.role : [userData.role]) : [];
-  // Only Super Admin (Role 8) can access this page
   const isSuperAdmin = userRoles.includes('super_admin') || userRoles.includes(8 as any);
 
   const loadCities = useCallback(async () => {
     setLoading(true);
     try {
-      // Load from local JSON file (no Firestore reads!)
       const citiesData = await getCitiesFromLocal();
+      const allCities: Array<{ id: string; name: string; state: string }> = [];
 
-      if (filterState) {
-        // Filter by state
-        const stateCities = citiesData[filterState] || [];
-        setCities(stateCities.map((name, index) => ({
-          id: `${filterState}-${name}-${index}`,
-          name,
-          state: filterState,
-        })));
-      } else {
-        // Get all cities
-        const allCities: any[] = [];
-        Object.keys(citiesData).forEach(state => {
-          citiesData[state].forEach((name, index) => {
-            allCities.push({
-              id: `${state}-${name}-${index}`,
-              name,
-              state,
-            });
+      Object.keys(citiesData).forEach((state) => {
+        citiesData[state].forEach((name, index) => {
+          allCities.push({
+            id: `${state}-${name}-${index}`,
+            name,
+            state,
           });
         });
-        setCities(allCities);
-      }
-    } catch (error) {
-      console.error('Error loading cities:', error);
+      });
+
+      setCities(allCities);
+    } catch (err) {
+      console.error('Error loading cities:', err);
+      setError('Failed to load cities');
     } finally {
       setLoading(false);
     }
-  }, [filterState]);
+  }, []);
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -100,50 +126,174 @@ export default function CitiesPage() {
       return;
     }
     loadCities();
-    // Load available cities count from world_cities_full.js
-    getIndianCitiesCount().then(count => setAvailableCitiesCount(count));
-    // Load available cities count from all-cities.json
-    getAllCitiesTxtCount().then(count => setAvailableTxtCitiesCount(count));
+    getIndianCitiesCount().then((count) => setAvailableCitiesCount(count));
+    getAllCitiesTxtCount().then((count) => setAvailableTxtCitiesCount(count));
   }, [isSuperAdmin, router, loadCities]);
 
+  // Reset pagination when search, filter, or sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterState, searchQuery, sortField, sortOrder, pageSize]);
+
+  // Toggle sorting helper
+  const handleSort = (field: 'name' | 'state') => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Derived Metrics
+  const metrics = useMemo(() => {
+    const totalCities = cities.length;
+    const statesWithCities = new Set(cities.map((c) => c.state));
+    const statesCount = statesWithCities.size;
+
+    // Calculate state with most cities
+    const countsByState: Record<string, number> = {};
+    cities.forEach((c) => {
+      countsByState[c.state] = (countsByState[c.state] || 0) + 1;
+    });
+
+    let topStateName = 'None';
+    let topStateCount = 0;
+    Object.entries(countsByState).forEach(([st, cnt]) => {
+      if (cnt > topStateCount) {
+        topStateCount = cnt;
+        topStateName = st;
+      }
+    });
+
+    return {
+      totalCities,
+      statesCount,
+      topStateName,
+      topStateCount,
+      countsByState,
+    };
+  }, [cities]);
+
+  // Filtered & Sorted Cities
+  const filteredCities = useMemo(() => {
+    const filtered = cities.filter((city) => {
+      const matchesState = filterState ? city.state === filterState : true;
+      const matchesSearch = searchQuery
+        ? city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          city.state.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+      return matchesState && matchesSearch;
+    });
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      if (sortField === 'name') {
+        const diff = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        if (diff !== 0) return sortOrder === 'asc' ? diff : -diff;
+        return a.state.localeCompare(b.state);
+      } else {
+        const diff = a.state.localeCompare(b.state, undefined, { sensitivity: 'base' });
+        if (diff !== 0) return sortOrder === 'asc' ? diff : -diff;
+        return a.name.localeCompare(b.name);
+      }
+    });
+
+    return filtered;
+  }, [cities, filterState, searchQuery, sortField, sortOrder]);
+
+  // Paginated Cities
+  const paginatedCities = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCities.slice(start, start + pageSize);
+  }, [filteredCities, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredCities.length / pageSize) || 1;
+
+  // Add City Handler
   const handleAddCity = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCity.name || !newCity.state) {
+    if (!newCity.name.trim() || !newCity.state) {
       setError('City name and state are required');
       return;
     }
 
+    setAddingCity(true);
+    setError('');
+    setSuccess('');
+
     try {
-      // Add to local JSON file (no Firestore writes!)
-      const success = await addCityToLocal(newCity.state, newCity.name.trim());
-      if (success) {
-        setSuccess('City added successfully to local file');
+      const ok = await addCityToLocal(newCity.state, newCity.name.trim());
+      if (ok) {
+        setSuccess(`City "${newCity.name.trim()}" added to ${newCity.state} successfully`);
         setNewCity({ name: '', state: '' });
         setShowAddForm(false);
         loadCities();
       } else {
-        setError('Failed to add city');
+        setError('Failed to add city. It may already exist in this state.');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to add city');
+    } finally {
+      setAddingCity(false);
     }
   };
 
-  const handleDeleteCity = async (cityId: string) => {
-    if (!confirm('Are you sure you want to delete this city?')) return;
+  // Open Edit City Modal
+  const handleOpenEdit = (city: { id: string; name: string; state: string }) => {
+    setEditingCity(city);
+    setEditName(city.name);
+    setEditError('');
+  };
+
+  // Update City Handler
+  const handleUpdateCity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCity) return;
+
+    const trimmedNew = editName.trim();
+    if (!trimmedNew) {
+      setEditError('City name cannot be empty');
+      return;
+    }
+
+    if (trimmedNew === editingCity.name) {
+      setEditingCity(null);
+      return;
+    }
+
+    setUpdatingCity(true);
+    setEditError('');
+    setError('');
+    setSuccess('');
 
     try {
-      // Find the city to get state and name
-      const city = cities.find(c => c.id === cityId);
-      if (!city) {
-        setError('City not found');
-        return;
+      const result = await updateCityInLocal(editingCity.state, editingCity.name, trimmedNew);
+      if (result.success) {
+        setSuccess(`Renamed "${editingCity.name}" to "${trimmedNew}" successfully.`);
+        setEditingCity(null);
+        loadCities();
+      } else {
+        setEditError(result.error || 'Failed to update city name');
       }
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update city');
+    } finally {
+      setUpdatingCity(false);
+    }
+  };
 
-      // Delete from local JSON file (no Firestore writes!)
-      const success = await deleteCityFromLocal(city.state, city.name);
-      if (success) {
-        setSuccess('City deleted successfully from local file');
+  // Delete City Handler
+  const handleDeleteCity = async (city: { id: string; name: string; state: string }) => {
+    if (!confirm(`Are you sure you want to delete "${city.name}" from ${city.state}?`)) return;
+
+    setError('');
+    setSuccess('');
+
+    try {
+      const ok = await deleteCityFromLocal(city.state, city.name);
+      if (ok) {
+        setSuccess(`City "${city.name}" deleted successfully.`);
         loadCities();
       } else {
         setError('Failed to delete city');
@@ -153,36 +303,40 @@ export default function CitiesPage() {
     }
   };
 
+  // Excel/CSV Parsing & Upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      if (
+        selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
         selectedFile.type === 'application/vnd.ms-excel' ||
         selectedFile.name.endsWith('.xlsx') ||
         selectedFile.name.endsWith('.xls') ||
-        selectedFile.name.endsWith('.csv')) {
+        selectedFile.name.endsWith('.csv')
+      ) {
         setFile(selectedFile);
         setError('');
       } else {
-        setError('Please select a valid Excel or CSV file');
+        setError('Please select a valid Excel or CSV file (.xlsx, .xls, .csv)');
         setFile(null);
       }
     }
   };
 
-  const parseExcel = async (file: File): Promise<any[]> => {
-    if (file.name.endsWith('.csv')) {
+  const parseExcel = async (f: File): Promise<any[]> => {
+    if (f.name.endsWith('.csv')) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           try {
             const text = e.target?.result as string;
             const lines = text.split('\n');
-            const headers = lines[0].split(',').map(h => h.trim());
-            const data = lines.slice(1)
-              .filter(line => line.trim())
-              .map(line => {
-                const values = line.split(',').map(v => v.trim());
+            const headers = lines[0].split(',').map((h) => h.trim());
+            const data = lines
+              .slice(1)
+              .filter((line) => line.trim())
+              .map((line) => {
+                const values = line.split(',').map((v) => v.trim());
                 const obj: any = {};
                 headers.forEach((header, index) => {
                   obj[header] = values[index] || '';
@@ -195,7 +349,7 @@ export default function CitiesPage() {
           }
         };
         reader.onerror = reject;
-        reader.readAsText(file);
+        reader.readAsText(f);
       });
     } else {
       return new Promise(async (resolve, reject) => {
@@ -214,7 +368,7 @@ export default function CitiesPage() {
             }
           };
           reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsArrayBuffer(file);
+          reader.readAsArrayBuffer(f);
         } catch (error) {
           reject(new Error('Failed to load Excel parser'));
         }
@@ -250,22 +404,20 @@ export default function CitiesPage() {
             continue;
           }
 
-          // Add to local JSON file (no Firestore!)
-          const success = await addCityToLocal(state, name);
-          if (success) {
+          const ok = await addCityToLocal(state, name);
+          if (ok) {
             processed++;
           } else {
-            errors++; // Might be duplicate or other issue
+            errors++;
           }
           setProgress({ processed, total: data.length, errors });
-        } catch (err: any) {
-          // City might already exist or other error, continue
+        } catch {
           errors++;
           setProgress({ processed, total: data.length, errors });
         }
       }
 
-      setSuccess(`Successfully imported ${processed} cities. ${errors} errors (may include duplicates).`);
+      setSuccess(`Import finished: ${processed} cities imported. ${errors} skipped or errored.`);
       setFile(null);
       loadCities();
 
@@ -278,15 +430,17 @@ export default function CitiesPage() {
     }
   };
 
+  // Pre-packaged dataset imports
   const handleImportFromWorldCities = async () => {
     const mode = importMode;
-    const confirmMessage = mode === 'mapped-only'
-      ? `This will import only cities that can be mapped to states (estimated: ~${Math.floor((availableCitiesCount || 0) * 0.3)} cities). Continue?`
-      : `This will process all ${availableCitiesCount || 0} cities. Cities with state mapping will be imported, others will be listed. Continue?`;
+    const confirmMessage =
+      mode === 'mapped-only'
+        ? `Import only cities matching existing states from world_cities_full.js (~${Math.floor(
+            (availableCitiesCount || 0) * 0.3
+          )} cities)?`
+        : `Process all ${availableCitiesCount || 0} cities from world_cities_full.js?`;
 
-    if (!confirm(confirmMessage)) {
-      return;
-    }
+    if (!confirm(confirmMessage)) return;
 
     setImportingFromWorldCities(true);
     setError('');
@@ -296,7 +450,6 @@ export default function CitiesPage() {
 
     try {
       let result;
-
       if (mode === 'mapped-only') {
         result = await importMappedCitiesOnly((current, total) => {
           setProgress({ processed: current, total, errors: 0 });
@@ -308,17 +461,13 @@ export default function CitiesPage() {
         });
       }
 
-      const successMsg = mode === 'mapped-only'
-        ? `✅ Import completed! Success: ${result.success}, Skipped: ${result.skipped}, Errors: ${result.errors}`
-        : `✅ Import completed! Success: ${result.success}, Unmapped: ${result.unmapped}, Skipped: ${result.skipped}, Errors: ${result.errors}`;
+      const successMsg =
+        mode === 'mapped-only'
+          ? `Import completed! Success: ${result.success}, Skipped: ${result.skipped}, Errors: ${result.errors}`
+          : `Import completed! Success: ${result.success}, Unmapped: ${result.unmapped}, Skipped: ${result.skipped}, Errors: ${result.errors}`;
 
       setSuccess(successMsg);
       loadCities();
-
-      // Show unmapped cities info if any
-      if (result.details.unmapped.length > 0 && mode === 'all') {
-        console.log('Unmapped cities (first 50):', result.details.unmapped.slice(0, 50));
-      }
     } catch (err: any) {
       setError(err.message || 'Failed to import cities from world_cities_full.js');
     } finally {
@@ -326,39 +475,8 @@ export default function CitiesPage() {
     }
   };
 
-  const handleImportFromAllCityTxt = async () => {
-    if (!confirm('This will import all cities from "all city.txt" file into the local cities JSON file. Continue?')) {
-      return;
-    }
-
-    setImportingFromAllCityTxt(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await fetch('/api/cities/import-all', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to import cities');
-      }
-
-      const result = await response.json();
-      setSuccess(`✅ Successfully imported cities from all city.txt! Added ${result.stats.totalCitiesAdded} cities across ${result.stats.statesUpdated} states.`);
-      loadCities();
-    } catch (err: any) {
-      setError(err.message || 'Failed to import cities from all city.txt');
-    } finally {
-      setImportingFromAllCityTxt(false);
-    }
-  };
-
   const handleImportFromTxt = async () => {
-    if (!confirm(`This will import ${availableTxtCitiesCount || 0} cities from all-cities.json. Continue?`)) {
-      return;
-    }
+    if (!confirm(`Import ${availableTxtCitiesCount || 0} cities from all-cities.json?`)) return;
 
     setImportingFromTxt(true);
     setError('');
@@ -370,8 +488,7 @@ export default function CitiesPage() {
         setProgress({ processed: current, total, errors: 0 });
       });
 
-      setSuccess(`✅ Import completed! Success: ${result.success}, Skipped: ${result.skipped}, Errors: ${result.errors}`);
-      setTxtImportCompleted(true);
+      setSuccess(`Import completed! Success: ${result.success}, Skipped: ${result.skipped}, Errors: ${result.errors}`);
       loadCities();
     } catch (err: any) {
       setError(err.message || 'Failed to import cities from all-cities.json');
@@ -380,364 +497,239 @@ export default function CitiesPage() {
     }
   };
 
+  const handleImportFromAllCityTxt = async () => {
+    if (!confirm('Import cities from "all city.txt" file into database?')) return;
+
+    setImportingFromAllCityTxt(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await fetch('/api/cities/import-all', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to import cities');
+      }
+
+      const result = await response.json();
+      setSuccess(`Successfully imported cities from all city.txt! Added ${result.stats.totalCitiesAdded} cities.`);
+      loadCities();
+    } catch (err: any) {
+      setError(err.message || 'Failed to import cities from all city.txt');
+    } finally {
+      setImportingFromAllCityTxt(false);
+    }
+  };
+
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[350px] space-y-3">
+        <div className="animate-spin rounded-full h-9 w-9 border-3 border-primary-200 border-t-primary-600"></div>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Loading Cities Data...</p>
+      </div>
+    );
   }
 
-  const filteredCities = filterState
-    ? cities.filter(c => c.state === filterState)
-    : cities;
-
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Cities Management</h1>
-          <p className="text-gray-600 mt-2">Add cities that are missing from the dropdown lists</p>
+    <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4 px-3 sm:px-6 py-3 sm:py-5 min-h-screen">
+      {/* Compact Modern Header */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-3 sm:p-4 text-white shadow-md shadow-indigo-900/10 overflow-hidden">
+        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="absolute left-1/3 -bottom-10 h-36 w-36 rounded-full bg-cyan-400/15 blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md shadow-xs flex-shrink-0">
+              <Building2 className="h-5 w-5 text-white stroke-[2.2px]" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-black tracking-tight leading-tight">Cities Management</h1>
+              <p className="text-[11px] text-blue-100 font-medium opacity-90">
+                Configure master city names and geographic mappings across Indian states
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowImportPanel((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                showImportPanel
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
+              }`}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span>Import Tools</span>
+              {showImportPanel ? <ChevronUp className="h-3.5 w-3.5 ml-0.5" /> : <ChevronDown className="h-3.5 w-3.5 ml-0.5" />}
+            </button>
+
+            <button
+              onClick={() => setShowAddForm((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-blue-700 rounded-xl text-xs font-black shadow-sm hover:shadow-md hover:bg-blue-50 transition-all active:scale-95"
+            >
+              <Plus className="h-4 w-4 stroke-[2.8px]" />
+              <span>Add City</span>
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          Add City
-        </button>
       </div>
 
+      {/* Notifications */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
-          <AlertCircle className="h-5 w-5 mr-2" />
-          {error}
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError('')} className="text-rose-500 hover:text-rose-700">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center">
-          <CheckCircle className="h-5 w-5 mr-2" />
-          {success}
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+            <span>{success}</span>
+          </div>
+          <button onClick={() => setSuccess('')} className="text-emerald-500 hover:text-emerald-700">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      {/* Import from world_cities_full.js - Only for Super Admin (Role 8) */}
-      {isSuperAdmin && availableCitiesCount !== null && availableCitiesCount > 0 && !hideWorldCitiesImport && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg shadow-lg p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center flex-1">
-              <MapPin className="h-6 w-6 text-blue-600 mr-3" />
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold text-blue-900">Import from world_cities_full.js</h2>
-                <p className="text-sm text-blue-700 mt-1">
-                  Import {availableCitiesCount.toLocaleString()} Indian cities with automatic state mapping
-                </p>
-              </div>
+      {/* Compact 4-Card Metrics Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        {/* Total Cities */}
+        <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/20 p-3 shadow-xs">
+          <div className="absolute -right-2 -top-2 h-12 w-12 rounded-full bg-blue-400/10 blur-lg" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 flex-shrink-0">
+              <Building2 className="h-4 w-4 stroke-[2.2px]" />
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowWorldCitiesImport(!showWorldCitiesImport)}
-                className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                title={showWorldCitiesImport ? 'Collapse' : 'Expand'}
-              >
-                {showWorldCitiesImport ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to remove this import section? It will be permanently removed and won\'t appear again.')) {
-                    setHideWorldCitiesImport(true);
-                    localStorage.setItem('cities_import_world_cities_removed', 'true');
-                  }
-                }}
-                className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                title="Remove this import section permanently"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {showWorldCitiesImport && (
-            <div className="space-y-4">
-              {/* Import Mode Selection */}
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Import Mode
-                </label>
-                <div className="flex space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="mapped-only"
-                      checked={importMode === 'mapped-only'}
-                      onChange={(e) => setImportMode(e.target.value as 'mapped-only' | 'all')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">
-                      <strong>Mapped Only</strong> - Import only cities that can be matched to states (Recommended)
-                    </span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="all"
-                      checked={importMode === 'all'}
-                      onChange={(e) => setImportMode(e.target.value as 'mapped-only' | 'all')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">
-                      <strong>All Cities</strong> - Process all cities (unmapped will be listed)
-                    </span>
-                  </label>
-                </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate">Total Cities</div>
+              <div className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                {metrics.totalCities.toLocaleString()}
               </div>
-
-              {/* Progress Display */}
-              {importingFromWorldCities && progress.total > 0 && (
-                <div className="bg-white rounded-lg p-4 border border-blue-200">
-                  <div className="flex justify-between text-sm text-blue-600 mb-2">
-                    <span>Processing: {progress.processed.toLocaleString()} / {progress.total.toLocaleString()}</span>
-                    {importMode === 'all' && (
-                      <span>Mapped: {importStats.mapped} | Unmapped: {importStats.unmapped}</span>
-                    )}
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-3">
-                    <div
-                      className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${(progress.processed / progress.total) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-blue-500 mt-2">
-                    This may take several minutes. Please don&apos;t close the browser.
-                  </p>
-                </div>
-              )}
-
-              {/* Import Button */}
-              <button
-                onClick={handleImportFromWorldCities}
-                disabled={importingFromWorldCities}
-                className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg"
-              >
-                {importingFromWorldCities ? (
-                  <>
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                    Importing Cities...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-6 w-6 mr-3" />
-                    Import {availableCitiesCount.toLocaleString()} Cities from world_cities_full.js
-                  </>
-                )}
-              </button>
-
-              <div className="bg-blue-100 rounded-lg p-3 text-sm text-blue-800">
-                <p className="font-semibold mb-1">ℹ️ How it works:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>Cities are automatically matched to states based on existing state-city mappings</li>
-                  <li>Only cities with state matches are imported (ensures data quality)</li>
-                  <li>Duplicate cities are automatically skipped</li>
-                  <li>Import happens in batches to avoid overwhelming the system</li>
-                </ul>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Import from all-cities.json - Only for Super Admin (Role 8) */}
-      {isSuperAdmin && availableTxtCitiesCount !== null && availableTxtCitiesCount > 0 && !hideTxtImport && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg shadow-lg p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center flex-1">
-              <MapPin className="h-6 w-6 text-green-600 mr-3" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold text-green-900">Import from all-cities.json</h2>
-                  {txtImportCompleted && (
-                    <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">Completed</span>
-                  )}
-                </div>
-                <p className="text-sm text-green-700 mt-1">
-                  {txtImportCompleted
-                    ? 'Cities have been imported successfully. You can hide this section if no longer needed.'
-                    : `Import ${availableTxtCitiesCount.toLocaleString()} cities with state mapping`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowTxtImport(!showTxtImport)}
-                className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                title={showTxtImport ? 'Collapse' : 'Expand'}
-              >
-                {showTxtImport ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to remove this import section? It will be permanently removed and won\'t appear again.')) {
-                    setHideTxtImport(true);
-                    localStorage.setItem('cities_import_txt_removed', 'true');
-                  }
-                }}
-                className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                title="Remove this import section permanently"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {/* Progress Display */}
-            {importingFromTxt && progress.total > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-green-200">
-                <div className="flex justify-between text-sm text-green-600 mb-2">
-                  <span>Processing: {progress.processed.toLocaleString()} / {progress.total.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-green-200 rounded-full h-3">
-                  <div
-                    className="bg-green-600 h-3 rounded-full transition-all duration-300"
-                    style={{ width: `${(progress.processed / progress.total) * 100}%` }}
-                  />
-                </div>
-                <p className="text-xs text-green-500 mt-2">
-                  This may take several minutes. Please don&apos;t close the browser.
-                </p>
-              </div>
-            )}
-
-            {/* Import Button */}
-            <button
-              onClick={handleImportFromTxt}
-              disabled={importingFromTxt}
-              className="w-full bg-green-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg"
-            >
-              {importingFromTxt ? (
-                <>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                  Importing Cities...
-                </>
-              ) : (
-                <>
-                  <Download className="h-6 w-6 mr-3" />
-                  Import {availableTxtCitiesCount.toLocaleString()} Cities from all-cities.json
-                </>
-              )}
-            </button>
-
-            <div className="bg-green-100 rounded-lg p-3 text-sm text-green-800">
-              <p className="font-semibold mb-1">ℹ️ How it works:</p>
-              <ul className="list-disc list-inside space-y-1 text-xs">
-                <li>All cities are already mapped to their respective states</li>
-                <li>Duplicate cities are automatically skipped</li>
-                <li>Import happens in batches to avoid overwhelming the system</li>
-              </ul>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Import from all city.txt - Only for Super Admin (Role 8) */}
-      {isSuperAdmin && !hideAllCityTxtImport && (
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg shadow-lg p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center flex-1">
-              <MapPin className="h-6 w-6 text-purple-600 mr-3" />
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold text-purple-900">Import from all city.txt</h2>
-                <p className="text-sm text-purple-700 mt-1">
-                  Import all cities from the &quot;all city.txt&quot; file into the local cities JSON file
-                </p>
+        {/* States Covered */}
+        <div className="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/20 p-3 shadow-xs">
+          <div className="absolute -right-2 -top-2 h-12 w-12 rounded-full bg-emerald-400/10 blur-lg" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 flex-shrink-0">
+              <Globe className="h-4 w-4 stroke-[2.2px]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate">States Covered</div>
+              <div className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                {metrics.statesCount} <span className="text-xs font-semibold text-gray-400">/ {indianStates.length}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Filtered Cities */}
+        <div className="relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/20 p-3 shadow-xs">
+          <div className="absolute -right-2 -top-2 h-12 w-12 rounded-full bg-amber-400/10 blur-lg" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600 flex-shrink-0">
+              <Filter className="h-4 w-4 stroke-[2.2px]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate">
+                {filterState ? filterState : 'Filtered View'}
+              </div>
+              <div className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                {filteredCities.length.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Top State */}
+        <div className="relative overflow-hidden rounded-xl border border-purple-100 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/20 p-3 shadow-xs">
+          <div className="absolute -right-2 -top-2 h-12 w-12 rounded-full bg-purple-400/10 blur-lg" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 text-purple-600 flex-shrink-0">
+              <Layers className="h-4 w-4 stroke-[2.2px]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate">Highest Density</div>
+              <div className="text-sm sm:text-base font-black text-gray-900 leading-tight truncate">
+                {metrics.topStateName}{' '}
+                <span className="text-xs font-bold text-purple-600">({metrics.topStateCount})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add City Modal / Inline Form */}
+      {showAddForm && (
+        <div className="rounded-xl border border-emerald-200 bg-white p-3.5 sm:p-4 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+            <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="h-4 w-4 text-emerald-600" />
+              Add New City
+            </h2>
             <button
               onClick={() => {
-                if (confirm('Are you sure you want to remove this import section? It will be permanently removed and won\'t appear again.')) {
-                  setHideAllCityTxtImport(true);
-                  localStorage.setItem('cities_import_all_city_txt_removed', 'true');
-                }
+                setShowAddForm(false);
+                setNewCity({ name: '', state: '' });
               }}
-              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-              title="Remove this import section permanently"
+              className="text-gray-400 hover:text-gray-600 text-xs font-bold"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={handleImportFromAllCityTxt}
-              disabled={importingFromAllCityTxt}
-              className="w-full bg-purple-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg"
-            >
-              {importingFromAllCityTxt ? (
-                <>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                  Importing Cities...
-                </>
-              ) : (
-                <>
-                  <Download className="h-6 w-6 mr-3" />
-                  Import Cities from all city.txt
-                </>
-              )}
-            </button>
-
-            <div className="bg-purple-100 rounded-lg p-3 text-sm text-purple-800">
-              <p className="font-semibold mb-1">ℹ️ How it works:</p>
-              <ul className="list-disc list-inside space-y-1 text-xs">
-                <li>Reads cities from &quot;all city.txt&quot; file (JSON format)</li>
-                <li>Merges with existing cities in local JSON file</li>
-                <li>Automatically removes duplicates</li>
-                <li>Organizes cities by state</li>
-                <li>No Firestore operations - all data stored locally</li>
-              </ul>
+          <form onSubmit={handleAddCity} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                State <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={newCity.state}
+                onChange={(e) => setNewCity({ ...newCity, state: e.target.value })}
+                required
+                className="w-full px-3 py-2 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+              >
+                <option value="">Select State</option>
+                {indianStates.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Add City Form */}
-      {showAddForm && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Add New City</h2>
-          <form onSubmit={handleAddCity} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={newCity.state}
-                  onChange={(e) => setNewCity({ ...newCity, state: e.target.value })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 bg-white"
-                >
-                  <option value="">Select State</option>
-                  {indianStates.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newCity.name}
-                  onChange={(e) => setNewCity({ ...newCity, name: e.target.value })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 bg-white"
-                  placeholder="Enter city name"
-                />
-              </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                City Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={newCity.name}
+                onChange={(e) => setNewCity({ ...newCity, name: e.target.value })}
+                required
+                placeholder="e.g. Pune, Navi Mumbai"
+                className="w-full px-3 py-2 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white"
+              />
             </div>
-            <div className="flex space-x-2">
+
+            <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                disabled={addingCity}
+                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50"
               >
-                Add City
+                {addingCity ? 'Adding...' : 'Save City'}
               </button>
               <button
                 type="button"
@@ -745,7 +737,7 @@ export default function CitiesPage() {
                   setShowAddForm(false);
                   setNewCity({ name: '', state: '' });
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold"
               >
                 Cancel
               </button>
@@ -754,17 +746,46 @@ export default function CitiesPage() {
         </div>
       )}
 
-      {/* Import Section - Only for Super Admin (Role 8) */}
-      {isSuperAdmin && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Import Cities from Excel/CSV</h2>
-          <div className="space-y-4">
+      {/* Consolidated Bulk Import Section (Collapsible) */}
+      {showImportPanel && (
+        <div className="rounded-2xl border border-indigo-100 bg-white p-3.5 sm:p-4 shadow-sm animate-in fade-in duration-200 space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
             <div>
-              <label htmlFor="excel-file-cities" className="block text-sm font-medium text-gray-700 mb-2">
-                Select Excel or CSV File
-              </label>
-              <div className="flex items-center space-x-4">
-                <label className="flex-1 cursor-pointer">
+              <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Database className="h-4 w-4 text-indigo-600" />
+                Bulk Import Tools
+              </h2>
+              <p className="text-[11px] text-gray-500">
+                Consolidated data sources for bulk loading and migrating city registries
+              </p>
+            </div>
+
+            {/* Sub-tabs for Import Methods */}
+            <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60 w-fit text-xs font-bold">
+              <button
+                onClick={() => setImportTab('excel')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  importTab === 'excel' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                Excel / CSV File
+              </button>
+              <button
+                onClick={() => setImportTab('prepackaged')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  importTab === 'prepackaged' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                Pre-Packaged Datasets
+              </button>
+            </div>
+          </div>
+
+          {/* TAB 1: Excel / CSV File Import */}
+          {importTab === 'excel' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+                <label className="cursor-pointer">
                   <input
                     id="excel-file-cities"
                     type="file"
@@ -772,132 +793,495 @@ export default function CitiesPage() {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <div className="flex items-center justify-center px-6 py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 transition-colors">
-                    <FileSpreadsheet className="h-8 w-8 text-gray-400 mr-3" />
-                    <span className="text-gray-600">
-                      {file ? file.name : 'Click to select Excel or CSV file'}
+                  <div className="flex items-center justify-center gap-2.5 px-4 py-3 border-2 border-dashed border-gray-200 hover:border-indigo-400 bg-gray-50/50 hover:bg-indigo-50/20 rounded-xl transition-all">
+                    <FileSpreadsheet className="h-5 w-5 text-indigo-500 flex-shrink-0" />
+                    <span className="text-xs font-medium text-gray-700 truncate">
+                      {file ? file.name : 'Click to select Excel (.xlsx, .xls) or CSV file'}
                     </span>
                   </div>
                 </label>
-              </div>
-            </div>
 
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-700 mb-2">File should have the following columns:</p>
-              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-                <li><strong>name</strong> or <strong>city</strong> (required) - City name</li>
-                <li><strong>state</strong> (required) - State name (must match exactly with state names in the system)</li>
-              </ul>
-              <p className="text-xs text-gray-500 mt-2">
-                You can download comprehensive city datasets from: simplemaps.com/data/in-cities or use any CSV/Excel with city and state columns
-              </p>
-            </div>
-
-            {importing && progress.total > 0 && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Processing: {progress.processed} / {progress.total}</span>
-                  <span>Errors: {progress.errors}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-primary-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(progress.processed / progress.total) * 100}%` }}
-                  />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleImport}
+                    disabled={!file || importing}
+                    className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    {importing ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Importing ({progress.processed}/{progress.total})...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>Upload & Import</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-            )}
 
-            <button
-              onClick={handleImport}
-              disabled={!file || importing}
-              className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {importing ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-5 w-5 mr-2" />
-                  Import Cities
-                </>
-              )}
-            </button>
-          </div>
+              <div className="rounded-lg bg-gray-50 p-2.5 text-[11px] text-gray-600 border border-gray-200/60 flex items-center justify-between">
+                <span>
+                  Expected columns: <strong>name</strong> (or <strong>city</strong>) and <strong>state</strong>. Duplicates are automatically skipped.
+                </span>
+                <span className="text-[10px] font-semibold text-gray-400">SimpleMaps / Custom CSV</span>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: Pre-Packaged Seed Datasets */}
+          {importTab === 'prepackaged' && (
+            <div className="space-y-2.5">
+              <div className="rounded-lg bg-amber-50/60 border border-amber-200/60 p-2 text-[11px] text-amber-800">
+                ℹ️ <strong>Why are there multiple datasets?</strong> These were built during development as initial
+                database bootstrap seeds. You can run any of them on-demand:
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {/* Dataset 1: world_cities_full.js */}
+                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-blue-900">world_cities_full.js</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded">
+                        {availableCitiesCount ? `${availableCitiesCount.toLocaleString()} Cities` : 'Available'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-blue-700 mt-1">Automatic state mapping against master dictionary.</p>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-3 text-[10px] font-semibold text-blue-900">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          value="mapped-only"
+                          checked={importMode === 'mapped-only'}
+                          onChange={() => setImportMode('mapped-only')}
+                          className="text-blue-600 h-3 w-3"
+                        />
+                        <span>Mapped Only</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          value="all"
+                          checked={importMode === 'all'}
+                          onChange={() => setImportMode('all')}
+                          className="text-blue-600 h-3 w-3"
+                        />
+                        <span>All</span>
+                      </label>
+                    </div>
+
+                    <button
+                      onClick={handleImportFromWorldCities}
+                      disabled={importingFromWorldCities}
+                      className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      {importingFromWorldCities ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Download className="h-3 w-3" />
+                      )}
+                      <span>Run Import</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dataset 2: all-cities.json */}
+                <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-emerald-900">all-cities.json</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded">
+                        {availableTxtCitiesCount ? `${availableTxtCitiesCount.toLocaleString()} Cities` : 'Available'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-emerald-700 mt-1">
+                      Pre-organized JSON structure mapped by state name.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleImportFromTxt}
+                    disabled={importingFromTxt}
+                    className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1 mt-auto"
+                  >
+                    {importingFromTxt ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                    <span>Run Import</span>
+                  </button>
+                </div>
+
+                {/* Dataset 3: all city.txt */}
+                <div className="p-3 rounded-xl border border-purple-200 bg-purple-50/40 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-purple-900">all city.txt</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded">
+                        Raw Text
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-purple-700 mt-1">
+                      Server API parsing from local flat text city dump.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleImportFromAllCityTxt}
+                    disabled={importingFromAllCityTxt}
+                    className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1 mt-auto"
+                  >
+                    {importingFromAllCityTxt ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Download className="h-3 w-3" />
+                    )}
+                    <span>Run Import</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Filter */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Filter by State
-        </label>
-        <select
-          value={filterState}
-          onChange={(e) => setFilterState(e.target.value)}
-          className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 bg-white"
-        >
-          <option value="">All States</option>
-          {indianStates.map(state => (
-            <option key={state} value={state}>{state}</option>
-          ))}
-        </select>
+      {/* Filter, Search & Sorting Bar */}
+      <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="h-3.5 w-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by city name or state..."
+              className="w-full pl-8 pr-7 py-1.5 text-xs font-medium border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50/50 hover:bg-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* State Filter */}
+          <div className="w-full sm:w-56">
+            <select
+              value={filterState}
+              onChange={(e) => setFilterState(e.target.value)}
+              className="w-full py-1.5 px-2.5 text-xs font-semibold border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50/50 hover:bg-white text-gray-800"
+            >
+              <option value="">All States ({metrics.totalCities})</option>
+              {indianStates.map((state) => {
+                const count = metrics.countsByState[state] || 0;
+                return (
+                  <option key={state} value={state}>
+                    {state} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Sort By Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <div className="relative w-full sm:w-44">
+              <select
+                value={`${sortField}-${sortOrder}`}
+                onChange={(e) => {
+                  const [field, order] = e.target.value.split('-') as ['name' | 'state', 'asc' | 'desc'];
+                  setSortField(field);
+                  setSortOrder(order);
+                }}
+                className="w-full py-1.5 pl-2.5 pr-7 text-xs font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50/50 hover:bg-white text-gray-800 cursor-pointer"
+              >
+                <option value="name-asc">City (A → Z)</option>
+                <option value="name-desc">City (Z → A)</option>
+                <option value="state-asc">State (A → Z)</option>
+                <option value="state-desc">State (Z → A)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Right side controls: Page Size & Reset */}
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
+          {(filterState || searchQuery || sortField !== 'name' || sortOrder !== 'asc') && (
+            <button
+              onClick={() => {
+                setFilterState('');
+                setSearchQuery('');
+                setSortField('name');
+                setSortOrder('asc');
+              }}
+              className="text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1"
+            >
+              <X className="h-3 w-3" />
+              Reset
+            </button>
+          )}
+
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
+            <span>Show:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="text-[11px] font-bold py-1 px-1.5 border border-gray-200 rounded-md bg-white text-gray-700"
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* Cities List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">All Cities ({filteredCities.length})</h2>
-        </div>
+      {/* Cities Table */}
+      <div className="rounded-xl border border-gray-200/80 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50/80">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  City Name
+                <th className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-gray-500 w-16">
+                  #
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  State
+                <th
+                  onClick={() => handleSort('name')}
+                  className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-gray-500 cursor-pointer hover:text-blue-600 transition-colors select-none group"
+                  title="Click to sort by City Name"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'name' ? 'text-blue-700' : ''}>City Name</span>
+                    {sortField === 'name' ? (
+                      sortOrder === 'asc' ? (
+                        <ArrowUp className="h-3 w-3 text-blue-600" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3 text-blue-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-gray-300 group-hover:text-gray-500" />
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  onClick={() => handleSort('state')}
+                  className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-gray-500 cursor-pointer hover:text-blue-600 transition-colors select-none group"
+                  title="Click to sort by State Name"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'state' ? 'text-blue-700' : ''}>State</span>
+                    {sortField === 'state' ? (
+                      sortOrder === 'asc' ? (
+                        <ArrowUp className="h-3 w-3 text-blue-600" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3 text-blue-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-gray-300 group-hover:text-gray-500" />
+                    )}
+                  </div>
+                </th>
+                <th className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-gray-500 w-28">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCities.length === 0 ? (
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {paginatedCities.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
-                    {filterState ? `No cities found for ${filterState}` : 'No cities found. Add cities manually.'}
+                  <td colSpan={4} className="px-4 py-8 text-center text-xs text-gray-400">
+                    {searchQuery || filterState
+                      ? 'No cities match your current search/filter.'
+                      : 'No cities found. Use "+ Add City" or "Import Tools" to add cities.'}
                   </td>
                 </tr>
               ) : (
-                filteredCities.map((city) => (
-                  <tr key={city.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {city.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {city.state}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => handleDeleteCity(city.id)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                paginatedCities.map((city, idx) => {
+                  const globalIndex = (currentPage - 1) * pageSize + idx + 1;
+                  return (
+                    <tr key={city.id} className="hover:bg-blue-50/30 transition-colors group">
+                      <td className="px-3.5 py-2 whitespace-nowrap text-xs font-semibold text-gray-400">
+                        {globalIndex}
+                      </td>
+                      <td className="px-3.5 py-2 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                            {city.name}
+                          </span>
+                          <button
+                            onClick={() => handleOpenEdit(city)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all p-0.5 rounded"
+                            title="Edit City Name"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-3.5 py-2 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 text-gray-700">
+                          {city.state}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-2 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEdit(city)}
+                            className="p-1 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Edit City Name"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCity(city)}
+                            className="p-1 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Delete City"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Compact Pagination Bar */}
+        {filteredCities.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-3.5 py-2.5 bg-gray-50/60 border-t border-gray-100">
+            <span className="text-[11px] text-gray-500 font-medium">
+              Showing{' '}
+              <strong className="text-gray-900">
+                {(currentPage - 1) * pageSize + 1}
+              </strong>{' '}
+              to{' '}
+              <strong className="text-gray-900">
+                {Math.min(currentPage * pageSize, filteredCities.length)}
+              </strong>{' '}
+              of <strong className="text-gray-900">{filteredCities.length.toLocaleString()}</strong> cities
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="p-1 rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                title="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <span className="px-2.5 py-0.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-lg">
+                {currentPage} / {totalPages}
+              </span>
+
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="p-1 rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                title="Next Page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Edit City Modal */}
+      {editingCity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 sm:p-5 shadow-2xl border border-gray-100 space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                  <Pencil className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900">Edit City Name</h3>
+                  <p className="text-[10px] text-gray-500">Update city name in {editingCity.state}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingCity(null)}
+                className="text-gray-400 hover:text-gray-600 rounded-lg p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateCity} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={editingCity.state}
+                  disabled
+                  className="w-full px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  City Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  autoFocus
+                  placeholder="Enter updated city name"
+                  className="w-full px-3 py-2 text-xs font-semibold border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingCity(null)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingCity || !editName.trim()}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {updatingCity ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
