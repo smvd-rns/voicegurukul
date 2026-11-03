@@ -589,12 +589,28 @@ export async function POST(req: NextRequest) {
 
     // Attach user_profile_details when fetching from users table
     if (table === 'users' && resultData.length > 0) {
-      for (const row of resultData) {
+      const userIds = resultData.map((row: any) => String(row.id)).filter(Boolean);
+      if (userIds.length > 0) {
         try {
-          const profileRes = await query('SELECT * FROM user_profile_details WHERE user_id = $1', [row.id]);
-          row.user_profile_details = profileRes.rows;
+          const profileRes = await query(
+            'SELECT * FROM user_profile_details WHERE user_id::text = ANY($1::text[])',
+            [userIds]
+          );
+          const profileMap = new Map<string, any[]>();
+          for (const p of profileRes.rows) {
+            const uId = String(p.user_id);
+            const list = profileMap.get(uId) || [];
+            list.push(p);
+            profileMap.set(uId, list);
+          }
+          for (const row of resultData) {
+            row.user_profile_details = profileMap.get(String(row.id)) || [];
+          }
         } catch (e) {
-          row.user_profile_details = [];
+          console.error('Error batch attaching profile details:', e);
+          for (const row of resultData) {
+            row.user_profile_details = [];
+          }
         }
       }
     }

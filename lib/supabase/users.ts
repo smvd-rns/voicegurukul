@@ -6,6 +6,12 @@ import { enrichHierarchyData } from './hierarchy-helpers';
 
 export const attachUserProfileDetails = async (users: any[]) => {
   if (!users || users.length === 0 || !supabase) return users;
+
+  // If user_profile_details is already attached (e.g. via db-proxy batch lookup), skip redundant query
+  if (users.every((u: any) => u.user_profile_details !== undefined)) {
+    return users;
+  }
+
   const userIds = Array.from(new Set(users.map((u: any) => u.id).filter(Boolean)));
   if (userIds.length === 0) return users;
 

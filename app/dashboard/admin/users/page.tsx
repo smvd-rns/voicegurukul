@@ -94,24 +94,18 @@ export default function UsersPage() {
       if (userData) {
         setLoading(true);
         try {
-          let fetchedUsers: User[] = [];
           const currentUserRoles = Array.isArray(userData.role) ? userData.role : [userData.role];
+          const isSuperAdmin = currentUserRoles.includes('super_admin') || currentUserRoles.includes(8);
 
-          // 1. Fetch Users logic
-          if (currentUserRoles.includes('super_admin') || currentUserRoles.includes(8)) {
-            fetchedUsers = await getUsersByHierarchy({});
-          } else {
-            fetchedUsers = [];
-          }
-          setUsers(fetchedUsers);
-
-          // 2. Fetch Filter Options from DB
-          const [temples, centers, counselors] = await Promise.all([
+          // Parallelize fetching users, temples, centers, and counselors
+          const [fetchedUsers, temples, centers, counselors] = await Promise.all([
+            isSuperAdmin ? getUsersByHierarchy({}) : Promise.resolve([]),
             getTemplesFromSupabase(),
             getCentersFromSupabase(),
             getCounselorsFromSupabase()
           ]);
 
+          setUsers(fetchedUsers);
           setTemplesList(temples);
           setCentersList(centers);
           setCounselorsList(counselors);
