@@ -101,6 +101,9 @@ export async function POST(request: Request) {
         }
 
     const isSuperAdmin = numRoles.includes(8) || roles.includes('super_admin');
+    if (!isSuperAdmin && !project_manager_id) {
+      return NextResponse.json({ error: 'Project Manager is required for creating a center' }, { status: 400 });
+    }
     if (!isSuperAdmin) {
       const { checkRateLimit } = await import('@/lib/rate-limit');
       const rateLimit = await checkRateLimit(request, userId, {

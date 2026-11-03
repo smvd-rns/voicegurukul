@@ -266,9 +266,13 @@ export default function ManagingDirectorDashboard() {
     };
 
     const ADMIN_ROLES = [8, 11, 12, 13, 21];
-    const isMD = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).some(r =>
+    const userRoleList = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+    const isMD = userRoleList.some(r =>
         ADMIN_ROLES.includes(Number(r)) ||
         ['managing_director', 'super_admin', 'director', 'central_voice_manager', 'youth_preacher'].includes(String(r))
+    );
+    const isSuperAdmin = userRoleList.some(r =>
+        Number(r) === 8 || String(r) === 'super_admin'
     );
 
     // Temple Details State
@@ -621,8 +625,9 @@ export default function ManagingDirectorDashboard() {
 
             setIsSubmitting(true);
 
-            if (!newCenter.projectManagerId) {
+            if (!isSuperAdmin && !newCenter.projectManagerId) {
                 toast.error('Project Manager is required');
+                setIsSubmitting(false);
                 return;
             }
 
@@ -642,8 +647,8 @@ export default function ManagingDirectorDashboard() {
                     temple_name: templeName,
                     state: templeState,
                     city: templeCity,
-                    project_manager_id: newCenter.projectManagerId,
-                    project_manager_name: selectedPM?.name,
+                    project_manager_id: newCenter.projectManagerId || null,
+                    project_manager_name: selectedPM?.name || null,
                     project_advisor_id: newCenter.projectAdvisorId,
                     project_advisor_name: selectedPA?.name,
                     acting_manager_id: newCenter.actingManagerId,
@@ -732,8 +737,8 @@ export default function ManagingDirectorDashboard() {
                     temple_name: templeName,
                     state: templeState,
                     city: templeCity,
-                    project_manager_id: editingCenter.projectManagerId,
-                    project_manager_name: selectedPM?.name,
+                    project_manager_id: editingCenter.projectManagerId || null,
+                    project_manager_name: selectedPM?.name || null,
                     project_advisor_id: editingCenter.projectAdvisorId,
                     project_advisor_name: selectedPA?.name,
                     acting_manager_id: editingCenter.actingManagerId,
@@ -3198,7 +3203,7 @@ export default function ManagingDirectorDashboard() {
                                     </h3>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Manager *</label>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Manager {isSuperAdmin ? <span className="text-gray-400 font-normal normal-case">(Optional for Super Admin)</span> : <span className="text-red-500">*</span>}</label>
                                         <SearchableSelect
                                             options={users.map(u => ({ id: u.id, name: u.name, email: u.email }))}
                                             value={newCenter.projectManagerId}
@@ -3454,7 +3459,7 @@ export default function ManagingDirectorDashboard() {
                                     </h3>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Manager *</label>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Manager {isSuperAdmin ? <span className="text-gray-400 font-normal normal-case">(Optional for Super Admin)</span> : <span className="text-red-500">*</span>}</label>
                                         <SearchableSelect
                                             options={users.map(u => ({ id: u.id, name: u.name, email: u.email }))}
                                             value={editingCenter.projectManagerId}

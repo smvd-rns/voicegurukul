@@ -319,6 +319,12 @@ export default function CentersPage() {
       return;
     }
 
+    if (!isSuperAdmin && !newCenter.projectManagerId) {
+      setError('Project Manager is required');
+      toast.error('Project Manager is required');
+      return;
+    }
+
     const selectedTemple = temples.find(t => t.id === newCenter.templeId);
     if (!selectedTemple) {
       setError('Invalid temple selected');
@@ -334,7 +340,7 @@ export default function CentersPage() {
       contact: newCenter.contact || null,
       temple_id: newCenter.templeId,
       temple_name: selectedTemple.name,
-      project_manager_id: newCenter.projectManagerId,
+      project_manager_id: newCenter.projectManagerId || undefined,
       project_advisor_id: newCenter.projectAdvisorId,
       acting_manager_id: newCenter.actingManagerId
     });
@@ -360,8 +366,8 @@ export default function CentersPage() {
       contact: newCenter.contact || undefined,
       temple_id: newCenter.templeId,
       temple_name: selectedTemple.name,
-      project_manager_id: newCenter.projectManagerId,
-      project_manager_name: selectedPM?.name,
+      project_manager_id: newCenter.projectManagerId || undefined,
+      project_manager_name: selectedPM?.name || undefined,
       project_advisor_id: newCenter.projectAdvisorId,
       project_advisor_name: selectedPA?.name,
       acting_manager_id: newCenter.actingManagerId,
@@ -912,7 +918,7 @@ export default function CentersPage() {
                     {/* Project Manager - Mandatory */}
                     <div className="md:col-span-2">
                       <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">
-                        Project Manager <span className="text-red-500">*</span>
+                        Project Manager {isSuperAdmin ? <span className="text-gray-400 font-normal normal-case">(Optional)</span> : <span className="text-red-500">*</span>}
                       </label>
                       <SearchableSelect
                         options={users}
