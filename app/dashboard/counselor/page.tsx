@@ -112,8 +112,19 @@ export default function CounselorPage() {
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
 
+  const PROFILE_ASHRAMS = [
+    'Student and Not decided',
+    'Working and Not Decided',
+    'Gauranga Sabha',
+    'Nityananda Sabha',
+    'Brahmachari',
+    'Grihastha',
+    'Staying Single (Not planning to marry)',
+  ] as const;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCampFilter, setSelectedCampFilter] = useState<string>('all');
+  const [selectedAshram, setSelectedAshram] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'name-asc' | 'name-desc' | 'soul-desc' | 'soul-asc' | 'reports-desc'>('name-asc');
   const [selectedLetter, setSelectedLetter] = useState<string>('all');
   const [showChart, setShowChart] = useState(true);
@@ -741,6 +752,24 @@ export default function CounselorPage() {
           matchesLetter = firstChar === selectedLetter.toUpperCase();
         }
 
+        // Ashram filter logic
+        let matchesAshram = true;
+        if (selectedAshram !== 'all') {
+          const sAshram = (student.hierarchy?.ashram || (student as any).ashram || '').trim().toLowerCase();
+          const sel = selectedAshram.trim().toLowerCase();
+          if (sel === 'student and not decided') {
+            matchesAshram = sAshram === 'student and not decided' || sAshram === 'student';
+          } else if (sel === 'working and not decided') {
+            matchesAshram = sAshram === 'working and not decided' || sAshram === 'working';
+          } else if (sel === 'brahmachari') {
+            matchesAshram = sAshram.includes('brahmachari');
+          } else if (sel === 'grihastha') {
+            matchesAshram = sAshram.includes('grihastha');
+          } else {
+            matchesAshram = sAshram === sel || sAshram.includes(sel);
+          }
+        }
+
         // Camp filter logic
         let matchesCamp = true;
         if (selectedCampFilter !== 'all') {
@@ -783,7 +812,7 @@ export default function CounselorPage() {
           }
         }
 
-        return matchesSearch && matchesLetter && matchesCamp;
+        return matchesSearch && matchesLetter && matchesAshram && matchesCamp;
       })
       .sort((a, b) => {
         if (sortOrder === 'name-asc') {
@@ -799,7 +828,38 @@ export default function CounselorPage() {
         }
         return (a.name || '').localeCompare(b.name || '');
       });
-  }, [students, searchTerm, selectedLetter, selectedCampFilter, sortOrder]);
+  }, [students, searchTerm, selectedLetter, selectedCampFilter, selectedAshram, sortOrder]);
+
+  // Dynamic statistics recomputed as per active filters
+  const isFiltered = selectedLetter !== 'all' || searchTerm !== '' || selectedCampFilter !== 'all' || selectedAshram !== 'all';
+
+  const dynamicStats = useMemo(() => {
+    const total = filteredStudents.length;
+    const activeReporters = filteredStudents.filter(s => (s.totalReports || 0) > 0).length;
+    const totalReportsSum = filteredStudents.reduce((acc, s) => acc + (s.totalReports || 0), 0);
+    const avgReports = total > 0 ? (totalReportsSum / total).toFixed(1) : '0';
+
+    const soulSum = filteredStudents.reduce((acc, s) => acc + (s.avgSoulPercent || 0), 0);
+    const avgSoul = total > 0 ? Math.round(soulSum / total) : 0;
+    const excellentCount = filteredStudents.filter(s => (s.avgSoulPercent || 0) >= 80).length;
+
+    const bodySum = filteredStudents.reduce((acc, s) => acc + (s.avgBodyPercent || 0), 0);
+    const avgBody = total > 0 ? Math.round(bodySum / total) : 0;
+
+    const needsGuidanceCount = filteredStudents.filter(s => (s.totalReports || 0) === 0 || (s.avgSoulPercent || 0) < 50).length;
+    const zeroReportsCount = filteredStudents.filter(s => (s.totalReports || 0) === 0).length;
+
+    return {
+      total,
+      activeReporters,
+      avgReports,
+      avgSoul,
+      excellentCount,
+      avgBody,
+      needsGuidanceCount,
+      zeroReportsCount
+    };
+  }, [filteredStudents]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
@@ -901,7 +961,7 @@ export default function CounselorPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCampFilter, itemsPerPage, sortOrder, selectedLetter]);
+  }, [searchTerm, selectedCampFilter, selectedAshram, itemsPerPage, sortOrder, selectedLetter]);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-orange-50 via-gray-50 to-amber-50/30 py-4 sm:py-6 px-2 sm:px-4">
@@ -1074,12 +1134,91 @@ export default function CounselorPage() {
         <div className="min-h-[400px]">
           {activeTab === 'sadhana-reports' && (
             <div className="space-y-3 sm:space-y-3.5 animate-in fade-in duration-300">
+              {/* Dynamic Filter-Responsive Stat Cards - Values update live with filters */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+                {/* Card 1: Total / Filtered Devotees */}
+                <div className="relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all group">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-10 rounded-full blur-lg -mr-2 -mt-2" />
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-2xs">
+                      <Users className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      {dynamicStats.total}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                    {isFiltered ? 'Filtered Devotees' : 'Total Devotees'}
+                  </div>
+                  <p className="text-[9.5px] font-bold text-indigo-600 truncate mt-0.5">
+                    {isFiltered ? `of ${students.length} in sangha` : 'In your care'}
+                  </p>
+                </div>
+
+                {/* Card 2: Active Consistency */}
+                <div className="relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all group">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 opacity-10 rounded-full blur-lg -mr-2 -mt-2" />
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-2xs">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      {dynamicStats.activeReporters}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                    Active Reporters
+                  </div>
+                  <p className="text-[9.5px] font-bold text-emerald-600 truncate mt-0.5">
+                    Avg {dynamicStats.avgReports} reports / devotee
+                  </p>
+                </div>
+
+                {/* Card 3: Avg Soul Score */}
+                <div className="relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all group">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 opacity-10 rounded-full blur-lg -mr-2 -mt-2" />
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-2xs">
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      {dynamicStats.avgSoul}%
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                    Avg Soul Score
+                  </div>
+                  <p className="text-[9.5px] font-bold text-amber-600 truncate mt-0.5">
+                    {dynamicStats.excellentCount} devotees ≥ 80%
+                  </p>
+                </div>
+
+                {/* Card 4: Needs Guidance */}
+                <div className="relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all group">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-500 to-pink-600 opacity-10 rounded-full blur-lg -mr-2 -mt-2" />
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-2xs">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      {dynamicStats.needsGuidanceCount}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                    Needs Attention
+                  </div>
+                  <p className="text-[9.5px] font-bold text-rose-600 truncate mt-0.5">
+                    {dynamicStats.zeroReportsCount} without reports
+                  </p>
+                </div>
+              </div>
+
               {/* Controls Panel: Compact, High-Contrast & Colorful */}
               <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
-                {/* Row 1: Date Range, Run Analysis, Search, Camp & Sort */}
+                {/* Row 1: Search, Official Ashram Filter, Camp, A-Z Sort & Date Range */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center">
                   {/* Search Devotee */}
-                  <div className="relative group sm:col-span-2 lg:col-span-4">
+                  <div className="relative group sm:col-span-2 lg:col-span-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                     <input
                       type="text"
@@ -1098,24 +1237,19 @@ export default function CounselorPage() {
                     )}
                   </div>
 
-                  {/* A-Z Sort Dropdown */}
-                  <div className="relative sm:col-span-1 lg:col-span-3">
+                  {/* Official Ashram Filter Dropdown */}
+                  <div className="relative sm:col-span-1 lg:col-span-2">
                     <select
-                      value={sortOrder}
-                      onChange={(e) => setSortOrder(e.target.value as any)}
+                      value={selectedAshram}
+                      onChange={(e) => setSelectedAshram(e.target.value)}
                       className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
                     >
-                      <option value="name-asc">🔤 Name: A to Z</option>
-                      <option value="name-desc">🔤 Name: Z to A</option>
-                      <option value="soul-desc">✨ Soul %: High to Low</option>
-                      <option value="soul-asc">📉 Soul %: Low to High</option>
-                      <option value="reports-desc">📋 Most Reports</option>
+                      <option value="all">All Ashrams</option>
+                      {PROFILE_ASHRAMS.map((ash) => (
+                        <option key={ash} value={ash}>{ash}</option>
+                      ))}
                     </select>
-                    {sortOrder === 'name-desc' ? (
-                      <ArrowUpZA className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-600 pointer-events-none" />
-                    ) : (
-                      <ArrowDownAZ className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-600 pointer-events-none" />
-                    )}
+                    <Compass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-500 pointer-events-none" />
                   </div>
 
                   {/* Camp Filter Dropdown */}
@@ -1131,6 +1265,26 @@ export default function CounselorPage() {
                       ))}
                     </select>
                     <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+                  </div>
+
+                  {/* A-Z Sort Dropdown */}
+                  <div className="relative sm:col-span-1 lg:col-span-2">
+                    <select
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(e.target.value as any)}
+                      className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                    >
+                      <option value="name-asc">🔤 Name: A to Z</option>
+                      <option value="name-desc">🔤 Name: Z to A</option>
+                      <option value="soul-desc">✨ Soul % High</option>
+                      <option value="soul-asc">📉 Soul % Low</option>
+                      <option value="reports-desc">📋 Most Reports</option>
+                    </select>
+                    {sortOrder === 'name-desc' ? (
+                      <ArrowUpZA className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-600 pointer-events-none" />
+                    ) : (
+                      <ArrowDownAZ className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-600 pointer-events-none" />
+                    )}
                   </div>
 
                   {/* Compact Date Range & Run Analysis */}
@@ -1198,12 +1352,13 @@ export default function CounselorPage() {
                       Showing <strong className="text-orange-700 font-extrabold">{filteredStudents.length}</strong> of {students.length}
                     </span>
 
-                    {(selectedLetter !== 'all' || searchTerm || selectedCampFilter !== 'all') && (
+                    {isFiltered && (
                       <button
                         onClick={() => {
                           setSelectedLetter('all');
                           setSearchTerm('');
                           setSelectedCampFilter('all');
+                          setSelectedAshram('all');
                         }}
                         className="flex items-center gap-1 px-2 py-1 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer shadow-2xs"
                         title="Reset all filters"
@@ -1334,6 +1489,11 @@ export default function CounselorPage() {
                               {selectedLetter !== 'all' && (
                                 <span className="ml-1.5 px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-extrabold">
                                   Letter: {selectedLetter.toUpperCase()}
+                                </span>
+                              )}
+                              {selectedAshram !== 'all' && (
+                                <span className="ml-1.5 px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-900 font-extrabold">
+                                  Ashram: {selectedAshram}
                                 </span>
                               )}
                             </p>
