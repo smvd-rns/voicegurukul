@@ -83,7 +83,7 @@ export async function POST(request: Request) {
         // 1. Fetch existing center details to check for role changes
         const { data: existingCenter, error: fetchCenterError } = await supabase
             .from('centers')
-            .select('project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, preaching_coordinator_id, morning_program_in_charge_id, mentor_id, frontliner_id, mentor_ids, frontliner_ids, preaching_coordinator_ids, preaching_coordinator_names, grihstha_counselor_ids, grihstha_counselor_names, easy_incharge_ids, easy_incharge_names, prerna_incharge_ids, prerna_incharge_names, accountant_id, kitchen_head_id, study_in_charge_id')
+            .select('name, project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, preaching_coordinator_id, morning_program_in_charge_id, mentor_id, frontliner_id, mentor_ids, frontliner_ids, preaching_coordinator_ids, preaching_coordinator_names, grihstha_counselor_ids, grihstha_counselor_names, easy_incharge_ids, easy_incharge_names, prerna_incharge_ids, prerna_incharge_names, accountant_id, kitchen_head_id, study_in_charge_id')
             .eq('id', id)
             .single();
 
@@ -143,6 +143,64 @@ export async function POST(request: Request) {
 
         if (updateError) {
             throw updateError;
+        }
+
+        // 2b. Automatic Cascade: If center name changed, update all user profiles & registrations referencing old name
+        const oldCenterName = existingCenter?.name?.trim();
+        const newCenterName = name?.trim();
+        if (oldCenterName && newCenterName && oldCenterName !== newCenterName) {
+            try {
+                const { query: rawQuery } = await import('@/lib/db');
+                // A. Update users flat columns
+                await rawQuery(
+                    `UPDATE users SET current_center = $1, updated_at = NOW() WHERE current_center = $2`,
+                    [newCenterName, oldCenterName]
+                );
+                await rawQuery(
+                    `UPDATE users SET parent_center = $1, updated_at = NOW() WHERE parent_center = $2`,
+                    [newCenterName, oldCenterName]
+                );
+
+                // B. Update users hierarchy JSONB fields (currentCenter, parentCenter, center)
+                await rawQuery(`
+                    UPDATE users
+                    SET hierarchy = jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                COALESCE(hierarchy, '{}'::jsonb),
+                                '{currentCenter}',
+                                CASE WHEN hierarchy->>'currentCenter' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'currentCenter', 'null'::jsonb) END
+                            ),
+                            '{parentCenter}',
+                            CASE WHEN hierarchy->>'parentCenter' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'parentCenter', 'null'::jsonb) END
+                        ),
+                        '{center}',
+                        CASE WHEN hierarchy->>'center' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'center', 'null'::jsonb) END
+                    ),
+                    updated_at = NOW()
+                    WHERE hierarchy->>'currentCenter' = $2 
+                       OR hierarchy->>'parentCenter' = $2 
+                       OR hierarchy->>'center' = $2
+                `, [newCenterName, oldCenterName]);
+
+                // C. Update camp_registrations referencing the old center name
+                try {
+                    await rawQuery(
+                        `UPDATE camp_registrations SET current_center = $1 WHERE current_center = $2`,
+                        [newCenterName, oldCenterName]
+                    );
+                    await rawQuery(
+                        `UPDATE camp_registrations SET voice_name = $1 WHERE voice_name = $2`,
+                        [newCenterName, oldCenterName]
+                    );
+                } catch (campErr) {
+                    console.warn('[Center Rename Cascade] camp_registrations update notice:', campErr);
+                }
+
+                console.log(`[Center Rename Cascade] Successfully updated users and registrations from "${oldCenterName}" to "${newCenterName}"`);
+            } catch (cascadeErr) {
+                console.error('[Center Rename Cascade] Error cascading center rename:', cascadeErr);
+            }
         }
 
         // 3. Sync Roles

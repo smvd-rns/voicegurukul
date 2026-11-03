@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         // 1. Fetch current temple state for role cleanup
         const { data: oldTemple } = await authenticatedClient
             .from('temples')
-            .select('managing_director_id, director_id, central_voice_manager_id, yp_id')
+            .select('name, managing_director_id, director_id, central_voice_manager_id, yp_id')
             .eq('id', id)
             .single();
 
@@ -77,6 +77,85 @@ export async function POST(request: Request) {
             .eq('id', id);
 
         if (updateError) throw updateError;
+
+        // 2b. Automatic Cascade: If temple name changed, update all centers, users, counselors, and registrations
+        const oldTempleName = oldTemple?.name?.trim();
+        const newTempleName = name?.trim();
+        if (oldTempleName && newTempleName && oldTempleName !== newTempleName) {
+            try {
+                const { query: rawQuery } = await import('@/lib/db');
+
+                // A. Cascade to centers table
+                await rawQuery(
+                    `UPDATE centers SET temple_name = $1, updated_at = NOW() WHERE temple_name = $2`,
+                    [newTempleName, oldTempleName]
+                );
+
+                // B. Cascade to users current_temple & parent_temple
+                await rawQuery(
+                    `UPDATE users SET current_temple = $1, updated_at = NOW() WHERE current_temple = $2`,
+                    [newTempleName, oldTempleName]
+                );
+                await rawQuery(
+                    `UPDATE users SET parent_temple = $1, updated_at = NOW() WHERE parent_temple = $2`,
+                    [newTempleName, oldTempleName]
+                );
+
+                // C. Cascade to users hierarchy JSONB fields (currentTemple, parentTemple, temple)
+                await rawQuery(`
+                    UPDATE users
+                    SET hierarchy = jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                COALESCE(hierarchy, '{}'::jsonb),
+                                '{currentTemple}',
+                                CASE WHEN hierarchy->>'currentTemple' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'currentTemple', 'null'::jsonb) END
+                            ),
+                            '{parentTemple}',
+                            CASE WHEN hierarchy->>'parentTemple' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'parentTemple', 'null'::jsonb) END
+                        ),
+                        '{temple}',
+                        CASE WHEN hierarchy->>'temple' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'temple', 'null'::jsonb) END
+                    ),
+                    updated_at = NOW()
+                    WHERE hierarchy->>'currentTemple' = $2 
+                       OR hierarchy->>'parentTemple' = $2 
+                       OR hierarchy->>'temple' = $2
+                `, [newTempleName, oldTempleName]);
+
+                // D. Cascade to counselors table
+                try {
+                    await rawQuery(
+                        `UPDATE counselors SET current_temple = $1, updated_at = NOW() WHERE current_temple = $2`,
+                        [newTempleName, oldTempleName]
+                    );
+                    await rawQuery(
+                        `UPDATE counselors SET parent_temple = $1, updated_at = NOW() WHERE parent_temple = $2`,
+                        [newTempleName, oldTempleName]
+                    );
+                } catch (counselorErr) {
+                    console.warn('[Temple Rename Cascade] counselors update notice:', counselorErr);
+                }
+
+                // E. Cascade to camp_registrations table
+                try {
+                    await rawQuery(
+                        `UPDATE camp_registrations SET current_temple = $1 WHERE current_temple = $2`,
+                        [newTempleName, oldTempleName]
+                    );
+                    await rawQuery(
+                        `UPDATE camp_registrations SET parent_temple = $1 WHERE parent_temple = $2`,
+                        [newTempleName, oldTempleName]
+                    );
+                } catch (campErr) {
+                    console.warn('[Temple Rename Cascade] camp_registrations update notice:', campErr);
+                }
+
+                console.log(`[Temple Rename Cascade] Successfully cascaded rename from "${oldTempleName}" to "${newTempleName}"`);
+            } catch (cascadeErr) {
+                console.error('[Temple Rename Cascade] Error cascading temple rename:', cascadeErr);
+            }
+        }
 
         // 3. Handle Role Changes (Grant & Revoke)
         const roleConfigs = [

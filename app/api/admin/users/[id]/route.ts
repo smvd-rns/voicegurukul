@@ -219,6 +219,54 @@ export async function PATCH(
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
+        // Automatic Cascade: If counselor user's name or initiated name changed, cascade to counselors table and assigned devotees
+        if (name !== undefined || initiatedName !== undefined) {
+            const updatedUser = updateRes.rows[0];
+            const newDisplayName = (updatedUser.initiated_name || updatedUser.name || '').trim();
+            if (newDisplayName) {
+                try {
+                    const isCounselor = await dbQuery(
+                        `SELECT id FROM counselors WHERE user_id = $1 OR email = $2 LIMIT 1`,
+                        [targetUserId, updatedUser.email || '']
+                    );
+                    if (isCounselor.rowCount && isCounselor.rowCount > 0) {
+                        // 1. Update counselors table
+                        await dbQuery(
+                            `UPDATE counselors SET name = $1, updated_at = NOW() WHERE user_id = $2 OR email = $3`,
+                            [newDisplayName, targetUserId, updatedUser.email || '']
+                        );
+                        // 2. Cascade to devotees with this counselor assigned
+                        await dbQuery(
+                            `UPDATE users SET counselor = $1, updated_at = NOW() WHERE counselor_id = $2`,
+                            [newDisplayName, targetUserId]
+                        );
+                        await dbQuery(`
+                            UPDATE users
+                            SET hierarchy = jsonb_set(
+                                COALESCE(hierarchy, '{}'::jsonb),
+                                '{counselor}',
+                                to_jsonb($1::text)
+                            ),
+                            updated_at = NOW()
+                            WHERE counselor_id = $2 OR hierarchy->>'counselorId' = $2
+                        `, [newDisplayName, targetUserId]);
+                        // 3. Cascade to camp_registrations
+                        try {
+                            await dbQuery(
+                                `UPDATE camp_registrations SET counselor_name = $1 WHERE counselor_id = $2`,
+                                [newDisplayName, targetUserId]
+                            );
+                        } catch (campErr) {
+                            // ignore if counselor_id not on camp_registrations
+                        }
+                        console.log(`[Counselor Rename Cascade] Successfully updated counselor name to "${newDisplayName}" for user ${targetUserId}`);
+                    }
+                } catch (counselorErr) {
+                    console.warn('[Counselor Rename Cascade] Notice:', counselorErr);
+                }
+            }
+        }
+
         return NextResponse.json({ success: true, user: updateRes.rows[0] });
     } catch (error: any) {
         console.error('Error in patch user API:', error);
