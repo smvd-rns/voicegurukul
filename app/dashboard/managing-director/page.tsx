@@ -1587,15 +1587,15 @@ export default function ManagingDirectorDashboard() {
 
             {/* Premium Header / Command Center */}
             <div className="relative z-10">
-                <div className="bg-white/70 backdrop-blur-xl border-b border-white/20 sticky top-0 z-40">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 sm:p-3 bg-gradient-to-br from-primary-500 to-blue-600 rounded-2xl shadow-lg shadow-primary-200 text-white flex-shrink-0">
-                                    <Shield className="h-6 w-6 stroke-[2.5px]" />
+                <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl shadow-md text-white flex-shrink-0">
+                                    <Shield className="h-5 w-5 stroke-[2.5px]" />
                                 </div>
                                 <div>
-                                    <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight leading-tight">Administration</h1>
+                                    <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight">Managing Director</h1>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                                         {assignedTemples.length > 1 ? (
@@ -1605,7 +1605,7 @@ export default function ManagingDirectorDashboard() {
                                                     const temple = assignedTemples.find(t => t.id === e.target.value);
                                                     if (temple) setSelectedTemple(temple);
                                                 }}
-                                                className="text-xs font-black text-primary-600 bg-transparent border-none focus:ring-0 cursor-pointer uppercase tracking-widest p-0 pr-6"
+                                                className="text-xs font-black text-indigo-600 bg-transparent border-none focus:ring-0 cursor-pointer uppercase tracking-widest p-0 pr-6"
                                             >
                                                 {assignedTemples.map(t => (
                                                     <option key={t.id} value={t.id}>{t.name}</option>
@@ -1621,7 +1621,7 @@ export default function ManagingDirectorDashboard() {
                             </div>
 
                             {/* Tab Switcher - Pill Design */}
-                            <div className="flex bg-gray-100/80 p-1 rounded-2xl border border-gray-200/50 backdrop-blur-sm shadow-inner overflow-x-auto no-scrollbar scroll-smooth">
+                            <div className="flex bg-gray-100/90 p-1 rounded-xl border border-gray-200/60 backdrop-blur-sm overflow-x-auto no-scrollbar scroll-smooth">
                                 <div className="flex min-w-max sm:min-w-0 p-0.5 gap-1">
                                     {(['centers', 'user-management', 'approvals', 'registrations'] as const).map(tab => {
                                         const isActive = activeTab === tab;
@@ -1629,9 +1629,9 @@ export default function ManagingDirectorDashboard() {
                                             <button
                                                 key={tab}
                                                 onClick={() => handleTabChange(tab)}
-                                                className={`relative px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${isActive
-                                                    ? 'bg-white text-primary-600 shadow-md transform scale-[1.02]'
-                                                    : 'text-gray-500 hover:text-gray-900 hover:bg-white/30'
+                                                className={`relative px-3 sm:px-3.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 whitespace-nowrap ${isActive
+                                                    ? 'bg-white text-indigo-700 shadow-sm font-black'
+                                                    : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
                                                     }`}
                                             >
                                                 {tab === 'user-management' ? 'Devotee Management' : tab === 'registrations' ? 'New Dev Approval' : tab === 'approvals' ? 'Profile Approval' : tab}
@@ -1644,60 +1644,72 @@ export default function ManagingDirectorDashboard() {
                     </div>
                 </div>
 
-                {/* Stats Section */}
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+                {/* Stats Section - Compact & Colorful */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {/* Active Centers */}
                     <div
                         onClick={() => handleTabChange('centers')}
-                        className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
+                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-blue-300 cursor-pointer"
                     >
-                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-blue-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
-                        <div className="p-3 bg-blue-50 text-blue-600 w-fit rounded-2xl mb-3 group-hover:rotate-12 transition-transform">
-                            <Building2 className="h-5 w-5 stroke-[2.5px]" />
+                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-blue-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Active Centers</div>
+                                <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-blue-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                    {stats.loading ? '' : stats.centers}
+                                </div>
+                            </div>
                         </div>
-                        <div className={`text-2xl font-black text-gray-900 ${stats.loading ? 'animate-pulse bg-gray-200 h-8 w-16 rounded' : ''}`}>
-                            {stats.loading ? '' : stats.centers}
-                        </div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Centers</div>
                     </div>
 
+                    {/* Total Devotees */}
                     <div
                         onClick={() => handleTabChange('user-management')}
-                        className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
+                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-emerald-300 cursor-pointer"
                     >
-                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
-                        <div className="p-3 bg-emerald-50 text-emerald-600 w-fit rounded-2xl mb-3 group-hover:rotate-12 transition-transform">
-                            <Users className="h-5 w-5 stroke-[2.5px]" />
+                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-emerald-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                                <Users className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Total Devotees</div>
+                                <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                    {stats.loading ? '' : stats.devotees}
+                                </div>
+                            </div>
                         </div>
-                        <div className={`text-2xl font-black text-gray-900 ${stats.loading ? 'animate-pulse bg-gray-200 h-8 w-16 rounded' : ''}`}>
-                            {stats.loading ? '' : stats.devotees}
-                        </div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Devotees</div>
                     </div>
 
+                    {/* Pending Profiles */}
                     <div
                         onClick={() => handleTabChange('approvals')}
-                        className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex flex-col"
+                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-amber-300 cursor-pointer flex flex-col justify-between"
                     >
-                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
-                        <div className="flex items-center justify-between mb-3 relative z-10">
-                            <div className="p-3 bg-amber-50 text-amber-600 w-fit rounded-2xl group-hover:rotate-12 transition-transform">
-                                <History className="h-5 w-5 stroke-[2.5px]" />
+                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-amber-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                                    <History className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Pending Profiles</div>
+                                    <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-amber-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                        {stats.loading ? '' : stats.pendingProfiles}
+                                    </div>
+                                </div>
                             </div>
                             {stats.pendingBreakdown.length > 1 && (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100/50 rounded-full border border-amber-200/50">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                    <span className="text-[9px] font-black text-amber-700 uppercase tracking-tight">Multi-Temple</span>
-                                </div>
+                                <span className="text-[8px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full flex-shrink-0">Multi</span>
                             )}
                         </div>
-                        <div className={`text-2xl font-black text-gray-900 relative z-10 ${stats.loading ? 'animate-pulse bg-gray-200 h-8 w-16 rounded' : ''}`}>
-                            {stats.loading ? '' : stats.pendingProfiles}
-                        </div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 relative z-10">Pending Profile</div>
 
                         {!stats.loading && stats.pendingBreakdown.length > 0 && (
-                            <div className="mt-auto pt-3 border-t border-amber-100/50 space-y-2 relative z-10">
-                                {stats.pendingBreakdown.slice(0, 3).map((item, idx) => {
+                            <div className="mt-2 pt-2 border-t border-amber-100/60 space-y-1 relative z-10">
+                                {stats.pendingBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
                                         <div
@@ -1708,53 +1720,46 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('approvals');
                                             }}
-                                            className={`flex items-center justify-between p-2 rounded-xl transition-all ${isCurrent
-                                                ? 'bg-amber-100/30 border border-amber-200/30'
-                                                : 'hover:bg-amber-50/50 cursor-pointer active:scale-95'
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded-lg text-[9px] transition-all ${isCurrent
+                                                ? 'bg-amber-100/60 font-black text-amber-800'
+                                                : 'hover:bg-amber-100/40 font-semibold text-gray-600'
                                                 }`}
                                         >
-                                            <span className={`text-[10px] font-bold truncate max-w-[100px] ${isCurrent ? 'text-amber-700' : 'text-gray-500 italic'}`}>
-                                                {item.name}
-                                            </span>
-                                            <span className={`text-[10px] font-black ${isCurrent ? 'text-amber-800' : 'text-amber-600/70'}`}>
-                                                {item.count}
-                                            </span>
+                                            <span className="truncate max-w-[85px]">{item.name}</span>
+                                            <span className="font-black text-amber-700">{item.count}</span>
                                         </div>
                                     );
                                 })}
-                                {stats.pendingBreakdown.length > 3 && (
-                                    <div className="text-[8px] font-black text-center text-amber-400 uppercase tracking-widest pt-1">
-                                        + {stats.pendingBreakdown.length - 3} more temples
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
 
+                    {/* New Requests */}
                     <div
                         onClick={() => handleTabChange('registrations')}
-                        className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex flex-col"
+                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-rose-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-rose-300 cursor-pointer flex flex-col justify-between"
                     >
-                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-rose-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
-                        <div className="flex items-center justify-between mb-3 relative z-10">
-                            <div className="p-3 bg-rose-50 text-rose-600 w-fit rounded-2xl group-hover:rotate-12 transition-transform">
-                                <UserCheck className="h-5 w-5 stroke-[2.5px]" />
+                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-rose-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                                    <UserCheck className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">New Requests</div>
+                                    <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-rose-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                        {stats.loading ? '' : stats.newRequests}
+                                    </div>
+                                </div>
                             </div>
                             {stats.pendingRegBreakdown.length > 1 && (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100/50 rounded-full border border-emerald-200/50">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-[9px] font-black text-emerald-700 uppercase tracking-tight">Multi-Temple</span>
-                                </div>
+                                <span className="text-[8px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-full flex-shrink-0">Multi</span>
                             )}
                         </div>
-                        <div className={`text-2xl font-black text-gray-900 relative z-10 ${stats.loading ? 'animate-pulse bg-gray-200 h-8 w-16 rounded' : ''}`}>
-                            {stats.loading ? '' : stats.newRequests}
-                        </div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 relative z-10">New Requests</div>
 
                         {!stats.loading && stats.pendingRegBreakdown.length > 0 && (
-                            <div className="mt-auto pt-3 border-t border-rose-100/50 space-y-2 relative z-10">
-                                {stats.pendingRegBreakdown.slice(0, 3).map((item, idx) => {
+                            <div className="mt-2 pt-2 border-t border-rose-100/60 space-y-1 relative z-10">
+                                {stats.pendingRegBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
                                         <div
@@ -1765,50 +1770,42 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('registrations');
                                             }}
-                                            className={`flex items-center justify-between p-2 rounded-xl transition-all ${isCurrent
-                                                ? 'bg-emerald-100/30 border border-emerald-200/30'
-                                                : 'hover:bg-rose-50/50 cursor-pointer active:scale-95'
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded-lg text-[9px] transition-all ${isCurrent
+                                                ? 'bg-rose-100/60 font-black text-rose-800'
+                                                : 'hover:bg-rose-100/40 font-semibold text-gray-600'
                                                 }`}
                                         >
-                                            <span className={`text-[10px] font-bold truncate max-w-[100px] ${isCurrent ? 'text-emerald-700' : 'text-gray-500 italic'}`}>
-                                                {item.name}
-                                            </span>
-                                            <span className={`text-[10px] font-black ${isCurrent ? 'text-emerald-800' : 'text-rose-600/70'}`}>
-                                                {item.count}
-                                            </span>
+                                            <span className="truncate max-w-[85px]">{item.name}</span>
+                                            <span className="font-black text-rose-700">{item.count}</span>
                                         </div>
                                     );
                                 })}
-                                {stats.pendingRegBreakdown.length > 3 && (
-                                    <div className="text-[8px] font-black text-center text-rose-400 uppercase tracking-widest pt-1">
-                                        + {stats.pendingRegBreakdown.length - 3} more temples
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
 
+                    {/* Temple Sadhana Reports */}
                     <div
                         onClick={() => router.push('/dashboard/managing-director/sadhana-report')}
-                        className="bg-[#fffdfa]/90 backdrop-blur-xl border border-amber-200 p-5 rounded-[2rem] shadow-xl shadow-orange-100/50 group hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex flex-col justify-center"
+                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-purple-300 cursor-pointer"
                     >
-                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-700" />
-                        <div className="flex items-center justify-between mb-3 relative z-10 w-full">
-                            <div className="p-3 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-600 w-fit rounded-2xl group-hover:rotate-12 transition-transform shadow-sm">
-                                <Activity className="h-5 w-5 stroke-[2.5px]" />
+                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-purple-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                                <Activity className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
                             </div>
-                        </div>
-                        <div className="text-xl sm:text-2xl font-black text-gray-900 relative z-10 leading-none">
-                            Reports
-                        </div>
-                        <div className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mt-1.5 relative z-10 line-clamp-2">
-                            Temple Sadhana
+                            <div className="min-w-0">
+                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Temple Sadhana</div>
+                                <div className="text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-purple-700 transition-colors">
+                                    Reports
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
 
                 {/* Centers Tab */}
                 {activeTab === 'centers' && (
@@ -2590,9 +2587,9 @@ export default function ManagingDirectorDashboard() {
 
                 {/* Approvals Tab */}
                 {activeTab === 'approvals' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-6 bg-[#fffdfa]/80 backdrop-blur-md p-4 sm:p-6 rounded-[2rem] border border-amber-200 shadow-xl shadow-orange-100/20">
-                            <div className="flex bg-gray-200/50 p-1 rounded-2xl border border-gray-100/50 items-center overflow-x-auto no-scrollbar">
+                    <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-3 bg-white/80 backdrop-blur-md p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="flex bg-gray-100/90 p-1 rounded-xl border border-gray-200/60 items-center overflow-x-auto no-scrollbar">
                                 <div className="flex min-w-max gap-1">
                                     {(['pending', 'approved', 'rejected'] as const).map(status => {
                                         const isActive = approvalStatus === status;
@@ -2603,8 +2600,8 @@ export default function ManagingDirectorDashboard() {
                                                     setApprovalStatus(status);
                                                     setSelectedRequestIds([]);
                                                 }}
-                                                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${isActive
-                                                    ? 'bg-white text-gray-900 shadow-lg transform scale-[1.05]'
+                                                className={`px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 ${isActive
+                                                    ? 'bg-white text-gray-900 shadow-sm font-black'
                                                     : 'text-gray-400 hover:text-gray-600'
                                                     }`}
                                             >
@@ -2821,10 +2818,10 @@ export default function ManagingDirectorDashboard() {
 
                 {/* New User Registrations Tab */}
                 {activeTab === 'registrations' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-[#fffdfa]/80 backdrop-blur-md p-6 rounded-[2rem] border border-amber-200 shadow-xl shadow-orange-100/20">
-                            <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-                                <Users className="h-6 w-6 text-orange-600" />
+                    <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/80 backdrop-blur-md p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm">
+                            <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
+                                <Users className="h-5 w-5 text-rose-600" />
                                 New Dev Approvals
                             </h2>
 

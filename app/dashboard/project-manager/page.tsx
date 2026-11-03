@@ -1300,43 +1300,52 @@ export default function ProjectManagerDashboard() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 bg-gray-50/50 min-h-screen">
+        <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-4 px-3 sm:px-6 lg:px-8 py-3.5 sm:py-5 bg-gray-50/50 min-h-screen">
             {/* Header */}
-            <div className="relative rounded-3xl bg-gradient-to-r from-teal-600 to-emerald-600 p-6 sm:p-8 shadow-lg z-10 overflow-hidden">
-                {/* Decorative Circles */}
-                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 rounded-full bg-teal-400/20 blur-3xl pointer-events-none"></div>
+            <div className="relative rounded-2xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-3.5 sm:p-4 shadow-md shadow-teal-900/10 z-10 overflow-hidden">
+                {/* Decorative Accents */}
+                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
+                <div className="absolute bottom-0 left-1/3 -ml-16 -mb-16 w-48 h-48 rounded-full bg-cyan-400/20 blur-2xl pointer-events-none"></div>
 
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                    <div className="text-white w-full">
-                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Project Management</h1>
-                        <div className="mt-3 text-teal-100 flex flex-col sm:flex-row sm:items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+                    <div className="text-white flex flex-wrap items-center justify-between sm:justify-start gap-2.5 sm:gap-4 w-full sm:w-auto">
+                        <div className="flex items-center gap-2.5">
+                            <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl text-white shadow-xs">
+                                <Shield className="h-5 w-5 stroke-[2.5px]" />
+                            </div>
+                            <div>
+                                <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">Project Management</h1>
+                                <p className="text-[10px] sm:text-[11px] text-teal-100 font-medium opacity-90">Center Leadership & Spiritual Approvals</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 text-white text-xs font-bold shadow-xs">
+                                <MapPin className="h-3.5 w-3.5 text-teal-200 flex-shrink-0" />
                                 {managedCenters.length > 1 ? (
-                                    <div className="relative group w-full max-w-[200px]">
+                                    <div className="relative group max-w-[180px]">
                                         <select
                                             value={currentCenter}
                                             onChange={(e) => handleCenterChange(e.target.value)}
-                                            className="w-full appearance-none bg-white/10 hover:bg-white/20 text-white font-bold py-1.5 pl-3 pr-8 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 shadow-sm transition-all text-sm truncate border border-white/20"
+                                            className="appearance-none bg-transparent text-white font-bold pr-5 cursor-pointer focus:outline-none text-xs truncate"
                                             style={{ backgroundImage: 'none' }}
                                         >
                                             {managedCenters.map(c => (
-                                                <option key={c.id} value={c.name} className="text-gray-900 bg-white py-2">
-                                                    {c.name} {c.pendingCount > 0 ? `(${c.pendingCount})` : ''}
+                                                <option key={c.id} value={c.name} className="text-gray-900 bg-white">
+                                                    {c.name} {c.pendingCount > 0 ? '(' + c.pendingCount + ')' : ''}
                                                 </option>
                                             ))}
                                         </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-100 pointer-events-none" />
+                                        <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-teal-100 pointer-events-none" />
                                     </div>
                                 ) : (
-                                    <span className="font-semibold text-sm sm:text-base">{currentCenter}</span>
+                                    <span className="truncate">{currentCenter}</span>
                                 )}
                             </div>
 
                             {/* Role Badge */}
                             {managedCenters.find(c => c.name === currentCenter)?.userRole && (
-                                <span className="w-fit px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/20 uppercase tracking-wide">
+                                <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-white/20 backdrop-blur-md text-white border border-white/25 uppercase tracking-wider shadow-xs">
                                     {managedCenters.find(c => c.name === currentCenter)?.userRole}
                                 </span>
                             )}
@@ -1346,152 +1355,142 @@ export default function ProjectManagerDashboard() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 md:gap-3">
+                {/* 1. Total Devotees */}
                 <div
                     onClick={() => handleTabChange('user-management')}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-center cursor-pointer hover:shadow-md transition-all group"
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-blue-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 group-hover:bg-blue-100 transition-colors">
-                        <Users className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Devotees</span>
+                        <div className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Users className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Devotees</p>
-                        <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{stats.devotees}</p>
-                    </div>
+                    <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">{stats.devotees}</div>
+                    <div className="text-[10px] text-blue-600 font-semibold mt-1">Active Members</div>
                 </div>
+
+                {/* 2. Pending Requests */}
                 <div
                     onClick={() => {
                         setApprovalStatus('pending');
                         handleTabChange('approvals');
                     }}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-start cursor-pointer hover:shadow-md transition-all group"
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-orange-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 flex-shrink-0 group-hover:bg-orange-100 transition-colors">
-                        <FileCheck className="h-6 w-6 sm:h-7 sm:w-7 text-orange-600" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pending Requests</span>
+                        <div className="h-7 w-7 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <FileCheck className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div className="w-full">
-                        <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Pending Requests</p>
-                        {(() => {
-                            const activeCenters = managedCenters.filter(c => c.pendingCount > 0);
-                            if (activeCenters.length === 0) {
-                                return <p className="text-2xl sm:text-3xl font-bold text-gray-400">0</p>;
-                            }
-                            return (
-                                <div className="max-h-32 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                                    {activeCenters.map(c => (
-                                        <div key={c.id}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleCenterChange(c.name);
-                                                setApprovalStatus('pending');
-                                                handleTabChange('approvals');
-                                            }}
-                                            className="flex justify-between items-center text-[11px] sm:text-sm p-1.5 rounded hover:bg-orange-100/50 cursor-pointer transition-colors group/item">
-                                            <span className="font-medium text-gray-700 truncate mr-2 group-hover/item:text-orange-800">{c.name}</span>
-                                            <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px] font-bold">{c.pendingCount}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
+                    <div className="flex items-baseline justify-between gap-1">
+                        <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">
+                            {managedCenters.reduce((acc, c) => acc + (c.pendingCount || 0), 0)}
+                        </div>
+                        {managedCenters.filter(c => c.pendingCount > 0).length > 1 && (
+                            <span className="text-[9px] font-bold text-orange-600 bg-orange-100/70 px-1.5 py-0.5 rounded">
+                                {managedCenters.filter(c => c.pendingCount > 0).length} centers
+                            </span>
+                        )}
                     </div>
+                    <div className="text-[10px] text-orange-600 font-semibold mt-1 truncate">Profile Approvals</div>
                 </div>
 
+                {/* 3. New Registrations */}
                 <div
                     onClick={() => handleTabChange('registrations')}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-start cursor-pointer hover:shadow-md transition-all group"
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-emerald-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 flex-shrink-0 group-hover:bg-emerald-100 transition-colors">
-                        <Users className="h-6 w-6 sm:h-7 sm:w-7 text-emerald-600" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">New Registrations</span>
+                        <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <UserCheck className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div className="w-full">
-                        <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">New Registrations</p>
-                        {(() => {
-                            const activeCenters = managedCenters.filter(c => (c.pendingRegCount || 0) > 0);
-                            if (activeCenters.length === 0) {
-                                return <p className="text-2xl sm:text-3xl font-bold text-gray-400">0</p>;
-                            }
-                            return (
-                                <div className="max-h-32 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                                    {activeCenters.map(c => (
-                                        <div key={c.id}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleCenterChange(c.name);
-                                                handleTabChange('registrations');
-                                            }}
-                                            className="flex justify-between items-center text-[11px] sm:text-sm p-1.5 rounded hover:bg-emerald-100/50 cursor-pointer transition-colors group/item">
-                                            <span className="font-medium text-gray-700 truncate mr-2 group-hover/item:text-emerald-800">{c.name}</span>
-                                            <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-bold">{c.pendingRegCount}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
+                    <div className="flex items-baseline justify-between gap-1">
+                        <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">
+                            {managedCenters.reduce((acc, c) => acc + (c.pendingRegCount || 0), 0)}
+                        </div>
+                        {managedCenters.filter(c => (c.pendingRegCount || 0) > 0).length > 1 && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                                {managedCenters.filter(c => (c.pendingRegCount || 0) > 0).length} centers
+                            </span>
+                        )}
                     </div>
+                    <div className="text-[10px] text-emerald-600 font-semibold mt-1 truncate">New Devotees</div>
                 </div>
 
+                {/* 4. Service Team */}
                 <div
                     onClick={() => handleTabChange('service-team')}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-center cursor-pointer hover:shadow-md transition-all group"
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-teal-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 group-hover:bg-teal-100 transition-colors">
-                        <ShieldCheck className="h-6 w-6 sm:h-7 sm:w-7 text-teal-600" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Service Team</span>
+                        <div className="h-7 w-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <ShieldCheck className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Service Team</p>
-                        <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">Management roles</p>
-                    </div>
+                    <div className="text-base sm:text-lg font-black text-gray-900 leading-tight truncate">Management</div>
+                    <div className="text-[10px] text-purple-600 font-semibold mt-1">Center Service Team</div>
                 </div>
 
+                {/* 5. Spiritual Progress */}
                 <div
                     onClick={() => router.push('/dashboard/project-manager/sadhana-report')}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 flex items-center cursor-pointer hover:shadow-md transition-all group"
+                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
                 >
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-amber-50 rounded-2xl flex items-center justify-center mr-4 sm:mr-5 group-hover:bg-amber-100 transition-colors">
-                        <Activity className="h-6 w-6 sm:h-7 sm:w-7 text-amber-600" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-rose-500 to-pink-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Spiritual Progress</span>
+                        <div className="h-7 w-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Activity className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Spiritual Progress</p>
-                        <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">Sadhana Report</p>
-                    </div>
+                    <div className="text-base sm:text-lg font-black text-gray-900 leading-tight truncate">Sadhana Report</div>
+                    <div className="text-[10px] text-rose-600 font-semibold mt-1">Center Progress</div>
                 </div>
             </div>
 
             {/* Tabs */}
-            <div className="overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="flex gap-2 p-1.5 bg-white/60 backdrop-blur-md rounded-2xl w-fit border border-gray-200/50 shadow-sm">
+            <div className="overflow-x-auto no-scrollbar">
+                <div className="flex gap-1.5 p-1 bg-white/90 backdrop-blur-md rounded-xl w-fit border border-gray-200/70 shadow-xs">
                     <button
                         onClick={() => handleTabChange('approvals')}
-                        className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'approvals'
-                            ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
-                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                            }`}
+                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'approvals'
+                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
                     >
-                        <FileCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <FileCheck className="h-3.5 w-3.5" />
                         Spiritual Approval
                     </button>
                     <button
                         onClick={() => handleTabChange('registrations')}
-                        className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'registrations'
-                            ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
-                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                            }`}
+                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'registrations'
+                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
                     >
-                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <Users className="h-3.5 w-3.5" />
                         New Dev Approval
                         {stats.newRegistrations > 0 && (
-                            <span className="flex h-1.5 w-1.5 rounded-full bg-orange-500 ml-1" />
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-orange-500 text-white ml-1">
+                                {stats.newRegistrations}
+                            </span>
                         )}
                     </button>
                     <button
                         onClick={() => handleTabChange('user-management')}
-                        className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all duration-300 min-w-max ${activeTab === 'user-management'
-                            ? 'bg-white text-orange-600 shadow-sm ring-1 ring-gray-200'
-                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
-                            }`}
+                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'user-management'
+                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
                     >
-                        <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <Shield className="h-3.5 w-3.5" />
                         Management roles
                     </button>
                 </div>
@@ -1513,7 +1512,7 @@ export default function ProjectManagerDashboard() {
                                                     setApprovalStatus(status);
                                                     setSelectedRequestIds([]);
                                                 }}
-                                                className={`px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${isActive
+                                                className={`px-3.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${isActive
                                                     ? 'bg-white text-gray-900 shadow-sm transform scale-[1.02]'
                                                     : 'text-gray-500 hover:text-gray-700'
                                                     }`}
