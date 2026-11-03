@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -10,7 +10,8 @@ import {
     Activity, Building2, Users, FileCheck, Search, Plus, Trash2,
     MapPin, UserCheck, X, Check, AlertCircle, Eye, Home,
     ChevronDown, ChevronUp, History, ArrowRight, Clock, Mail, Calendar, Shield, Filter, Phone, Heart,
-    ChevronRight, ShieldAlert, Quote, ShieldCheck, AlertTriangle, Award, Lock, Edit, Loader2
+    ChevronRight, ShieldAlert, Quote, ShieldCheck, AlertTriangle, Award, Lock, Edit, Loader2,
+    RotateCcw, Compass, Sparkles, Layers, SlidersHorizontal, CheckSquare, Square
 } from 'lucide-react';
 import { getRoleDisplayName, getRoleHierarchyNumber, canAdminManageTarget } from '@/lib/utils/roles';
 import { CenterData, addCenterToLocal, deleteCenterFromLocal } from '@/lib/data/local-centers';
@@ -87,6 +88,166 @@ const MANAGEABLE_ROLES = [
     { label: 'Easy Incharge', value: 32 },
     { label: 'Prerna Incharge', value: 33 },
 ];
+
+// Sleek, Compact Multi-Select Dropdown Component
+function MultiSelectDropdown({
+    label,
+    icon: Icon,
+    options,
+    selected,
+    onChange,
+    color = 'indigo'
+}: {
+    label: string;
+    icon: any;
+    options: { label: string; value: string; count?: number }[];
+    selected: string[];
+    onChange: (values: string[]) => void;
+    color?: 'blue' | 'indigo' | 'purple' | 'emerald' | 'amber' | 'rose';
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = useMemo(() => {
+        if (!search) return options;
+        return options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+    }, [options, search]);
+
+    const toggleOption = (val: string) => {
+        if (selected.includes(val)) {
+            onChange(selected.filter(v => v !== val));
+        } else {
+            onChange([...selected, val]);
+        }
+    };
+
+    const selectAll = () => {
+        onChange(options.map(o => o.value));
+    };
+
+    const clearAll = () => {
+        onChange([]);
+    };
+
+    const isAllSelected = options.length > 0 && selected.length === options.length;
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between gap-1.5 px-3 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border rounded-xl font-bold text-xs shadow-2xs hover:border-slate-400 transition-all cursor-pointer ${
+                    selected.length > 0
+                        ? 'border-indigo-400 text-indigo-900 bg-indigo-50/50 ring-2 ring-indigo-100/60'
+                        : 'border-slate-300 text-slate-700'
+                }`}
+            >
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${selected.length > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <span className="truncate">
+                        {selected.length === 0
+                            ? `All ${label}s`
+                            : isAllSelected
+                            ? `All ${label}s (${selected.length})`
+                            : `${label} (${selected.length})`}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                    {selected.length > 0 && (
+                        <span className="text-[9.5px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 font-black">
+                            {selected.length}
+                        </span>
+                    )}
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+
+            {isOpen && (
+                <div className="absolute left-0 mt-1.5 w-64 max-w-[90vw] bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-1 text-slate-800">
+                    <div className="px-3 pb-2 mb-1 border-b border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Select {label}
+                        </span>
+                        <div className="flex items-center gap-2 text-[10.5px]">
+                            <button
+                                type="button"
+                                onClick={selectAll}
+                                className="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                            >
+                                All
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                                type="button"
+                                onClick={clearAll}
+                                className="text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    {options.length > 5 && (
+                        <div className="px-2.5 pb-2">
+                            <input
+                                type="text"
+                                placeholder={`Search ${label.toLowerCase()}...`}
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 placeholder:text-slate-400"
+                            />
+                        </div>
+                    )}
+
+                    <div className="max-h-56 overflow-y-auto px-1 space-y-0.5 no-scrollbar">
+                        {filteredOptions.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-slate-400 italic">No matching options</div>
+                        ) : (
+                            filteredOptions.map(opt => {
+                                const checked = selected.includes(opt.value);
+                                return (
+                                    <div
+                                        key={opt.value}
+                                        onClick={() => toggleOption(opt.value)}
+                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                                            checked ? 'bg-indigo-50 text-indigo-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => {}}
+                                                className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-400 cursor-pointer pointer-events-none"
+                                            />
+                                            <span className="truncate">{opt.label}</span>
+                                        </div>
+                                        {opt.count !== undefined && (
+                                            <span className="text-[10px] text-slate-400 font-mono ml-2">
+                                                {opt.count}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function ManagingDirectorDashboard() {
     const { userData } = useAuth();
@@ -193,6 +354,12 @@ export default function ManagingDirectorDashboard() {
     const [selectedCenter, setSelectedCenter] = useState('');
     const [selectedCamp, setSelectedCamp] = useState('');
     const [selectedRole, setSelectedRole] = useState<number | string | ''>('');
+
+    // Temple Role Scope & Multi-Select Filter States
+    const [templeScope, setTempleScope] = useState<'all' | 'current' | 'parent'>('all');
+    const [selectedCenters, setSelectedCenters] = useState<string[]>([]);
+    const [selectedAshrams, setSelectedAshrams] = useState<string[]>([]);
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [pendingAdminRole, setPendingAdminRole] = useState<number | null>(null);
@@ -275,6 +442,18 @@ export default function ManagingDirectorDashboard() {
         Number(r) === 8 || String(r) === 'super_admin'
     );
 
+    // Dynamic Title for Temple Roles (MD, Director, Central VOICE Manager, Youth Preacher)
+    const currentRoleTitle = useMemo(() => {
+        const rawRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+        const roles = rawRoles.filter((r): r is UserRole => !!r).map(r => getRoleHierarchyNumber(r));
+        if (roles.includes(8)) return 'Super Admin (Temple View)';
+        if (roles.includes(11)) return 'Managing Director';
+        if (roles.includes(12)) return 'Director';
+        if (roles.includes(13)) return 'Central VOICE Manager';
+        if (roles.includes(21)) return 'Youth Preacher';
+        return 'Temple Administrator';
+    }, [userData?.role]);
+
     // Temple Details State
     const [templeDetails, setTempleDetails] = useState<any>(null);
     const [assignedTemples, setAssignedTemples] = useState<any[]>([]);
@@ -302,6 +481,7 @@ export default function ManagingDirectorDashboard() {
         const hierarchy = {
             ...(user.hierarchy || {}),
             currentTemple: user.current_temple || user.hierarchy?.currentTemple,
+            parentTemple: user.parent_temple || user.hierarchy?.parentTemple,
             currentCenter: user.current_center || user.hierarchy?.currentCenter,
             center: user.center || user.hierarchy?.center,
             counselor: user.counselor || user.hierarchy?.counselor,
@@ -311,11 +491,15 @@ export default function ManagingDirectorDashboard() {
             ashram: user.ashram || user.hierarchy?.ashram,
         };
 
-        const mapped: User = {
+        const mapped: any = {
             ...user,
             birthDate: user.birth_date,
             role: normalizedRole,
             hierarchy: hierarchy,
+            parentTemple: user.parent_temple || user.hierarchy?.parentTemple,
+            _templeConnection: user._templeConnection || 'current',
+            _currentTempleDisplay: user._currentTempleDisplay || '',
+            _parentTempleDisplay: user._parentTempleDisplay || '',
             // Map Education (edu_1_*)
             education: (() => {
                 const eduArray = [];
@@ -448,12 +632,14 @@ export default function ManagingDirectorDashboard() {
                 // Centers count
                 supabase.from('centers').select('*', { count: 'exact', head: true }).eq('temple_name', tName).then(res => res.count || 0),
 
-                // Devotees count (filtered in memory for accuracy with hierarchy)
-                supabase.from('users').select('current_temple, hierarchy').eq('verification_status', 'approved').then(({ data }) => {
+                // Devotees count (filtered in memory for accuracy with current & parent temple)
+                supabase.from('users').select('current_temple, parent_temple, hierarchy').eq('verification_status', 'approved').then(({ data }) => {
+                    const target = (tName || '').trim().toLowerCase();
                     return (data || []).filter((u: any) => {
                         const uH = u.hierarchy as any;
-                        const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
-                        return uTemple === tName;
+                        const curTemple = (u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || '').trim().toLowerCase();
+                        const parTemple = (u.parent_temple || u.parentTemple || uH?.parentTemple?.name || (typeof uH?.parentTemple === 'string' ? uH?.parentTemple : '') || '').trim().toLowerCase();
+                        return curTemple === target || parTemple === target;
                     }).length;
                 }),
 
@@ -899,6 +1085,7 @@ export default function ManagingDirectorDashboard() {
         try {
             const templeName = selectedTemple?.name;
             if (!templeName) return;
+            const tNorm = templeName.trim().toLowerCase();
 
             const { data, error } = await supabase
                 .from('users')
@@ -907,8 +1094,33 @@ export default function ManagingDirectorDashboard() {
 
             const filtered = (data || []).filter((u: any) => {
                 const uH = u.hierarchy as any;
-                const uTemple = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
-                return uTemple === templeName;
+                const curTemple = (
+                    u.current_temple ||
+                    uH?.currentTemple?.name ||
+                    (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') ||
+                    uH?.temple ||
+                    ''
+                ).trim().toLowerCase();
+
+                const parTemple = (
+                    u.parent_temple ||
+                    u.parentTemple ||
+                    uH?.parentTemple?.name ||
+                    (typeof uH?.parentTemple === 'string' ? uH?.parentTemple : '') ||
+                    uH?.parent_temple ||
+                    ''
+                ).trim().toLowerCase();
+
+                const isCurrent = curTemple === tNorm;
+                const isParent = parTemple === tNorm;
+
+                if (isCurrent || isParent) {
+                    u._templeConnection = (isCurrent && isParent) ? 'both' : isCurrent ? 'current' : 'parent';
+                    u._currentTempleDisplay = u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None';
+                    u._parentTempleDisplay = u.parent_temple || u.parentTemple || uH?.parentTemple?.name || (typeof uH?.parentTemple === 'string' ? uH?.parentTemple : '') || 'None';
+                    return true;
+                }
+                return false;
             });
 
             setUsers(filtered.map(mapUserData));
@@ -1351,25 +1563,224 @@ export default function ManagingDirectorDashboard() {
         }
     }, [showAddCenterModal, showEditCenterModal, users.length, loadUsers]);
 
+    // Multi-Select Options with Live Counts
+    const centerOptions = useMemo(() => {
+        const list = centers.map(c => ({
+            label: c.name,
+            value: c.name,
+            count: users.filter(u => {
+                const uH = u.hierarchy as any;
+                const cName = uH?.currentCenter || uH?.center || u.center || u.current_center || '';
+                return cName.toLowerCase() === c.name.toLowerCase();
+            }).length
+        }));
+        list.push({
+            label: '⚠️ Other Center (Custom)',
+            value: '__other__',
+            count: users.filter(u => {
+                const uH = u.hierarchy as any;
+                return Boolean(u.otherCenter || uH?.otherCenter || u.other_center || (uH?.center === 'Other'));
+            }).length
+        });
+        list.push({
+            label: '⚪ None / Unassigned',
+            value: '__none__',
+            count: users.filter(u => {
+                const uH = u.hierarchy as any;
+                const cName = uH?.currentCenter || uH?.center || u.center || u.current_center;
+                return !cName || cName === 'None';
+            }).length
+        });
+        return list;
+    }, [centers, users]);
+
+    const ashramOptions = useMemo(() => [
+        { label: 'Student and not decided', value: 'Student and not decided' },
+        { label: 'Working and not decided', value: 'Working and not decided' },
+        { label: 'Brahmachari', value: 'Brahmachari' },
+        { label: 'Grihastha', value: 'Grihastha' },
+        { label: 'Gauranga Sabha', value: 'Gauranga Sabha' },
+        { label: 'Nityananda Sabha', value: 'Nityananda Sabha' },
+        { label: 'Staying Single (Not planning to marry)', value: 'Staying Single (Not planning to marry)' },
+    ], []);
+
+    const roleFilterOptions = useMemo(() => [
+        { label: 'Student (1)', value: '1' },
+        { label: 'Counselor (2)', value: '2' },
+        { label: 'Care Giver (20)', value: '20' },
+        { label: 'Voice Manager (3)', value: '3' },
+        { label: 'BC Voice Manager (4)', value: '4' },
+        { label: 'Project Manager (15)', value: '15' },
+        { label: 'Project Advisor (14)', value: '14' },
+        { label: 'Acting Manager (16)', value: '16' },
+        { label: 'Youth Preacher (21)', value: '21' },
+        { label: 'Managing Director (11)', value: '11' },
+        { label: 'Director (12)', value: '12' },
+        { label: 'Central VOICE Manager (13)', value: '13' },
+        { label: 'ROYAL Roles', value: 'royal' },
+    ], []);
+
     // Final Filtered & Paged users for the management tab
-    const filteredUsersList = users.filter(u => {
-        const userRoles = Array.isArray(u.role) ? u.role : [u.role];
-        const searchMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-            u.email.toLowerCase().includes(userSearch.toLowerCase());
-        const uH = u.hierarchy as any;
-        const uCenter = uH?.currentCenter || uH?.center || u.center || '';
-        const centerMatch = !selectedCenter || uCenter === selectedCenter;
-        const campMatch = !selectedCamp || u[selectedCamp as keyof typeof u];
-        const roleMatch = !selectedRole || (
-            selectedRole === 'royal'
-                ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
-                : userRoles.some((r: any) => getRoleHierarchyNumber(r) === selectedRole)
-        );
-        const groupMatch = !selectedGroup || u.bv_group === selectedGroup;
-        const kcMatch = !selectedKCStatus || u.hierarchy?.kcStatus === selectedKCStatus;
-        const ashramMatch = !selectedAshram || u.hierarchy?.ashram === selectedAshram;
-        return searchMatch && centerMatch && campMatch && roleMatch && groupMatch && kcMatch && ashramMatch;
-    });
+    const filteredUsersList = useMemo(() => {
+        return users.filter(u => {
+            const userRoles = Array.isArray(u.role) ? u.role : [u.role];
+            const uH = u.hierarchy as any;
+
+            // 1. Search Query Match
+            if (userSearch) {
+                const query = userSearch.toLowerCase();
+                const matchName = (u.name || '').toLowerCase().includes(query);
+                const matchInitName = (uH?.initiatedName || '').toLowerCase().includes(query);
+                const matchEmail = (u.email || '').toLowerCase().includes(query);
+                const matchPhone = (u.phone || '').includes(query);
+                const matchCity = (uH?.city || '').toLowerCase().includes(query);
+                const matchCenter = (uH?.currentCenter || uH?.center || u.center || '').toLowerCase().includes(query);
+                if (!matchName && !matchInitName && !matchEmail && !matchPhone && !matchCity && !matchCenter) {
+                    return false;
+                }
+            }
+
+            // 2. Temple Scope Match (Current vs Past/Parent Temple)
+            if (templeScope === 'current') {
+                if (u._templeConnection === 'parent') return false;
+            } else if (templeScope === 'parent') {
+                if (u._templeConnection !== 'parent') return false;
+            }
+
+            // 3. Center Match (Multi-Select & Single-Select)
+            const uCenter = (uH?.currentCenter || uH?.center || u.center || u.current_center || '').trim();
+            const hasOtherCenter = Boolean(u.otherCenter || uH?.otherCenter || u.other_center || uCenter === 'Other');
+
+            if (selectedCenters.length > 0) {
+                const matchesAnyCenter = selectedCenters.some(sc => {
+                    if (sc === '__other__') return hasOtherCenter;
+                    if (sc === '__none__') return !uCenter || uCenter === 'None';
+                    return uCenter.toLowerCase() === sc.toLowerCase();
+                });
+                if (!matchesAnyCenter) return false;
+            } else if (selectedCenter) {
+                if (uCenter.toLowerCase() !== selectedCenter.toLowerCase()) return false;
+            }
+
+            // 4. Ashram Match (Multi-Select & Single-Select)
+            const uAshram = (uH?.ashram || (u as any).ashram || '').trim().toLowerCase();
+            if (selectedAshrams.length > 0) {
+                const matchesAnyAshram = selectedAshrams.some(sa => {
+                    const sel = sa.trim().toLowerCase();
+                    if (sel === 'student and not decided') return uAshram === 'student and not decided' || uAshram === 'student';
+                    if (sel === 'working and not decided') return uAshram === 'working and not decided';
+                    if (sel === 'staying single (not planning to marry)') return uAshram === 'staying single (not planning to marry)' || uAshram.includes('single');
+                    return uAshram === sel;
+                });
+                if (!matchesAnyAshram) return false;
+            } else if (selectedAshram) {
+                const sel = selectedAshram.trim().toLowerCase();
+                if (sel === 'student and not decided') {
+                    if (uAshram !== 'student and not decided' && uAshram !== 'student') return false;
+                } else if (sel === 'working and not decided') {
+                    if (uAshram !== 'working and not decided') return false;
+                } else if (sel === 'staying single (not planning to marry)') {
+                    if (uAshram !== 'staying single (not planning to marry)' && !uAshram.includes('single')) return false;
+                } else {
+                    if (uAshram !== sel) return false;
+                }
+            }
+
+            // 5. Role Match (Multi-Select & Single-Select)
+            if (selectedRoles.length > 0) {
+                const matchesAnyRole = selectedRoles.some(sr => {
+                    if (sr === 'royal') {
+                        return userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)));
+                    }
+                    const numRole = Number(sr);
+                    return userRoles.some((r: any) => getRoleHierarchyNumber(r) === numRole);
+                });
+                if (!matchesAnyRole) return false;
+            } else if (selectedRole) {
+                const roleMatch = selectedRole === 'royal'
+                    ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
+                    : userRoles.some((r: any) => getRoleHierarchyNumber(r) === Number(selectedRole));
+                if (!roleMatch) return false;
+            }
+
+            // 6. Camp, Group & KC Status Matches
+            if (selectedCamp && !u[selectedCamp as keyof typeof u]) return false;
+            if (selectedGroup && u.bv_group !== selectedGroup) return false;
+            if (selectedKCStatus && uH?.kcStatus !== selectedKCStatus) return false;
+
+            return true;
+        });
+    }, [users, userSearch, templeScope, selectedCenters, selectedCenter, selectedAshrams, selectedAshram, selectedRoles, selectedRole, selectedCamp, selectedGroup, selectedKCStatus]);
+
+    // Live Dynamic Stats: update reactively with every filter change!
+    const dynamicDevoteeStats = useMemo(() => {
+        const totalInTemple = users.length;
+        const filteredCount = filteredUsersList.length;
+
+        let currentCount = 0;
+        let parentOnlyCount = 0;
+        let activeKcCount = 0;
+        let leadersCount = 0;
+
+        filteredUsersList.forEach(u => {
+            if ((u as any)._templeConnection === 'parent') {
+                parentOnlyCount++;
+            } else {
+                currentCount++;
+            }
+
+            const uH = u.hierarchy as any;
+            if (uH?.kcStatus === 'Active') {
+                activeKcCount++;
+            }
+
+            const uRoles = Array.isArray(u.role) ? u.role : [u.role];
+            if (uRoles.some((r: any) => [2, 3, 4, 11, 12, 13, 14, 15, 16, 17, 20, 21].includes(getRoleHierarchyNumber(r)))) {
+                leadersCount++;
+            }
+        });
+
+        const activePercentage = filteredCount > 0 ? Math.round((activeKcCount / filteredCount) * 100) : 0;
+
+        return {
+            totalInTemple,
+            filteredCount,
+            currentCount,
+            parentOnlyCount,
+            activeKcCount,
+            leadersCount,
+            activePercentage
+        };
+    }, [users, filteredUsersList]);
+
+    const isDevoteeFiltered = Boolean(
+        userSearch ||
+        templeScope !== 'all' ||
+        selectedCenters.length > 0 ||
+        selectedCenter ||
+        selectedAshrams.length > 0 ||
+        selectedAshram ||
+        selectedRoles.length > 0 ||
+        selectedRole ||
+        selectedCamp ||
+        selectedGroup ||
+        selectedKCStatus
+    );
+
+    const resetAllDevoteeFilters = () => {
+        setUserSearch('');
+        setTempleScope('all');
+        setSelectedCenters([]);
+        setSelectedCenter('');
+        setSelectedAshrams([]);
+        setSelectedAshram('');
+        setSelectedRoles([]);
+        setSelectedRole('');
+        setSelectedCamp('');
+        setSelectedGroup('');
+        setSelectedKCStatus('');
+        setCurrentPage(1);
+    };
 
     const totalPages = Math.ceil(filteredUsersList.length / itemsPerPage);
     const pagedUsers = filteredUsersList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1600,7 +2011,7 @@ export default function ManagingDirectorDashboard() {
                                     <Shield className="h-5 w-5 stroke-[2.5px]" />
                                 </div>
                                 <div>
-                                    <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight">Managing Director</h1>
+                                    <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight flex items-center gap-2"><span>{currentRoleTitle}</span></h1>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                                         {assignedTemples.length > 1 ? (
@@ -1681,9 +2092,11 @@ export default function ManagingDirectorDashboard() {
                                 <Users className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Total Devotees</div>
+                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">
+                                    {activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered Devotees' : 'Total Devotees'}
+                                </div>
                                 <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
-                                    {stats.loading ? '' : stats.devotees}
+                                    {stats.loading ? '' : (activeTab === 'user-management' ? dynamicDevoteeStats.filteredCount : stats.devotees)}
                                 </div>
                             </div>
                         </div>
@@ -1964,171 +2377,277 @@ export default function ManagingDirectorDashboard() {
 
                 {/* Staff / User Management Tab */}
                 {activeTab === 'user-management' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Advanced Filter Command Bar */}
-                        <div className="bg-[#fffdfa]/95 backdrop-blur-xl rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl shadow-orange-100/40 border border-amber-200">
-                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 sm:gap-8 mb-6 sm:mb-8 border-b border-gray-100 pb-8">
-                                <div>
-                                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Devotee Management</h2>
-                                    <p className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Directory & Access Control</p>
+                    <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* Dynamic Live Metric Cards for Temple Admin */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                            {/* 1. Filtered Devotees */}
+                            <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/30 p-3 sm:p-3.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-indigo-700">
+                                        Filtered Devotees
+                                    </span>
+                                    <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                                        <Users className="w-3.5 h-3.5" />
+                                    </div>
                                 </div>
-                                <div className="relative w-full lg:w-[450px] group">
-                                    <div className="absolute inset-0 bg-primary-500/5 blur-2xl group-focus-within:bg-primary-500/10 transition-colors rounded-[2rem]" />
-                                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-primary-500 group-focus-within:scale-110 transition-transform stroke-[2.5px]" />
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                        {dynamicDevoteeStats.filteredCount}
+                                    </span>
+                                    <span className="text-[11px] font-bold text-slate-400">
+                                        of {dynamicDevoteeStats.totalInTemple}
+                                    </span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                    <span className="text-emerald-700">🟢 {dynamicDevoteeStats.currentCount} Current</span>
+                                    <span>•</span>
+                                    <span className="text-purple-700">🟣 {dynamicDevoteeStats.parentOnlyCount} Past</span>
+                                </div>
+                            </div>
+
+                            {/* 2. Temple Affiliation Scope */}
+                            <div className="relative overflow-hidden rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/70 via-white to-violet-50/30 p-3 sm:p-3.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-purple-700">
+                                        Temple Scope
+                                    </span>
+                                    <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
+                                        <Compass className="w-3.5 h-3.5" />
+                                    </div>
+                                </div>
+                                <div className="text-base sm:text-lg font-black text-slate-900 truncate">
+                                    {templeScope === 'all' ? 'All Connected' : templeScope === 'current' ? 'Current Only' : 'Past (Parent)'}
+                                </div>
+                                <div className="mt-1 text-[10px] font-bold text-purple-600 truncate">
+                                    {dynamicDevoteeStats.parentOnlyCount} devotees linked in past
+                                </div>
+                            </div>
+
+                            {/* 3. Active KC Devotees */}
+                            <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 p-3 sm:p-3.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                                        Active KC Status
+                                    </span>
+                                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                                        <Activity className="w-3.5 h-3.5" />
+                                    </div>
+                                </div>
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                        {dynamicDevoteeStats.activeKcCount}
+                                    </span>
+                                    <span className="text-[11px] font-bold text-emerald-600">
+                                        ({dynamicDevoteeStats.activePercentage}%)
+                                    </span>
+                                </div>
+                                <div className="mt-1 text-[10px] font-bold text-slate-500">
+                                    Active spiritual engagement
+                                </div>
+                            </div>
+
+                            {/* 4. Leaders & Counselors */}
+                            <div className="relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/30 p-3 sm:p-3.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-amber-700">
+                                        Leaders & Mentors
+                                    </span>
+                                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                                        <Award className="w-3.5 h-3.5" />
+                                    </div>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                    {dynamicDevoteeStats.leadersCount}
+                                </div>
+                                <div className="mt-1 text-[10px] font-bold text-slate-500">
+                                    Counselors, Care Givers & Staff
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Compact & Colorful Filter Toolbar */}
+                        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-300 shadow-xs flex flex-col gap-2.5">
+                            {/* Primary Row: Search + Temple Scope + Quick Actions */}
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-2.5 items-center">
+                                {/* Search */}
+                                <div className="relative group sm:col-span-6 lg:col-span-5">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                     <input
                                         type="text"
-                                        placeholder="Search devotees..."
+                                        placeholder="Search legal/initiated name, email, phone, city, center..."
                                         value={userSearch}
                                         onChange={(e) => setUserSearch(e.target.value)}
-                                        className="relative w-full pl-14 pr-6 py-3.5 sm:py-4 bg-gray-50/50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-primary-100 focus:ring-4 focus:ring-primary-500/5 outline-none text-sm sm:text-base font-medium transition-all shadow-inner"
+                                        className="w-full pl-9 pr-3 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400 text-xs font-medium transition-all shadow-2xs"
                                     />
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                                {/* Row 1 */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Spiritual Group</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-orange-50 text-orange-500 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300">
-                                            <Users className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedGroup}
-                                            onChange={(e) => setSelectedGroup(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
-                                        >
-                                            <option value="">All Groups</option>
-                                            {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
+                                {/* Temple Scope Filter: Current vs Past/Parent Temple */}
+                                <div className="relative sm:col-span-4 lg:col-span-4">
+                                    <select
+                                        value={templeScope}
+                                        onChange={(e) => setTempleScope(e.target.value as any)}
+                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                    >
+                                        <option value="all">🏛️ All Connected (Current & Past)</option>
+                                        <option value="current">🟢 Current Temple Members Only</option>
+                                        <option value="parent">🟣 Past / Parent Temple Devotees Only</option>
+                                    </select>
+                                    <Compass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-purple-600 pointer-events-none" />
+                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                                 </div>
 
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">KC Activity Status</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-rose-50 text-rose-500 rounded-lg group-hover:bg-rose-500 group-hover:text-white transition-colors duration-300">
-                                            <Activity className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedKCStatus}
-                                            onChange={(e) => setSelectedKCStatus(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
+                                {/* Reset Button */}
+                                <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
+                                    {isDevoteeFiltered && (
+                                        <button
+                                            type="button"
+                                            onClick={resetAllDevoteeFilters}
+                                            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
                                         >
-                                            <option value="">All KC Status</option>
-                                            {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Ashram Type</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-purple-50 text-purple-500 rounded-lg group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
-                                            <Home className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedAshram}
-                                            onChange={(e) => setSelectedAshram(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
-                                        >
-                                            <option value="">All Ashrams</option>
-                                            {['Brahmachari', 'Grihastha', 'Student and not decided', 'Working and not decided', 'Gauranga Sabha', 'Nityananda Sabha', 'Staying Single (Not planning to marry)'].map(a => (
-                                                <option key={a} value={a}>{a}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Row 2 */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Center Division</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-blue-50 text-blue-500 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
-                                            <Building2 className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedCenter}
-                                            onChange={(e) => setSelectedCenter(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
-                                        >
-                                            <option value="">All Locations</option>
-                                            {centers.map(center => (
-                                                <option key={center.id} value={center.name}>{center.name}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Camp Membership</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-emerald-50 text-emerald-500 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-300">
-                                            <Shield className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedCamp}
-                                            onChange={(e) => setSelectedCamp(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
-                                        >
-                                            <option value="">Any Status</option>
-                                            {CAMP_OPTIONS.map(camp => (
-                                                <option key={camp.value} value={camp.value}>{camp.label}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Administrative Role</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300">
-                                            <UserCheck className="h-4 w-4" />
-                                        </div>
-                                        <select
-                                            value={selectedRole}
-                                            onChange={(e) => setSelectedRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-amber-100 rounded-2xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm hover:border-orange-200"
-                                        >
-                                            <option value="">All Categories</option>
-                                            {(() => {
-                                                const userRoles = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).filter(Boolean) as UserRole[];
-                                                const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
-                                                const isHighLevelAdmin = userRoleNums.some(num => [11, 12, 13].includes(num));
-                                                
-                                                let visibleRoles = MANAGEABLE_ROLES;
-                                                if (isHighLevelAdmin) {
-                                                    const allowedSet = ['royal', 1, 2, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
-                                                    visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
-                                                }
-                                                
-                                                return visibleRoles.map(role => (
-                                                    <option key={role.value} value={role.value}>{role.label}</option>
-                                                ));
-                                            })()}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </div>
-                                    </div>
+                                            <RotateCcw className="w-3.5 h-3.5" />
+                                            <span>Reset Filters</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
+                            {/* Secondary Row: Multi-Select Filters & Dropdowns */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-2.5 pt-2 border-t border-slate-200">
+                                {/* Multi-Select Center Filter */}
+                                <div className="sm:col-span-1 lg:col-span-2">
+                                    <MultiSelectDropdown
+                                        label="Center"
+                                        icon={Building2}
+                                        options={centerOptions}
+                                        selected={selectedCenters}
+                                        onChange={setSelectedCenters}
+                                        color="indigo"
+                                    />
+                                </div>
+
+                                {/* Multi-Select Ashram Filter */}
+                                <div className="sm:col-span-1 lg:col-span-2">
+                                    <MultiSelectDropdown
+                                        label="Ashram"
+                                        icon={Home}
+                                        options={ashramOptions}
+                                        selected={selectedAshrams}
+                                        onChange={setSelectedAshrams}
+                                        color="purple"
+                                    />
+                                </div>
+
+                                {/* Multi-Select Role Filter */}
+                                <div className="sm:col-span-1 lg:col-span-2">
+                                    <MultiSelectDropdown
+                                        label="Role"
+                                        icon={UserCheck}
+                                        options={roleFilterOptions}
+                                        selected={selectedRoles}
+                                        onChange={setSelectedRoles}
+                                        color="amber"
+                                    />
+                                </div>
+
+                                {/* Spiritual Group (BV Group) */}
+                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                    <select
+                                        value={selectedGroup}
+                                        onChange={(e) => setSelectedGroup(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                    >
+                                        <option value="">All Groups</option>
+                                        {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                    <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+
+                                {/* KC Activity Status */}
+                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                    <select
+                                        value={selectedKCStatus}
+                                        onChange={(e) => setSelectedKCStatus(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                    >
+                                        <option value="">All KC Status</option>
+                                        {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                    <Activity className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+
+                                {/* Camp Filter */}
+                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                    <select
+                                        value={selectedCamp}
+                                        onChange={(e) => setSelectedCamp(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                    >
+                                        <option value="">All Camps</option>
+                                        {CAMP_OPTIONS.map(camp => (
+                                            <option key={camp.value} value={camp.value}>{camp.label}</option>
+                                        ))}
+                                    </select>
+                                    <Shield className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-blue-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* Active Filter Badges */}
+                            {isDevoteeFiltered && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-200 text-xs">
+                                    <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Active:</span>
+                                    {templeScope !== 'all' && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
+                                            <span>Scope: {templeScope === 'current' ? 'Current Only' : 'Past (Parent)'}</span>
+                                            <button onClick={() => setTempleScope('all')} className="hover:text-purple-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedCenters.length > 0 && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold">
+                                            <span>Centers: {selectedCenters.length} selected</span>
+                                            <button onClick={() => setSelectedCenters([])} className="hover:text-indigo-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedAshrams.length > 0 && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
+                                            <span>Ashram: {selectedAshrams.length} selected</span>
+                                            <button onClick={() => setSelectedAshrams([])} className="hover:text-purple-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedRoles.length > 0 && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                            <span>Roles: {selectedRoles.length} selected</span>
+                                            <button onClick={() => setSelectedRoles([])} className="hover:text-amber-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedGroup && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-bold">
+                                            <span>Group: {selectedGroup}</span>
+                                            <button onClick={() => setSelectedGroup('')} className="hover:text-orange-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedKCStatus && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                            <span>KC: {selectedKCStatus}</span>
+                                            <button onClick={() => setSelectedKCStatus('')} className="hover:text-emerald-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {selectedCamp && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                                            <span>Camp: {CAMP_OPTIONS.find(c => c.value === selectedCamp)?.label}</span>
+                                            <button onClick={() => setSelectedCamp('')} className="hover:text-blue-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                    {userSearch && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold">
+                                            <span>Search: &quot;{userSearch}&quot;</span>
+                                            <button onClick={() => setUserSearch('')} className="hover:text-slate-900 cursor-pointer">×</button>
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {loadingUsers ? (
@@ -2150,8 +2669,14 @@ export default function ManagingDirectorDashboard() {
                                     onClick={() => {
                                         setUserSearch('');
                                         setSelectedCenter('');
+                                        setSelectedCenters([]);
                                         setSelectedCamp('');
                                         setSelectedRole('');
+                                        setSelectedRoles([]);
+                                        setSelectedAshrams([]);
+                                        setSelectedGroup('');
+                                        setSelectedKCStatus('');
+                                        setTempleScope('all');
                                     }}
                                     className="mt-8 px-8 py-4 bg-white text-gray-900 font-black text-[10px] uppercase tracking-widest border-2 border-gray-100 rounded-2xl hover:bg-gray-50 hover:border-gray-200 transition-all shadow-md"
                                 >
@@ -2168,13 +2693,31 @@ export default function ManagingDirectorDashboard() {
 
                                         return (
                                             <div key={user.id} className="bg-[#fffdfa] rounded-3xl p-5 border border-amber-200 shadow-lg shadow-orange-100/30">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-lg flex-shrink-0">
+                                                <div className="flex items-center gap-4 mb-3">
+                                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-lg flex-shrink-0 shadow-sm">
                                                         {user.name.charAt(0).toUpperCase()}
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <p className="font-black text-gray-900 truncate">{user.name}</p>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="font-black text-gray-900 truncate">{user.name}</p>
+                                                            {user._templeConnection === 'parent' ? (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                                    Past Devotee
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                                                    Current Member
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-[10px] font-bold text-gray-400 lowercase truncate">{user.email}</p>
+                                                        {user._templeConnection === 'parent' && (
+                                                            <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
+                                                                Now at: {user._currentTempleDisplay || 'Other Temple'}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -2349,7 +2892,7 @@ export default function ManagingDirectorDashboard() {
 
                                                     return (
                                                         <tr key={user.id} className="hover:bg-primary-50/30 transition-colors group/row">
-                                                            <td className="px-6 py-6">
+                                                            <td className="px-4 py-3">
                                                                 <div className="flex items-center gap-4">
                                                                     <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-lg shadow-lg group-hover/row:scale-110 transition-transform">
                                                                         {user.name.charAt(0).toUpperCase()}
@@ -2360,23 +2903,39 @@ export default function ManagingDirectorDashboard() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6">
-                                                                <div className="flex flex-col gap-2">
-                                                                    <div className="flex items-center gap-2 text-xs font-black text-gray-700 uppercase tracking-wider">
-                                                                        <MapPin className="h-3 w-3 text-emerald-500" />
-                                                                        {uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None'}
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    {/* Temple Connection Badge */}
+                                                                    {(user as any)._templeConnection === 'parent' ? (
+                                                                        <div className="flex flex-col gap-0.5">
+                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 w-fit">
+                                                                                🟣 Past Devotee (Parent Temple)
+                                                                            </span>
+                                                                            <span className="text-[9.5px] font-bold text-purple-700">
+                                                                                Now at: {(user as any)._currentTempleDisplay || 'Other Temple'}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (user as any)._templeConnection === 'both' ? (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-100 text-teal-900 border border-teal-300 w-fit">
+                                                                            🔷 Current & Parent Member
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 w-fit">
+                                                                            🟢 Current Temple Member
+                                                                        </span>
+                                                                    )}
+
+                                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                                                                        <Building2 className="h-3 w-3 text-blue-600 shrink-0" />
+                                                                        <span className="truncate max-w-[170px]">{uCenterLabel}</span>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                                                                        <Building2 className="h-3 w-3 text-blue-500" />
-                                                                        {uCenterLabel}
-                                                                    </div>
-                                                                    <div className="flex gap-2">
-                                                                        {user.is_smvd_volunteer && <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase rounded-md border border-blue-100">SMVD</span>}
-                                                                        {user.is_rns_volunteer && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase rounded-md border border-emerald-100">RNS</span>}
+                                                                    <div className="flex gap-1.5">
+                                                                        {user.is_smvd_volunteer && <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[8px] font-black uppercase rounded border border-blue-200">SMVD</span>}
+                                                                        {user.is_rns_volunteer && <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase rounded border border-emerald-200">RNS</span>}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6">
+                                                            <td className="px-4 py-3">
                                                                 <div className="flex flex-col gap-1.5">
                                                                     <p className="flex items-center gap-2 text-[10px] font-black text-primary-600 uppercase tracking-widest bg-primary-50/50 px-2.5 py-1 rounded-lg border border-primary-100/50 self-start">
                                                                         <Home className="h-3 w-3" />
@@ -2389,7 +2948,7 @@ export default function ManagingDirectorDashboard() {
                                                                     </p>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6">
+                                                            <td className="px-4 py-3">
                                                                 <div className="flex flex-wrap gap-1.5 max-w-[250px]">
                                                                     {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
                                                                         <span key={i} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${getRoleHierarchyNumber(r) >= 12
@@ -2401,7 +2960,7 @@ export default function ManagingDirectorDashboard() {
                                                                     ))}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6">
+                                                            <td className="px-4 py-3">
                                                                 <div className="relative w-full">
                                                                     <select
                                                                         value={user.bv_group || ''}
@@ -2423,7 +2982,7 @@ export default function ManagingDirectorDashboard() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6">
+                                                            <td className="px-4 py-3">
                                                                 <div className="relative w-full">
                                                                     <select
                                                                         value={user.hierarchy?.kcStatus || ''}
@@ -2445,7 +3004,7 @@ export default function ManagingDirectorDashboard() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-6 text-right">
+                                                            <td className="px-4 py-3 text-right">
                                                                 {(() => {
                                                                     const canManage = canAdminManageTarget(userData?.role || [], user.role || [], userData?.id, user.id);
 
@@ -2906,7 +3465,7 @@ export default function ManagingDirectorDashboard() {
 
                                                 return (
                                                     <tr key={user.id} className={`${isHighlighted ? 'bg-rose-50/50 hover:bg-rose-100/40' : 'hover:bg-primary-50/30'} transition-colors group/row`}>
-                                                        <td className="px-6 py-6">
+                                                        <td className="px-4 py-3">
                                                             <div
                                                                 className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${selectedPendingUserIds.includes(user.id) ? 'bg-primary-600 border-primary-600 shadow-lg' : 'border-gray-200 hover:border-primary-400 bg-white'}`}
                                                                 onClick={() => setSelectedPendingUserIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])}
@@ -2914,13 +3473,13 @@ export default function ManagingDirectorDashboard() {
                                                                 {selectedPendingUserIds.includes(user.id) && <Check className="h-4 w-4 text-white stroke-[3px]" />}
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-6">
+                                                        <td className="px-4 py-3">
                                                             <div className="flex flex-col">
                                                                 <span className="text-sm font-black text-gray-900 tracking-tight">{user.name}</span>
                                                                 <span className="text-xs font-bold text-gray-400">{user.email}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-6">
+                                                        <td className="px-4 py-3">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
@@ -2934,7 +3493,7 @@ export default function ManagingDirectorDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-6">
+                                                        <td className="px-4 py-3">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
@@ -2948,7 +3507,7 @@ export default function ManagingDirectorDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-6 text-right">
+                                                        <td className="px-4 py-3 text-right">
                                                             <div className="flex items-center justify-end gap-3 translate-x-2 group-hover/row:translate-x-0 transition-transform duration-300">
                                                                 <button
                                                                     onClick={() => { setUserToVerify(user); setVerificationAction('rejected'); setVerificationMode('single'); setShowRejectionModal(true); }}
