@@ -78,18 +78,18 @@ export default function MembershipCard() {
                           (userData?.parentTemple || userData?.hierarchy?.parentTemple);
 
     return (
-        <div className="group relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2rem] p-6 shadow-2xl border border-white/10 transition-all duration-300 hover:shadow-orange-900/20">
+        <div className="group relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl border border-white/10 transition-all duration-300 hover:shadow-orange-900/20">
             {/* Background Decorations */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-orange-500/20 transition-all" />
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -ml-12 -mb-12" />
 
             <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-3.5 sm:mb-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 text-white shadow-lg">
+                        <div className="p-2 rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 text-white shadow-md">
                             <Shield className="w-5 h-5" />
                         </div>
-                        <h2 className="text-lg font-bold text-white tracking-tight">Membership Status</h2>
+                        <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">Membership Status</h2>
                     </div>
                     {membershipId && (
                         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
@@ -100,12 +100,12 @@ export default function MembershipCard() {
                 </div>
 
                 {membershipId ? (
-                    <div className="space-y-4">
-                        <div className="relative p-5 rounded-2xl bg-white/5 border border-white/10 overflow-hidden group/id">
+                    <div className="space-y-3">
+                        <div className="relative p-3.5 sm:p-4 rounded-xl bg-white/5 border border-white/10 overflow-hidden group/id">
                             <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-transparent opacity-0 group-hover/id:opacity-100 transition-opacity" />
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Membership ID</p>
                             <div className="flex items-center justify-between">
-                                <span className="text-2xl font-black text-white tracking-widest font-mono">
+                                <span className="text-xl sm:text-2xl font-black text-white tracking-widest font-mono">
                                     {membershipId}
                                 </span>
                                 <CreditCard className="w-6 h-6 text-orange-500/50 group-hover/id:scale-110 transition-transform" />
@@ -116,8 +116,8 @@ export default function MembershipCard() {
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-5">
-                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5 backdrop-blur-sm">
+                    <div className="space-y-3">
+                        <div className="p-3 sm:p-3.5 rounded-xl bg-white/5 border border-white/5 backdrop-blur-sm">
                             <div className="flex gap-3">
                                 <AlertCircle className={`w-5 h-5 shrink-0 ${hasRequiredData ? 'text-amber-400' : 'text-slate-400'}`} />
                                 <div className="space-y-1">
@@ -142,7 +142,7 @@ export default function MembershipCard() {
                         <button
                             onClick={handleGenerate}
                             disabled={!hasRequiredData || generating}
-                            className={`w-full group/btn relative flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold transition-all overflow-hidden ${
+                            className={`w-full group/btn relative flex items-center justify-center gap-2 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all overflow-hidden ${
                                 hasRequiredData 
                                 ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:scale-[0.98]' 
                                 : 'bg-slate-700 text-slate-400 cursor-not-allowed'

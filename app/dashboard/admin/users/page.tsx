@@ -484,7 +484,6 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error('Failed to update profile');
-      throw error;
     }
   };
 
@@ -865,11 +864,10 @@ export default function UsersPage() {
                   setFilterType(pill.id as FilterType);
                 }
               }}
-              className={`px-3 py-1 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer ${
-                filterType === pill.id
+              className={`px-3 py-1 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all duration-200 border cursor-pointer ${filterType === pill.id
                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                   : 'bg-white text-slate-700 border-slate-300 hover:border-amber-500 hover:text-amber-800 hover:bg-amber-50/50 shadow-2xs'
-              }`}
+                }`}
             >
               {pill.label}
             </button>
@@ -1032,11 +1030,10 @@ export default function UsersPage() {
                 {/* Right: Status Badge & Actions */}
                 <div className="flex items-center justify-between md:justify-end gap-2 md:w-auto shrink-0 border-t md:border-t-0 pt-2 md:pt-0 mt-0.5 md:mt-0">
                   {/* Status Badge */}
-                  <div className={`px-2.5 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider border shrink-0 ${
-                    isPending
+                  <div className={`px-2.5 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider border shrink-0 ${isPending
                       ? 'bg-amber-50 text-amber-700 border-amber-300'
                       : 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                  }`}>
+                    }`}>
                     {isPending ? 'Pending' : 'Active'}
                   </div>
 
