@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -447,9 +447,29 @@ export default function DonationPage() {
   const [isMuted, setIsMuted] = useState(true);
   const [showFloatingBtn, setShowFloatingBtn] = useState(false);
 
+  const hasUserScrolledSchemesRef = useRef(false);
+
+  // Center the most popular / most chosen card (Youth Guardian) by default on mobile
+  const centerDefaultCard = useCallback((behavior: ScrollBehavior = 'auto') => {
+    if (schemesScrollRef.current) {
+      const container = schemesScrollRef.current;
+      const targetCard = (container.querySelector('#scheme-card-youth-guardian') ||
+        container.querySelector('[data-featured="true"]')) as HTMLElement | null;
+      if (targetCard) {
+        const containerRect = container.getBoundingClientRect();
+        const cardRect = targetCard.getBoundingClientRect();
+        const scrollPos = container.scrollLeft + (cardRect.left - containerRect.left) - (container.clientWidth - targetCard.clientWidth) / 2;
+        container.scrollTo({ left: Math.max(0, scrollPos), behavior });
+      }
+    }
+  }, []);
+
   const scrollToSchemes = () => {
     if (formRef.current) {
       formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        centerDefaultCard('smooth');
+      }, 250);
     }
   };
 
@@ -481,6 +501,7 @@ export default function DonationPage() {
 
   const scrollSchemesCarousel = (direction: 'left' | 'right') => {
     if (!schemesScrollRef.current) return;
+    hasUserScrolledSchemesRef.current = true;
     const scrollAmount = schemesScrollRef.current.clientWidth * 0.85;
     schemesScrollRef.current.scrollBy({
       left: direction === 'left' ? -scrollAmount : scrollAmount,
@@ -490,20 +511,51 @@ export default function DonationPage() {
 
   // On mobile mount, center the most popular / most chosen card (Youth Guardian) by default
   useEffect(() => {
-    const centerDefaultCard = () => {
-      if (schemesScrollRef.current) {
-        const container = schemesScrollRef.current;
-        const targetCard = (container.querySelector('[data-featured="true"]') ||
-          container.querySelector('#scheme-card-youth-guardian')) as HTMLElement | null;
-        if (targetCard) {
-          const scrollPos = targetCard.offsetLeft - (container.clientWidth - targetCard.clientWidth) / 2;
-          container.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
-        }
+    // 1. Center at various mount milestones
+    centerDefaultCard('auto');
+    const t1 = setTimeout(() => centerDefaultCard('auto'), 80);
+    const t2 = setTimeout(() => centerDefaultCard('auto'), 250);
+    const t3 = setTimeout(() => centerDefaultCard('auto'), 600);
+
+    // 2. Track manual user interaction
+    const container = schemesScrollRef.current;
+    const onUserTouch = () => {
+      hasUserScrolledSchemesRef.current = true;
+    };
+    if (container) {
+      container.addEventListener('touchstart', onUserTouch, { passive: true });
+      container.addEventListener('mousedown', onUserTouch, { passive: true });
+    }
+
+    // 3. When the schemes section enters viewport, ensure Youth Guardian is centered if user hasn't scrolled
+    let observer: IntersectionObserver | null = null;
+    if (container && typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && !hasUserScrolledSchemesRef.current) {
+              centerDefaultCard('auto');
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+      observer.observe(container);
+    }
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      if (container) {
+        container.removeEventListener('touchstart', onUserTouch);
+        container.removeEventListener('mousedown', onUserTouch);
+      }
+      if (observer) {
+        observer.disconnect();
       }
     };
-    const timer = setTimeout(centerDefaultCard, 120);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [centerDefaultCard]);
 
   // Show floating donation button after scrolling down
   useEffect(() => {
@@ -1341,7 +1393,7 @@ export default function DonationPage() {
           <div className="relative mb-14">
             <div
               ref={schemesScrollRef}
-              className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pt-6 pb-5 sm:pt-5 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none"
+              className="relative flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pt-6 pb-5 sm:pt-5 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none"
             >
               {DONATION_SCHEMES.map((scheme) => {
                 const isSelected = selectedSchemeId === scheme.id;
@@ -1612,18 +1664,14 @@ export default function DonationPage() {
                 </button>
 
                 {/* Trust Badges */}
-                <div className="pt-3.5 border-t border-amber-200/60 grid grid-cols-3 gap-2 text-center text-[10px] text-slate-600 font-semibold">
-                  <div className="flex flex-col items-center gap-1">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <div className="pt-3.5 border-t border-amber-200/60 flex items-center justify-center gap-8 sm:gap-14 text-center text-[11px] text-slate-600 font-semibold">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>80G Deductible</span>
                   </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <Lock className="w-4 h-4 text-amber-600" />
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                     <span>256-Bit SSL Encrypted</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                    <span>Instant 80G Receipt</span>
                   </div>
                 </div>
               </div>
