@@ -3,6 +3,10 @@ import { Inter, Playfair_Display, Merriweather } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { Toaster } from 'react-hot-toast';
+import { Suspense } from 'react';
+import { DeepLinkHandler } from '@/components/providers/DeepLinkHandler';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import VisitorTracker from '@/components/analytics/VisitorTracker';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const playfair = Playfair_Display({
@@ -24,9 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-import { DeepLinkHandler } from '@/components/providers/DeepLinkHandler';
-import { ThemeProvider } from '@/components/providers/ThemeProvider';
-
 export default function RootLayout({
   children,
 }: {
@@ -35,6 +36,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} ${merriweather.variable} font-sans`}>
+        <Suspense fallback={null}>
+          <VisitorTracker />
+        </Suspense>
         <DeepLinkHandler />
         <AuthProvider>
           <ThemeProvider>

@@ -11,6 +11,14 @@ import {
 export default function AdminDashboardPage() {
     const adminSections = [
         {
+            title: 'Website Visitors & Traffic',
+            description: 'Track real visitors, guest traffic & logged-in users',
+            icon: Activity,
+            href: '/dashboard/admin/visitors',
+            color: 'text-cyan-600',
+            bgColor: 'bg-cyan-100',
+        },
+        {
             title: 'Camps',
             description: 'Host & manage camps, dates, fees & registrations',
             icon: Tent,
