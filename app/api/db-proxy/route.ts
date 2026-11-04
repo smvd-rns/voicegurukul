@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       rpcParams,
       onConflictCols,
     } = body;
+    let effectiveSelectCols = selectCols;
 
     // ─── 1. Method Validation ──────────────────────────────────
     const ALLOWED_METHODS = ['select', 'insert', 'update', 'delete', 'upsert', 'rpc'];
@@ -170,11 +171,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Rule C: Public Catalog Tables (Read-only for guests, Admin for mutations)
-      const publicCatalogTables = ['temples', 'centers', 'cities', 'states', 'spiritual_masters', 'policies', 'stories', 'app_configs', 'camps'];
+      // Rule C: Public Catalog & Event Tables (Read-only for guests, Admin for mutations)
+      const publicCatalogTables = [
+        'temples', 'centers', 'cities', 'states', 'spiritual_masters',
+        'policies', 'stories', 'app_configs', 'camps', 'events', 'event_materials'
+      ];
       if (publicCatalogTables.includes(table)) {
         if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
-          return NextResponse.json({ data: null, error: 'Forbidden: Only administrators can modify catalog data' }, { status: 403 });
+          return NextResponse.json({ data: null, error: 'Forbidden: Only administrators can modify catalog or event data' }, { status: 403 });
         }
       }
 
@@ -264,11 +268,26 @@ export async function POST(req: NextRequest) {
 
         // Protect SELECT on users table from unauthorized data dumping
         if (method === 'select' && !isSuperAdmin && !isHigherAdmin) {
-          const isDonationSlugQuery = filters?.some((f: any) => f.col === 'donation_slug' && f.val);
-          const isAuthEmailCheck = !session && singleRow && selectCols === 'id' && filters?.some((f: any) => f.col === 'email');
+          const slugFilter = filters?.find((f: any) => f.col === 'donation_slug');
+          const isDonationSlugQuery = Boolean(slugFilter && slugFilter.val && (!slugFilter.type || slugFilter.type === 'eq'));
+          const isAuthEmailCheck = !session && singleRow && selectCols === 'id' && filters?.some((f: any) => f.col === 'email' && (!f.type || f.type === 'eq'));
 
           if (isDonationSlugQuery) {
-            // Public / authenticated donation lookup allowed for active collector
+            // Public donation lookup allowed ONLY for safe public fields
+            if (!session) {
+              const SAFE_COLLECTOR_COLS = [
+                'id', 'name', 'email', 'phone', 'profile_image', 'donation_slug',
+                'parent_center', 'other_parent_center', 'parent_temple', 'other_parent_temple',
+                'current_center', 'other_center', 'current_temple', 'other_temple',
+                'center', 'ashram', 'selected_behalf_id', 'selected_behalf_name'
+              ];
+              const requestedCols = (selectCols || '')
+                .split(',')
+                .map((c: string) => c.trim().toLowerCase())
+                .filter(Boolean);
+              const sanitizedCols = requestedCols.filter((c: string) => SAFE_COLLECTOR_COLS.includes(c));
+              effectiveSelectCols = sanitizedCols.length > 0 ? sanitizedCols.join(', ') : SAFE_COLLECTOR_COLS.join(', ');
+            }
           } else if (isAuthEmailCheck) {
             // Unauthenticated signup email existence check allowed
           } else if (session) {
@@ -286,11 +305,36 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Rule G: Organizational, Role Allocation & Platform Settings Tables
-      const orgTables = ['counselors', 'event_admin_allocations', 'user_centers', 'membership_cards', 'platform_settings', 'donation_behalf_devotees'];
+      // Rule G: Organizational, Role Allocation, Membership & Platform Settings Tables
+      const orgTables = [
+        'counselors', 'event_admin_allocations', 'user_centers', 'membership_cards',
+        'membership_ids', 'platform_settings', 'donation_behalf_devotees', 'camp_kitchen_extra_meals'
+      ];
       if (orgTables.includes(table)) {
         if (method !== 'select' && !isSuperAdmin && !isHigherAdmin) {
           return NextResponse.json({ data: null, error: 'Forbidden: Super Admin access required' }, { status: 403 });
+        }
+        // Protect behalf devotees from anonymous PII scraping
+        if (table === 'donation_behalf_devotees' && !session) {
+          effectiveSelectCols = 'id, name, is_active';
+        }
+        // Protect platform_settings from leaking approval tokens to non-super-admins
+        if (table === 'platform_settings' && !isSuperAdmin) {
+          effectiveSelectCols = 'id, value';
+        }
+      }
+
+      // Rule G-2: Event Responses Protection
+      if (table === 'event_responses') {
+        if (!session) {
+          return NextResponse.json({ data: null, error: 'Unauthorized: Login required' }, { status: 401 });
+        }
+        if (['insert', 'update', 'upsert'].includes(method) && !isSuperAdmin && !isHigherAdmin) {
+          const respUserId = (insertData && (insertData.user_id || (Array.isArray(insertData) && insertData[0]?.user_id))) ||
+                             (updateData && updateData.user_id);
+          if (respUserId && respUserId !== session.userId) {
+            return NextResponse.json({ data: null, error: 'Forbidden: Cannot submit event response for another user' }, { status: 403 });
+          }
         }
       }
 
@@ -340,7 +384,7 @@ export async function POST(req: NextRequest) {
     let paramCounter = 1;
 
     if (method === 'select') {
-      let cols = selectCols || '*';
+      let cols = effectiveSelectCols || '*';
       if (typeof cols !== 'string' || !/^[a-zA-Z0-9_,\s*()]+$/.test(cols)) {
         cols = '*';
       }
@@ -588,13 +632,18 @@ export async function POST(req: NextRequest) {
     let resultData = dbRes.rows;
 
     // Attach user_profile_details when fetching from users table
-    if (table === 'users' && resultData.length > 0) {
-      const userIds = resultData.map((row: any) => String(row.id)).filter(Boolean);
-      if (userIds.length > 0) {
+    // SECURITY: NEVER attach user_profile_details for anonymous visitors (e.g. donation page lookups)!
+    // For authenticated users, non-admins/non-counselors only receive their own profile details.
+    if (table === 'users' && resultData.length > 0 && (isInternalServer || session)) {
+      let authorizedUserIds = resultData.map((row: any) => String(row.id)).filter(Boolean);
+      if (!isInternalServer && !isSuperAdmin && !isHigherAdmin && !isCounselor) {
+        authorizedUserIds = authorizedUserIds.filter(id => id === session.userId);
+      }
+      if (authorizedUserIds.length > 0) {
         try {
           const profileRes = await query(
             'SELECT * FROM user_profile_details WHERE user_id::text = ANY($1::text[])',
-            [userIds]
+            [authorizedUserIds]
           );
           const profileMap = new Map<string, any[]>();
           for (const p of profileRes.rows) {
@@ -612,6 +661,14 @@ export async function POST(req: NextRequest) {
             row.user_profile_details = [];
           }
         }
+      } else {
+        for (const row of resultData) {
+          row.user_profile_details = [];
+        }
+      }
+    } else if (table === 'users' && resultData.length > 0) {
+      for (const row of resultData) {
+        row.user_profile_details = [];
       }
     }
 
@@ -656,6 +713,35 @@ export async function POST(req: NextRequest) {
         resultData.forEach(sanitizeCamp);
       } else if (typeof resultData === 'object') {
         sanitizeCamp(resultData);
+      }
+    }
+
+    // CRITICAL SECURITY: Never leak approval tokens or pending values from platform_settings to non-super-admins!
+    if (table === 'platform_settings' && !isSuperAdmin && resultData) {
+      const sanitizeSettings = (row: any) => {
+        if (!row) return;
+        delete row.approval_token;
+        delete row.pending_value;
+      };
+      if (Array.isArray(resultData)) {
+        resultData.forEach(sanitizeSettings);
+      } else if (typeof resultData === 'object') {
+        sanitizeSettings(resultData);
+      }
+    }
+
+    // CRITICAL SECURITY: Never leak contact details (email, phone) of behalf devotees to anonymous callers!
+    if (table === 'donation_behalf_devotees' && !session && resultData) {
+      const sanitizeBehalf = (row: any) => {
+        if (!row) return;
+        delete row.email;
+        delete row.phone;
+        delete row.created_by;
+      };
+      if (Array.isArray(resultData)) {
+        resultData.forEach(sanitizeBehalf);
+      } else if (typeof resultData === 'object') {
+        sanitizeBehalf(resultData);
       }
     }
 
