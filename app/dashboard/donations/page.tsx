@@ -280,10 +280,10 @@ export default function MyDonationsPage() {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-    const url = `${baseUrl}/donate/${userSlug}?behalf=${effectiveBehalfId}&behalf_name=${encodeURIComponent(effectiveBehalfName)}`;
+    const url = `${baseUrl}/donate/${userSlug}`;
     navigator.clipboard.writeText(url);
     setCopying(true);
-    toast.success(`Copied donation link on behalf of ${effectiveBehalfName}!`);
+    toast.success(`Copied donation link: ${url}`);
     setTimeout(() => setCopying(false), 2000);
   };
 

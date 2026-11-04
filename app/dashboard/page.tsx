@@ -5,36 +5,52 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { fetchSadhanaHistory } from '@/lib/api/sadhana-client';
 import { getUserMessages } from '@/lib/supabase/messages';
 import { SadhanaReport, Message } from '@/types';
-import { BookOpen, TrendingUp, Calendar, Zap, ArrowRight, Heart, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  BookOpen, TrendingUp, Calendar, Zap, ArrowRight, Heart,
+  Sparkles, CheckCircle2, Flame, Tent, Clock, Info, X, ChevronRight,
+  Share2, Award, Quote
+} from 'lucide-react';
 import { parseISO } from 'date-fns';
 import Link from 'next/link';
 import { getEventsForUser } from '@/lib/actions/events';
 import { ManagedEvent } from '@/types';
 import MembershipCard from './components/MembershipCard';
-
-const QUOTES = [
-  "Chanting the holy name is the primary spiritual practice for this age.",
-  "Always remember Krishna and never forget Him.",
-  "Tolerance and humility are the ornaments of a devotee.",
-  "Patience and enthusiasm are key to spiritual success.",
-  "Service to the devotees is the highest of all services."
-];
+import { getDailySloka, DailySloka } from '@/lib/data/daily-slokas';
+import {
+  getNextEkadashi,
+  getTodaysVaishnavaEvent,
+  getUpcomingVaishnavaEvents,
+  VaishnavaEvent,
+  NextEkadashiInfo
+} from '@/lib/data/vaishnava-calendar';
+import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
   const { userData } = useAuth();
   const [recentReports, setRecentReports] = useState<SadhanaReport[]>([]);
   const [unreadMessages, setUnreadMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [quote, setQuote] = useState('');
   const [greeting, setGreeting] = useState('Welcome');
   const [events, setEvents] = useState<ManagedEvent[]>([]);
 
+  // Spiritual Data
+  const [dailySloka, setDailySloka] = useState<DailySloka | null>(null);
+  const [nextEkadashi, setNextEkadashi] = useState<NextEkadashiInfo | null>(null);
+  const [todaysEvent, setTodaysEvent] = useState<VaishnavaEvent | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<VaishnavaEvent[]>([]);
+  const [selectedEventModal, setSelectedEventModal] = useState<VaishnavaEvent | null>(null);
+
   useEffect(() => {
-    setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
-    const hour = new Date().getHours();
+    const now = new Date();
+    const hour = now.getHours();
     if (hour < 12) setGreeting('Good Morning');
     else if (hour < 18) setGreeting('Good Afternoon');
     else setGreeting('Good Evening');
+
+    setDailySloka(getDailySloka(now));
+    setNextEkadashi(getNextEkadashi(now));
+    setTodaysEvent(getTodaysVaishnavaEvent(now));
+    setUpcomingEvents(getUpcomingVaishnavaEvents(4, now));
   }, []);
 
   useEffect(() => {
@@ -72,7 +88,7 @@ export default function DashboardPage() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const upcomingEvents = (fetchedEvents as any[]).filter((event: any) => {
+        const activeEvents = (fetchedEvents as any[]).filter((event: any) => {
           const dateToUse = event.eventDate || event.createdAt;
           if (!dateToUse) return false;
           const eventDate = new Date(dateToUse);
@@ -80,8 +96,8 @@ export default function DashboardPage() {
         });
 
         setRecentReports(reports);
-        setUnreadMessages((messages as any[]).filter((m: any) => !m.readBy.includes(userData.id)));
-        setEvents(upcomingEvents);
+        setUnreadMessages((messages as any[]).filter((m: any) => !m.readBy?.includes(userData.id)));
+        setEvents(activeEvents);
         setLoading(false);
       }
     };
@@ -91,7 +107,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -129,252 +145,437 @@ export default function DashboardPage() {
     }
   }
 
-  const stats = [
-    {
-      name: "Today's Sadhana",
-      value: todayReport ? 'Completed' : 'Pending',
-      icon: todayReport ? CheckCircle2 : BookOpen,
-      gradient: todayReport ? 'from-emerald-500 to-teal-600' : 'from-amber-500 to-orange-600',
-      href: '/dashboard/sadhana',
-      subtext: todayReport ? 'Report Submitted' : 'Submit today',
-    },
-    {
-      name: 'Sadhana Streak',
-      value: `${streak} Days`,
-      icon: Zap,
-      gradient: 'from-purple-500 to-pink-600',
-      href: '/dashboard/sadhana/progress',
-      subtext: streak > 0 ? 'Active Practice' : 'Start streak today',
-    },
-    {
-      name: 'Communications',
-      value: events.length.toString(),
-      icon: Calendar,
-      gradient: 'from-blue-500 to-indigo-600',
-      href: '/dashboard/events',
-      subtext: events.length > 0 ? `${events.filter(e => !e.userResponse).length} New Announcements` : 'Up to date',
-    },
-  ];
+  const handleCopySloka = () => {
+    if (!dailySloka) return;
+    const text = `📖 *${dailySloka.reference}*\n\n"${dailySloka.sanskrit}"\n\n_${dailySloka.translation}_\n\n✨ *Reflection:* ${dailySloka.reflection}\n\nShared via VOICE Gurukul`;
+    navigator.clipboard.writeText(text);
+    toast.success('Sloka copied to clipboard! Share with devotees.');
+  };
 
   return (
-    <div className="relative overflow-hidden px-1 sm:px-2 md:px-3">
+    <div className="relative overflow-hidden px-2 sm:px-4 py-2 space-y-4 max-w-6xl mx-auto">
       {/* Background blobs */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[35%] h-[35%] rounded-full t-blob-a blur-[90px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full t-blob-b blur-[90px]" />
       </div>
 
-      <div className="max-w-6xl mx-auto space-y-3 sm:space-y-4 lg:space-y-4.5 relative z-10">
+      {/* Hero Welcome Card */}
+      <div className="relative bg-white/90 backdrop-blur-xl rounded-2xl shadow-sm border border-slate-200/90 p-4 sm:p-5 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200 mb-1.5 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              <span>Hare Krishna</span>
+              {todaysEvent && (
+                <span className="ml-1 pl-1 border-l border-amber-300 font-extrabold text-orange-700">
+                  • {todaysEvent.name}
+                </span>
+              )}
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              {greeting}, <span className="text-amber-700">{userData?.name?.split(' ')[0] || 'Devotee'}</span>
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">
+              Welcome to your daily spiritual sanctuary. May your chanting and service bring you closer to Krishna today.
+            </p>
+          </div>
 
-        {/* Hero Section (Compact for 13/14-inch screens) */}
-        <div className="relative bg-white/85 backdrop-blur-xl rounded-xl sm:rounded-2xl shadow-sm border border-slate-200/80 p-3.5 sm:p-4 lg:p-5 overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-12 -mt-12 w-28 h-28 sm:w-48 sm:h-48 rounded-full t-blob-a blur-2xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-20 h-20 sm:w-36 sm:h-36 rounded-full t-blob-b blur-xl pointer-events-none" />
+          <div className="hidden sm:flex flex-col items-center justify-center p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 shadow-2xs shrink-0 min-w-[100px]">
+            <div className="text-2xl font-black text-amber-800 leading-none">{new Date().getDate()}</div>
+            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mt-0.5">{new Date().toLocaleString('default', { month: 'short' })}</div>
+            <div className="text-[10px] font-semibold text-slate-400">{new Date().getFullYear()}</div>
+          </div>
+        </div>
+      </div>
 
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full t-bg-badge t-text-badge text-[10px] sm:text-xs font-semibold mb-1.5 sm:mb-2 shadow-2xs border t-border">
-                <Sparkles className="w-3 h-3 t-text-accent" />
-                <span>Hare Krishna</span>
+      {/* Next Ekadashi & Festival Alert Banner (Lively Spiritual Highlight) */}
+      {nextEkadashi && (
+        <div
+          onClick={() => setSelectedEventModal(nextEkadashi.event)}
+          className="group relative overflow-hidden bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 rounded-2xl p-4 sm:p-4.5 text-white shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
+        >
+          <div className="absolute right-0 top-0 w-48 h-48 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none group-hover:scale-125 transition-transform" />
+
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-xs flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-amber-200 animate-spin-slow" />
               </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight leading-tight">
-                {greeting}, <span className="t-text-accent">{userData?.name?.split(' ')[0] || 'Devotee'}</span>
-              </h1>
-              <div className="flex items-start gap-2 mt-1.5 sm:mt-2">
-                <div className="mt-1 w-0.5 sm:w-1 h-4 sm:h-5 t-bg-primary rounded-full shrink-0 opacity-70" />
-                <p className="text-xs sm:text-sm text-slate-600 max-w-xl italic font-medium leading-snug truncate sm:whitespace-normal">
-                  &quot;{quote}&quot;
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full border border-white/20">
+                    Next Ekadashi
+                  </span>
+                  <span className="text-xs font-bold text-amber-200">
+                    {nextEkadashi.label} ({new Date(nextEkadashi.event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })})
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black tracking-tight text-white mt-0.5 group-hover:text-amber-100 transition-colors">
+                  {nextEkadashi.event.name}
+                </h3>
+                <p className="text-xs text-amber-100/90 font-medium line-clamp-1">
+                  {nextEkadashi.event.fasting || 'Fasting from grains & beans'} • {nextEkadashi.event.significance}
                 </p>
               </div>
             </div>
 
-            <div className="hidden md:flex flex-col items-center justify-center min-w-[85px] lg:min-w-[95px] p-2.5 sm:p-3 t-bg-light rounded-xl border t-border shadow-2xs shrink-0">
-              <div className="text-center">
-                <div className="text-2xl lg:text-3xl font-black t-text-accent leading-none">{new Date().getDate()}</div>
-                <div className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">{new Date().toLocaleString('default', { month: 'short' })}</div>
-                <div className="text-[9px] font-semibold text-slate-400 mt-0.5">{new Date().getFullYear()}</div>
-              </div>
+            <div className="flex items-center gap-1.5 self-end sm:self-auto text-xs font-bold bg-white/15 group-hover:bg-white/25 px-3 py-1.5 rounded-xl border border-white/20 transition-all shrink-0">
+              <span>View Story & Rules</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
           </div>
         </div>
+      )}
 
-        {/* Dynamic Stats Grid (3 Balanced Cards) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 lg:gap-3.5">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Link
-                key={stat.name}
-                href={stat.href}
-                className="group relative overflow-hidden bg-white/80 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-3.5 lg:p-4 shadow-2xs border border-slate-200/90 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs hover:border-amber-400"
-              >
-                <div className="absolute top-0 left-0 w-1 h-full t-gradient" />
-                <div className="flex justify-between items-start mb-2 sm:mb-2.5">
-                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl t-gradient text-white shadow-2xs group-hover:scale-105 transition-transform">
-                    <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                  </div>
-                  <div className="p-1 bg-slate-100 text-slate-400 rounded-lg opacity-0 group-hover:opacity-100 group-hover:bg-slate-200 group-hover:text-slate-700 transition-all transform group-hover:translate-x-0.5">
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg lg:text-xl font-black text-slate-800 tracking-tight leading-tight">{stat.value}</h3>
-                  <p className="text-[11px] sm:text-xs font-bold text-slate-500 mt-0.5">{stat.name}</p>
-                  <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 font-semibold bg-slate-100/80 border border-slate-200/60 inline-block px-1.5 py-0.5 rounded-md">{stat.subtext}</p>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Recent Activity & Quick Actions Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-4 lg:gap-4.5 items-start">
-          
-          {/* Left/Main Column: Recent Sadhana Feed (Takes up 2 columns on large screens) */}
-          <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/90 overflow-hidden flex flex-col">
-            <div className="p-3 sm:p-3.5 lg:p-4 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 sm:gap-3">
-                <div className="p-1.5 sm:p-2 t-bg-light rounded-lg border t-border shadow-2xs">
-                  <TrendingUp className="w-4 h-4 t-text-accent" />
-                </div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight">Recent Sadhana</h2>
-              </div>
-              <Link href="/dashboard/sadhana/progress" className="text-xs font-bold t-text-accent hover:opacity-80 flex items-center gap-1 group transition-opacity">
-                <span>View All</span>
-                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
+      {/* Compact 2x2 Mobile / 4-Col Desktop Stats Grid (Replaces the empty stacked cards!) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+        {/* Card 1: Today's Sadhana */}
+        <Link
+          href="/dashboard/sadhana"
+          className="group bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all relative overflow-hidden flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className={`p-2 rounded-xl text-white shadow-xs ${
+              todayReport ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-amber-500 to-orange-600'
+            }`}>
+              {todayReport ? <CheckCircle2 className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
             </div>
-
-            <div className="flex-1 overflow-y-auto max-h-[380px] lg:max-h-[420px] scrollbar-thin">
-              {recentReports.length > 0 ? (
-                <div className="divide-y divide-slate-100">
-                  {recentReports.slice(0, 7).map((report, idx) => {
-                    const soul = report.soulPercent || 0;
-                    const body = report.bodyPercent || 0;
-                    const date = typeof report.date === 'string' ? parseISO(report.date) : report.date;
-                    
-                    return (
-                      <div key={idx} className="p-2.5 sm:p-3 hover:bg-slate-50/80 transition-colors group">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xs border border-slate-200 shadow-2xs group-hover:t-border group-hover:t-bg-light group-hover:t-text-accent transition-all shrink-0">
-                              {date.getDate()}
-                            </div>
-                            <div>
-                              <p className="text-xs sm:text-sm font-bold text-slate-800 leading-tight">{date.toLocaleString('default', { weekday: 'short' })}, {date.toLocaleString('default', { month: 'short' })}</p>
-                              <p className="text-[10px] font-semibold text-slate-400">{date.getFullYear()}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full t-bg-badge t-text-badge text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider border t-border">
-                             <Sparkles className="w-2.5 h-2.5 t-text-accent" />
-                             Day {30 - idx}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                              <span>Soul</span>
-                              <span className={soul >= 80 ? 'text-emerald-600' : 'text-slate-600'}>{soul.toFixed(0)}%</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                              <div className={`h-full rounded-full transition-all duration-700 ${soul >= 80 ? 'bg-gradient-to-r from-orange-400 to-rose-500' : soul >= 50 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-slate-300 to-slate-400'}`} style={{ width: `${soul}%` }} />
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                              <span>Body</span>
-                              <span className={body >= 80 ? 'text-emerald-600' : 'text-slate-600'}>{body.toFixed(0)}%</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                              <div className={`h-full rounded-full transition-all duration-700 ${body >= 80 ? 'bg-gradient-to-r from-teal-400 to-emerald-500' : body >= 50 ? 'bg-gradient-to-r from-cyan-400 to-blue-500' : 'bg-gradient-to-r from-rose-400 to-orange-400'}`} style={{ width: `${body}%` }} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+              todayReport ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+            }`}>
+              {todayReport ? 'Submitted' : 'Pending'}
+            </span>
+          </div>
+          <div>
+            <div className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+              {todayReport ? (
+                <span>Soul {todayReport.soulPercent?.toFixed(0) || 100}%</span>
               ) : (
-                <div className="text-center py-12 px-4">
-                  <div className="w-14 h-14 t-bg-light rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner border t-border">
-                     <BookOpen className="w-7 h-7 t-text-accent" />
-                  </div>
-                  <h3 className="text-base font-bold text-slate-800 mb-1">Your Path Starts Here</h3>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4 font-medium leading-relaxed">View your progress and streak on the Progress page.</p>
-                  <Link href="/dashboard/sadhana/progress" className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl t-gradient t-text-on-bg text-xs font-bold hover:shadow-md hover:opacity-95 transition-all">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>View Progress</span>
-                  </Link>
-                </div>
+                <span>Today&apos;s Sadhana</span>
               )}
             </div>
+            <p className="text-[11px] font-semibold text-slate-500 mt-0.5 truncate">
+              {todayReport ? 'Practices recorded' : 'Record rounds & reading'}
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 2: Sadhana Streak (with Animated Flame) */}
+        <Link
+          href="/dashboard/sadhana/progress"
+          className="group bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-orange-400 transition-all relative overflow-hidden flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white shadow-xs">
+              <Flame className="w-4 h-4 animate-pulse" />
+            </div>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-50 text-orange-800 border border-orange-200">
+              Streak
+            </span>
+          </div>
+          <div>
+            <div className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+              {streak} {streak === 1 ? 'Day' : 'Days'}
+            </div>
+            <p className="text-[11px] font-semibold text-slate-500 mt-0.5 truncate">
+              {streak > 0 ? 'Daily devotion active' : 'Start your streak today'}
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 3: Communications / Notices */}
+        <Link
+          href="/dashboard/events"
+          className="group bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all relative overflow-hidden flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xs">
+              <Calendar className="w-4 h-4" />
+            </div>
+            {events.filter(e => !e.userResponse).length > 0 && (
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                {events.filter(e => !e.userResponse).length} New
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+              {events.length} Gatherings
+            </div>
+            <p className="text-[11px] font-semibold text-slate-500 mt-0.5 truncate">
+              Community broadcasts
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 4: Upcoming Camps */}
+        <Link
+          href="/dashboard/camp"
+          className="group bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-emerald-400 transition-all relative overflow-hidden flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs">
+              <Tent className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+              Retreats
+            </span>
+          </div>
+          <div>
+            <div className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+              Youth Camps
+            </div>
+            <p className="text-[11px] font-semibold text-slate-500 mt-0.5 truncate">
+              View & register
+            </p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Daily Bhagavad Gita Sloka Card (Transcendental Daily Inspiration) */}
+      {dailySloka && (
+        <div className="bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-50 rounded-2xl p-4 sm:p-6 border border-amber-200/80 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3 border-b border-amber-200/60 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-600 text-white shadow-2xs">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase tracking-wider text-amber-900">
+                  Sloka of the Day
+                </span>
+                <span className="text-xs font-extrabold text-amber-700 ml-2">
+                  • {dailySloka.reference}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCopySloka}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 hover:bg-white text-amber-900 text-xs font-bold border border-amber-200 transition shadow-2xs cursor-pointer"
+              title="Copy Sloka to share on WhatsApp"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
           </div>
 
-          {/* Right/Sidebar Column: Membership & Quick Actions */}
-          <div className="flex flex-col gap-3.5 sm:gap-4 lg:col-span-1">
-            <MembershipCard />
-            
-            {/* Quick Actions */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl sm:rounded-2xl shadow-xl shadow-slate-900/10 overflow-hidden relative flex flex-col">
-              <div className="absolute top-0 right-0 w-48 h-48 t-blob-a rounded-full blur-3xl opacity-20 pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-36 h-36 t-blob-b rounded-full blur-2xl opacity-20 pointer-events-none" />
+          <div className="space-y-2.5">
+            <p className="font-serif italic text-sm sm:text-base font-bold text-amber-950 leading-relaxed">
+              &quot;{dailySloka.sanskrit}&quot;
+            </p>
+            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+              {dailySloka.translation}
+            </p>
+            <div className="p-3 bg-white/80 rounded-xl border border-amber-200/60 text-xs text-amber-900 font-medium leading-relaxed">
+              <strong className="font-bold text-amber-950">Daily Reflection:</strong> {dailySloka.reflection}
+            </div>
+          </div>
+        </div>
+      )}
 
-              <div className="p-3.5 sm:p-4 border-b border-white/10 relative z-10">
-                <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                  <span>Quick Actions</span>
-                </h2>
+      {/* Middle Grid: Upcoming Vaishnava Festivals & Recent Sadhana */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Left Column (2 Cols): Recent Sadhana History */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-xs border border-slate-200/90 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3.5 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+                <TrendingUp className="w-4 h-4" />
               </div>
+              <h2 className="text-base font-extrabold text-slate-900">Recent Sadhana Activity</h2>
+            </div>
+            <Link
+              href="/dashboard/sadhana/progress"
+              className="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 group"
+            >
+              <span>View All</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          </div>
 
-              <div className="p-3.5 sm:p-4 flex-1 flex flex-col gap-2.5 sm:gap-3 relative z-10">
-                <Link href="/dashboard/sadhana" className="group flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/15 transition-all">
-                  <div className="w-10 h-10 rounded-xl t-gradient flex items-center justify-center shadow-md group-hover:scale-105 transition-transform shrink-0">
-                    <BookOpen className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-white leading-tight group-hover:text-amber-200 transition-colors truncate">Submit Sadhana</h3>
-                    <p className="text-[10px] text-slate-400 font-medium truncate">Record today&apos;s practices</p>
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/15 transition-colors shrink-0">
-                    <ArrowRight className="w-3 h-3 text-slate-400 group-hover:text-white" />
-                  </div>
-                </Link>
+          {recentReports.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {recentReports.slice(0, 5).map((report, idx) => {
+                const soul = report.soulPercent || 0;
+                const body = report.bodyPercent || 0;
+                const date = typeof report.date === 'string' ? parseISO(report.date) : report.date;
 
-                <Link href="/dashboard/events" className="group flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/15 transition-all">
-                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform shrink-0">
-                    <Calendar className="w-5 h-5 text-white" />
-                    {events.filter(e => !e.userResponse).length > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black border-2 border-slate-900">
-                        {events.filter(e => !e.userResponse).length}
+                return (
+                  <div key={idx} className="py-2.5 sm:py-3 hover:bg-slate-50/60 transition rounded-xl px-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700">
+                          {date.getDate()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">
+                            {date.toLocaleString('default', { weekday: 'short' })}, {date.toLocaleString('default', { month: 'short' })}
+                          </p>
+                          <p className="text-[10px] font-semibold text-slate-400">{date.getFullYear()}</p>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        Day {30 - idx}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-white leading-tight group-hover:text-blue-300 transition-colors truncate">Communications</h3>
-                    <p className="text-[10px] text-slate-400 font-medium truncate">Community Gatherings</p>
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/15 transition-colors shrink-0">
-                    <ArrowRight className="w-3 h-3 text-slate-400 group-hover:text-blue-300" />
-                  </div>
-                </Link>
-
-                <div className="mt-1 pt-2 border-t border-white/5">
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/5 relative overflow-hidden group">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Heart className="w-3 h-3 text-rose-400 animate-pulse shrink-0" />
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Inspiration</span>
                     </div>
-                    <p className="text-xs font-medium text-slate-300 italic leading-snug">
-                      &quot;Service to the devotees is the highest of all services.&quot;
-                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                          <span>Soul</span>
+                          <span className={soul >= 80 ? 'text-emerald-600 font-extrabold' : 'text-slate-600'}>{soul.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${soul >= 80 ? 'bg-gradient-to-r from-orange-400 to-rose-500' : 'bg-gradient-to-r from-amber-400 to-orange-500'}`}
+                            style={{ width: `${soul}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                          <span>Body</span>
+                          <span className={body >= 80 ? 'text-teal-600 font-extrabold' : 'text-slate-600'}>{body.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${body >= 80 ? 'bg-gradient-to-r from-teal-400 to-emerald-500' : 'bg-gradient-to-r from-cyan-400 to-blue-500'}`}
+                            style={{ width: `${body}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-2 border border-amber-200">
+                <BookOpen className="w-6 h-6" />
               </div>
+              <h3 className="text-sm font-extrabold text-slate-800">Start Your Sadhana Journey</h3>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto mb-3">Record your daily rounds, reading, and hearing to watch your devotional practice bloom.</p>
+              <Link
+                href="/dashboard/sadhana"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs font-black shadow-xs hover:shadow-md transition"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Submit Today&apos;s Sadhana</span>
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column (1 Col): Upcoming Vaishnava Festivals & Membership */}
+        <div className="space-y-4">
+          <MembershipCard />
+
+          {/* Upcoming Festivals Card */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200/90 p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
+              <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-orange-600" />
+                Upcoming Auspicious Days
+              </h2>
+            </div>
+
+            <div className="space-y-2.5">
+              {upcomingEvents.map((evt, i) => (
+                <div
+                  key={i}
+                  onClick={() => setSelectedEventModal(evt)}
+                  className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-100 hover:border-amber-200 transition cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-800 group-hover:text-amber-900 transition-colors">
+                      {evt.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                      {new Date(evt.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                    {evt.significance}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Vaishnava Event Detail Modal */}
+      {selectedEventModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setSelectedEventModal(null)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-amber-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-amber-600 to-orange-600 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-amber-200" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                    {selectedEventModal.type.toUpperCase()}
+                  </span>
+                  <h3 className="text-lg font-black tracking-tight text-white mt-1">
+                    {selectedEventModal.name}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedEventModal(null)}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs">
+                <div>
+                  <span className="font-bold text-amber-900 block">Date</span>
+                  <span className="text-slate-700">{new Date(selectedEventModal.date).toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </div>
+                {selectedEventModal.fasting && (
+                  <div className="text-right">
+                    <span className="font-bold text-orange-900 block">Fasting Rule</span>
+                    <span className="font-semibold text-orange-700">{selectedEventModal.fasting}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Significance</h4>
+                <p className="text-xs font-semibold text-slate-800">{selectedEventModal.significance}</p>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Story & Pastime</h4>
+                <p className="text-xs text-slate-600 leading-relaxed">{selectedEventModal.description}</p>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => setSelectedEventModal(null)}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs font-bold shadow-xs hover:shadow-md transition"
+                >
+                  Hare Krishna • Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -39,27 +39,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 2. Parse time filter
+    // 2. Parse time filter & pagination & search params
     const searchParams = req.nextUrl.searchParams;
     const period = searchParams.get('period') || '7d';
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(5, parseInt(searchParams.get('limit') || '15', 10)));
+    const offset = (page - 1) * limit;
+
+    const search = searchParams.get('search')?.trim() || '';
+    const typeFilter = searchParams.get('type') || 'all'; // 'all' | 'guest' | 'member'
+    const deviceFilter = searchParams.get('device') || 'all'; // 'all' | 'mobile' | 'desktop' | 'tablet'
+    const pathFilter = searchParams.get('path')?.trim() || '';
 
     let intervalClause = "NOW() - INTERVAL '7 days'";
-    let daysCount = 7;
     if (period === 'today') {
       intervalClause = "DATE_TRUNC('day', NOW())";
-      daysCount = 1;
     } else if (period === '30d') {
       intervalClause = "NOW() - INTERVAL '30 days'";
-      daysCount = 30;
     } else if (period === '90d') {
       intervalClause = "NOW() - INTERVAL '90 days'";
-      daysCount = 90;
     } else if (period === 'all') {
       intervalClause = "'2020-01-01'::timestamp";
-      daysCount = 365;
     }
 
-    // 3. Overall KPI Stats (excluding search engine bots from human counts)
+    // 3. Overall KPI Stats (across the selected period)
     const statsQuery = `
       SELECT 
         COUNT(DISTINCT visitor_id) AS total_visitors,
@@ -124,8 +127,57 @@ export async function GET(req: NextRequest) {
     `;
     const devicesRes = await query(devicesQuery);
 
-    // 7. Recent Visits Log (Live Stream, last 35)
-    const recentQuery = `
+    // 7. Filtered Live Activity Stream with Search & Type/Device Filters
+    const whereClauses: string[] = ['is_bot = false'];
+    const queryParams: any[] = [];
+    let paramIdx = 1;
+
+    // Time filter applies to stream as well
+    whereClauses.push(`created_at >= ${intervalClause}`);
+
+    if (search) {
+      whereClauses.push(`(page_path ILIKE $${paramIdx} OR COALESCE(user_email, '') ILIKE $${paramIdx} OR COALESCE(referrer, '') ILIKE $${paramIdx})`);
+      queryParams.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    if (typeFilter === 'guest') {
+      whereClauses.push(`is_logged_in = false`);
+    } else if (typeFilter === 'member') {
+      whereClauses.push(`is_logged_in = true`);
+    }
+
+    if (deviceFilter && deviceFilter !== 'all') {
+      whereClauses.push(`device_type = $${paramIdx}`);
+      queryParams.push(deviceFilter);
+      paramIdx++;
+    }
+
+    if (pathFilter) {
+      whereClauses.push(`page_path = $${paramIdx}`);
+      queryParams.push(pathFilter);
+      paramIdx++;
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
+    // Count filtered records and breakdown
+    const countSql = `
+      SELECT 
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE is_logged_in = false) AS guest_count,
+        COUNT(*) FILTER (WHERE is_logged_in = true) AS member_count
+      FROM site_visits 
+      WHERE ${whereSql};
+    `;
+    const countRes = await query(countSql, queryParams);
+    const totalFiltered = parseInt(countRes.rows[0]?.total || '0', 10);
+    const guestFiltered = parseInt(countRes.rows[0]?.guest_count || '0', 10);
+    const memberFiltered = parseInt(countRes.rows[0]?.member_count || '0', 10);
+    const totalPages = Math.ceil(totalFiltered / limit) || 1;
+
+    // Fetch the paginated rows
+    const recentSql = `
       SELECT 
         id,
         created_at,
@@ -140,15 +192,37 @@ export async function GET(req: NextRequest) {
         os,
         referrer
       FROM site_visits
-      WHERE is_bot = false
+      WHERE ${whereSql}
       ORDER BY created_at DESC
-      LIMIT 35;
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1};
     `;
-    const recentRes = await query(recentQuery);
+    const recentRes = await query(recentSql, [...queryParams, limit, offset]);
+
+    // 8. Disk Space Usage in PostgreSQL
+    let tableSize = 'under 1 MB';
+    try {
+      const sizeRes = await query(
+        "SELECT pg_size_pretty(pg_total_relation_size('site_visits')) as size;"
+      );
+      if (sizeRes.rows[0]?.size) {
+        tableSize = sizeRes.rows[0].size;
+      }
+    } catch {
+      // Non-critical
+    }
 
     return NextResponse.json({
       success: true,
       period,
+      tableSize,
+      pagination: {
+        page,
+        limit,
+        totalCount: totalFiltered,
+        guestCount: guestFiltered,
+        memberCount: memberFiltered,
+        totalPages,
+      },
       stats: {
         totalVisitors: Number(stats.total_visitors || 0),
         guestVisitors: Number(stats.guest_visitors || 0),
@@ -182,4 +256,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Failed to fetch analytics' }, { status: 500 });
   }
 }
-

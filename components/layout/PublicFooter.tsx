@@ -20,9 +20,9 @@ export default function PublicFooter() {
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-sky-900/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
-        
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-4 sm:gap-6 md:gap-10">
-          
+
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1 space-y-4">
             <Link href="/" className="group inline-block">
@@ -31,11 +31,6 @@ export default function PublicFooter() {
             <p className="text-xs text-slate-400 leading-relaxed">
               Vedic Oasis for Inspiration, Culture & Education. Empowering university youth with character, leadership, mental resilience, and spiritual principles across 120+ centres.
             </p>
-            <div className="pt-2">
-              <span className="inline-flex items-center text-[11px] font-semibold text-sky-400 bg-sky-950/60 border border-sky-800/60 px-3 py-1 rounded-full">
-                Connected with ISKCON Youth Forum
-              </span>
-            </div>
           </div>
 
           {/* Quick Links with 7-page sequence */}
@@ -96,9 +91,8 @@ export default function PublicFooter() {
 
         </div>
 
-        <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
+        <div className="pt-8 border-t border-slate-900 flex items-center justify-center text-xs text-slate-500 text-center">
           <p>© {new Date().getFullYear()} VOICE Gurukul. All rights reserved.</p>
-          <p className="mt-2 sm:mt-0 font-serif italic text-indigo-300/80">Hare Krishna Hare Rama • Inspiring Youth Globally</p>
         </div>
 
       </div>

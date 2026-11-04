@@ -9,6 +9,8 @@ import { logout } from '@/lib/supabase/auth';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
 import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen, Tent, Clock } from 'lucide-react';
 import ProfileCompletionModal from '@/components/auth/ProfileCompletionModal';
+import ChangePasswordModal from '@/components/dashboard/ChangePasswordModal';
+import { KeyRound } from 'lucide-react';
 import ProfileCreationLoadingModal from '@/components/auth/ProfileCreationLoadingModal';
 import { getSmallThumbnailUrl } from '@/lib/utils/google-drive';
 import { requestNotificationPermission, getNotificationPermission, isNotificationSupported } from '@/lib/utils/notifications';
@@ -20,12 +22,15 @@ import { useTheme } from '@/components/providers/ThemeProvider';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const isEffectiveCollapsed = isCollapsed && !isHovered;
   const [sidebarImgError, setSidebarImgError] = useState(false);
   const [topbarImgError, setTopbarImgError] = useState(false);
   const { user, userData, loading } = useAuth();
    const router = useRouter();
    const pathname = usePathname();
    const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
    const { theme, themeName, setTheme } = useTheme();
 
@@ -197,15 +202,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const baseNavigation = isPending
       ? [
+          { name: 'Website Home', href: '/', icon: Globe },
           { name: 'Camps', href: '/dashboard/camp', icon: Tent },
           { name: 'Profile', href: '/dashboard/profile', icon: Settings },
         ]
       : [
+          { name: 'Website Home', href: '/', icon: Globe },
           { name: 'Dashboard', href: '/dashboard', icon: Home },
           { name: 'Sadhana', href: '/dashboard/sadhana', icon: BookOpen },
           { name: 'Camps', href: '/dashboard/camp', icon: Tent },
           { name: 'Communications', href: '/dashboard/events', icon: Calendar },
-          { name: 'Data Center', href: '/dashboard/data-center', icon: Globe },
+          { name: 'Data Center', href: '/dashboard/data-center', icon: Database },
           { name: 'Policies', href: '/dashboard/policies', icon: BookOpen },
           { name: 'Donations', href: '/dashboard/donations', icon: CreditCard },
           { name: 'Profile', href: '/dashboard/profile', icon: Settings },
@@ -294,6 +301,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="t-page-bg h-screen flex overflow-hidden transition-colors duration-500">
       {/* Profile Creation Loading Modal */}
       <ProfileCreationLoadingModal isOpen={!!showLoadingModal} />
+      <ChangePasswordModal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} userData={userData} />
 
       {/* Profile Completion Modal */}
       {showProfileModal && !isProfileComplete && !showLoadingModal && (
@@ -320,15 +328,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
+      {/* Spacer for collapsed sidebar so page doesn't shift when hovering */}
+      {isCollapsed && (
+        <div className="hidden lg:block w-[72px] flex-shrink-0 transition-all duration-300" />
+      )}
+
       {/* Sidebar / More Menu */}
       <div
+        onMouseEnter={() => {
+          if (isCollapsed) setIsHovered(true);
+        }}
+        onMouseLeave={() => {
+          if (isCollapsed) setIsHovered(false);
+        }}
         className={`fixed z-30 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] 
           t-sidebar-gradient shadow-2xl lg:shadow-none
-          w-72 ${isCollapsed ? 'lg:w-[72px]' : 'lg:w-60 xl:w-64 2xl:w-72'}
+          w-72 ${
+            isCollapsed
+              ? isEffectiveCollapsed
+                ? 'lg:w-[72px]'
+                : 'lg:w-64 lg:shadow-2xl lg:z-40'
+              : 'lg:w-60 xl:w-64 2xl:w-72'
+          }
+          ${isCollapsed ? 'lg:fixed lg:top-0 lg:left-0 lg:bottom-0' : 'lg:static'}
           bottom-[88px] lg:bottom-0 lg:top-0 right-0 lg:left-0
           max-h-[calc(100vh-140px)] lg:max-h-none lg:h-screen
           ${sidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 lg:opacity-100 lg:translate-x-0'} 
-          lg:static lg:block lg:translate-x-0 lg:border-r lg:border-white/10
+          lg:block lg:translate-x-0 lg:border-r lg:border-white/10
           rounded-t-[2.5rem] lg:rounded-none
           ${!sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}
           flex flex-col flex-shrink-0
@@ -336,30 +362,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div className="flex flex-col h-full relative overflow-hidden">
           {/* Header */}
-          <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between px-5 lg:px-4'} h-14 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]`}>
-            {isCollapsed ? (
-              <div className="flex flex-col items-center gap-1.5 py-1">
+          <div className={`flex items-center ${isEffectiveCollapsed ? 'lg:justify-center lg:px-2' : 'justify-between px-5 lg:px-4'} h-14 border-b border-white/10 flex-shrink-0 relative z-10 bg-transparent lg:rounded-none rounded-tl-[2rem]`}>
+            {isEffectiveCollapsed ? (
+              <div className="flex items-center justify-center w-full py-1">
                 <button
                   onClick={toggleCollapse}
-                  className="hidden lg:flex text-amber-300 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-all cursor-pointer"
-                  title="Expand Sidebar (Ctrl+B)"
+                  className="hidden lg:flex items-center justify-center w-10 h-10 text-amber-300 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer shadow-xs group"
+                  title="Expand Sidebar (Click to Pin Open)"
                 >
-                  <PanelLeftOpen className="h-4 w-4" />
+                  <PanelLeftOpen className="h-5 w-5 transition-transform group-hover:scale-110" />
                 </button>
-                <Link 
-                  href="/" 
-                  className="text-xs font-black text-amber-400 font-display tracking-widest hover:text-white transition-colors"
-                  title="Go to Home Page"
-                >
-                  VG
-                </Link>
               </div>
             ) : (
               <>
                 <Link 
-                  href="/" 
+                  href="/dashboard" 
                   className="flex items-center space-x-2.5 group hover:opacity-90 transition-opacity"
-                  title="Go to Home Page"
+                  title="VOICE Gurukul Dashboard"
                 >
                   <div className="flex flex-col">
                     <h1 className="text-sm lg:text-base font-extrabold text-white font-display tracking-wider uppercase group-hover:text-amber-300 transition-colors truncate">
@@ -370,13 +389,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </p>
                   </div>
                 </Link>
-                <button
-                  onClick={toggleCollapse}
-                  className="hidden lg:flex text-white/50 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all cursor-pointer"
-                  title="Collapse Sidebar (Ctrl+B)"
-                >
-                  <PanelLeftClose className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <Link
+                    href="/"
+                    className="hidden lg:flex items-center justify-center p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                    title="Go to Public Website Home"
+                  >
+                    <Globe className="h-4 w-4 text-amber-300" />
+                  </Link>
+                  <button
+                    onClick={toggleCollapse}
+                    className="hidden lg:flex text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-all cursor-pointer border border-transparent hover:border-white/10"
+                    title="Collapse Sidebar (Ctrl+B)"
+                  >
+                    <PanelLeftClose className="h-4 w-4" />
+                  </button>
+                </div>
               </>
             )}
             <button
@@ -404,21 +432,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.name}
                     href={item.href}
-                    title={isCollapsed ? item.name : undefined}
-                    className={`group items-center ${isCollapsed ? 'lg:justify-center lg:px-2' : 'px-3 lg:px-3'} py-2 lg:py-2 rounded-xl transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${
+                    title={isEffectiveCollapsed ? item.name : undefined}
+                    className={`group items-center ${isEffectiveCollapsed ? 'lg:justify-center lg:px-2' : 'px-3 lg:px-3'} py-2 lg:py-2 rounded-xl transition-all duration-200 ${isMobileHidden ? 'hidden lg:flex' : 'flex'} ${
                       isActive 
                         ? 'bg-black/25 text-white font-black shadow-inner border-l-4 border-amber-200 ring-1 ring-white/10' 
                         : 'text-amber-100 hover:bg-black/15 hover:text-white'
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className={`relative z-10 flex items-center ${isCollapsed ? 'lg:justify-center' : 'w-full'}`}>
+                    <div className={`relative z-10 flex items-center ${isEffectiveCollapsed ? 'lg:justify-center' : 'w-full'}`}>
                       <div className={`p-1.5 rounded-lg transition-all duration-200 flex-shrink-0 ${
                         isActive ? 'bg-amber-300 text-slate-950 font-black shadow-xs' : 'bg-black/15 text-amber-200 group-hover:bg-black/25 group-hover:text-white'
                       }`}>
                         <Icon className="h-4 w-4 transition-colors duration-200" />
                       </div>
-                      {!isCollapsed && (
+                      {!isEffectiveCollapsed && (
                         <span className="ml-3 font-bold text-[10.5px] lg:text-[11px] tracking-wider uppercase font-sans truncate drop-shadow-2xs">
                           {item.name}
                         </span>
@@ -431,7 +459,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Theme Selector Dropdown */}
-          {!isCollapsed ? (
+          {!isEffectiveCollapsed ? (
             <div className="px-3 py-2 border-t border-white/10 bg-black/15 relative z-10">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[9px] font-bold tracking-widest text-white/50 uppercase">
@@ -466,65 +494,80 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
 
-          {/* User Profile Section */}
+          {/* User Profile Section (Click to Open Account Security & Password) */}
           <div className="border-t border-white/10 p-2.5 lg:p-2 flex-shrink-0 relative z-10 bg-black/25">
-            {!isCollapsed ? (
-              <div className="flex items-center mb-1.5 p-2 bg-white/10 rounded-xl border border-white/10">
-                <div className="mr-2 flex-shrink-0">
-                  <div className="relative">
-                    {userData?.profileImage && !sidebarImgError ? (
-                      <Image
-                        src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
-                        alt={userData.name || 'Profile'}
-                        width={28}
-                        height={28}
-                        className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm"
-                        unoptimized={true}
-                        onError={() => setSidebarImgError(true)}
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center">
-                        <UserCircle2 className="w-4 h-4 text-white" />
-                      </div>
-                    )}
+            {!isEffectiveCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full text-left flex items-center justify-between mb-1.5 p-2 bg-white/10 hover:bg-white/20 rounded-xl border border-white/10 hover:border-white/25 transition-all cursor-pointer group shadow-2xs"
+                title="Account Security & Password Settings"
+              >
+                <div className="flex items-center min-w-0 flex-1">
+                  <div className="mr-2 flex-shrink-0">
+                    <div className="relative">
+                      {userData?.profileImage && !sidebarImgError ? (
+                        <Image
+                          src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
+                          alt={userData.name || 'Profile'}
+                          width={28}
+                          height={28}
+                          className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm group-hover:ring-2 group-hover:ring-amber-300 transition-all"
+                          unoptimized={true}
+                          onError={() => setSidebarImgError(true)}
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center group-hover:bg-white/25 transition-colors">
+                          <UserCircle2 className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-white truncate uppercase tracking-tight group-hover:text-amber-200 transition-colors">
+                      {userData?.name}
+                    </p>
+                    <p className="text-[8.5px] text-white/60 font-medium truncate uppercase">
+                      {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
+                    </p>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-white truncate uppercase tracking-tight">
-                    {userData?.name}
-                  </p>
-                  <p className="text-[8.5px] text-white/60 font-medium truncate uppercase">
-                    {getRoleDisplayName(getHighestRole(userData?.role || 'student'))}
-                  </p>
+                <div className="p-1 rounded-md text-white/40 group-hover:text-amber-300 transition-colors flex-shrink-0" title="Security & Password">
+                  <KeyRound className="w-3.5 h-3.5" />
                 </div>
-              </div>
+              </button>
             ) : (
-              <div className="flex justify-center mb-1.5" title={`${userData?.name} (${getRoleDisplayName(getHighestRole(userData?.role || 'student'))})`}>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full flex justify-center mb-1.5 cursor-pointer hover:opacity-80 transition group"
+                title={`Account Security & Password (${userData?.name})`}
+              >
                 {userData?.profileImage && !sidebarImgError ? (
                   <Image
                     src={getSmallThumbnailUrl(userData.profileImage) || userData.profileImage}
                     alt={userData.name || 'Profile'}
                     width={28}
                     height={28}
-                    className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm"
+                    className="w-7 h-7 rounded-full object-cover border border-white/20 shadow-sm group-hover:ring-2 group-hover:ring-amber-300 transition-all"
                     unoptimized={true}
                     onError={() => setSidebarImgError(true)}
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-white/15 border border-white/20 shadow-sm flex items-center justify-center group-hover:bg-white/25 transition-colors">
                     <UserCircle2 className="w-4 h-4 text-white" />
                   </div>
                 )}
-              </div>
+              </button>
             )}
 
             <button
               onClick={handleLogout}
-              className={`group flex items-center justify-center w-full ${isCollapsed ? 'py-1.5 px-0' : 'px-3 py-1.5'} text-white/60 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all duration-200 font-bold text-[9.5px] uppercase tracking-wider`}
+              className={`group flex items-center justify-center w-full ${isEffectiveCollapsed ? 'py-1.5 px-0' : 'px-3 py-1.5'} text-white/60 hover:text-red-400 hover:bg-white/5 rounded-lg transition-all duration-200 font-bold text-[9.5px] uppercase tracking-wider`}
               title="Logout Session"
             >
-              <LogOut className={`h-3.5 w-3.5 ${!isCollapsed ? 'mr-1.5' : ''} text-white/60 group-hover:text-red-400 transition-colors`} />
-              {!isCollapsed && <span>Logout</span>}
+              <LogOut className={`h-3.5 w-3.5 ${!isEffectiveCollapsed ? 'mr-1.5' : ''} text-white/60 group-hover:text-red-400 transition-colors`} />
+              {!isEffectiveCollapsed && <span>Logout</span>}
             </button>
           </div>
         </div>
