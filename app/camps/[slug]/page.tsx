@@ -2597,6 +2597,7 @@ export default function PublicCampRegistrationPage() {
                               <div>
                                 <span className="text-slate-400 block text-[10px] font-semibold">
                                   {camp.accommodation_pricing?.facility_charge_label || 'Other Charges'}
+                                  {camp.accommodation_pricing?.ac_charge_billing_type !== 'fixed' && ` (${Math.max(1, liveCost.daysOfStay)}d)`}
                                 </span>
                                 <span className="font-bold text-slate-900">₹{liveCost.acCost}</span>
                               </div>

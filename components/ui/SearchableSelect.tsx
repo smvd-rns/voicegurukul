@@ -24,6 +24,7 @@ interface SearchableSelectProps {
     searchPlaceholder?: string;
     displayValue?: string;
     allowClear?: boolean;
+    icon?: React.ReactNode;
 }
 
 export default function SearchableSelect({
@@ -39,6 +40,7 @@ export default function SearchableSelect({
     searchPlaceholder,
     displayValue,
     allowClear = false,
+    icon,
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -131,10 +133,10 @@ export default function SearchableSelect({
 
     const shouldShowEmail = showEmail && options.some((opt) => Boolean(opt.email));
 
-    // Filter options based on search (name or email)
+    // Filter options based on search (name or email/subtitle)
     const filteredOptions = options.filter((option) =>
         option.name.toLowerCase().includes(search.toLowerCase()) ||
-        (shouldShowEmail && option.email && option.email.toLowerCase().includes(search.toLowerCase()))
+        (option.email && option.email.toLowerCase().includes(search.toLowerCase()))
     );
 
     let selectedOption = options.find((opt) => opt[valueProperty] === value);
@@ -245,7 +247,12 @@ export default function SearchableSelect({
         `}
                 onClick={toggleOpen}
             >
-                <div className="flex flex-col truncate pr-5">
+                {icon && (
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 flex items-center justify-center">
+                        {icon}
+                    </div>
+                )}
+                <div className={`flex flex-col truncate pr-5 ${icon ? 'pl-7' : ''}`}>
                     <span 
                         className={`block truncate ${(!selectedOption && !value && !displayValue) ? 'text-gray-400' : 'text-gray-900 font-medium'}`}
                         title={displayText}

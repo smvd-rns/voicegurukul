@@ -17,6 +17,7 @@ import { getRoleHierarchyNumber } from '@/lib/utils/roles';
 import { supabase } from '@/lib/supabase/config';
 import EditUserProfileModal from '../users/EditUserProfileModal';
 import UserDetailsModal from '../users/UserDetailsModal';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { toast } from 'react-hot-toast';
 
 type ApprovalFilterType = 'all' | 'other_none' | 'other_center' | 'other_temple' | 'other_counselor';
@@ -253,6 +254,40 @@ export default function UserApprovalsPage() {
         }
         return counselorsList;
     }, [counselorsList, selectedCenter, centersList]);
+
+    // Searchable Select Options for Table Filters
+    const templeFilterOptions = useMemo(() => [
+        { id: '', name: 'All Temples' },
+        { id: '__other__', name: '⚠️ Other Temple (Custom)' },
+        { id: '__none__', name: '⚪ None / Unassigned Temple' },
+        ...templesList.map(t => ({
+            id: t.name,
+            name: t.name,
+            email: t.city ? (t.state ? `${t.city}, ${t.state}` : t.city) : t.state || ''
+        }))
+    ], [templesList]);
+
+    const centerFilterOptions = useMemo(() => [
+        { id: '', name: 'All Centers' },
+        { id: '__other__', name: '⚠️ Other Center (Custom)' },
+        { id: '__none__', name: '⚪ None / Unassigned Center' },
+        ...availableCenters.map(c => ({
+            id: c.name,
+            name: c.name,
+            email: [c.temple_name, c.city].filter(Boolean).join(' • ')
+        }))
+    ], [availableCenters]);
+
+    const counselorFilterOptions = useMemo(() => [
+        { id: '', name: 'All Counselors' },
+        { id: '__other__', name: '⚠️ Other Counselor (Custom)' },
+        { id: '__none__', name: '⚪ None / No Counselor' },
+        ...availableCounselors.map(c => ({
+            id: c.name,
+            name: c.name,
+            email: [c.ashram, c.city, c.mobile, c.email].filter(Boolean).join(' • ')
+        }))
+    ], [availableCounselors]);
 
     // Counts for badges
     const needsAllocationCount = useMemo(() => {
@@ -595,59 +630,50 @@ export default function UserApprovalsPage() {
                 {showFilters && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2.5 border-t border-gray-50 animate-in fade-in duration-150">
                         {/* Temple Filter */}
-                        <div className="relative">
-                            <select
-                                value={selectedTemple}
-                                onChange={(e) => {
-                                    setSelectedTemple(e.target.value);
-                                    setSelectedCenter('');
-                                    setSelectedCounselor('');
-                                }}
-                                className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
-                            >
-                                <option value="">All Temples</option>
-                                <option value="__other__">⚠️ Other Temple (Custom)</option>
-                                <option value="__none__">⚪ None / Unassigned Temple</option>
-                                <option disabled>──────────</option>
-                                {templesList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                            </select>
-                            <Landmark className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
+                        <SearchableSelect
+                            options={templeFilterOptions}
+                            value={selectedTemple}
+                            valueProperty="id"
+                            onChange={(val) => {
+                                setSelectedTemple(val);
+                                setSelectedCenter('');
+                                setSelectedCounselor('');
+                            }}
+                            placeholder="All Temples"
+                            searchPlaceholder="Search temple by name, city, state..."
+                            icon={<Landmark className="w-3.5 h-3.5 text-gray-400" />}
+                            className="w-full"
+                            triggerClassName="w-full py-2 bg-white border border-gray-100 rounded-xl font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
+                        />
 
                         {/* Center Filter */}
-                        <div className="relative">
-                            <select
-                                value={selectedCenter}
-                                onChange={(e) => {
-                                    setSelectedCenter(e.target.value);
-                                    setSelectedCounselor('');
-                                }}
-                                className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
-                            >
-                                <option value="">All Centers</option>
-                                <option value="__other__">⚠️ Other Center (Custom)</option>
-                                <option value="__none__">⚪ None / Unassigned Center</option>
-                                <option disabled>──────────</option>
-                                {availableCenters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                            </select>
-                            <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
+                        <SearchableSelect
+                            options={centerFilterOptions}
+                            value={selectedCenter}
+                            valueProperty="id"
+                            onChange={(val) => {
+                                setSelectedCenter(val);
+                                setSelectedCounselor('');
+                            }}
+                            placeholder="All Centers"
+                            searchPlaceholder="Search center..."
+                            icon={<Building2 className="w-3.5 h-3.5 text-gray-400" />}
+                            className="w-full"
+                            triggerClassName="w-full py-2 bg-white border border-gray-100 rounded-xl font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
+                        />
 
                         {/* Counselor Filter */}
-                        <div className="relative">
-                            <select
-                                value={selectedCounselor}
-                                onChange={(e) => setSelectedCounselor(e.target.value)}
-                                className="w-full pl-8 pr-7 py-2 bg-white border border-gray-100 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
-                            >
-                                <option value="">All Counselors</option>
-                                <option value="__other__">⚠️ Other Counselor (Custom)</option>
-                                <option value="__none__">⚪ None / No Counselor</option>
-                                <option disabled>──────────</option>
-                                {availableCounselors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                            </select>
-                            <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
+                        <SearchableSelect
+                            options={counselorFilterOptions}
+                            value={selectedCounselor}
+                            valueProperty="id"
+                            onChange={(val) => setSelectedCounselor(val)}
+                            placeholder="All Counselors"
+                            searchPlaceholder="Search counselor by name, phone, email..."
+                            icon={<Users className="w-3.5 h-3.5 text-gray-400" />}
+                            className="w-full"
+                            triggerClassName="w-full py-2 bg-white border border-gray-100 rounded-xl font-bold text-xs text-gray-600 shadow-2xs hover:border-gray-200 transition-colors"
+                        />
                     </div>
                 )}
 

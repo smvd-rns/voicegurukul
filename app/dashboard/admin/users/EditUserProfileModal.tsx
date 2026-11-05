@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,6 +11,7 @@ import { CounselorData } from '@/lib/supabase/counselors';
 import { addTempleToSupabase } from '@/lib/supabase/temples';
 import { SPIRITUAL_MASTERS } from '@/lib/utils/spiritual-masters';
 import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 import { toast } from 'react-hot-toast';
 
@@ -161,6 +162,78 @@ export default function EditUserProfileModal({
       return false;
     });
   }, [centersList, formData.currentTemple, currentTempleObj]);
+
+  // Searchable Select Options
+  const currentTempleOptions = React.useMemo(() => [
+    { id: '', name: 'None / Not Assigned' },
+    { id: 'Other', name: '⚠️ Other (Custom Temple Name)' },
+    ...templesList.map(t => ({
+      id: t.name,
+      name: t.name,
+      email: t.city ? (t.state ? `${t.city}, ${t.state}` : t.city) : t.state || ''
+    }))
+  ], [templesList]);
+
+  const currentCenterOptions = React.useMemo(() => {
+    const opts: Array<{ id: string; name: string; email?: string }> = [
+      { id: '', name: 'None / Not Assigned' },
+      { id: 'Other', name: '⚠️ Other (Custom Center Name)' }
+    ];
+
+    if (formData.currentCenter && !availableCurrentCenters.some(c => c.name === formData.currentCenter) && formData.currentCenter !== 'Other') {
+      opts.push({
+        id: formData.currentCenter,
+        name: `${formData.currentCenter} (Current)`,
+        email: 'Previously Assigned'
+      });
+    }
+
+    availableCurrentCenters.forEach(c => {
+      opts.push({
+        id: c.name,
+        name: c.name,
+        email: [c.temple_name, c.city].filter(Boolean).join(' • ')
+      });
+    });
+
+    return opts;
+  }, [availableCurrentCenters, formData.currentCenter]);
+
+  const parentTempleOptions = React.useMemo(() => [
+    { id: '', name: 'None / Not Specified' },
+    ...templesList.map(t => ({
+      id: t.name,
+      name: t.name,
+      email: t.city ? (t.state ? `${t.city}, ${t.state}` : t.city) : t.state || ''
+    }))
+  ], [templesList]);
+
+  const parentCenterOptions = React.useMemo(() => [
+    { id: '', name: 'None / Not Specified' },
+    ...centersList.map(c => ({
+      id: c.name,
+      name: c.name,
+      email: [c.temple_name, c.city].filter(Boolean).join(' • ')
+    }))
+  ], [centersList]);
+
+  const counselorOptions = React.useMemo(() => [
+    { id: '', name: 'None / No Counselor' },
+    { id: 'Other', name: '⚠️ Other (Custom Counselor Name)' },
+    ...counselorsList.map(c => ({
+      id: c.name,
+      name: c.name,
+      email: [c.ashram, c.city, c.mobile, c.email].filter(Boolean).join(' • ')
+    }))
+  ], [counselorsList]);
+
+  const spiritualMasterOptions = React.useMemo(() => [
+    { id: '', name: 'Select Spiritual Master' },
+    ...SPIRITUAL_MASTERS.map(sm => ({
+      id: sm,
+      name: sm
+    }))
+  ], []);
 
   const handleRegisterNewCenter = async () => {
     const centerName = formData.otherCenter.trim();
@@ -431,29 +504,23 @@ export default function EditUserProfileModal({
                 {/* Current Temple */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Current Temple</label>
-                  <div className="relative">
-                    <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <select
-                      value={formData.currentTemple}
-                      onChange={e => {
-                        const newTemple = e.target.value;
-                        setFormData({
-                          ...formData,
-                          currentTemple: newTemple,
-                          otherTemple: newTemple === 'Other' ? formData.otherTemple : '',
-                          currentCenter: ''
-                        });
-                      }}
-                      className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                    >
-                      <option value="">None / Not Assigned</option>
-                      <option value="Other">⚠️ Other (Custom Temple Name)</option>
-                      <option disabled>──────────</option>
-                      {templesList.map(t => (
-                        <option key={t.id} value={t.name}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <SearchableSelect
+                    options={currentTempleOptions}
+                    value={formData.currentTemple}
+                    valueProperty="id"
+                    onChange={(val) => {
+                      setFormData({
+                        ...formData,
+                        currentTemple: val,
+                        otherTemple: val === 'Other' ? formData.otherTemple : '',
+                        currentCenter: ''
+                      });
+                    }}
+                    placeholder="None / Not Assigned"
+                    searchPlaceholder="Search temple by name, city, state..."
+                    icon={<Landmark className="w-4 h-4 text-gray-400" />}
+                    triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                  />
 
                   {formData.currentTemple === 'Other' && (
                     <div className="mt-2 p-3 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
@@ -490,31 +557,22 @@ export default function EditUserProfileModal({
                 {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Current Center</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                      <select
-                        value={formData.currentCenter}
-                        onChange={e => {
-                          const newCenter = e.target.value;
-                          setFormData({
-                            ...formData,
-                            currentCenter: newCenter,
-                            otherCenter: newCenter === 'Other' ? formData.otherCenter : ''
-                          });
-                        }}
-                        className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                      >
-                        <option value="">None / Not Assigned</option>
-                        <option value="Other">⚠️ Other (Custom Center Name)</option>
-                        <option disabled>──────────</option>
-                        {formData.currentCenter && !availableCurrentCenters.some(c => c.name === formData.currentCenter) && formData.currentCenter !== 'Other' && (
-                          <option value={formData.currentCenter}>{formData.currentCenter} (Current)</option>
-                        )}
-                        {availableCurrentCenters.map(c => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <SearchableSelect
+                      options={currentCenterOptions}
+                      value={formData.currentCenter}
+                      valueProperty="id"
+                      onChange={(val) => {
+                        setFormData({
+                          ...formData,
+                          currentCenter: val,
+                          otherCenter: val === 'Other' ? formData.otherCenter : ''
+                        });
+                      }}
+                      placeholder="None / Not Assigned"
+                      searchPlaceholder="Search center..."
+                      icon={<Building2 className="w-4 h-4 text-gray-400" />}
+                      triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                    />
 
                     {formData.currentCenter === 'Other' && (
                       <div className="mt-2 p-3 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-2">
@@ -551,68 +609,61 @@ export default function EditUserProfileModal({
                 {/* Parent Temple */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Parent Temple</label>
-                  <select
+                  <SearchableSelect
+                    options={parentTempleOptions}
                     value={formData.parentTemple}
-                    onChange={e => {
-                      const newParent = e.target.value;
+                    valueProperty="id"
+                    onChange={(val) => {
                       setFormData({
                         ...formData,
-                        parentTemple: newParent,
+                        parentTemple: val,
                         parentCenter: ''
                       });
                     }}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                  >
-                    <option value="">None / Not Specified</option>
-                    {templesList.map(t => (
-                      <option key={t.id} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
+                    placeholder="None / Not Specified"
+                    searchPlaceholder="Search parent temple..."
+                    icon={<Landmark className="w-4 h-4 text-gray-400" />}
+                    triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                  />
                 </div>
 
                 {/* Parent Center */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Parent Center</label>
-                  <select
+                  <SearchableSelect
+                    options={parentCenterOptions}
                     value={formData.parentCenter}
-                    onChange={e => setFormData({ ...formData, parentCenter: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                  >
-                    <option value="">None / Not Specified</option>
-                    {centersList.map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
+                    valueProperty="id"
+                    onChange={(val) => setFormData({ ...formData, parentCenter: val })}
+                    placeholder="None / Not Specified"
+                    searchPlaceholder="Search parent center..."
+                    icon={<Building2 className="w-4 h-4 text-gray-400" />}
+                    triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                  />
                 </div>
               </div>
 
               {/* Counselor with Other support */}
               <div className="pt-2 border-t border-gray-100">
                 <label className="block text-xs font-bold text-gray-700 mb-1">Assigned Counselor</label>
-                <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <select
-                    value={formData.counselor}
-                    onChange={e => {
-                      const val = e.target.value;
-                      const selected = counselorsList.find(c => c.name === val);
-                      setFormData({
-                        ...formData,
-                        counselor: val,
-                        otherCounselor: val === 'Other' ? formData.otherCounselor : '',
-                        counselorId: selected?.id || ''
-                      });
-                    }}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                  >
-                    <option value="">None / No Counselor</option>
-                    <option value="Other">⚠️ Other (Custom Counselor Name)</option>
-                    <option disabled>──────────</option>
-                    {counselorsList.map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableSelect
+                  options={counselorOptions}
+                  value={formData.counselor}
+                  valueProperty="id"
+                  onChange={(val) => {
+                    const selected = counselorsList.find(c => c.name === val);
+                    setFormData({
+                      ...formData,
+                      counselor: val,
+                      otherCounselor: val === 'Other' ? formData.otherCounselor : '',
+                      counselorId: selected?.id || ''
+                    });
+                  }}
+                  placeholder="None / No Counselor"
+                  searchPlaceholder="Search counselor by name, mobile, email, city..."
+                  icon={<Users className="w-4 h-4 text-gray-400" />}
+                  triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                />
 
                 {formData.counselor === 'Other' && (
                   <div className="mt-2">
@@ -767,16 +818,16 @@ export default function EditUserProfileModal({
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Spiritual Master</label>
-                  <select
+                  <SearchableSelect
+                    options={spiritualMasterOptions}
                     value={formData.spiritualMasterName}
-                    onChange={e => setFormData({ ...formData, spiritualMasterName: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-100 focus:border-orange-500 font-medium"
-                  >
-                    <option value="">Select Spiritual Master</option>
-                    {SPIRITUAL_MASTERS.map((sm, idx) => (
-                      <option key={idx} value={sm}>{sm}</option>
-                    ))}
-                  </select>
+                    valueProperty="id"
+                    onChange={(val) => setFormData({ ...formData, spiritualMasterName: val })}
+                    placeholder="Select Spiritual Master"
+                    searchPlaceholder="Search spiritual master..."
+                    icon={<Sparkles className="w-4 h-4 text-gray-400" />}
+                    triggerClassName="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium"
+                  />
                 </div>
 
                 <div>

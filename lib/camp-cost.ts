@@ -205,15 +205,24 @@ export function calculateDynamicCampCost(
   const isFreeAcc = Boolean(roleWaiver?.free_accommodation);
 
   if (wantsAcc && !isFreeAcc) {
+    const peakStartIndex = accConfig.peak_start_date
+      ? mealPricing.findIndex(m => m.date === accConfig.peak_start_date || m.label === accConfig.peak_start_date || (m.full_date && m.full_date === accConfig.peak_start_date))
+      : -1;
+    const peakEndIndex = accConfig.peak_end_date
+      ? mealPricing.findIndex(m => m.date === accConfig.peak_end_date || m.label === accConfig.peak_end_date || (m.full_date && m.full_date === accConfig.peak_end_date))
+      : -1;
+
     // Map each day's accommodation fee
     for (let d = firstMeal.dayIndex; d < firstMeal.dayIndex + daysOfStay && d < mealPricing.length; d++) {
       const dayConfig = mealPricing[d];
-      const isPeak = dayConfig.isPeak || (accConfig.peak_start_date && Number(dayConfig.date) >= Number(accConfig.peak_start_date) && Number(dayConfig.date) <= Number(accConfig.peak_end_date || '999'));
+      const isPeakByRange = peakStartIndex !== -1 && d >= peakStartIndex && (peakEndIndex === -1 || d <= peakEndIndex);
+      const isPeakByNumeric = (!isNaN(Number(dayConfig.date)) && !isNaN(Number(accConfig.peak_start_date)) && Number(dayConfig.date) >= Number(accConfig.peak_start_date) && Number(dayConfig.date) <= Number(accConfig.peak_end_date || '999'));
+      const isPeak = Boolean(dayConfig.isPeak || isPeakByRange || isPeakByNumeric);
       accCost += isPeak ? (accConfig.peak_daily || 200) : (accConfig.regular_daily || 120);
     }
   }
 
-  // Custom Facility / Miscellaneous Other Charges (Calculated on per-day basis if user selects fewer days)
+  // Custom Facility / Miscellaneous Other Charges (Calculated on per-day basis or fixed one-time fee)
   let acCost = 0;
   const configuredFee = Number(accConfig.ac_charge ?? 0);
   const billingType = accConfig.ac_charge_billing_type || 'per_day';
@@ -224,22 +233,9 @@ export function calculateDynamicCampCost(
     if (billingType === 'fixed') {
       acCost = configuredFee;
     } else {
-      // Per day basis: if user selected e.g. 7 days of meals out of 10, charge for 7 days
-      if (accConfig.peak_start_date) {
-        let activeDaysInPeak = 0;
-        const peakStart = Number(accConfig.peak_start_date);
-        const peakEnd = Number(accConfig.peak_end_date || '999');
-        for (let d = firstMeal.dayIndex; d <= lastMeal.dayIndex && d < mealPricing.length; d++) {
-          const dayDateNum = Number(mealPricing[d].date);
-          if (dayDateNum >= peakStart && dayDateNum <= peakEnd) {
-            activeDaysInPeak++;
-          }
-        }
-        acCost = configuredFee * Math.max(1, activeDaysInPeak);
-      } else {
-        const selectedMealDays = Math.max(1, lastMeal.dayIndex - firstMeal.dayIndex + 1);
-        acCost = configuredFee * selectedMealDays;
-      }
+      // Per day basis: charges per selected day of stay/meals
+      const chargeDays = Math.max(1, daysOfStay);
+      acCost = configuredFee * chargeDays;
     }
   }
 
