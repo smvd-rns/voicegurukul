@@ -258,201 +258,236 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
 
     if (!isOpen || !user) return null;
 
+    const verificationStatusText = String(user.verificationStatus || (user as any).verification_status || 'approved');
+    const isApproved = verificationStatusText.toLowerCase() === 'approved';
+    const isRejected = verificationStatusText.toLowerCase() === 'rejected';
+
+    const currentCenterName = (user as any)._currentCenterDisplay || (user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || (user as any).current_center || (user as any).center || 'Not set';
+    const parentCenterName = (user as any)._parentCenterDisplay || (user as any).parent_center || (user.hierarchy?.parentCenter as any)?.name || user.hierarchy?.parentCenter || 'None';
+    const currentTempleName = (user as any)._currentTempleDisplay || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || (user as any).current_temple || 'Not set';
+    const voiceConnection = (user as any)._centerConnection;
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-[#fffdfa] rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl shadow-orange-100/20 w-[92%] sm:w-full max-w-4xl overflow-hidden transform transition-all scale-100 border sm:border-amber-200 animate-in zoom-in-95 duration-300 relative flex flex-col h-[80vh] sm:h-auto sm:max-h-[90vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-50 rounded-2xl shadow-2xl border-2 border-slate-300 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
-                <div className="relative z-10 px-4 py-4 sm:px-8 sm:py-5 border-b border-gray-100 flex justify-between items-center bg-white/50 backdrop-blur-sm">
-                    <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-                        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-lg flex-shrink-0">
+                <div className="px-4 py-3 sm:px-6 sm:py-3.5 bg-white border-b-2 border-slate-200 flex justify-between items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-lg shadow-xs flex-shrink-0">
                             {user.name.charAt(0).toUpperCase()}
                         </div>
-                        <div className="overflow-hidden">
-                            <h2 className="text-base sm:text-xl font-black text-gray-900 tracking-tight truncate">{user.name}</h2>
-                            <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest truncate">{user.email}</p>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight truncate">
+                                    {user.name}
+                                </h2>
+                                {voiceConnection === 'alumni' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                        🎓 Voice Alumni
+                                    </span>
+                                ) : voiceConnection === 'both' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                                        🔷 Current & Alumni
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                        🟢 Current Member
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs font-semibold text-slate-500 truncate mt-0.5">{user.email}</p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 sm:p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900 transition-all flex-shrink-0 ml-4"
+                        className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors flex-shrink-0"
                         aria-label="Close modal"
                     >
-                        <X className="h-5 w-5 sm:h-6 sm:w-6 stroke-[2.5px]" />
+                        <X className="h-5 w-5 stroke-[2.5px]" />
                     </button>
                 </div>
 
                 {/* Tabs */}
-                <div className="px-4 sm:px-8 py-1 bg-gray-50/50 border-b border-gray-100 flex gap-2 sm:gap-4">
+                <div className="px-4 sm:px-6 bg-white border-b-2 border-slate-200 flex gap-4">
                     <button
                         onClick={() => setActiveTab('profile')}
-                        className={`py-3 px-2 sm:px-4 text-[10px] sm:text-xs font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'profile'
-                            ? 'border-orange-500 text-orange-600'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
-                            }`}
+                        className={`py-2.5 px-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5 ${
+                            activeTab === 'profile'
+                                ? 'border-blue-600 text-blue-700'
+                                : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                     >
-                        <UserIcon className="inline-block w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 mb-0.5" />
-                        Profile
+                        <UserIcon className="w-4 h-4" />
+                        Profile Details
                     </button>
                     <button
                         onClick={() => setActiveTab('sadhana')}
-                        className={`py-3 px-2 sm:px-4 text-[10px] sm:text-xs font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'sadhana'
-                            ? 'border-amber-500 text-amber-600'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
-                            }`}
+                        className={`py-2.5 px-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5 ${
+                            activeTab === 'sadhana'
+                                ? 'border-amber-500 text-amber-700'
+                                : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
                     >
-                        <Activity className="inline-block w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 mb-0.5" />
-                        Sadhana
+                        <Activity className="w-4 h-4" />
+                        Sadhana Report
                     </button>
                 </div>
 
                 {/* Content - Scrollable */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#fffdfa]">
+                <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 bg-slate-100/70 space-y-3">
 
                     {/* Profile Tab */}
                     {activeTab === 'profile' && (
-                        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Personal Info */}
-                                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                        <UserIcon className="h-4 w-4 text-orange-500" /> Personal Information
+                        <div className="space-y-3 animate-in fade-in duration-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {/* 1. Personal & Contact Info */}
+                                <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-slate-200 shadow-2xs">
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-2.5 pb-1.5 border-b border-slate-100 flex items-center gap-2">
+                                        <UserIcon className="h-4 w-4 text-blue-600" />
+                                        <span>Personal & Contact Info</span>
                                     </h3>
-                                    <div className="space-y-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Phone</span>
-                                            <span className="text-sm font-bold text-gray-700">{user.phone || 'Not set'}</span>
+                                    <div className="space-y-1.5 text-xs">
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Phone</span>
+                                            {user.phone ? (
+                                                <a href={`tel:${user.phone}`} className="font-bold text-blue-700 hover:underline flex items-center gap-1">
+                                                    <Phone className="h-3 w-3" />
+                                                    <span>{user.phone}</span>
+                                                </a>
+                                            ) : (
+                                                <span className="font-bold text-slate-400">Not set</span>
+                                            )}
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight sm:tracking-normal">Date of Birth</span>
-                                            <span className="text-sm font-bold text-gray-700">{user.birthDate || 'Not set'}</span>
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Date of Birth</span>
+                                            <span className="font-bold text-slate-800">{user.birthDate || (user as any).birth_date || 'Not set'}</span>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Roles</span>
-                                            <div className="flex flex-wrap gap-1 sm:justify-end">
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Status</span>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                                isApproved ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                                                isRejected ? 'bg-rose-100 text-rose-900 border-rose-300' :
+                                                'bg-amber-100 text-amber-900 border-amber-300'
+                                            }`}>
+                                                {verificationStatusText.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-start justify-between py-1 border-b border-slate-100 gap-2">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider mt-0.5">Assigned Roles</span>
+                                            <div className="flex flex-wrap gap-1 justify-end max-w-[65%]">
                                                 {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => {
                                                     const roleVal = Number(r);
                                                     return (
-                                                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[9px] sm:text-[10px] uppercase font-bold">
+                                                        <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded text-[10px] uppercase font-bold">
                                                             {getRoleDisplayName(roleVal as any)}
                                                         </span>
                                                     );
                                                 })}
                                             </div>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight sm:tracking-normal">Status</span>
-                                            <span className={`w-fit px-2 py-1 rounded text-[10px] sm:text-xs font-bold uppercase ${user.verificationStatus === 'approved' ? 'bg-green-100 text-green-700' :
-                                                user.verificationStatus === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                    'bg-yellow-100 text-yellow-700'
-                                                }`}>
-                                                {user.verificationStatus}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Relative Contact Info */}
-                                {(user.relative1Name || user.relative2Name || user.relative3Name) && (
-                                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                            <Users className="h-4 w-4 text-sky-500" /> Relative Contacts
-                                        </h3>
-                                        <div className="space-y-6">
-                                            {[1, 2, 3].map((num) => {
-                                                const name = (user as any)[`relative${num}Name`];
-                                                const rel = (user as any)[`relative${num}Relationship`];
-                                                const phone = (user as any)[`relative${num}Phone`];
-                                                if (!name && !rel && !phone) return null;
-                                                return (
-                                                    <div key={num} className="space-y-2 last:border-0 border-b border-gray-50 pb-4 last:pb-0">
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="min-w-0 flex-1">
-                                                                <p className="text-sm font-bold text-gray-800 truncate">{name || 'Unnamed'}</p>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{rel || 'Relationship not set'}</p>
-                                                            </div>
-                                                            {phone && (
-                                                                <a href={`tel:${phone}`} className="flex items-center gap-1.5 px-2 py-1 bg-sky-50 text-sky-600 rounded-lg text-[10px] font-bold hover:bg-sky-100 transition-colors whitespace-nowrap ml-2">
-                                                                    <Phone className="h-3 w-3" /> {phone}
-                                                                </a>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Health Info */}
-                                {user.healthChronicDisease && (
-                                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm md:col-span-2">
-                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <Activity className="h-4 w-4 text-rose-500" /> Health Information
-                                        </h3>
-                                        <div className="p-4 bg-rose-50/30 rounded-2xl border border-rose-100/50">
-                                            <p className="text-sm text-gray-700 font-medium leading-relaxed whitespace-pre-wrap">
-                                                {user.healthChronicDisease}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Hierarchy Info */}
-                                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                        <MapPin className="h-4 w-4 text-purple-500" /> Spiritual Hierarchy
-                                    </h3>
-                                    <div className="space-y-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Temple</span>
-                                            <span className="text-sm font-bold text-gray-700 sm:text-right">{(user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'Not set'}</span>
-                                        </div>
-                                        {user.hierarchy?.ashram !== 'Brahmachari' && user.hierarchy?.ashram !== 'Grihastha' && (
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Center</span>
-                                                <span className="text-sm font-bold text-gray-700 sm:text-right">
-                                                    {(() => {
-                                                        const center = (user.hierarchy?.currentCenter as any)?.name || user.hierarchy?.currentCenter || (user.hierarchy?.center as any)?.name || user.hierarchy?.center;
-                                                        const other = user.hierarchy?.otherCenter;
-                                                        if (center === 'Other' || (!center && other)) {
-                                                            return <span className="text-rose-600">Other: {other}</span>;
-                                                        }
-                                                        return center || (other ? `Other: ${other}` : 'Not set');
-                                                    })()}
+                                        {(user as any).bv_group && (
+                                            <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                                <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">VOICE Group</span>
+                                                <span className="font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded text-[11px]">
+                                                    {(user as any).bv_group}
                                                 </span>
                                             </div>
                                         )}
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase">Counselor</span>
-                                            <span className="text-sm font-bold text-gray-700 sm:text-right">
+                                        {user.hierarchy?.kcStatus && (
+                                            <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                                <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">KC Status</span>
+                                                <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px]">
+                                                    {user.hierarchy.kcStatus}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Relative / Emergency Contacts */}
+                                    {(user.relative1Name || user.relative2Name || user.relative3Name) && (
+                                        <div className="mt-3 pt-2.5 border-t border-slate-100">
+                                            <p className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <Users className="h-3.5 w-3.5 text-sky-600" />
+                                                <span>Emergency / Relative Contacts</span>
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {[1, 2, 3].map((num) => {
+                                                    const name = (user as any)[`relative${num}Name`];
+                                                    const rel = (user as any)[`relative${num}Relationship`];
+                                                    const phone = (user as any)[`relative${num}Phone`];
+                                                    if (!name && !rel && !phone) return null;
+                                                    return (
+                                                        <div key={num} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs">
+                                                            <div className="min-w-0">
+                                                                <span className="font-black text-slate-800">{name || 'Contact'}</span>
+                                                                {rel && <span className="text-slate-500 text-[10.5px] ml-1.5 font-bold">({rel})</span>}
+                                                            </div>
+                                                            {phone && (
+                                                                <a href={`tel:${phone}`} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded border border-blue-200 text-[10.5px] font-bold transition-colors">
+                                                                    <Phone className="h-3 w-3" />
+                                                                    <span>{phone}</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 2. Spiritual Hierarchy & Location */}
+                                <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-slate-200 shadow-2xs">
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-2.5 pb-1.5 border-b border-slate-100 flex items-center gap-2">
+                                        <MapPin className="h-4 w-4 text-purple-600" />
+                                        <span>Spiritual Hierarchy</span>
+                                    </h3>
+                                    <div className="space-y-1.5 text-xs">
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Active Center</span>
+                                            <span className="font-bold text-slate-800 text-right">{currentCenterName}</span>
+                                        </div>
+                                        {voiceConnection === 'alumni' && parentCenterName !== 'None' && (
+                                            <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                                <span className="text-[10.5px] font-black text-purple-700 uppercase tracking-wider">Origin VOICE</span>
+                                                <span className="font-black text-purple-800 text-right">{parentCenterName}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Temple</span>
+                                            <span className="font-bold text-slate-800 text-right">{currentTempleName}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Counselor</span>
+                                            <span className="font-bold text-slate-800 text-right">
                                                 {(() => {
                                                     const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
                                                     const other = user.hierarchy?.otherCounselor;
                                                     if (counselor === 'Other' || (!counselor && other)) {
-                                                        return <span className="text-rose-600">Other: {other}</span>;
+                                                        return `Other: ${other}`;
                                                     }
                                                     return counselor || (other ? `Other: ${other}` : 'Not set');
                                                 })()}
                                             </span>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight sm:tracking-normal">Ashram</span>
-                                            <span className="text-sm font-bold text-gray-700 sm:text-right">{user.hierarchy?.ashram || 'Not set'}</span>
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Ashram</span>
+                                            <span className="font-bold text-slate-800 text-right">{user.hierarchy?.ashram || 'Not set'}</span>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight sm:tracking-normal">Initiation</span>
-                                            <span className="text-sm font-bold text-gray-700 sm:text-right">{user.hierarchy?.initiationStatus || 'Not set'}</span>
+                                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                            <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Initiation</span>
+                                            <span className="font-bold text-slate-800 text-right">{user.hierarchy?.initiationStatus || 'Not set'}</span>
                                         </div>
                                         {user.introducedToKcIn && (
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-gray-50 last:border-0 gap-1 sm:gap-4">
-                                                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight sm:tracking-normal">Introduced to KC</span>
-                                                <span className="text-sm font-bold text-gray-700 sm:text-right">
+                                            <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                                                <span className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider">Introduced to KC</span>
+                                                <span className="font-bold text-slate-800 text-right">
                                                     {(() => {
                                                         try {
                                                             const date = new Date(user.introducedToKcIn);
                                                             if (isNaN(date.getTime())) return user.introducedToKcIn;
-                                                            // If it's just a year (4 digits), return as is
                                                             if (/^\d{4}$/.test(user.introducedToKcIn)) return user.introducedToKcIn;
                                                             return format(date, 'MMM d, yyyy');
                                                         } catch (e) {
@@ -466,50 +501,65 @@ export default function UserDetailModal({ user, isOpen, onClose }: UserDetailMod
                                 </div>
                             </div>
 
-                            {/* Education and Work Experience */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Health Information if present */}
+                            {(user.healthChronicDisease || (user as any).health_chronic_disease) && (
+                                <div className="bg-rose-50/70 p-3 sm:p-3.5 rounded-xl border border-rose-200">
+                                    <h4 className="text-[11px] font-black text-rose-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                        <Activity className="h-3.5 w-3.5 text-rose-600" />
+                                        <span>Health / Medical Information</span>
+                                    </h4>
+                                    <p className="text-xs text-rose-950 font-medium leading-relaxed whitespace-pre-wrap">
+                                        {user.healthChronicDisease || (user as any).health_chronic_disease}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* 3. Education & Work Experience */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {/* Education */}
-                                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                        <GraduationCap className="h-4 w-4 text-indigo-500" /> Education
+                                <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-slate-200 shadow-2xs">
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-2 pb-1.5 border-b border-slate-100 flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4 text-indigo-600" />
+                                        <span>Education</span>
                                     </h3>
-                                    <div className="space-y-4">
-                                        {user.education && user.education.length > 0 ? (
-                                            user.education.map((edu, i) => (
-                                                <div key={i} className="flex flex-col py-2 border-b border-gray-50 last:border-0">
-                                                    <span className="text-sm font-black text-gray-800">{edu.degreeBranch}</span>
-                                                    <span className="text-xs font-bold text-gray-500">{edu.institution}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                                    {user.education && user.education.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {user.education.map((edu, i) => (
+                                                <div key={i} className="py-1 border-b border-slate-100 last:border-0">
+                                                    <p className="text-xs font-black text-slate-900">{edu.degreeBranch}</p>
+                                                    <p className="text-[11px] font-bold text-slate-600">{edu.institution}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
                                                         {edu.startYear ? edu.startYear : 'N/A'} - {edu.endYear ? edu.endYear : 'N/A'}
-                                                    </span>
+                                                    </p>
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-xs font-medium text-gray-400 italic">No education details available.</p>
-                                        )}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs font-medium text-slate-400 italic py-1">No education details recorded.</p>
+                                    )}
                                 </div>
 
                                 {/* Work Experience */}
-                                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                        <Briefcase className="h-4 w-4 text-emerald-500" /> Work Experience
+                                <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-slate-200 shadow-2xs">
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-2 pb-1.5 border-b border-slate-100 flex items-center gap-2">
+                                        <Briefcase className="h-4 w-4 text-emerald-600" />
+                                        <span>Work Experience</span>
                                     </h3>
-                                    <div className="space-y-4">
-                                        {user.workExperience && user.workExperience.length > 0 ? (
-                                            user.workExperience.map((work, i) => (
-                                                <div key={i} className="flex flex-col py-2 border-b border-gray-50 last:border-0">
-                                                    <span className="text-sm font-black text-gray-800">{work.position}</span>
-                                                    <span className="text-xs font-bold text-gray-500">{work.company}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                                    {user.workExperience && user.workExperience.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {user.workExperience.map((work, i) => (
+                                                <div key={i} className="py-1 border-b border-slate-100 last:border-0">
+                                                    <p className="text-xs font-black text-slate-900">{work.position}</p>
+                                                    <p className="text-[11px] font-bold text-slate-600">{work.company}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
                                                         {work.startDate ? new Date(work.startDate).getFullYear() : 'N/A'} - {work.current ? 'Present' : (work.endDate ? new Date(work.endDate).getFullYear() : 'N/A')}
-                                                    </span>
+                                                    </p>
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-xs font-medium text-gray-400 italic">No work experience details available.</p>
-                                        )}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs font-medium text-slate-400 italic py-1">No work experience recorded.</p>
+                                    )}
                                 </div>
                             </div>
                         </div>

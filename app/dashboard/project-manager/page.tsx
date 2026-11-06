@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/config';
@@ -9,7 +9,7 @@ import {
     Users, FileCheck, Search, Activity, Shield, Filter, MapPin,
     CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight,
     History, Calendar, Mail, Quote, ShieldCheck, Check, Clock, X, ArrowRight, ShieldAlert, Edit, Plus, Trash2, Heart, Award, Lock,
-    Home, Building2, UserCheck
+    Home, Building2, UserCheck, GraduationCap, Eye
 } from 'lucide-react';
 import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -232,7 +232,7 @@ const RoleMultiSelect = ({
                 ref={buttonRef}
                 onClick={handleToggle}
                 disabled={isUpdating}
-                className="w-full bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 disabled:opacity-70 transition-all text-left flex items-center justify-between"
+                className="w-full bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-slate-50 disabled:opacity-70 transition-all text-left flex items-center justify-between shadow-2xs"
             >
                 <span className="truncate">
                     {distinctRoleNames || 'Member / No Post'}
@@ -358,6 +358,8 @@ export default function ProjectManagerDashboard() {
     // Stats
     const [stats, setStats] = useState({
         devotees: 0,
+        currentCount: 0,
+        alumniCount: 0,
         pendingRequests: 0,
         newRegistrations: 0,
         loading: true
@@ -392,6 +394,7 @@ export default function ProjectManagerDashboard() {
     const [users, setUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [userSearch, setUserSearch] = useState('');
+    const [centerScope, setCenterScope] = useState<'all' | 'current' | 'alumni'>('all');
     const [filterGroup, setFilterGroup] = useState('');
     const [filterKCStatus, setFilterKCStatus] = useState('');
     const [filterAshram, setFilterAshram] = useState('');
@@ -400,8 +403,16 @@ export default function ProjectManagerDashboard() {
     const [updatingGroupUserId, setUpdatingGroupUserId] = useState<string | null>(null);
     const [updatingKCStatusUserId, setUpdatingKCStatusUserId] = useState<string | null>(null);
 
+    const dynamicDevoteeStats = useMemo(() => {
+        const total = users.length;
+        const currentCount = users.filter((u: any) => u._centerConnection !== 'alumni').length;
+        const alumniCount = users.filter((u: any) => u._centerConnection === 'alumni').length;
+        return { total, currentCount, alumniCount };
+    }, [users]);
+
     const BV_GROUPS = ['Yudhishthira', 'Bhima', 'Arjuna', 'Nakula', 'Sahadeva', 'Prerna', 'Non Residential Alumni'];
     const KC_STATUS_OPTIONS = ['Active', 'Passive', 'Dormant'];
+    const ASHRAM_OPTIONS = ['Brahmachari', 'Grihastha', 'Student and not decided', 'Working and not decided', 'Gauranga Sabha', 'Nityananda Sabha', 'Staying Single (Not planning to marry)'];
 
     // Service Team State
     const [loadingStructure, setLoadingStructure] = useState(false);
@@ -554,8 +565,9 @@ export default function ProjectManagerDashboard() {
     // Youth Preacher (21), Internal Manager (22), Preaching Coordinator (23), Morning Program In-charge (24),
     // Mentor (25), Frontliner (26), Accountant (27), Kitchen Head (28), Study In-charge (29), Event Admin (30),
     // Grihastha Counselor (31), Easy Incharge (32), Prerna Incharge (33)
-    const ALLOWED_ROLES = [14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+    const ALLOWED_ROLES = [1, 2, 3, 11, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
     const ALLOWED_ROLE_NAMES = [
+        'managing_director', 'admin', 'director',
         'project_advisor', 'project_manager', 'acting_manager', 'oc', 'care_giver',
         'youth_preacher', 'internal_manager', 'preaching_coordinator', 'morning_program_in_charge',
         'mentor', 'frontliner', 'accountant', 'kitchen_head', 'study_in_charge', 'event_admin',
@@ -570,7 +582,7 @@ export default function ProjectManagerDashboard() {
     const [managedCenters, setManagedCenters] = useState<{ id: string, name: string, temple_name: string, userRole: string, pendingCount: number, pendingRegCount: number }[]>([]);
 
     // Helper to determine role label
-    const getCenterRoleLabel = (center: any, userId: string) => {
+    const getCenterRoleLabel = (center: any, userId: string, assignedTempleNames: string[] = []) => {
         if (center.project_manager_id === userId) return 'Project Manager';
         if (center.project_advisor_id === userId) return 'Project Advisor';
         if (center.acting_manager_id === userId) return 'Acting Manager';
@@ -587,12 +599,15 @@ export default function ProjectManagerDashboard() {
         if (center.grihstha_counselor_id === userId) return 'Grihastha Counselor';
         if (center.easy_incharge_id === userId) return 'Easy Incharge';
         if (center.prerna_incharge_id === userId) return 'Prerna Incharge';
+        if (assignedTempleNames.some(t => t.trim().toLowerCase() === (center.temple_name || '').trim().toLowerCase())) {
+            return 'Managing Director';
+        }
         return 'Center Manager';
     };
 
     const buildCenterMatch = useCallback((centerName: string) => {
         const normalized = centerName.trim();
-        return `current_center.eq.${normalized},center.eq.${normalized},hierarchy->>currentCenter.eq.${normalized},hierarchy->>center.eq.${normalized},hierarchy->currentCenter->>name.eq.${normalized}`;
+        return `current_center.eq.${normalized},center.eq.${normalized},parent_center.eq.${normalized},other_parent_center.eq.${normalized},hierarchy->>currentCenter.eq.${normalized},hierarchy->>center.eq.${normalized},hierarchy->>parentCenter.eq.${normalized},hierarchy->>otherParentCenter.eq.${normalized},hierarchy->currentCenter->>name.eq.${normalized},hierarchy->parentCenter->>name.eq.${normalized}`;
     }, []);
 
     const refreshCounts = useCallback(async (centersToMap: any[]) => {
@@ -692,17 +707,57 @@ export default function ProjectManagerDashboard() {
 
             // Only show full page loader if we don't have cached data
             try {
-                // 1. Fetch managed centers across all center leadership and service team assignments
-                const { data, error } = await supabase
+                // 1. Fetch temples where user is assigned as Managing Director, Director, Central VM, or YP
+                const { data: assignedTemplesData } = await supabase
+                    .from('temples')
+                    .select('id, name')
+                    .or(`managing_director_id.eq.${adminId},director_id.eq.${adminId},central_voice_manager_id.eq.${adminId},yp_id.eq.${adminId}`);
+
+                const assignedTempleNames: string[] = (assignedTemplesData || [])
+                    .map((t: any) => t.name?.trim())
+                    .filter(Boolean);
+
+                // Fallback to user profile's current_temple if user has MD/Director role and assignedTemplesData is empty
+                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+                const isMDOrDirector = userRoles.some(r => [1, 11, 'managing_director', 3, 'director'].includes(r));
+                if (isMDOrDirector && assignedTempleNames.length === 0) {
+                    const uH = userData?.hierarchy as any;
+                    const profileTemple = (userData as any)?.current_temple || userData?.currentTemple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
+                    if (profileTemple && profileTemple.trim()) {
+                        assignedTempleNames.push(profileTemple.trim());
+                    }
+                }
+
+                // 2. Fetch centers strictly isolated by temple or specific center assignment
+                const directCenterFilter = `project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId},internal_manager_id.eq.${adminId},oc_id.eq.${adminId},care_giver_id.eq.${adminId},youth_preacher_id.eq.${adminId},preaching_coordinator_id.eq.${adminId},morning_program_in_charge_id.eq.${adminId},accountant_id.eq.${adminId},kitchen_head_id.eq.${adminId},study_in_charge_id.eq.${adminId},event_admin_id.eq.${adminId},grihstha_counselor_id.eq.${adminId},easy_incharge_id.eq.${adminId},prerna_incharge_id.eq.${adminId}`;
+
+                let centersQuery = supabase
                     .from('centers')
                     .select('id, name, temple_name, project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, oc_id, care_giver_id, youth_preacher_id, preaching_coordinator_id, morning_program_in_charge_id, accountant_id, kitchen_head_id, study_in_charge_id, event_admin_id, grihstha_counselor_id, easy_incharge_id, prerna_incharge_id')
-                    .or(`project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId},internal_manager_id.eq.${adminId},oc_id.eq.${adminId},care_giver_id.eq.${adminId},youth_preacher_id.eq.${adminId},preaching_coordinator_id.eq.${adminId},morning_program_in_charge_id.eq.${adminId},accountant_id.eq.${adminId},kitchen_head_id.eq.${adminId},study_in_charge_id.eq.${adminId},event_admin_id.eq.${adminId},grihstha_counselor_id.eq.${adminId},easy_incharge_id.eq.${adminId},prerna_incharge_id.eq.${adminId}`);
+                    .order('name');
+
+                let data: any[] | null = null;
+                let error: any = null;
+
+                if (assignedTempleNames.length > 0) {
+                    // Restrict strictly to centers under the user's assigned temple(s) OR where directly assigned in service team
+                    const templeFilters = assignedTempleNames.map((t: string) => `temple_name.eq.${t}`).join(',');
+                    const combinedFilter = `${templeFilters},${directCenterFilter}`;
+                    const res = await centersQuery.or(combinedFilter);
+                    data = res.data;
+                    error = res.error;
+                } else {
+                    // Only centers where directly assigned in leadership/service team
+                    const res = await centersQuery.or(directCenterFilter);
+                    data = res.data;
+                    error = res.error;
+                }
 
                 if (error) throw error;
 
                 if (data && data.length > 0) {
                     const mappedCenters = (data as any[]).map((center: any) => {
-                        const role = getCenterRoleLabel(center, adminId);
+                        const role = getCenterRoleLabel(center, adminId, assignedTempleNames);
                         return {
                             id: center.id,
                             name: center.name,
@@ -712,7 +767,7 @@ export default function ProjectManagerDashboard() {
                         };
                     });
 
-                    // 2. Refresh counts using the newly fetched centers
+                    // 3. Refresh counts using the newly fetched centers
                     await refreshCounts(mappedCenters);
 
                 } else {
@@ -737,24 +792,23 @@ export default function ProjectManagerDashboard() {
     // Handle Center Change
     const handleCenterChange = (centerName: string) => {
         const selected = managedCenters.find(c => c.name === centerName);
-        if (selected) {
-            setCurrentCenter(selected.name);
-            localStorage.setItem('pm_current_center', selected.name);
-            // Clear lists to prevent stale data
-            setUsers([]);
-            setRequests([]);
-            setPendingUsers([]);
+        const targetName = selected?.name || centerName;
+        const targetTemple = selected?.temple_name || currentTemple || '';
 
-            // Use temple from the selected center, or fallback to current if missing (unlikely for DB centers)
-            const tName = selected.temple_name || currentTemple;
-            setCurrentTemple(tName);
-            localStorage.setItem('pm_current_temple', tName);
-
-            // Reload data
-            loadStats(selected.name, tName);
-            // Reset specific view states if needed?
-            // The useEffect on [activeTab, currentCenter] will trigger loadRequests/loadUsers automatically.
+        setCurrentCenter(targetName);
+        localStorage.setItem('pm_current_center', targetName);
+        if (targetTemple) {
+            setCurrentTemple(targetTemple);
+            localStorage.setItem('pm_current_temple', targetTemple);
         }
+
+        // Clear lists to prevent stale data
+        setUsers([]);
+        setRequests([]);
+        setPendingUsers([]);
+
+        // Reload stats for this new center immediately
+        loadStats(targetName, targetTemple);
     };
 
     // (useEffect for tab changes moved below, after all useCallbacks are declared)
@@ -765,34 +819,71 @@ export default function ProjectManagerDashboard() {
         if (!supabase || !cName) return;
         setStats(prev => ({ ...prev, loading: true }));
         try {
-            const [devoteesRes, pendingReqRes, pendingRegRes] = await Promise.all([
-                // devotees: match users by current_center, center, or hierarchy fields
+            const targetCenterNorm = cName.trim().toLowerCase();
+
+            const [approvedUsersRes, pendingReqRes, pendingRegRes] = await Promise.all([
+                // Fetch approved users to segment current vs alumni for active center
                 supabase.from('users')
-                    .select('id', { count: 'exact', head: true })
+                    .select('current_center, center, parent_center, other_parent_center, hierarchy')
                     .eq('verification_status', 'approved')
                     .or(buildCenterMatch(cName)),
-                // pending profile requests
+                // pending profile requests for active center
                 supabase.from('profile_update_requests')
                     .select('id', { count: 'exact', head: true })
                     .eq('status', 'pending')
                     .eq('center_name', cName),
-                // pending registrations: match by current_center, center, or hierarchy fields
+                // pending registrations for active center
                 supabase.from('users')
                     .select('id', { count: 'exact', head: true })
                     .eq('verification_status', 'pending')
                     .or(buildCenterMatch(cName))
             ]);
 
-            const devoteesCount = devoteesRes.error ? 0 : devoteesRes.count ?? 0;
+            let currentCount = 0;
+            let alumniCount = 0;
+
+            if (approvedUsersRes.data) {
+                approvedUsersRes.data.forEach((u: any) => {
+                    const uH = u.hierarchy as any;
+                    const uCurCenter = (
+                        u.current_center ||
+                        u.center ||
+                        uH?.currentCenter?.name ||
+                        (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') ||
+                        uH?.center ||
+                        ''
+                    ).trim().toLowerCase();
+
+                    const uParCenter = (
+                        u.parent_center ||
+                        u.parentCenter ||
+                        uH?.parentCenter?.name ||
+                        (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') ||
+                        uH?.parent_center ||
+                        u.other_parent_center ||
+                        uH?.otherParentCenter ||
+                        ''
+                    ).trim().toLowerCase();
+
+                    const isCurrent = uCurCenter === targetCenterNorm;
+                    const isParent = uParCenter === targetCenterNorm;
+
+                    if (isCurrent) {
+                        currentCount++;
+                    } else if (isParent) {
+                        alumniCount++;
+                    }
+                });
+            }
+
+            const totalDevotees = currentCount + alumniCount;
             const pendingReqCount = pendingReqRes.error ? 0 : pendingReqRes.count ?? 0;
             const pendingRegCount = pendingRegRes.error ? 0 : pendingRegRes.count ?? 0;
 
-            if (devoteesRes.error) console.error('PM Dashboard: devotees count error', devoteesRes.error);
-            if (pendingReqRes.error) console.error('PM Dashboard: pending request count error', pendingReqRes.error);
-            if (pendingRegRes.error) console.error('PM Dashboard: pending registrations count error', pendingRegRes.error);
-
             setStats({
-                devotees: devoteesCount,
+                devotees: totalDevotees,
+                currentCount: currentCount,
+                alumniCount: alumniCount,
                 pendingRequests: pendingReqCount,
                 newRegistrations: pendingRegCount,
                 loading: false
@@ -981,13 +1072,44 @@ export default function ProjectManagerDashboard() {
 
             if (error) throw error;
 
+            const targetCenterNorm = currentCenter.trim().toLowerCase();
+
             const mappedUsers = (data || []).map((u: any) => {
                 const uH = u.hierarchy as any;
-                const uCenter = u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '';
-                if (uCenter !== currentCenter) return null;
+                const uCurCenter = (
+                    u.current_center ||
+                    u.center ||
+                    uH?.currentCenter?.name ||
+                    (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') ||
+                    uH?.center ||
+                    ''
+                ).trim().toLowerCase();
+
+                const uParCenter = (
+                    u.parent_center ||
+                    u.parentCenter ||
+                    uH?.parentCenter?.name ||
+                    (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') ||
+                    uH?.parent_center ||
+                    u.other_parent_center ||
+                    uH?.otherParentCenter ||
+                    ''
+                ).trim().toLowerCase();
+
+                const isCurrent = uCurCenter === targetCenterNorm;
+                const isParent = uParCenter === targetCenterNorm;
+
+                // User must be connected to this center either as current member or as alumni (parent/origin center)
+                if (!isCurrent && !isParent) return null;
+
+                const centerConnection: 'current' | 'alumni' | 'both' = (isCurrent && isParent) ? 'both' : isCurrent ? 'current' : 'alumni';
 
                 return {
                     ...u,
+                    _centerConnection: centerConnection,
+                    _currentCenterDisplay: u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || 'None',
+                    _parentCenterDisplay: u.parent_center || u.parentCenter || uH?.parentCenter?.name || (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') || 'None',
+                    _currentTempleDisplay: u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None',
                     hierarchy: {
                         ...(u.hierarchy || {}),
                         currentTemple: u.current_temple || u.hierarchy?.currentTemple,
@@ -1024,6 +1146,7 @@ export default function ProjectManagerDashboard() {
     }, [buildCenterMatch, currentCenter]);
     useEffect(() => {
         if (!currentCenter) return;
+        loadStats(currentCenter, currentTemple);
 
         if (activeTab === 'approvals') {
             loadRequests();
@@ -1035,7 +1158,7 @@ export default function ProjectManagerDashboard() {
             loadStructure();
             loadUsers(); // Also load users for role assignment
         }
-    }, [activeTab, currentCenter, approvalStatus, loadRequests, loadPendingUsers, loadUsers, loadStructure]);
+    }, [activeTab, currentCenter, approvalStatus, loadStats, loadRequests, loadPendingUsers, loadUsers, loadStructure, currentTemple]);
 
     // --- Action Handlers ---
 
@@ -1300,76 +1423,102 @@ export default function ProjectManagerDashboard() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-4 px-3 sm:px-6 lg:px-8 py-3.5 sm:py-5 bg-gray-50/50 min-h-screen">
+        <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-3 px-2 sm:px-4 lg:px-6 py-2 sm:py-3.5 bg-slate-100/80 min-h-screen">
             {/* Header */}
-            <div className="relative rounded-2xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-3.5 sm:p-4 shadow-md shadow-teal-900/10 z-10 overflow-hidden">
-                {/* Decorative Accents */}
+            <div className="relative rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-2.5 sm:p-3 shadow-sm border border-teal-700/40 z-10 overflow-hidden">
                 <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
                 <div className="absolute bottom-0 left-1/3 -ml-16 -mb-16 w-48 h-48 rounded-full bg-cyan-400/20 blur-2xl pointer-events-none"></div>
 
                 <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
-                    <div className="text-white flex flex-wrap items-center justify-between sm:justify-start gap-2.5 sm:gap-4 w-full sm:w-auto">
-                        <div className="flex items-center gap-2.5">
-                            <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl text-white shadow-xs">
-                                <Shield className="h-5 w-5 stroke-[2.5px]" />
-                            </div>
-                            <div>
-                                <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">Project Management</h1>
-                                <p className="text-[10px] sm:text-[11px] text-teal-100 font-medium opacity-90">Center Leadership & Spiritual Approvals</p>
-                            </div>
+                    <div className="text-white flex items-center gap-2.5">
+                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl text-white shadow-xs">
+                            <Shield className="h-5 w-5 stroke-[2.5px]" />
                         </div>
+                        <div>
+                            <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">Project Management</h1>
+                            <p className="text-[10px] sm:text-[11px] text-teal-100 font-medium opacity-90">Center Leadership & Spiritual Approvals</p>
+                        </div>
+                    </div>
 
+                    <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-white/20 backdrop-blur-md text-white border border-white/25 shadow-xs flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-teal-200" />
+                            {managedCenters.length} {managedCenters.length === 1 ? 'Center Available' : 'Centers Managed'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Dedicated Active Center & Switcher Bar - Clear, High-Visibility */}
+            <div className="bg-white rounded-xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center text-teal-700 flex-shrink-0 shadow-2xs">
+                        <Building2 className="h-5 w-5 stroke-[2.5px]" />
+                    </div>
+                    <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 text-white text-xs font-bold shadow-xs">
-                                <MapPin className="h-3.5 w-3.5 text-teal-200 flex-shrink-0" />
-                                {managedCenters.length > 1 ? (
-                                    <div className="relative group max-w-[180px]">
-                                        <select
-                                            value={currentCenter}
-                                            onChange={(e) => handleCenterChange(e.target.value)}
-                                            className="appearance-none bg-transparent text-white font-bold pr-5 cursor-pointer focus:outline-none text-xs truncate"
-                                            style={{ backgroundImage: 'none' }}
-                                        >
-                                            {managedCenters.map(c => (
-                                                <option key={c.id} value={c.name} className="text-gray-900 bg-white">
-                                                    {c.name} {c.pendingCount > 0 ? '(' + c.pendingCount + ')' : ''}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-teal-100 pointer-events-none" />
-                                    </div>
-                                ) : (
-                                    <span className="truncate">{currentCenter}</span>
-                                )}
-                            </div>
-
-                            {/* Role Badge */}
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Active Managed Center</span>
                             {managedCenters.find(c => c.name === currentCenter)?.userRole && (
-                                <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-white/20 backdrop-blur-md text-white border border-white/25 uppercase tracking-wider shadow-xs">
+                                <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black bg-teal-100 text-teal-900 border border-teal-300 uppercase tracking-wider">
                                     {managedCenters.find(c => c.name === currentCenter)?.userRole}
                                 </span>
                             )}
                         </div>
+                        <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight mt-0.5">
+                            {currentCenter || 'No Center Selected'}
+                        </h2>
+                    </div>
+                </div>
+
+                {/* Dropdown to change center */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                    <label className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 text-teal-600" />
+                        <span>Change Center:</span>
+                    </label>
+                    <div className="relative w-full sm:w-72">
+                        <select
+                            value={currentCenter}
+                            onChange={(e) => handleCenterChange(e.target.value)}
+                            className="w-full bg-slate-50 hover:bg-white text-slate-900 font-bold text-xs py-2 pl-3 pr-8 rounded-lg border-2 border-teal-500 hover:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer shadow-2xs transition-all"
+                        >
+                            {managedCenters.map(c => (
+                                <option key={c.id} value={c.name} className="text-slate-900 bg-white font-bold">
+                                    🏛️ {c.name} {c.pendingCount > 0 ? `(${c.pendingCount} pending)` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-700 pointer-events-none" />
                     </div>
                 </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 md:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-2.5">
                 {/* 1. Total Devotees */}
                 <div
                     onClick={() => handleTabChange('user-management')}
-                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-blue-50/80 via-white to-white border-2 border-blue-200/90 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Devotees</span>
-                        <div className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Users className="h-4 w-4" />
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Total Devotees</span>
+                        <div className="h-6 w-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Users className="h-3.5 w-3.5" />
                         </div>
                     </div>
-                    <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">{stats.devotees}</div>
-                    <div className="text-[10px] text-blue-600 font-semibold mt-1">Active Members</div>
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                            {users.length > 0 ? dynamicDevoteeStats.total : stats.devotees}
+                        </div>
+                        {(users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount) > 0 && (
+                            <span className="text-[9.5px] font-black text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded-md">
+                                +{users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
+                            </span>
+                        )}
+                    </div>
+                    <div className="text-[9.5px] text-slate-500 font-semibold mt-0.5 truncate">
+                        {users.length > 0 ? dynamicDevoteeStats.currentCount : stats.currentCount} Current • {users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
+                    </div>
                 </div>
 
                 {/* 2. Pending Requests */}
@@ -1378,103 +1527,99 @@ export default function ProjectManagerDashboard() {
                         setApprovalStatus('pending');
                         handleTabChange('approvals');
                     }}
-                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-amber-50/80 via-white to-white border-2 border-amber-200/90 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pending Requests</span>
-                        <div className="h-7 w-7 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <FileCheck className="h-4 w-4" />
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Pending Requests</span>
+                        <div className="h-6 w-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Clock className="h-3.5 w-3.5" />
                         </div>
                     </div>
                     <div className="flex items-baseline justify-between gap-1">
-                        <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">
-                            {managedCenters.reduce((acc, c) => acc + (c.pendingCount || 0), 0)}
+                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                            {stats.pendingRequests}
                         </div>
-                        {managedCenters.filter(c => c.pendingCount > 0).length > 1 && (
-                            <span className="text-[9px] font-bold text-orange-600 bg-orange-100/70 px-1.5 py-0.5 rounded">
-                                {managedCenters.filter(c => c.pendingCount > 0).length} centers
+                        {stats.pendingRequests > 0 && (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                Action needed
                             </span>
                         )}
                     </div>
-                    <div className="text-[10px] text-orange-600 font-semibold mt-1 truncate">Profile Approvals</div>
+                    <div className="text-[9.5px] text-amber-700 font-semibold mt-0.5 truncate">Profile Approvals</div>
                 </div>
 
                 {/* 3. New Registrations */}
                 <div
                     onClick={() => handleTabChange('registrations')}
-                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-emerald-50/80 via-white to-white border-2 border-emerald-200/90 shadow-2xs hover:shadow-md hover:border-emerald-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">New Registrations</span>
-                        <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <UserCheck className="h-4 w-4" />
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-emerald-900 uppercase tracking-wider">New Registrations</span>
+                        <div className="h-6 w-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <UserCheck className="h-3.5 w-3.5" />
                         </div>
                     </div>
                     <div className="flex items-baseline justify-between gap-1">
-                        <div className="text-xl sm:text-2xl font-black text-gray-900 leading-none">
-                            {managedCenters.reduce((acc, c) => acc + (c.pendingRegCount || 0), 0)}
+                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                            {stats.newRegistrations}
                         </div>
-                        {managedCenters.filter(c => (c.pendingRegCount || 0) > 0).length > 1 && (
-                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100/70 px-1.5 py-0.5 rounded">
-                                {managedCenters.filter(c => (c.pendingRegCount || 0) > 0).length} centers
+                        {stats.newRegistrations > 0 && (
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                                Action needed
                             </span>
                         )}
                     </div>
-                    <div className="text-[10px] text-emerald-600 font-semibold mt-1 truncate">New Devotees</div>
+                    <div className="text-[9.5px] text-emerald-700 font-semibold mt-0.5 truncate">New Devotees</div>
                 </div>
 
                 {/* 4. Service Team */}
                 <div
                     onClick={() => handleTabChange('service-team')}
-                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-purple-50/80 via-white to-white border-2 border-purple-200/90 shadow-2xs hover:shadow-md hover:border-purple-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Service Team</span>
-                        <div className="h-7 w-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <ShieldCheck className="h-4 w-4" />
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-purple-900 uppercase tracking-wider">Service Team</span>
+                        <div className="h-6 w-6 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <ShieldCheck className="h-3.5 w-3.5" />
                         </div>
                     </div>
-                    <div className="text-base sm:text-lg font-black text-gray-900 leading-tight truncate">Management</div>
-                    <div className="text-[10px] text-purple-600 font-semibold mt-1">Center Service Team</div>
+                    <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Management</div>
+                    <div className="text-[9.5px] text-purple-700 font-semibold mt-0.5">Center Service Team</div>
                 </div>
 
                 {/* 5. Spiritual Progress */}
                 <div
                     onClick={() => router.push('/dashboard/project-manager/sadhana-report')}
-                    className="relative overflow-hidden rounded-xl md:rounded-2xl p-3 md:p-3.5 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-rose-50/80 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
                 >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-rose-500 to-pink-600 opacity-10 rounded-full blur-xl -mr-4 -mt-4 transition-opacity group-hover:opacity-25" />
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Spiritual Progress</span>
-                        <div className="h-7 w-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Activity className="h-4 w-4" />
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-rose-900 uppercase tracking-wider">Spiritual Progress</span>
+                        <div className="h-6 w-6 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Activity className="h-3.5 w-3.5" />
                         </div>
                     </div>
-                    <div className="text-base sm:text-lg font-black text-gray-900 leading-tight truncate">Sadhana Report</div>
-                    <div className="text-[10px] text-rose-600 font-semibold mt-1">Center Progress</div>
+                    <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Sadhana Report</div>
+                    <div className="text-[9.5px] text-rose-700 font-semibold mt-0.5">Center Progress</div>
                 </div>
             </div>
 
             {/* Tabs */}
             <div className="overflow-x-auto no-scrollbar">
-                <div className="flex gap-1.5 p-1 bg-white/90 backdrop-blur-md rounded-xl w-fit border border-gray-200/70 shadow-xs">
+                <div className="flex gap-1 p-1 bg-white rounded-xl w-fit border-2 border-slate-300 shadow-2xs">
                     <button
                         onClick={() => handleTabChange('approvals')}
-                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'approvals'
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'approvals'
                             ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
                     >
                         <FileCheck className="h-3.5 w-3.5" />
                         Spiritual Approval
                     </button>
                     <button
                         onClick={() => handleTabChange('registrations')}
-                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'registrations'
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'registrations'
                             ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
                     >
                         <Users className="h-3.5 w-3.5" />
                         New Dev Approval
@@ -1486,9 +1631,9 @@ export default function ProjectManagerDashboard() {
                     </button>
                     <button
                         onClick={() => handleTabChange('user-management')}
-                        className={'flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'user-management'
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'user-management'
                             ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60')}
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
                     >
                         <Shield className="h-3.5 w-3.5" />
                         Management roles
@@ -1890,7 +2035,7 @@ export default function ProjectManagerDashboard() {
                                         <tbody className="divide-y divide-gray-100">
                                             {pendingUsers.map((user) => (
                                                 <tr key={user.id} className="hover:bg-gray-50/80 transition-all duration-300 group">
-                                                    <td className="px-6 py-4">
+                                                    <td className="px-3.5 py-1.5">
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedPendingUserIds.includes(user.id)}
@@ -1902,13 +2047,13 @@ export default function ProjectManagerDashboard() {
                                                             className="w-4 h-4 rounded-md border-gray-300 text-teal-600 focus:ring-teal-500"
                                                         />
                                                     </td>
-                                                    <td className="px-6 py-4">
+                                                    <td className="px-3.5 py-1.5">
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-black text-gray-900 tracking-tight">{user.name}</span>
                                                             <span className="text-xs font-bold text-gray-400">{user.email}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4">
+                                                    <td className="px-3.5 py-1.5">
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-1.5">
                                                                 <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
@@ -1926,7 +2071,7 @@ export default function ProjectManagerDashboard() {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4">
+                                                    <td className="px-3.5 py-1.5">
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-1.5">
                                                                 <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
@@ -1991,97 +2136,181 @@ export default function ProjectManagerDashboard() {
                 )}
 
                 {activeTab === 'user-management' && (
-                    <div className="space-y-6">
-                        {/* Search */}
-                        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 mb-8">
-                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 border-b border-gray-50 pb-8">
-                                <div>
-                                    <h2 className="text-xl font-black text-gray-900 tracking-tight">Devotee Directory</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Search & Segment Devotees</p>
+                    <div className="space-y-3">
+                        {/* Search & Scope Header */}
+                        <div className="bg-white rounded-2xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm">
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-3 mb-2.5 pb-2.5 border-b border-slate-200">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 w-full lg:w-auto">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">Devotee Directory</h2>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline">•</span>
+                                            <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">Search & Segment</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCenterScope('all')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                centerScope === 'all'
+                                                    ? 'bg-slate-900 text-white shadow-xs'
+                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                                            }`}
+                                        >
+                                            All ({dynamicDevoteeStats.total})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCenterScope('current')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                centerScope === 'current'
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                            }`}
+                                        >
+                                            🟢 Current ({dynamicDevoteeStats.currentCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCenterScope('alumni')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                centerScope === 'alumni'
+                                                    ? 'bg-purple-700 text-white shadow-xs'
+                                                    : 'bg-purple-50 text-purple-800 border border-purple-300 hover:bg-purple-100'
+                                            }`}
+                                        >
+                                            🟣 Alumni ({dynamicDevoteeStats.alumniCount})
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="relative w-full lg:w-[400px] group">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-teal-500 group-focus-within:scale-110 transition-transform" />
+                                <div className="relative w-full lg:w-[320px] group">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-600 transition-colors" />
                                     <input
                                         type="text"
-                                        placeholder="Search by name or email..."
+                                        placeholder="Search by name, email, phone..."
                                         value={userSearch}
                                         onChange={(e) => setUserSearch(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-teal-100 focus:ring-4 focus:ring-teal-500/5 outline-none transition-all font-medium"
+                                        className="w-full pl-9 pr-7 py-1.5 bg-slate-50 hover:bg-white border-2 border-slate-300 focus:border-teal-500 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all shadow-2xs"
                                     />
+                                    {userSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setUserSearch('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {/* Spiritual Group */}
+                            {/* 6 Filter Dropdowns in a single compact responsive row */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                                {/* 1. VOICE Connection */}
                                 <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Spiritual Group</label>
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Connection
+                                    </label>
                                     <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-teal-50 text-teal-500 rounded-lg group-hover:bg-teal-500 group-hover:text-white transition-colors">
-                                            <Users className="h-4 w-4" />
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-purple-100 text-purple-700 rounded-md pointer-events-none">
+                                            <GraduationCap className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={centerScope}
+                                            onChange={(e) => setCenterScope(e.target.value as any)}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-purple-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="all">🏛️ All ({dynamicDevoteeStats.total})</option>
+                                            <option value="current">🟢 Current ({dynamicDevoteeStats.currentCount})</option>
+                                            <option value="alumni">🟣 Alumni ({dynamicDevoteeStats.alumniCount})</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                {/* 2. Spiritual Group */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Spiritual Group
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-teal-100 text-teal-700 rounded-md pointer-events-none">
+                                            <Users className="h-3.5 w-3.5" />
                                         </div>
                                         <select
                                             value={filterGroup}
                                             onChange={(e) => setFilterGroup(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-teal-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <option value="">All Groups</option>
-                                            {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                                            {BV_GROUPS.map(g => (
+                                                <option key={g} value={g}>{g}</option>
+                                            ))}
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
 
-                                {/* KC Status */}
+                                {/* 3. KC Status */}
                                 <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">KC Status</label>
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        KC Status
+                                    </label>
                                     <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-orange-50 text-orange-500 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                                            <Activity className="h-4 w-4" />
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
+                                            <Activity className="h-3.5 w-3.5" />
                                         </div>
                                         <select
                                             value={filterKCStatus}
                                             onChange={(e) => setFilterKCStatus(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <option value="">All KC Status</option>
-                                            {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                            {KC_STATUS_OPTIONS.map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
 
-                                {/* Ashram */}
+                                {/* 4. Ashram */}
                                 <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Ashram</label>
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Ashram
+                                    </label>
                                     <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-blue-50 text-blue-500 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                                            <Home className="h-4 w-4" />
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-blue-100 text-blue-700 rounded-md pointer-events-none">
+                                            <Building2 className="h-3.5 w-3.5" />
                                         </div>
                                         <select
                                             value={filterAshram}
                                             onChange={(e) => setFilterAshram(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <option value="">All Ashrams</option>
-                                            {['Brahmachari', 'Grihastha', 'Student and not decided', 'Working and not decided', 'Gauranga Sabha', 'Nityananda Sabha', 'Staying Single (Not planning to marry)'].map(a => (
+                                            {ASHRAM_OPTIONS.map(a => (
                                                 <option key={a} value={a}>{a}</option>
                                             ))}
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
 
-                                {/* Role Filter */}
+                                {/* 5. Admin Role */}
                                 <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Administrative Role</label>
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Admin Role
+                                    </label>
                                     <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                                            <UserCheck className="h-4 w-4" />
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
+                                            <UserCheck className="h-3.5 w-3.5" />
                                         </div>
                                         <select
                                             value={filterRole}
                                             onChange={(e) => setFilterRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <option value="">All Roles</option>
                                             {(() => {
@@ -2100,28 +2329,30 @@ export default function ProjectManagerDashboard() {
                                                 ));
                                             })()}
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
 
-                                {/* Camp Filter */}
+                                {/* 6. Camp Completed */}
                                 <div className="group">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Camp Completed</label>
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Camp Completed
+                                    </label>
                                     <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-emerald-50 text-emerald-500 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                                            <Shield className="h-4 w-4" />
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-emerald-100 text-emerald-700 rounded-md pointer-events-none">
+                                            <Shield className="h-3.5 w-3.5" />
                                         </div>
                                         <select
                                             value={filterCamp}
                                             onChange={(e) => setFilterCamp(e.target.value)}
-                                            className="w-full pl-14 pr-10 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-teal-500 focus:ring-4 focus:ring-teal-500/5 appearance-none outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-sm"
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-emerald-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <option value="">Any Status</option>
                                             {CAMP_OPTIONS.map(c => (
                                                 <option key={c.value} value={c.value}>{c.label}</option>
                                             ))}
                                         </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
                             </div>
@@ -2133,6 +2364,11 @@ export default function ProjectManagerDashboard() {
                                 .filter(u => {
                                     const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
                                                     u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                    const scopeMatch = !centerScope || centerScope === 'all'
+                                        ? true
+                                        : centerScope === 'current'
+                                            ? u._centerConnection !== 'alumni'
+                                            : u._centerConnection === 'alumni';
                                     const groupMatch = !filterGroup || u.bv_group === filterGroup;
                                     const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
                                     const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
@@ -2146,23 +2382,46 @@ export default function ProjectManagerDashboard() {
                                     
                                     const campMatch = !filterCamp || (u as any)[filterCamp];
 
-                                    return nameMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                                    return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
                                 })
                                 .map((user) => (
-                                    <div key={user.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+                                    <div key={user.id} className={`bg-white rounded-2xl border shadow-sm p-5 space-y-4 ${user._centerConnection === 'alumni' ? 'border-purple-200 bg-purple-50/15' : 'border-gray-200'}`}>
                                         <div className="flex justify-between items-start">
                                             <div className="min-w-0">
-                                                <h4 className="text-sm font-black text-gray-900 truncate uppercase">{user.name}</h4>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <h4 className="text-sm font-black text-gray-900 truncate uppercase">{user.name}</h4>
+                                                    {user._centerConnection === 'alumni' ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                            🎓 Voice Alumni
+                                                        </span>
+                                                    ) : user._centerConnection === 'both' ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                                                            🔷 Current & Alumni
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                            🟢 Current Member
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                                                {user._centerConnection === 'alumni' && (
+                                                    <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
+                                                        Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
+                                                    </p>
+                                                )}
                                             </div>
                                             <button
-                                                className="p-2 bg-gray-50 text-gray-400 hover:text-teal-600 rounded-lg transition-colors"
+                                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group"
                                                 onClick={() => {
                                                     setUserForView(user);
                                                     openUserView(user);
                                                 }}
+                                                title="View Devotee Profile"
                                             >
-                                                <Activity className="h-4 w-4" />
+                                                <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                                <span>View</span>
                                             </button>
                                         </div>
 
@@ -2270,23 +2529,28 @@ export default function ProjectManagerDashboard() {
                         </div>
 
                         {/* Desktop Table View */}
-                        <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
+                        <div className="hidden lg:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-hidden">
+                            <table className="min-w-full divide-y divide-slate-200">
+                                <thead className="bg-slate-100 border-b-2 border-slate-200">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">User</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Center Post</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">VOICE group level</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">KC Status</th>
-                                        <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-16">Actions</th>
+                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">User</th>
+                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">Role</th>
+                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-44">Center Post</th>
+                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">VOICE Group</th>
+                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">KC Status</th>
+                                        <th className="px-3.5 py-2 text-right text-[11px] font-black text-slate-700 uppercase tracking-wider w-14">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-100">
+                                <tbody className="bg-white divide-y divide-slate-200">
                                     {users
                                         .filter(u => {
                                             const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
                                                             u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                            const scopeMatch = !centerScope || centerScope === 'all'
+                                                ? true
+                                                : centerScope === 'current'
+                                                    ? u._centerConnection !== 'alumni'
+                                                    : u._centerConnection === 'alumni';
                                             const groupMatch = !filterGroup || u.bv_group === filterGroup;
                                             const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
                                             const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
@@ -2300,19 +2564,40 @@ export default function ProjectManagerDashboard() {
                                             
                                             const campMatch = !filterCamp || (u as any)[filterCamp];
 
-                                            return nameMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                                            return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
                                         })
                                         .map((user) => (
-                                            <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4">
+                                            <tr key={user.id} className={`hover:bg-slate-50/90 transition-colors ${user._centerConnection === 'alumni' ? 'bg-purple-50/30' : ''}`}>
+                                                <td className="px-3.5 py-1.5">
                                                     <div className="flex items-center">
                                                         <div className="ml-0">
-                                                            <div className="text-sm font-bold text-gray-900">{user.name}</div>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-sm font-bold text-gray-900">{user.name}</span>
+                                                                {user._centerConnection === 'alumni' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                                        🎓 Voice Alumni
+                                                                    </span>
+                                                                ) : user._centerConnection === 'both' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                                                                        🔷 Current & Alumni
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                        🟢 Current Member
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="text-xs text-gray-500">{user.email}</div>
+                                                            {user._centerConnection === 'alumni' && (
+                                                                <div className="text-[10px] font-bold text-purple-700 mt-0.5">
+                                                                    Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-3.5 py-1.5">
                                                     <div className="flex flex-wrap gap-1">
                                                         {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
                                                             <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
@@ -2321,7 +2606,7 @@ export default function ProjectManagerDashboard() {
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
                                                     <div className="relative w-48 text-left">
                                                         {(() => {
                                                             const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
@@ -2356,13 +2641,13 @@ export default function ProjectManagerDashboard() {
                                                         })()}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-3.5 py-1.5">
                                                     <div className="relative w-full">
                                                         <select
                                                             value={user.bv_group || ''}
                                                             onChange={(e) => handleAssignGroup(user.id, e.target.value)}
                                                             disabled={updatingGroupUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-teal-300"
+                                                            className="w-full appearance-none bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
                                                         >
                                                             <option value="">- No Group -</option>
                                                             {BV_GROUPS.map(g => (
@@ -2378,13 +2663,13 @@ export default function ProjectManagerDashboard() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-3.5 py-1.5">
                                                     <div className="relative w-full">
                                                         <select
                                                             value={user.hierarchy?.kcStatus || ''}
                                                             onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
                                                             disabled={updatingKCStatusUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-orange-300"
+                                                            className="w-full appearance-none bg-white border border-slate-300 hover:border-orange-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
                                                         >
                                                             <option value="">- No Status -</option>
                                                             {KC_STATUS_OPTIONS.map(status => (
@@ -2400,15 +2685,17 @@ export default function ProjectManagerDashboard() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
                                                     <button
-                                                        className="text-gray-400 hover:text-gray-600"
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group cursor-pointer"
                                                         onClick={() => {
                                                             setUserForView(user);
                                                             openUserView(user);
                                                         }}
+                                                        title="View Devotee Profile"
                                                     >
-                                                        <Activity className="h-5 w-5" />
+                                                        <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                                        <span>View</span>
                                                     </button>
                                                 </td>
                                             </tr>
