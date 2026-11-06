@@ -319,7 +319,7 @@ export default function CentersPage() {
       return;
     }
 
-    if (!isSuperAdmin && !newCenter.projectManagerId) {
+    if (!isSuperAdmin && !isEditing && !newCenter.projectManagerId) {
       setError('Project Manager is required');
       toast.error('Project Manager is required');
       return;
@@ -366,28 +366,28 @@ export default function CentersPage() {
       contact: newCenter.contact || undefined,
       temple_id: newCenter.templeId,
       temple_name: selectedTemple.name,
-      project_manager_id: newCenter.projectManagerId || undefined,
-      project_manager_name: selectedPM?.name || undefined,
-      project_advisor_id: newCenter.projectAdvisorId,
-      project_advisor_name: selectedPA?.name,
-      acting_manager_id: newCenter.actingManagerId,
-      acting_manager_name: selectedAM?.name,
-      internal_manager_id: newCenter.internalManagerId,
-      internal_manager_name: selectedIM?.name,
-      preaching_coordinator_id: newCenter.preachingCoordinatorId,
-      preaching_coordinator_name: selectedPC?.name,
-      morning_program_in_charge_id: newCenter.morningProgramInChargeId,
-      morning_program_in_charge_name: selectedMP?.name,
-      mentor_id: newCenter.mentorId,
-      mentor_name: selectedMentor?.name,
-      frontliner_id: newCenter.frontlinerId,
-      frontliner_name: selectedFL?.name,
-      accountant_id: newCenter.accountantId,
-      accountant_name: selectedACC?.name,
-      kitchen_head_id: newCenter.kitchenHeadId,
-      kitchen_head_name: selectedKH?.name,
-      study_in_charge_id: newCenter.studyInChargeId,
-      study_in_charge_name: selectedSI?.name
+      project_manager_id: newCenter.projectManagerId || null,
+      project_manager_name: selectedPM?.name || null,
+      project_advisor_id: newCenter.projectAdvisorId || null,
+      project_advisor_name: selectedPA?.name || null,
+      acting_manager_id: newCenter.actingManagerId || null,
+      acting_manager_name: selectedAM?.name || null,
+      internal_manager_id: newCenter.internalManagerId || null,
+      internal_manager_name: selectedIM?.name || null,
+      preaching_coordinator_id: newCenter.preachingCoordinatorId || null,
+      preaching_coordinator_name: selectedPC?.name || null,
+      morning_program_in_charge_id: newCenter.morningProgramInChargeId || null,
+      morning_program_in_charge_name: selectedMP?.name || null,
+      mentor_id: newCenter.mentorId || null,
+      mentor_name: selectedMentor?.name || null,
+      frontliner_id: newCenter.frontlinerId || null,
+      frontliner_name: selectedFL?.name || null,
+      accountant_id: newCenter.accountantId || null,
+      accountant_name: selectedACC?.name || null,
+      kitchen_head_id: newCenter.kitchenHeadId || null,
+      kitchen_head_name: selectedKH?.name || null,
+      study_in_charge_id: newCenter.studyInChargeId || null,
+      study_in_charge_name: selectedSI?.name || null
     };
 
     try {
@@ -926,6 +926,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, projectManagerId: val })}
                         placeholder="Search & Select Project Manager..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -941,6 +943,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, projectAdvisorId: val })}
                         placeholder="Search Advisor..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -956,6 +960,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, actingManagerId: val })}
                         placeholder="Search Manager..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -979,6 +985,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, internalManagerId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -994,6 +1002,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, preachingCoordinatorId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1009,6 +1019,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, morningProgramInChargeId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1024,6 +1036,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, mentorId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1039,6 +1053,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, frontlinerId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1054,6 +1070,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, accountantId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1069,6 +1087,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, kitchenHeadId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>
@@ -1084,6 +1104,8 @@ export default function CentersPage() {
                         onChange={(val) => setNewCenter({ ...newCenter, studyInChargeId: val })}
                         placeholder="Search..."
                         valueProperty="id"
+                        allowClear
+                        allowNone
                         className="w-full"
                       />
                     </div>

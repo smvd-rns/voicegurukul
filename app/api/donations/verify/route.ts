@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
+import { sendDonationCapturedEmails } from '@/lib/utils/email';
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,11 @@ export async function POST(req: Request) {
       console.error('Failed to update donation to captured:', error);
       throw error;
     }
+
+    // 3. Dispatch automated confirmation & appreciation emails (Donor, Behalf, Collector)
+    sendDonationCapturedEmails(razorpay_order_id, razorpay_payment_id).catch(e => {
+      console.error('[Verify Route] Error triggering donation captured emails:', e);
+    });
     
     return NextResponse.json({ success: true });
   } catch (err: any) {

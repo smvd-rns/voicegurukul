@@ -47,7 +47,7 @@ async function getTransporter(): Promise<Transporter> {
     return _transporterCache;
 }
 
-const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <noreply@voicegurukul.com>').replace(/^"|"$/g, '');
+const SENDER_EMAIL = (process.env.SMTP_FROM_EMAIL || '"VOICE Gurukul" <manager@voicepune.com>').replace(/^"|"$/g, '');
 
 export interface EmailDispatchOptions {
     to: string | string[];
@@ -55,6 +55,7 @@ export interface EmailDispatchOptions {
     html: string;
     text?: string;
     from?: string;
+    replyTo?: string;
 }
 
 /**
@@ -80,6 +81,7 @@ export async function dispatchEmail(options: EmailDispatchOptions): Promise<bool
                     html: options.html,
                     text: options.text,
                     from: options.from || SENDER_EMAIL,
+                    replyTo: options.replyTo,
                 }),
             });
             if (res.ok) {
@@ -100,6 +102,7 @@ export async function dispatchEmail(options: EmailDispatchOptions): Promise<bool
         const info = await t.sendMail({
             from: options.from || SENDER_EMAIL,
             to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+            replyTo: options.replyTo,
             subject: options.subject,
             html: options.html,
             text: options.text,
@@ -876,6 +879,329 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
         subject: subject,
         html: htmlContent,
     });
+}
+
+/**
+ * Dispatches automated, mobile-responsive confirmation & appreciation emails when a donation is captured:
+ * 1. To Donor: Warm greeting, offering summary, and divine blessing from Sri Sri Radha Vrindavan Chandra, Jagganath Baladev Subadra, Gaur Nitai, Balaji.
+ * 2. To On-The-Behalf Devotee: Notification highlighting collector name, donor info, amount, and blessing.
+ * 3. To Collector: Seva appreciation highlighting donor info, amount, and encouragement blessing.
+ */
+export async function sendDonationCapturedEmails(
+    orderIdOrTxnid: string,
+    paymentId?: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        if (!orderIdOrTxnid) return { success: false, error: 'Missing orderId/txnid' };
+
+        // 1. Fetch donation record from database
+        const donationRes = await pool.query(
+            `SELECT * FROM donations WHERE txnid = $1 OR id = $1 LIMIT 1`,
+            [orderIdOrTxnid]
+        );
+
+        if (!donationRes.rows || donationRes.rows.length === 0) {
+            console.warn(`[Donation Email] No donation found for txnid/id: ${orderIdOrTxnid}`);
+            return { success: false, error: 'Donation not found' };
+        }
+
+        const donation = donationRes.rows[0];
+
+        // 2. Prevent duplicate email sending (idempotency between webhooks & frontend verify)
+        let metadata: any = {};
+        try {
+            metadata = typeof donation.metadata === 'object' && donation.metadata !== null
+                ? donation.metadata
+                : JSON.parse(donation.metadata || '{}');
+        } catch {
+            metadata = {};
+        }
+
+        if (metadata.emails_sent) {
+            console.log(`[Donation Email] Emails already dispatched for donation ${donation.id} (${donation.txnid}). Skipping.`);
+            return { success: true };
+        }
+
+        // Mark emails_sent immediately to avoid race conditions
+        metadata.emails_sent = true;
+        metadata.emails_sent_at = new Date().toISOString();
+        await pool.query(
+            `UPDATE donations SET metadata = $1 WHERE id = $2`,
+            [JSON.stringify(metadata), donation.id]
+        );
+
+        const donorName = (donation.donor_name || 'Generous Donor').trim();
+        const donorEmail = donation.donor_email?.trim() || '';
+        const donorMobile = donation.donor_mobile?.trim() || '';
+        const amount = Number(donation.amount || 0);
+        const amountFormatted = `₹${amount.toLocaleString('en-IN')}`;
+        const paymentIdToDisplay = paymentId || donation.payment_id || donation.txnid || 'Confirmed';
+        const paymentFor = metadata.payment_for || donation.payment_for || 'Sacred Offering';
+
+        const createdAtDate = donation.created_at ? new Date(donation.created_at) : new Date();
+        const dateFormatted = createdAtDate.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+
+        // 3. Resolve Collector information (tag_user_id)
+        let collectorName = metadata.collector?.name || '';
+        let collectorEmail = metadata.collector?.email || '';
+        let collectorCenter = donation.center || metadata.collector?.parent_center || metadata.collector?.current_center || '';
+        let collectorTemple = donation.temple || metadata.collector?.parent_temple || metadata.collector?.current_temple || '';
+
+        if (donation.tag_user_id) {
+            try {
+                const userRes = await pool.query(
+                    `SELECT id, name, email, phone, current_center, parent_center, other_center, other_parent_center, center, current_temple, parent_temple, temple FROM users WHERE id = $1 LIMIT 1`,
+                    [donation.tag_user_id]
+                );
+                if (userRes.rows.length > 0) {
+                    const u = userRes.rows[0];
+                    if (u.name) collectorName = u.name;
+                    if (u.email) collectorEmail = u.email;
+                    if (!collectorCenter) {
+                        collectorCenter = u.current_center || u.parent_center || u.center || '';
+                    }
+                    if (!collectorTemple) {
+                        collectorTemple = u.current_temple || u.parent_temple || u.temple || '';
+                    }
+                }
+            } catch (err) {
+                console.error('[Donation Email] Error fetching collector devotee:', err);
+            }
+        }
+        if (!collectorName) collectorName = 'VOICE Devotee';
+
+        // 4. Resolve On-Behalf Devotee
+        let behalfName = donation.on_behalf_of_name || metadata.on_behalf_of?.name || '';
+        let behalfEmail = '';
+        const behalfId = donation.on_behalf_of_id || metadata.on_behalf_of?.id;
+
+        if (behalfId) {
+            try {
+                const behalfRes = await pool.query(
+                    `SELECT id, name, email FROM users WHERE id = $1 LIMIT 1`,
+                    [behalfId]
+                );
+                if (behalfRes.rows.length > 0) {
+                    const bu = behalfRes.rows[0];
+                    if (bu.name) behalfName = bu.name;
+                    if (bu.email) behalfEmail = bu.email;
+                }
+            } catch (err) {
+                console.error('[Donation Email] Error fetching on-behalf devotee:', err);
+            }
+        }
+
+        // 5. Resolve Center Manager (Project Manager of the center)
+        let managerName = 'Center Project Manager';
+        let managerEmail = '';
+
+        if (collectorCenter && collectorCenter !== 'None' && collectorCenter !== 'General') {
+            try {
+                const centerRes = await pool.query(
+                    `SELECT project_manager_id, project_manager_name, acting_manager_id, acting_manager_name FROM centers WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+                    [collectorCenter]
+                );
+                if (centerRes.rows.length > 0) {
+                    const c = centerRes.rows[0];
+                    const pmId = c.project_manager_id || c.acting_manager_id;
+                    if (c.project_manager_name) managerName = c.project_manager_name;
+                    else if (c.acting_manager_name) managerName = c.acting_manager_name;
+
+                    if (pmId) {
+                        const pmRes = await pool.query(`SELECT name, email FROM users WHERE id = $1 LIMIT 1`, [pmId]);
+                        if (pmRes.rows.length > 0) {
+                            if (pmRes.rows[0].name) managerName = pmRes.rows[0].name;
+                            if (pmRes.rows[0].email) managerEmail = pmRes.rows[0].email;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[Donation Email] Error fetching center manager:', err);
+            }
+        }
+
+        // Shared responsive detail row
+        const detailRow = (label: string, value: string, isHighlight = false) => `
+            <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b; font-size: 13.5px; width: 40%; vertical-align: top;">${label}</td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: ${isHighlight ? '#0284c7' : '#0f172a'}; font-size: 13.5px; font-weight: 700; ${isHighlight ? 'font-size: 15px;' : ''} vertical-align: top;">${value}</td>
+            </tr>
+        `;
+
+        // Divine Blessing block
+        const divineBlessingBlock = `
+            <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1.5px solid #bae6fd; border-radius: 14px; padding: 18px 20px; margin: 24px 0;">
+                <div style="font-size: 12.5px; font-weight: 800; color: #0284c7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">
+                    🙏 Divine Blessings &amp; Prayers
+                </div>
+                <p style="margin: 0; font-size: 14px; color: #0f172a; line-height: 1.7; font-weight: 500;">
+                    May <strong>Sri Sri Radha Vrindavan Chandra, Jagganath Baladev Subadra, Sri Sri Gaur Nitai, and Balaji Bhagavan</strong> bestow eternal blessings, divine peace, and auspiciousness upon you and your family.
+                </p>
+            </div>
+        `;
+
+        // -------------------------------------------------------------
+        // 1. EMAIL TO DONOR: Warm Greeting, Offering Summary & Blessings
+        // -------------------------------------------------------------
+        if (donorEmail && donorEmail.includes('@')) {
+            const donorSubject = `Heartfelt Gratitude for Your Sacred Offering - VOICE Gurukul`;
+            const donorBody = `
+                <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${donorName}</strong>,</p>
+                <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+                    Please accept our respectful greetings. We acknowledge with deep spiritual gratitude the receipt of your kind and generous offering towards the devotional, cultural, and youth-upliftment activities of <strong>VOICE Gurukul</strong>.
+                </p>
+
+                <!-- Contribution Summary Card -->
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; margin: 24px 0;">
+                    <h4 style="margin: 0 0 14px 0; color: #0284c7; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                        Offering Summary
+                    </h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        ${detailRow('Donor Name', donorName)}
+                        ${detailRow('Amount Received', amountFormatted, true)}
+                        ${detailRow('Seva / Scheme', paymentFor)}
+                        ${detailRow('Payment Ref / ID', paymentIdToDisplay)}
+                        ${detailRow('Date & Time', dateFormatted)}
+                        ${detailRow('Payment Status', 'Successful (Captured)')}
+                    </table>
+                </div>
+
+                ${divineBlessingBlock}
+
+                <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+                    Your selfless contribution plays a vital role in our ongoing mission to impart timeless spiritual wisdom and values to society. Thank you for your noble dedication.
+                </p>
+
+                <p style="font-size: 14px; color: #334155; margin-top: 25px; line-height: 1.6;">
+                    With gratitude and prayers in Lord Krishna's service,<br/>
+                    <strong>${managerName}</strong><br/>
+                    <span style="font-size: 13px; color: #64748b;">VOICE Gurukul${collectorCenter ? ` • ${collectorCenter}` : ''}</span>
+                </p>
+            `;
+
+            await dispatchEmail({
+                to: donorEmail,
+                subject: donorSubject,
+                html: getEmailWrapper('Sacred Offering Acknowledged', donorBody),
+                from: SENDER_EMAIL,
+                replyTo: managerEmail || 'manager@voicepune.com',
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 2. EMAIL TO ON-THE-BEHALF DEVOTEE
+        // (Greeting + Collector Name + Donor info + Divine Blessing)
+        // -------------------------------------------------------------
+        const hasDistinctBehalf = behalfEmail && behalfEmail.toLowerCase() !== collectorEmail?.toLowerCase();
+
+        if (behalfEmail && behalfEmail.includes('@')) {
+            const behalfSubject = `New Offering Received on Your Behalf: ${amountFormatted} from ${donorName}`;
+            const behalfBody = `
+                <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${behalfName}</strong>,</p>
+                <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+                    Please accept our humble obeisances. All glories to Srila Prabhupada.
+                </p>
+                <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+                    A pious donor has kindly contributed a sacred offering <strong>on your behalf</strong> for the VOICE Gurukul mission.
+                </p>
+
+                <!-- Details Card with Collector Highlighted -->
+                <div style="background-color: #f8fafc; border: 1.5px solid #0284c7; border-radius: 14px; padding: 22px; margin: 24px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 14px;">
+                        <span style="font-size: 13px; font-weight: 800; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em;">Offering Details</span>
+                        <span style="background-color: #0284c7; color: #ffffff; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; text-transform: uppercase;">On Your Behalf</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        ${detailRow('Collected By (Devotee)', collectorName, true)}
+                        ${detailRow('Donor Name', donorName)}
+                        ${detailRow('Offering Amount', amountFormatted, true)}
+                        ${donorMobile ? detailRow('Donor Mobile', donorMobile) : ''}
+                        ${donorEmail ? detailRow('Donor Email', donorEmail) : ''}
+                        ${detailRow('Seva / Scheme', paymentFor)}
+                        ${detailRow('Date & Time', dateFormatted)}
+                    </table>
+                </div>
+
+                <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1.5px solid #bae6fd; border-radius: 14px; padding: 18px 20px; margin: 24px 0;">
+                    <div style="font-size: 12.5px; font-weight: 800; color: #0284c7; margin-bottom: 6px; text-transform: uppercase;">
+                        🙏 Devotional Appreciation &amp; Prayers
+                    </div>
+                    <p style="margin: 0; font-size: 14px; color: #0f172a; line-height: 1.7; font-weight: 500;">
+                        Thank you for inspiring souls and spreading auspiciousness. May <strong>Sri Sri Radha Vrindavan Chandra, Jagganath Baladev Subadra, Sri Sri Gaur Nitai, and Balaji Bhagavan</strong> bestow eternal blessings, divine peace, and auspiciousness upon you and your family.
+                    </p>
+                </div>
+            `;
+
+            await dispatchEmail({
+                to: behalfEmail,
+                subject: behalfSubject,
+                html: getEmailWrapper('Donation Received on Your Behalf', behalfBody),
+                from: SENDER_EMAIL,
+                replyTo: 'manager@voicepune.com',
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 3. EMAIL TO WHO HAS COLLECTED (COLLECTOR)
+        // (Greeting + Donor info + Seva Encouragement & Blessing)
+        // -------------------------------------------------------------
+        if (collectorEmail && collectorEmail.includes('@')) {
+            const collectorSubject = `Donation Received via Your Link: ${amountFormatted} from ${donorName}`;
+            const collectorBody = `
+                <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${collectorName}</strong>,</p>
+                <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+                    Please accept our humble obeisances. All glories to Srila Prabhupada.
+                </p>
+                <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+                    A new donation offering has been successfully received through your seva link!
+                </p>
+
+                <!-- Details Card -->
+                <div style="background-color: #f8fafc; border: 1.5px solid #0284c7; border-radius: 14px; padding: 22px; margin: 24px 0;">
+                    <h4 style="margin: 0 0 14px 0; color: #0284c7; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                        Donation &amp; Donor Information
+                    </h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        ${detailRow('Donor Name', donorName)}
+                        ${detailRow('Offering Amount', amountFormatted, true)}
+                        ${behalfName && behalfName !== collectorName ? detailRow('Collected On Behalf Of', behalfName) : ''}
+                        ${donorMobile ? detailRow('Donor Mobile', donorMobile) : ''}
+                        ${donorEmail ? detailRow('Donor Email', donorEmail) : ''}
+                        ${detailRow('Seva / Scheme', paymentFor)}
+                        ${detailRow('Date & Time', dateFormatted)}
+                    </table>
+                </div>
+
+                <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1.5px solid #bae6fd; border-radius: 14px; padding: 18px 20px; margin: 24px 0;">
+                    <div style="font-size: 12.5px; font-weight: 800; color: #0284c7; margin-bottom: 6px; text-transform: uppercase;">
+                        🌟 Seva Encouragement &amp; Blessings
+                    </div>
+                    <p style="margin: 0; font-size: 14px; color: #0f172a; line-height: 1.7; font-weight: 500;">
+                        Thank you for your dedicated enthusiasm and endeavor in reaching out and engaging souls in the service of Lord Krishna. May <strong>Sri Sri Radha Vrindavan Chandra, Jagganath Baladev Subadra, Sri Sri Gaur Nitai, and Balaji Bhagavan</strong> bestow eternal blessings, divine peace, and auspiciousness upon you and your family.
+                    </p>
+                </div>
+            `;
+
+            await dispatchEmail({
+                to: collectorEmail,
+                subject: collectorSubject,
+                html: getEmailWrapper('Donation Received via Your Link', collectorBody),
+                from: SENDER_EMAIL,
+                replyTo: 'manager@voicepune.com',
+            });
+        }
+
+        return { success: true };
+    } catch (err: any) {
+        console.error('[Donation Email] Error in sendDonationCapturedEmails:', err);
+        return { success: false, error: err.message };
+    }
 }
 
 

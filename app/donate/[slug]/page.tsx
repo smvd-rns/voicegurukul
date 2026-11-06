@@ -1699,11 +1699,11 @@ export default function DonationPage() {
               </p>
 
               <p className="text-xs text-slate-600 mt-3 leading-relaxed font-medium">
-                May Lord Sri Sri Radha-Damodara &amp; Sri Balaji bestow eternal blessings and auspiciousness upon you and your family this Diwali season.
+                May Sri Sri Radha Vrindavan Chandra, Jagganath Baladev Subadra, Sri Sri Gaur Nitai, and Balaji Bhagavan bestow eternal blessings, divine peace, and auspiciousness upon you and your family.
               </p>
 
               <div className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 font-medium">
-                An official 80G tax receipt has been dispatched to <strong className="text-slate-900">{formData.donorEmail}</strong>.
+                We express our heartfelt gratitude for your generous offering in support of the sacred mission of VOICE Gurukul.
               </div>
 
               <button

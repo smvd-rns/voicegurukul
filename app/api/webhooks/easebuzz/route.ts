@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
+import { sendDonationCapturedEmails } from '@/lib/utils/email';
 
 export async function POST(req: Request) {
   try {
@@ -41,6 +42,10 @@ export async function POST(req: Request) {
           metadata: { webhook_received: true, timestamp: new Date().toISOString() }
         })
         .eq('txnid', txnid);
+
+      sendDonationCapturedEmails(txnid, paymentId).catch(e => {
+        console.error('[Easebuzz Webhook] Error triggering donation captured emails:', e);
+      });
     } else {
       await sadhanaDb
         .from('donations')

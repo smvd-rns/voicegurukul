@@ -101,6 +101,10 @@ export default function CampRegistrationsAdminPage() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
+  // Waiting List Approval Modal State
+  const [approvingWaitingListReg, setApprovingWaitingListReg] = useState<CampRegistration | null>(null);
+  const [isApprovingWaitingList, setIsApprovingWaitingList] = useState(false);
+
   // ITT Verification Modal State
   const [verifyingReg, setVerifyingReg] = useState<CampRegistration | null>(null);
   const [verifyTxnId, setVerifyTxnId] = useState('');
@@ -525,21 +529,31 @@ export default function CampRegistrationsAdminPage() {
     setRejectReason(reg.payment_method === 'IDT' ? 'IDT deduction declined by administration' : 'Transfer verification declined');
   };
 
-  // Approve Devotee from Accommodation Waiting List
-  const handleApproveWaitingList = async (regId: string) => {
-    if (!confirm('Are you sure you want to approve this devotee from the Waiting List? Their entry and prasadam pass will be unlocked and a confirmation email will be dispatched.')) {
-      return;
+  // Open Waiting List Approval Modal
+  const handleOpenApproveWaitingListModal = (regId: string) => {
+    const reg = registrations.find((r) => r.id === regId) || null;
+    if (reg) {
+      setApprovingWaitingListReg(reg);
     }
+  };
+
+  // Confirm Approval from Waiting List
+  const handleConfirmApproveWaitingList = async () => {
+    if (!approvingWaitingListReg?.id) return;
+    setIsApprovingWaitingList(true);
     try {
-      const res = await approveCampWaitingListRegistrationAction(regId);
+      const res = await approveCampWaitingListRegistrationAction(approvingWaitingListReg.id);
       if (res.success) {
-        toast.success('Registration approved & pass released successfully!');
+        toast.success(`Registration approved! Pass released for ${approvingWaitingListReg.participant_name || "devotee"}.`);
+        setApprovingWaitingListReg(null);
         loadData();
       } else {
         toast.error(res.error || 'Failed to approve registration.');
       }
     } catch (e: any) {
       toast.error(e.message || 'Error approving registration.');
+    } finally {
+      setIsApprovingWaitingList(false);
     }
   };
 
@@ -2200,7 +2214,7 @@ export default function CampRegistrationsAdminPage() {
                                 )}
                                 <button
                                   type="button"
-                                  onClick={() => reg.id && handleApproveWaitingList(reg.id)}
+                                  onClick={() => reg.id && handleOpenApproveWaitingListModal(reg.id)}
                                   className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-extrabold flex items-center gap-0.5 shadow-2xs cursor-pointer"
                                   title="Approve accommodation & release pass to devotee"
                                 >
@@ -2841,7 +2855,7 @@ export default function CampRegistrationsAdminPage() {
           if (found) setViewPassReg(found);
         }}
         onApproveWaitingList={async (regId) => {
-          await handleApproveWaitingList(regId);
+          handleOpenApproveWaitingListModal(regId);
         }}
         onRefresh={() => {
           loadData();
@@ -5605,6 +5619,119 @@ export default function CampRegistrationsAdminPage() {
           registration={viewPassReg}
           onClose={() => setViewPassReg(null)}
         />
+      )}
+
+      {/* WAITING LIST APPROVAL CONFIRMATION MODAL */}
+      {approvingWaitingListReg && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header with vibrant green gradient accent */}
+            <div className="p-6 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white relative">
+              <button
+                type="button"
+                onClick={() => !isApprovingWaitingList && setApprovingWaitingListReg(null)}
+                disabled={isApprovingWaitingList}
+                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer disabled:opacity-50"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">Approve Devotee Pass</h3>
+                  <p className="text-xs text-emerald-100 font-medium">Release accommodation &amp; confirm camp registration</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Devotee Info Card */}
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="text-base font-black text-slate-900 leading-snug">
+                      {approvingWaitingListReg.participant_name}
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
+                      <span>{approvingWaitingListReg.whatsapp || approvingWaitingListReg.poc_contact}</span>
+                      {approvingWaitingListReg.voice_name && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <span className="font-semibold text-slate-700">{approvingWaitingListReg.voice_name}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                    Waiting List
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200/60 text-slate-600">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Camp Track</span>
+                    <span className="font-bold text-slate-800">{approvingWaitingListReg.camp_track || 'Main Camp'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Accommodation Choice</span>
+                    <span className="font-bold text-slate-800">
+                      {approvingWaitingListReg.accommodation === 'NONE' || approvingWaitingListReg.accommodation === 'OUTSIDE' || approvingWaitingListReg.hotel_name
+                        ? (approvingWaitingListReg.hotel_name ? `Hotel (${approvingWaitingListReg.hotel_name})` : 'Self-Arranged Hotel')
+                        : 'CV Accommodation'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* What will happen notification list */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/60 space-y-2 text-xs text-emerald-950">
+                <div className="font-extrabold flex items-center gap-1.5 text-emerald-900">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Upon approval, the following actions will take place:</span>
+                </div>
+                <ul className="space-y-1.5 pl-5 list-disc text-[11px] font-medium text-emerald-800">
+                  <li>Devotee status changes from <strong>Waiting List</strong> to <strong>Confirmed Pass</strong>.</li>
+                  <li>Their digital Entry &amp; Prasadam QR pass is unlocked immediately.</li>
+                  <li>An official confirmation email and pass credentials are automatically dispatched.</li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setApprovingWaitingListReg(null)}
+                  disabled={isApprovingWaitingList}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmApproveWaitingList}
+                  disabled={isApprovingWaitingList}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-extrabold shadow-md shadow-emerald-700/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 hover:scale-[1.02]"
+                >
+                  {isApprovingWaitingList ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Releasing Pass...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Approve &amp; Release Pass</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* PASS QR SCANNER MODAL */}

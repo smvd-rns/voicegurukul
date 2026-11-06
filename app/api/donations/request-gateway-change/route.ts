@@ -77,13 +77,13 @@ export async function POST(request: Request) {
       to: 'smvd@voicepune.com',
       subject: '⚠️ SECURITY ACTION: Payment Gateway Change Request',
       html: `
-        <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ea580c; border-radius: 10px;">
-          <h2 style="color: #ea580c;">Payment Gateway Change Requested</h2>
+        <div style="font-family: sans-serif; padding: 20px; border: 2px solid #0284c7; border-radius: 10px;">
+          <h2 style="color: #0284c7;">Payment Gateway Change Requested</h2>
           <p>Admin <strong>${user.name}</strong> has requested to switch the platform payment gateway to <strong>${nextGateway.toUpperCase()}</strong>.</p>
           <p>Since this involves financial transactions, your explicit approval is required.</p>
           <div style="margin: 30px 0;">
             <a href="${approvalLink}" 
-               style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+               style="background-color: #0284c7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
                APPROVE CHANGE
             </a>
           </div>

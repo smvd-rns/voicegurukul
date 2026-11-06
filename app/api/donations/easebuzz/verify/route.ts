@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSadhanaAdminClient } from '@/lib/supabase/sadhanaDb';
+import { sendDonationCapturedEmails } from '@/lib/utils/email';
 
 export async function POST(req: Request) {
   try {
@@ -47,6 +48,10 @@ export async function POST(req: Request) {
         .eq('txnid', txnid)
         .eq('payment_status', 'pending');
         
+      sendDonationCapturedEmails(txnid, paymentId).catch(e => {
+        console.error('[Easebuzz Verify] Error triggering donation captured emails:', e);
+      });
+
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/donate/${slug}?mode=success`, 303);
     } else {
       // payment failed or user cancelled

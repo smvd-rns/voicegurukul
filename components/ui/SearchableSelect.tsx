@@ -24,6 +24,8 @@ interface SearchableSelectProps {
     searchPlaceholder?: string;
     displayValue?: string;
     allowClear?: boolean;
+    allowNone?: boolean;
+    noneLabel?: string;
     icon?: React.ReactNode;
 }
 
@@ -40,6 +42,8 @@ export default function SearchableSelect({
     searchPlaceholder,
     displayValue,
     allowClear = false,
+    allowNone = false,
+    noneLabel = 'None (Unassigned)',
     icon,
 }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -149,6 +153,15 @@ export default function SearchableSelect({
     const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
     const displayText = selectedOption?.name || displayValue || (!value ? placeholder : (isUuid(value) ? 'Assigned Devotee' : value));
 
+    const isNoneEnabled = allowNone || allowClear;
+    const isNoneMatchingSearch = isNoneEnabled && (
+        !search ||
+        'none'.includes(search.toLowerCase()) ||
+        'unassigned'.includes(search.toLowerCase()) ||
+        'clear'.includes(search.toLowerCase()) ||
+        'remove'.includes(search.toLowerCase())
+    );
+
     const dropdownList = (
         <div
             ref={portalRef}
@@ -190,7 +203,34 @@ export default function SearchableSelect({
             </div>
 
             <div className="flex-1 overflow-y-auto p-1.5 divide-y divide-gray-50">
-                {filteredOptions.length === 0 ? (
+                {isNoneMatchingSearch && (
+                    <div
+                        className={`
+                            relative cursor-pointer select-none py-2 px-3 hover:bg-orange-50/70 hover:text-orange-950 rounded-lg transition-colors border-b border-gray-100 mb-1 flex items-center justify-between
+                            ${!value || value === '' ? 'bg-orange-50 text-orange-950 font-semibold' : 'text-gray-500'}
+                        `}
+                        onClick={() => {
+                            onChange('');
+                            setIsOpen(false);
+                            setSearch('');
+                        }}
+                    >
+                        <div className="flex flex-col pr-6">
+                            <span className="block font-medium text-xs sm:text-sm italic text-gray-700">
+                                — {noneLabel} —
+                            </span>
+                            <span className="block text-[10px] text-gray-400">
+                                Clear / Unassign
+                            </span>
+                        </div>
+                        {(!value || value === '') && (
+                            <span className="text-orange-600">
+                                <Check className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                        )}
+                    </div>
+                )}
+                {filteredOptions.length === 0 && !isNoneMatchingSearch ? (
                     <div className="relative cursor-default select-none px-4 py-3 text-gray-500 italic text-xs">
                         No results found.
                     </div>
@@ -253,7 +293,7 @@ export default function SearchableSelect({
                     </div>
                 )}
                 <div className={`flex flex-col truncate pr-5 ${icon ? 'pl-7' : ''}`}>
-                    <span 
+                    <span
                         className={`block truncate ${(!selectedOption && !value && !displayValue) ? 'text-gray-400' : 'text-gray-900 font-medium'}`}
                         title={displayText}
                     >

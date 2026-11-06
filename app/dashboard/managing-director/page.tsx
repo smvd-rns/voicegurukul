@@ -3769,6 +3769,8 @@ export default function ManagingDirectorDashboard() {
                                             onChange={(val) => setNewCenter({ ...newCenter, projectManagerId: val })}
                                             placeholder="Search & Select Project Manager..."
                                             valueProperty="id"
+                                            allowClear
+                                            allowNone
                                         />
                                     </div>
 
@@ -3781,6 +3783,8 @@ export default function ManagingDirectorDashboard() {
                                                 onChange={(val) => setNewCenter({ ...newCenter, projectAdvisorId: val })}
                                                 placeholder="Search Advisor..."
                                                 valueProperty="id"
+                                                allowClear
+                                                allowNone
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -3791,6 +3795,8 @@ export default function ManagingDirectorDashboard() {
                                                 onChange={(val) => setNewCenter({ ...newCenter, actingManagerId: val })}
                                                 placeholder="Search Manager..."
                                                 valueProperty="id"
+                                                allowClear
+                                                allowNone
                                             />
                                         </div>
                                     </div>
@@ -3820,6 +3826,8 @@ export default function ManagingDirectorDashboard() {
                                                     onChange={(val) => setNewCenter({ ...newCenter, [role.key]: val })}
                                                     placeholder={role.placeholder}
                                                     valueProperty="id"
+                                                    allowClear
+                                                    allowNone
                                                 />
                                             </div>
                                         ))}
@@ -4025,6 +4033,8 @@ export default function ManagingDirectorDashboard() {
                                             onChange={(val) => setEditingCenter({ ...editingCenter, projectManagerId: val })}
                                             placeholder="Search & Select Project Manager..."
                                             valueProperty="id"
+                                            allowClear
+                                            allowNone
                                         />
                                         <p className="text-[10px] text-gray-400 italic">This user will be assigned the Project Manager role.</p>
                                     </div>
@@ -4038,6 +4048,8 @@ export default function ManagingDirectorDashboard() {
                                                 onChange={(val) => setEditingCenter({ ...editingCenter, projectAdvisorId: val })}
                                                 placeholder="Select Advisor..."
                                                 valueProperty="id"
+                                                allowClear
+                                                allowNone
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -4048,6 +4060,8 @@ export default function ManagingDirectorDashboard() {
                                                 onChange={(val) => setEditingCenter({ ...editingCenter, actingManagerId: val })}
                                                 placeholder="Select Acting Manager..."
                                                 valueProperty="id"
+                                                allowClear
+                                                allowNone
                                             />
                                         </div>
                                     </div>
@@ -4077,6 +4091,8 @@ export default function ManagingDirectorDashboard() {
                                                     onChange={(val) => setEditingCenter({ ...editingCenter, [role.key]: val })}
                                                     placeholder={role.placeholder}
                                                     valueProperty="id"
+                                                    allowClear
+                                                    allowNone
                                                 />
                                             </div>
                                         ))}

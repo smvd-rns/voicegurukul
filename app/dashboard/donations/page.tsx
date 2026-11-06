@@ -440,7 +440,7 @@ export default function MyDonationsPage() {
                     <option value="">Select Devotee</option>
                     {behalfDevotees.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} {d.center ? `(${d.center})` : ''}
+                        {d.name}
                       </option>
                     ))}
                   </select>
@@ -1340,7 +1340,7 @@ export default function MyDonationsPage() {
                       .filter(d => d.id !== frozenBehalfId)
                       .map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.name} {d.center ? `(${d.center})` : d.temple ? `(${d.temple})` : ''}
+                          {d.name}
                         </option>
                       ))}
                   </select>

@@ -422,10 +422,10 @@ export default function CampPrasadamCard({
         ctx.fillRect(0, 0, dpW, dpH);
         drawRoundRect(4, 4, dpW - 8, dpH - 8, 14, '#ffffff', '#cbd5e1', 1.5);
 
-        // Header Gradient Banner
+        // Header Gradient Banner (Sea Blue)
         const grad = ctx.createLinearGradient(12, 12, dpW - 24, 95);
-        grad.addColorStop(0, '#f59e0b');
-        grad.addColorStop(1, '#ea580c');
+        grad.addColorStop(0, '#0284c7');
+        grad.addColorStop(1, '#0369a1');
         drawRoundRect(12, 12, dpW - 24, 90, 10, grad as any);
 
         // Header Tag & Token
@@ -476,7 +476,7 @@ export default function CampPrasadamCard({
 
         const rows = [
           ['Attendee Name:', reg.participant_name, '#0f172a', true],
-          ['Camp:', reg.camp_track || 'Standard', '#c2410c', true],
+          ['Camp:', reg.camp_track || 'Standard', '#0369a1', true],
           ['WhatsApp:', reg.whatsapp || reg.poc_contact || '-', '#334155', false],
           ['Center:', resolvedUserCenter, '#0f172a', false],
           ['Booking Group:', reg.group_id, '#1e293b', true],
@@ -857,7 +857,7 @@ export default function CampPrasadamCard({
               : 'hover:text-slate-900'
           }`}
         >
-          <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-600 shrink-0" />
+          <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-600 shrink-0" />
           <span className="sm:hidden">Delegate Pass</span>
           <span className="hidden sm:inline">Official Delegate Pass</span>
         </button>
@@ -1203,7 +1203,7 @@ export default function CampPrasadamCard({
             </div>
           )}
 
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 text-white space-y-2 shadow-md">
+          <div className="bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 rounded-2xl p-4 text-white space-y-2 shadow-md">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2 py-0.5 rounded">
                 Official Delegate Pass
@@ -1233,7 +1233,7 @@ export default function CampPrasadamCard({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Camp:</span>
-                <span className="font-bold text-amber-700">{reg.camp_track || 'Standard'}</span>
+                <span className="font-bold text-sky-700">{reg.camp_track || 'Standard'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Registered Dates:</span>
@@ -1296,7 +1296,7 @@ export default function CampPrasadamCard({
               type="button"
               onClick={handleDownloadHdPass}
               disabled={downloading}
-              className="col-span-2 sm:col-span-1 py-2 sm:py-2.5 px-3 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-slate-950 font-black rounded-xl text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 order-1"
+              className="col-span-2 sm:col-span-1 py-2 sm:py-2.5 px-3 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 active:scale-[0.98] text-white font-extrabold rounded-xl text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50 order-1"
               title="Download razor-sharp, high-resolution pass image (300 DPI PNG)"
             >
               <Download className="w-3.5 h-3.5 shrink-0" />
@@ -1338,7 +1338,7 @@ export default function CampPrasadamCard({
       <div className="print-modal-container bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-3 sm:p-5 shadow-2xl border border-gray-100 space-y-2.5 sm:space-y-3 animate-in fade-in zoom-in-95 duration-200 my-2 sm:my-8 print:my-0 print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none print:w-auto print:static print:block">
         <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-gray-100 print:hidden">
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+            <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
             <h3 className="text-sm sm:text-base font-black text-gray-900">Camp Entry &amp; Prasadam Pass</h3>
           </div>
           {onClose && (

@@ -67,18 +67,18 @@ export async function POST(request: Request) {
         if (address) address = sanitizeInput(address);
         if (contact) contact = sanitizeInput(contact);
 
-        // Sanitize UUIDs (convert empty strings to null to avoid 22P02 invalid input syntax errors)
-        if (project_advisor_id === '') project_advisor_id = null;
-        if (acting_manager_id === '') acting_manager_id = null;
-        if (project_manager_id === '') project_manager_id = null;
-        if (internal_manager_id === '') internal_manager_id = null;
-        if (preaching_coordinator_id === '') preaching_coordinator_id = null;
-        if (morning_program_in_charge_id === '') morning_program_in_charge_id = null;
-        if (mentor_id === '') mentor_id = null;
-        if (frontliner_id === '') frontliner_id = null;
-        if (accountant_id === '') accountant_id = null;
-        if (kitchen_head_id === '') kitchen_head_id = null;
-        if (study_in_charge_id === '') study_in_charge_id = null;
+        // Sanitize UUIDs (convert empty strings / falsy to null to avoid 22P02 invalid input syntax errors)
+        if (!project_manager_id) { project_manager_id = null; project_manager_name = null; }
+        if (!project_advisor_id) { project_advisor_id = null; project_advisor_name = null; }
+        if (!acting_manager_id) { acting_manager_id = null; acting_manager_name = null; }
+        if (!internal_manager_id) { internal_manager_id = null; internal_manager_name = null; }
+        if (!preaching_coordinator_id) { preaching_coordinator_id = null; preaching_coordinator_name = null; }
+        if (!morning_program_in_charge_id) { morning_program_in_charge_id = null; morning_program_in_charge_name = null; }
+        if (!mentor_id) { mentor_id = null; mentor_name = null; }
+        if (!frontliner_id) { frontliner_id = null; frontliner_name = null; }
+        if (!accountant_id) { accountant_id = null; accountant_name = null; }
+        if (!kitchen_head_id) { kitchen_head_id = null; kitchen_head_name = null; }
+        if (!study_in_charge_id) { study_in_charge_id = null; study_in_charge_name = null; }
 
         // 1. Fetch existing center details to check for role changes
         const { data: existingCenter, error: fetchCenterError } = await supabase
@@ -128,6 +128,7 @@ export async function POST(request: Request) {
                 accountant_name,
                 kitchen_head_id,
                 kitchen_head_name,
+                study_in_charge_id,
                 study_in_charge_name,
                 preaching_coordinator_ids: JSON.stringify(Array.isArray(preaching_coordinator_ids) ? preaching_coordinator_ids : (preaching_coordinator_id ? [preaching_coordinator_id] : [])),
                 preaching_coordinator_names: JSON.stringify(Array.isArray(preaching_coordinator_names) ? preaching_coordinator_names : (preaching_coordinator_name ? [preaching_coordinator_name] : [])),
