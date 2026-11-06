@@ -21,7 +21,7 @@ import {
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
-import { isCampManagerialUser } from '@/lib/utils/roles';
+import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { toast } from 'react-hot-toast';
 import {
   getActiveCampsForUserAction,
@@ -552,6 +552,8 @@ function CampDashboardContent() {
     gender: string;
     age: string;
     rounds?: number | string;
+    role?: any;
+    royalMember?: boolean;
     counselor: string;
     center: string;
     temple: string;
@@ -1619,7 +1621,7 @@ function CampDashboardContent() {
     return userRegisteredTracks;
   }, [isManager, selectedDevotee, userRegisteredTracks]);
 
-  // Dynamically filter available camp tracks based on devotee chanting rounds
+  // Dynamically filter available camp tracks based on devotee chanting rounds & roles
   const availableTracksForDevotee = useMemo(() => {
     const allTracks = selectedCamp?.tracks && selectedCamp.tracks.length > 0
       ? selectedCamp.tracks
@@ -1629,19 +1631,30 @@ function CampDashboardContent() {
       ? Number(formData.rounds)
       : 0;
 
+    const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
+    const attendeeRoyal = isManager && selectedDevotee
+      ? selectedDevotee.royalMember
+      : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+
     const trackFees = selectedCamp?.special_waivers?.track_fees || [];
 
     return allTracks.filter((t) => {
       const tf = trackFees.find((x) => x.track.toLowerCase() === t.toLowerCase());
       const minRounds = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? Number(tf.min_rounds) : 0;
-      // If nothing is mentioned (0 or null), it is open to all.
       // If minimum rounds are specified (e.g. 16 rounds for Nistha), devotee must chant >= minRounds to see and register.
-      if (minRounds > 0) {
-        return userRoundsNum >= minRounds;
+      if (minRounds > 0 && userRoundsNum < minRounds) {
+        return false;
+      }
+      // If specific roles are required (e.g. Director, Acting Manager, Royal Member), check devotee eligibility
+      if (tf?.applicable_roles && tf.applicable_roles.length > 0) {
+        const isEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, tf.applicable_roles);
+        if (!isEligible) {
+          return false;
+        }
       }
       return true;
     });
-  }, [selectedCamp, formData.rounds]);
+  }, [selectedCamp, formData.rounds, isManager, selectedDevotee, userData]);
 
   // If current campTrack is not in the filtered available tracks, auto-select the first available track
   useEffect(() => {
@@ -1853,6 +1866,19 @@ function CampDashboardContent() {
     if (reqMinRounds > 0 && currentDevoteeRounds < reqMinRounds) {
       alert(`The "${formData.campTrack}" track requires a minimum of ${reqMinRounds} rounds of chanting. (Current: ${currentDevoteeRounds} rounds). Please choose an eligible track.`);
       return;
+    }
+
+    // Enforce sub-camp role requirement
+    if (selectedTrackFeeObj?.applicable_roles && selectedTrackFeeObj.applicable_roles.length > 0) {
+      const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
+      const attendeeRoyal = isManager && selectedDevotee
+        ? selectedDevotee.royalMember
+        : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+      const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
+      if (!isRoleEligible) {
+        alert(`The "${formData.campTrack}" sub-camp is restricted to specific roles (${selectedTrackFeeObj.applicable_roles.join(', ')}). This devotee does not have an eligible role.`);
+        return;
+      }
     }
 
     // Prevent duplicate entries in the same batch for the same track

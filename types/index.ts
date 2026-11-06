@@ -76,6 +76,7 @@ export interface User {
   reviewedAt?: string;
   role: UserRole | UserRole[]; // Support both single role (backward compatible) and multiple roles
   phone?: string;
+  royalMember?: boolean | string;
   profileImage?: string;
   aadharCardImage?: string;
   birthDate?: string;
@@ -508,6 +509,7 @@ export interface CampTrackFee {
   fee: number; // e.g. 150
   label?: string; // e.g. 'Camp Booklet & Study Material'
   min_rounds?: number; // Minimum daily chanting rounds required (e.g. 16 for Nistha; 0 or undefined = for all)
+  applicable_roles?: string[]; // Allowed roles (e.g. ['director', 'acting_manager', 'royal_member']). If empty, open to all roles.
   start_date?: string; // Sub-camp start date key
   start_meal_type?: string;
   end_date?: string; // Sub-camp end date key

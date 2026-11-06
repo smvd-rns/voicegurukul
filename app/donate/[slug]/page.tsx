@@ -1663,6 +1663,11 @@ export default function DonationPage() {
                   )}
                 </button>
 
+                {/* Indian Passport Holder Notice */}
+                <p className="text-center text-[11px] sm:text-xs text-amber-900 font-semibold pt-0.5">
+                  Donations accepted only from Indian Passport holders
+                </p>
+
                 {/* Trust Badges */}
                 <div className="pt-3.5 border-t border-amber-200/60 flex items-center justify-center gap-8 sm:gap-14 text-center text-[11px] text-slate-600 font-semibold">
                   <div className="flex items-center gap-1.5">

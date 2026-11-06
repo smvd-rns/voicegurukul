@@ -324,3 +324,112 @@ export const isCampManagerialUser = (
   });
 };
 
+/**
+ * Role options selectable for sub-camp role restrictions.
+ */
+export const CAMP_ROLE_OPTIONS: { id: string; label: string; group?: string }[] = [
+  // Leadership & Senior Management
+  { id: 'director', label: 'Director', group: 'Leadership' },
+  { id: 'managing_director', label: 'Managing Director', group: 'Leadership' },
+  { id: 'acting_manager', label: 'Acting Manager', group: 'Leadership' },
+  { id: 'project_manager', label: 'Project Manager', group: 'Leadership' },
+  { id: 'central_voice_manager', label: 'Central VOICE Manager', group: 'Leadership' },
+  { id: 'project_advisor', label: 'Project Advisor', group: 'Leadership' },
+  { id: 'oc', label: 'OC', group: 'Leadership' },
+  { id: 'super_admin', label: 'Super Admin', group: 'Leadership' },
+  { id: 'president', label: 'President', group: 'Leadership' },
+  { id: 'vice_president', label: 'Vice-President', group: 'Leadership' },
+
+  // Center Management & Pastoral Care
+  { id: 'center_admin', label: 'BC Voice Manager / Center Admin', group: 'Center & Care' },
+  { id: 'voice_manager', label: 'Voice Manager', group: 'Center & Care' },
+  { id: 'internal_manager', label: 'Internal Manager', group: 'Center & Care' },
+  { id: 'preaching_coordinator', label: 'Preaching Coordinator', group: 'Center & Care' },
+  { id: 'youth_preacher', label: 'Youth Preacher', group: 'Center & Care' },
+  { id: 'counselor', label: 'Counselor', group: 'Center & Care' },
+  { id: 'care_giver', label: 'Care Giver', group: 'Center & Care' },
+  { id: 'mentor', label: 'Mentor', group: 'Center & Care' },
+  { id: 'frontliner', label: 'Frontliner', group: 'Center & Care' },
+
+  // Operations & Department In-charges
+  { id: 'kitchen_head', label: 'Kitchen Head', group: 'Operations' },
+  { id: 'study_in_charge', label: 'Study In-charge', group: 'Operations' },
+  { id: 'accountant', label: 'Accountant', group: 'Operations' },
+  { id: 'morning_program_in_charge', label: 'Morning Program In-charge', group: 'Operations' },
+  { id: 'event_admin', label: 'Event Admin', group: 'Operations' },
+  { id: 'grihstha_counselor', label: 'Grihstha Counselor', group: 'Operations' },
+  { id: 'easy_incharge', label: 'Easy Incharge', group: 'Operations' },
+  { id: 'prerna_incharge', label: 'Prerna Incharge', group: 'Operations' },
+  { id: 'zonal_admin', label: 'Zone Manager', group: 'Operations' },
+  { id: 'state_admin', label: 'State Manager', group: 'Operations' },
+  { id: 'city_admin', label: 'City Manager', group: 'Operations' },
+
+  // Membership & Devotees
+  { id: 'royal_member', label: 'Royal Member', group: 'Membership' },
+  { id: 'student', label: 'Student / Devotee', group: 'Membership' },
+];
+
+/**
+ * Normalizes user role(s) to an array of lowercase string role names.
+ */
+export const normalizeUserRolesToNames = (role: any): string[] => {
+  if (role === null || role === undefined) return [];
+  const rawArray = Array.isArray(role) ? role : [role];
+  const result: string[] = [];
+  for (const item of rawArray) {
+    if (typeof item === 'number') {
+      const name = roleNumberToName[item as RoleNumber];
+      if (name) result.push(String(name).toLowerCase());
+      if (item === 3) result.push('voice_manager', 'senior_counselor');
+      if (item === 4) result.push('center_admin', 'bc_voice_manager');
+    } else if (typeof item === 'string') {
+      const trimmed = item.trim();
+      if (!isNaN(Number(trimmed)) && trimmed !== '') {
+        const num = Number(trimmed);
+        const name = roleNumberToName[num as RoleNumber];
+        if (name) result.push(String(name).toLowerCase());
+        if (num === 3) result.push('voice_manager', 'senior_counselor');
+        if (num === 4) result.push('center_admin', 'bc_voice_manager');
+      } else {
+        const lower = trimmed.toLowerCase();
+        result.push(lower);
+        if (lower === 'senior_counselor') result.push('voice_manager');
+        if (lower === 'voice_manager') result.push('senior_counselor');
+        if (lower === 'bc_voice_manager') result.push('center_admin');
+        if (lower === 'center_admin') result.push('bc_voice_manager');
+      }
+    }
+  }
+  return Array.from(new Set(result));
+};
+
+/**
+ * Checks whether an attendee has at least one role matching the sub-camp's applicable_roles.
+ * If applicableRoles is empty or undefined, the sub-camp is available to all roles.
+ */
+export const userHasEligibleRole = (
+  userRole: any,
+  isRoyalMember: boolean | string | undefined | null,
+  applicableRoles?: string[] | null
+): boolean => {
+  if (!applicableRoles || !Array.isArray(applicableRoles) || applicableRoles.length === 0) {
+    return true; // No restriction -> visible & available to everyone
+  }
+
+  const normalizedApplicable = applicableRoles.map((r) => String(r).trim().toLowerCase());
+  if (normalizedApplicable.length === 0) return true;
+
+  const isRoyal = isRoyalMember === true || isRoyalMember === 'yes' || isRoyalMember === 'true';
+  if (isRoyal && (normalizedApplicable.includes('royal_member') || normalizedApplicable.includes('royal'))) {
+    return true;
+  }
+
+  const userRoles = normalizeUserRolesToNames(userRole);
+  if (userRoles.length === 0) {
+    userRoles.push('student');
+  }
+
+  return userRoles.some((r) => normalizedApplicable.includes(r));
+};
+
+

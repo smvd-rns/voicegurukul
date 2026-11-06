@@ -18,7 +18,7 @@ import {
 import PublicNavbar from '@/components/layout/PublicNavbar';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { isCampManagerialUser } from '@/lib/utils/roles';
+import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
 import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction, getCampAccommodationCapacityStatusAction } from '@/app/dashboard/admin/camps/actions';
@@ -175,6 +175,8 @@ export default function PublicCampRegistrationPage() {
     gender: string;
     age: string;
     rounds?: number | string;
+    role?: any;
+    royalMember?: boolean;
     counselor: string;
     center: string;
     temple: string;
@@ -880,23 +882,35 @@ export default function PublicCampRegistrationPage() {
     return userRegisteredTracks;
   }, [isManager, selectedDevotee, userRegisteredTracks]);
 
-  // Dynamically filter available camp tracks based on devotee chanting rounds
+  // Dynamically filter available camp tracks based on devotee chanting rounds & roles
   const availableTracksForDevotee = useMemo(() => {
     const allTracks = camp?.tracks && camp.tracks.length > 0 ? camp.tracks : ['GS Camp - 1st Timer'];
     const userRoundsNum = formData.rounds !== '' && formData.rounds !== undefined && formData.rounds !== null
       ? Number(formData.rounds)
       : 0;
+
+    const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
+    const attendeeRoyal = isManager && selectedDevotee
+      ? selectedDevotee.royalMember
+      : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+
     const trackFees = camp?.special_waivers?.track_fees || [];
 
     return allTracks.filter((t) => {
       const tf = trackFees.find((x) => x.track.toLowerCase() === t.toLowerCase());
       const minRounds = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? Number(tf.min_rounds) : 0;
-      if (minRounds > 0) {
-        return userRoundsNum >= minRounds;
+      if (minRounds > 0 && userRoundsNum < minRounds) {
+        return false;
+      }
+      if (tf?.applicable_roles && tf.applicable_roles.length > 0) {
+        const isEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, tf.applicable_roles);
+        if (!isEligible) {
+          return false;
+        }
       }
       return true;
     });
-  }, [camp, formData.rounds]);
+  }, [camp, formData.rounds, isManager, selectedDevotee, userData]);
 
   // If current campTrack is not in the filtered available tracks, auto-select the first available track
   useEffect(() => {
@@ -1070,6 +1084,19 @@ export default function PublicCampRegistrationPage() {
     if (reqMinRounds > 0 && currentDevoteeRounds < reqMinRounds) {
       alert(`The "${formData.campTrack}" track requires a minimum of ${reqMinRounds} rounds of chanting. (Current: ${currentDevoteeRounds} rounds). Please choose an eligible track.`);
       return;
+    }
+
+    // Enforce sub-camp role requirement
+    if (selectedTrackFeeObj?.applicable_roles && selectedTrackFeeObj.applicable_roles.length > 0) {
+      const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
+      const attendeeRoyal = isManager && selectedDevotee
+        ? selectedDevotee.royalMember
+        : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+      const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
+      if (!isRoleEligible) {
+        alert(`The "${formData.campTrack}" sub-camp is restricted to specific roles (${selectedTrackFeeObj.applicable_roles.join(', ')}). This devotee does not have an eligible role.`);
+        return;
+      }
     }
 
     // Prevent duplicate entries in the same batch for the same track

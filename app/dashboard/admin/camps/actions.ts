@@ -4524,7 +4524,7 @@ export async function getCenterDevoteesForCampRegistrationAction(campId?: string
     }
 
     let sql = `
-      SELECT id, name, email, phone, birth_date, ashram, current_center, center, other_center, current_temple, parent_temple, hierarchy, verification_status, rounds
+      SELECT id, name, email, phone, birth_date, ashram, current_center, center, other_center, current_temple, parent_temple, hierarchy, verification_status, rounds, role, royal_member
       FROM users
       WHERE email IS NOT NULL AND email <> ''
     `;
@@ -4636,6 +4636,15 @@ export async function getCenterDevoteesForCampRegistrationAction(campId?: string
         ...(devPhone ? tracksByPhone.get(devPhone) || [] : [])
       ]));
 
+      const isRoyal = Boolean(
+        row.royal_member === 'yes' ||
+        row.royal_member === true ||
+        row.hierarchy?.royalMember === 'yes' ||
+        row.hierarchy?.royalMember === true ||
+        row.hierarchy?.royal_member === 'yes' ||
+        row.hierarchy?.royal_member === true
+      );
+
       return {
         id: row.id,
         name: isPending ? `${row.name} (Pending Approval)` : row.name,
@@ -4647,6 +4656,8 @@ export async function getCenterDevoteesForCampRegistrationAction(campId?: string
         center,
         temple,
         rounds: row.rounds !== undefined && row.rounds !== null ? row.rounds : (row.hierarchy?.rounds || ''),
+        role: row.role,
+        royalMember: isRoyal,
         isPending,
         registeredTracks,
       };

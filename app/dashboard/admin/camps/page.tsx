@@ -35,6 +35,7 @@ import {
   rejectCampBatchAction,
   getAllCentersForCampConfigAction
 } from './actions';
+import { CAMP_ROLE_OPTIONS } from '@/lib/utils/roles';
 
 // Formats any Date object or ISO string strictly into YYYY-MM-DD for HTML5 date inputs
 function formatDateForInput(val: any): string {
@@ -1669,7 +1670,7 @@ export default function AdminCampsPage() {
     });
   };
 
-  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string; min_rounds?: number; start_date?: string; start_meal_type?: string; end_date?: string; end_meal_type?: string }) => {
+  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string; min_rounds?: number; applicable_roles?: string[]; start_date?: string; start_meal_type?: string; end_date?: string; end_meal_type?: string }) => {
     const existing = formData.special_waivers.track_fees || [];
     const index = existing.findIndex((tf) => tf.track.toLowerCase() === trackName.toLowerCase());
     let nextList: CampTrackFee[];
@@ -1688,6 +1689,11 @@ export default function AdminCampsPage() {
           fee: updates.fee ?? 0,
           label: updates.label ?? 'Camp Booklet & Study Material',
           min_rounds: updates.min_rounds ?? 0,
+          applicable_roles: updates.applicable_roles ?? [],
+          start_date: updates.start_date,
+          start_meal_type: updates.start_meal_type,
+          end_date: updates.end_date,
+          end_meal_type: updates.end_meal_type,
         }
       ];
     }
@@ -4806,6 +4812,7 @@ export default function AdminCampsPage() {
                           const feeVal = tf && tf.fee !== undefined && tf.fee !== null ? tf.fee : 0;
                           const labelVal = tf?.label || '';
                           const minRoundsVal = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? tf.min_rounds : 0;
+                          const applicableRolesVal: string[] = tf?.applicable_roles || [];
                           const startDateVal = tf?.start_date || '';
                           const startMealVal = tf?.start_meal_type || 'Breakfast';
                           const endDateVal = tf?.end_date || '';
@@ -4839,6 +4846,16 @@ export default function AdminCampsPage() {
                                   ) : (
                                     <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                       Open to All (0+ Rounds)
+                                    </span>
+                                  )}
+                                  {applicableRolesVal.length > 0 ? (
+                                    <span className="text-[11px] font-black text-purple-900 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200 shadow-2xs flex items-center gap-1">
+                                      <Users className="w-3.5 h-3.5 text-purple-600" />
+                                      {applicableRolesVal.length} Role{applicableRolesVal.length > 1 ? 's' : ''} Restricted
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                      All Roles (Open)
                                     </span>
                                   )}
                                   {feeVal > 0 ? (
@@ -5025,6 +5042,63 @@ export default function AdminCampsPage() {
                                 <span className="text-[10px] text-slate-500 block">
                                   When devotees select &ldquo;{track}&rdquo; during registration, their arrival &amp; departure dates will auto-populate with these dates (devotees can still modify them if needed).
                                 </span>
+                              </div>
+
+                              {/* SUB-CAMP ROLE-BASED ACCESS & VISIBILITY */}
+                              <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/80 space-y-2.5">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div>
+                                    <span className="text-[11px] font-extrabold text-purple-950 flex items-center gap-1.5">
+                                      <Users className="w-3.5 h-3.5 text-purple-600" />
+                                      Role-Based Camp Access (Applicable Roles)
+                                    </span>
+                                    <p className="text-[10px] text-purple-800/80 mt-0.5">
+                                      {applicableRolesVal.length === 0
+                                        ? 'No roles selected — this sub-camp is visible and open to ALL devotees.'
+                                        : `Restricted to ${applicableRolesVal.length} selected role(s). Only devotees with these roles will see or be registered for this sub-camp.`}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {applicableRolesVal.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => updateTrackFee(track, { applicable_roles: [] })}
+                                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 hover:underline flex items-center gap-1"
+                                      >
+                                        <X className="w-3 h-3" /> Clear Roles (Open to All)
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1">
+                                  {CAMP_ROLE_OPTIONS.map((opt) => {
+                                    const isChecked = applicableRolesVal.includes(opt.id);
+                                    return (
+                                      <label
+                                        key={opt.id}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                                          isChecked
+                                            ? 'bg-purple-100 border-purple-400 text-purple-950 shadow-2xs'
+                                            : 'bg-white border-slate-200 text-slate-700 hover:border-purple-300 hover:bg-purple-50/30'
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            const next = e.target.checked
+                                              ? [...applicableRolesVal, opt.id]
+                                              : applicableRolesVal.filter((r) => r !== opt.id);
+                                            updateTrackFee(track, { applicable_roles: next });
+                                          }}
+                                          className="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
+                                        />
+                                        <span className="truncate">{opt.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           );

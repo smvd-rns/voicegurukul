@@ -4,7 +4,7 @@ import Razorpay from 'razorpay';
 import { query } from '@/lib/db';
 import { CampRegistration, Camp, CenterIdtCode } from '@/types';
 import { calculateDynamicCampCost } from '@/lib/camp-cost';
-import { isCampManagerialUser } from '@/lib/utils/roles';
+import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
 import bcrypt from 'bcryptjs';
 import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
@@ -140,6 +140,52 @@ export async function POST(req: NextRequest) {
           }, { status: 400 });
         }
 
+        // C2. Enforce sub-camp role restriction
+        if (trackFeeObj?.applicable_roles && Array.isArray(trackFeeObj.applicable_roles) && trackFeeObj.applicable_roles.length > 0) {
+          let userRole = entry.role;
+          let userRoyal = entry.royalMember !== undefined ? entry.royalMember : entry.royal_member;
+
+          if (!userRole || userRoyal === undefined) {
+            const userLookupParams: any[] = [];
+            const userLookupConds: string[] = [];
+            if (entryEmail) {
+              userLookupParams.push(entryEmail);
+              userLookupConds.push(`LOWER(email) = $${userLookupParams.length}`);
+            }
+            if (entryPhone) {
+              userLookupParams.push(entryPhone);
+              userLookupConds.push(`RIGHT(phone, 10) = $${userLookupParams.length}`);
+            }
+            if (userLookupConds.length > 0) {
+              const uRes = await query(
+                `SELECT role, royal_member, hierarchy FROM users WHERE ${userLookupConds.join(' OR ')} LIMIT 1`,
+                userLookupParams
+              );
+              if (uRes.rows.length > 0) {
+                const u = uRes.rows[0];
+                if (!userRole) userRole = u.role;
+                if (userRoyal === undefined) {
+                  userRoyal = Boolean(
+                    u.royal_member === 'yes' ||
+                    u.royal_member === true ||
+                    u.hierarchy?.royalMember === 'yes' ||
+                    u.hierarchy?.royalMember === true ||
+                    u.hierarchy?.royal_member === 'yes' ||
+                    u.hierarchy?.royal_member === true
+                  );
+                }
+              }
+            }
+          }
+
+          const hasAccess = userHasEligibleRole(userRole, userRoyal, trackFeeObj.applicable_roles);
+          if (!hasAccess) {
+            return NextResponse.json({
+              error: `The "${entryTrack}" sub-camp is restricted to specific roles (${trackFeeObj.applicable_roles.join(', ')}). Participant "${entryName}" does not have an eligible role.`
+            }, { status: 403 });
+          }
+        }
+
         // D. Enforce Center-Based Registration Restriction
         const eligibleCenters: string[] = Array.isArray(camp.eligible_centers) ? camp.eligible_centers : [];
         if (eligibleCenters.length > 0) {
@@ -242,7 +288,7 @@ export async function POST(req: NextRequest) {
         try {
           const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
           const payment = await razorpay.payments.fetch(razorpay_payment_id);
-          
+
           if (payment.order_id && payment.order_id !== razorpay_order_id) {
             return NextResponse.json({ error: 'Order ID mismatch for this payment ID' }, { status: 400 });
           }
@@ -347,8 +393,8 @@ export async function POST(req: NextRequest) {
                   OR $1 = ANY(prerna_incharge_ids)`,
               [callerUserId]
             );
-            cAlloc.rows.forEach(r => { 
-              if (r.name) userCenters.add(r.name.trim()); 
+            cAlloc.rows.forEach(r => {
+              if (r.name) userCenters.add(r.name.trim());
               if (r.temple_name) userCenters.add(r.temple_name.trim());
             });
           } catch (allocErr) {
@@ -360,8 +406,8 @@ export async function POST(req: NextRequest) {
               `SELECT c.name, c.temple_name FROM user_centers uc JOIN centers c ON uc.center_id = c.id WHERE uc.user_id = $1`,
               [callerUserId]
             );
-            ucRes.rows.forEach(r => { 
-              if (r.name) userCenters.add(r.name.trim()); 
+            ucRes.rows.forEach(r => {
+              if (r.name) userCenters.add(r.name.trim());
               if (r.temple_name) userCenters.add(r.temple_name.trim());
             });
           } catch (ucErr) {
@@ -748,8 +794,8 @@ export async function POST(req: NextRequest) {
       }
 
       const entryParticipantName = entry.participant_name || entry.participantName || entry.poc_name || 'Participant';
-      const matchingReg = insertedRecords.find(r => 
-        (r.email || '').trim().toLowerCase() === entryEmail && 
+      const matchingReg = insertedRecords.find(r =>
+        (r.email || '').trim().toLowerCase() === entryEmail &&
         (r.participant_name || '').trim().toLowerCase() === entryParticipantName.trim().toLowerCase()
       ) || insertedRecords.find(r => (r.email || '').trim().toLowerCase() === entryEmail) || insertedRecords[0];
       const rawPhone = String(entry.whatsapp || entry.phone || entry.poc_contact || '');
