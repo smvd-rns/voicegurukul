@@ -20,8 +20,10 @@ import { Camp, CampRegistration, CampRefundRequest } from '@/types';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampPrasadamTab from '@/components/camps/CampPrasadamTab';
-import { calculateDynamicCampCost } from '@/lib/camp-cost';
+import CampAccommodationTab from '@/components/camps/CampAccommodationTab';
+import { calculateDynamicCampCost, formatParticipantMealDate } from '@/lib/camp-cost';
 import {
+  approveCampWaitingListRegistrationAction,
   getCampRegistrationsAction,
   verifyAndApproveCampRegistrationAction,
   rejectCampRegistrationAction,
@@ -124,7 +126,7 @@ export default function CampRegistrationsAdminPage() {
   const [previewScreenshotUrl, setPreviewScreenshotUrl] = useState<string | null>(null);
 
   // Top View Switcher: 'registrations' vs 'batches' vs 'refunds' vs 'prasadam' vs 'pocs'
-  const [activeView, setActiveView] = useState<'registrations' | 'batches' | 'refunds' | 'prasadam' | 'pocs'>('registrations');
+  const [activeView, setActiveView] = useState<'registrations' | 'batches' | 'refunds' | 'prasadam' | 'accommodation' | 'pocs'>('registrations');
   const [refundRequests, setRefundRequests] = useState<CampRefundRequest[]>([]);
   const [loadingRefunds, setLoadingRefunds] = useState(false);
   const [campPocs, setCampPocs] = useState<any[]>([]);
@@ -346,7 +348,9 @@ export default function CampRegistrationsAdminPage() {
       }
 
       // Automatically initialize allowed activeView
-      if (initialViewParam === 'prasadam' && canPrasadam) {
+      if (initialViewParam === 'accommodation') {
+        setActiveView('accommodation');
+      } else if (initialViewParam === 'prasadam' && canPrasadam) {
         setActiveView('prasadam');
       } else if (initialViewParam === 'refunds' && canRefunds) {
         setActiveView('refunds');
@@ -521,6 +525,24 @@ export default function CampRegistrationsAdminPage() {
     setRejectReason(reg.payment_method === 'IDT' ? 'IDT deduction declined by administration' : 'Transfer verification declined');
   };
 
+  // Approve Devotee from Accommodation Waiting List
+  const handleApproveWaitingList = async (regId: string) => {
+    if (!confirm('Are you sure you want to approve this devotee from the Waiting List? Their entry and prasadam pass will be unlocked and a confirmation email will be dispatched.')) {
+      return;
+    }
+    try {
+      const res = await approveCampWaitingListRegistrationAction(regId);
+      if (res.success) {
+        toast.success('Registration approved & pass released successfully!');
+        loadData();
+      } else {
+        toast.error(res.error || 'Failed to approve registration.');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Error approving registration.');
+    }
+  };
+
   // Confirm Verification & Approval
   const handleConfirmApproval = async () => {
     if (!verifyingReg?.id) return;
@@ -608,7 +630,9 @@ export default function CampRegistrationsAdminPage() {
         if (regRole !== selectedRole.trim().toLowerCase()) return false;
       }
       if (selectedPayment !== 'all') {
-        if (selectedPayment === 'PROCESSING') {
+        if (selectedPayment === 'WAITING_LIST') {
+          if (!reg.is_waiting_list || reg.waiting_list_approved_at) return false;
+        } else if (selectedPayment === 'PROCESSING') {
           if (reg.payment_status !== 'processing') return false;
         } else if (selectedPayment === 'REFUNDED') {
           if (!reg.is_cancelled) return false;
@@ -638,7 +662,9 @@ export default function CampRegistrationsAdminPage() {
       if (attendanceFilter === 'cancelled' && !reg.is_cancelled) return false;
       if (selectedTrack !== 'all' && reg.camp_track !== selectedTrack) return false;
       if (selectedPayment !== 'all') {
-        if (selectedPayment === 'PROCESSING') {
+        if (selectedPayment === 'WAITING_LIST') {
+          if (!reg.is_waiting_list || reg.waiting_list_approved_at) return false;
+        } else if (selectedPayment === 'PROCESSING') {
           if (reg.payment_status !== 'processing') return false;
         } else if (selectedPayment === 'REFUNDED') {
           if (!reg.is_cancelled) return false;
@@ -771,6 +797,7 @@ export default function CampRegistrationsAdminPage() {
   const rejectedRefunds = refundRequests.filter(r => r.status === 'rejected');
   const rejectedRefundsCount = rejectedRefunds.length;
 
+  const waitingListCount = registrations.filter((r) => r.is_waiting_list && !r.waiting_list_approved_at).length;
   const processingCount = filteredRegistrations.filter((r) => r.payment_status === 'processing').length;
   const ittCount = filteredRegistrations.filter((r) => r.payment_method === 'INTER_TEMPLE_TRANSFER' || r.payment_method === 'ITT').length;
   const couponFreeCount = approvedRegistrations.filter((r) => r.payment_method === 'COUPON').length;
@@ -1628,6 +1655,25 @@ export default function CampRegistrationsAdminPage() {
 
           <button
             type="button"
+            onClick={() => setActiveView('accommodation')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeView === 'accommodation'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="sm:hidden">Stay</span>
+            <span className="hidden sm:inline">Accommodation &amp; Housing</span>
+            {waitingListCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-700 text-white text-[8.5px] sm:text-[10px] font-black animate-pulse">
+                {waitingListCount} Waiting
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveView('pocs')}
             className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeView === 'pocs'
@@ -1825,6 +1871,9 @@ export default function CampRegistrationsAdminPage() {
               className="w-full md:w-auto px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-[11px] sm:text-xs font-bold text-slate-800 outline-none shadow-2xs hover:border-amber-400 focus:border-amber-500 cursor-pointer transition-all truncate"
             >
               <option value="all">All Payment &amp; Status</option>
+              {waitingListCount > 0 && (
+                <option value="WAITING_LIST">⏳ Waiting List ({waitingListCount})</option>
+              )}
               <option value="PROCESSING">⏳ Pending ({processingCount})</option>
               <option value="REFUNDED">💸 Refunded ({cancelledDevoteesCount})</option>
               <option value="INTER_TEMPLE_TRANSFER">🏛️ ITT Transfer</option>
@@ -2018,8 +2067,16 @@ export default function CampRegistrationsAdminPage() {
 
                         {/* Meal Span */}
                         <td className="py-2 px-2 sm:py-2.5 sm:px-2.5 text-[10px] sm:text-[11px] text-slate-600 whitespace-nowrap">
-                          <div>Arr: {reg.first_meal_date} ({reg.first_meal_type})</div>
-                          <div>Dep: {reg.last_meal_date} ({reg.last_meal_type})</div>
+                          <div className="font-semibold text-slate-800">
+                            <span className="text-slate-400 font-normal">Arr: </span>
+                            {formatParticipantMealDate(reg.first_meal_date, camp?.start_date, camp?.meal_pricing)}
+                            <span className="text-slate-500 font-normal"> ({reg.first_meal_type})</span>
+                          </div>
+                          <div className="font-semibold text-slate-800">
+                            <span className="text-slate-400 font-normal">Dep: </span>
+                            {formatParticipantMealDate(reg.last_meal_date, camp?.start_date, camp?.meal_pricing)}
+                            <span className="text-slate-500 font-normal"> ({reg.last_meal_type})</span>
+                          </div>
                         </td>
 
                         {/* Accommodation */}
@@ -2115,7 +2172,44 @@ export default function CampRegistrationsAdminPage() {
 
                         {/* Fee & Status: Sleek, compact & fully visible */}
                         <td className="py-2 px-2.5 sm:py-2.5 sm:px-3 text-right whitespace-nowrap">
-                          {isProcessing ? (
+                          {Boolean(reg.is_waiting_list && !reg.waiting_list_approved_at) ? (
+                            <div className="inline-flex flex-col items-end px-2.5 py-1.5 rounded-xl bg-indigo-50/90 border border-indigo-300 shadow-2xs">
+                              <span className="text-xs font-black text-indigo-950">
+                                ₹{paidAmount.toLocaleString('en-IN')}
+                              </span>
+                              <span className="text-[9.5px] text-indigo-800 font-extrabold flex items-center gap-1 mt-0.5">
+                                <Clock className="w-2.5 h-2.5 text-indigo-600" /> Waiting List
+                              </span>
+                              {reg.hotel_name && (
+                                <span className="text-[9px] text-slate-500 font-semibold max-w-[130px] truncate">
+                                  {reg.hotel_name}
+                                </span>
+                              )}
+                              <div className="flex items-center gap-1 mt-1">
+                                {reg.hotel_receipt_url && (
+                                  <a
+                                    href={reg.hotel_receipt_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-1.5 py-0.5 rounded bg-white text-indigo-700 border border-indigo-200 text-[9px] font-bold inline-flex items-center gap-0.5 hover:bg-indigo-100 shadow-2xs"
+                                    title="View Hotel Booking Receipt"
+                                  >
+                                    <Eye className="w-2.5 h-2.5" />
+                                    <span>Receipt</span>
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => reg.id && handleApproveWaitingList(reg.id)}
+                                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-extrabold flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                                  title="Approve accommodation & release pass to devotee"
+                                >
+                                  <CheckCircle className="w-2.5 h-2.5" />
+                                  <span>Approve Pass</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : isProcessing ? (
                             <div className="inline-flex flex-col items-end px-2.5 py-1 rounded-xl bg-amber-50/90 border border-amber-300 shadow-2xs">
                               <span className="text-xs font-black text-amber-950">
                                 ₹{pendingAmount.toLocaleString('en-IN')}
@@ -2732,6 +2826,25 @@ export default function CampRegistrationsAdminPage() {
         onViewPass={(regId) => {
           const found = registrations.find(r => r.id === regId);
           if (found) setViewPassReg(found);
+        }}
+      />
+    )}
+
+    {/* VIEW: ACCOMMODATION & HOUSING MANAGEMENT */}
+    {activeView === 'accommodation' && (
+      <CampAccommodationTab
+        campId={campId}
+        camp={camp}
+        registrations={registrations}
+        onViewPass={(regId) => {
+          const found = registrations.find(r => r.id === regId);
+          if (found) setViewPassReg(found);
+        }}
+        onApproveWaitingList={async (regId) => {
+          await handleApproveWaitingList(regId);
+        }}
+        onRefresh={() => {
+          loadData();
         }}
       />
     )}
@@ -3483,23 +3596,47 @@ export default function CampRegistrationsAdminPage() {
                                   </span>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                  {b.attendees.map((att: any, aIdx: number) => (
-                                    <div key={att.id} className="p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs flex items-center justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <div className="font-bold text-slate-900 truncate flex items-center gap-1">
-                                          <span className="text-slate-400 font-mono text-[10px]">{aIdx + 1}.</span>
-                                          <span>{att.name}</span>
+                                  {b.attendees.map((att: any, aIdx: number) => {
+                                    const isAttCancelled = Boolean(att.isCancelled);
+                                    return (
+                                      <div
+                                        key={att.id}
+                                        className={`p-2.5 rounded-lg text-xs flex items-center justify-between gap-2 border transition-all ${
+                                          isAttCancelled
+                                            ? 'bg-rose-50/90 border-rose-300 text-rose-900 shadow-2xs'
+                                            : 'bg-slate-50 border-slate-200/80 text-slate-900'
+                                        }`}
+                                      >
+                                        <div className="min-w-0">
+                                          <div className="font-bold truncate flex items-center gap-1.5">
+                                            <span className={`font-mono text-[10px] ${isAttCancelled ? 'text-rose-500' : 'text-slate-400'}`}>
+                                              {aIdx + 1}.
+                                            </span>
+                                            <span className={isAttCancelled ? 'text-rose-800 font-extrabold line-through decoration-rose-400' : 'text-slate-900 font-bold'}>
+                                              {att.name}
+                                            </span>
+                                            {isAttCancelled && (
+                                              <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-rose-200 text-rose-800 border border-rose-300 shrink-0">
+                                                Cancelled
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className={`text-[10px] flex items-center gap-1 ${isAttCancelled ? 'text-rose-600' : 'text-slate-500'}`}>
+                                            <span>{att.track}</span>
+                                            {att.whatsapp && <span>• {att.whatsapp}</span>}
+                                          </div>
                                         </div>
-                                        <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                                          <span>{att.track}</span>
-                                          {att.whatsapp && <span>• {att.whatsapp}</span>}
+                                        <div className="text-right shrink-0">
+                                          <span className={`font-black text-xs block ${isAttCancelled ? 'text-rose-700 line-through' : 'text-slate-800'}`}>
+                                            ₹{att.cost.toLocaleString('en-IN')}
+                                          </span>
+                                          {isAttCancelled && (
+                                            <span className="text-[9px] font-bold text-rose-600 block">Refunded</span>
+                                          )}
                                         </div>
                                       </div>
-                                      <span className="font-black text-slate-800 text-xs shrink-0">
-                                        ₹{att.cost.toLocaleString('en-IN')}
-                                      </span>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </td>

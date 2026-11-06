@@ -454,6 +454,23 @@ export interface CampMealConfig {
   full_date?: string; // e.g. "2026-10-29"
 }
 
+export interface CampAccommodationBatchCapacity {
+  id?: string;
+  name: string; // e.g. "Batch 1 (24 Dec - 28 Dec)"
+  start_date: string; // e.g. "24 - Dec" or ISO date
+  end_date: string; // e.g. "28 - Dec" or ISO date
+  capacity: number; // Max allowed CV accommodation count (e.g. 500)
+}
+
+export interface CampRecommendedHotel {
+  id?: string;
+  name: string; // e.g. "Hotel Sai Palace"
+  contact: string; // e.g. "9876543210"
+  address: string; // e.g. "Near Katraj Chowk, Pune"
+  tariff?: string; // e.g. "₹800 - ₹1200 / night"
+  notes?: string; // e.g. "500m from temple"
+}
+
 export interface CampAccommodationPricing {
   regular_daily: number; // e.g. 120
   peak_daily: number; // e.g. 200
@@ -464,6 +481,9 @@ export interface CampAccommodationPricing {
   ac_charge_billing_type?: 'per_day' | 'fixed'; // Pricing basis: 'per_day' (default) or 'fixed'
   ac_charge_applies_to?: 'accommodation' | 'all'; // Applies to: 'accommodation' (default) or 'all'
   allow_female_cv_accommodation?: boolean;
+  cv_floor_capacity?: number; // General CV floor capacity (empty/0 = unlimited)
+  batch_capacities?: CampAccommodationBatchCapacity[]; // Date-range batches with independent capacities (e.g. 500 for Batch 1, 500 for Batch 2)
+  recommended_hotels?: CampRecommendedHotel[]; // Recommended nearby hotels for self-arranged accommodation
 }
 
 export interface CampRoleWaiver {
@@ -488,6 +508,10 @@ export interface CampTrackFee {
   fee: number; // e.g. 150
   label?: string; // e.g. 'Camp Booklet & Study Material'
   min_rounds?: number; // Minimum daily chanting rounds required (e.g. 16 for Nistha; 0 or undefined = for all)
+  start_date?: string; // Sub-camp start date key
+  start_meal_type?: string;
+  end_date?: string; // Sub-camp end date key
+  end_meal_type?: string;
 }
 
 export interface CampSpecialWaivers {
@@ -678,7 +702,12 @@ export interface CampRegistration {
   discount_amount?: number;
   coupon_code?: string;
   payment_method: 'RAZORPAY' | 'IDT' | 'FREE' | 'CASH' | 'COUPON' | 'ROLE_WAIVER' | 'INTER_TEMPLE_TRANSFER' | 'ITT';
-  payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'rejected' | 'cancelled';
+  payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'rejected' | 'cancelled' | 'waiting_list';
+  is_waiting_list?: boolean;
+  hotel_receipt_url?: string;
+  hotel_name?: string;
+  waiting_list_approved_at?: string;
+  waiting_list_approved_by?: string;
   payment_id?: string;
   order_id?: string;
   deduction_source?: string;

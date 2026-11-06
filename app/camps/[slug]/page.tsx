@@ -10,7 +10,7 @@ import {
   CreditCard, ShieldCheck, ArrowRight, Utensils,
   Home, Clock, Loader2, Sparkles, X, ChevronRight,
   Search, FileText, CheckCircle2, HeartHandshake,
-  Building, UserCheck, Award, Tag, Gift, Percent,
+  Building, Building2, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
   Undo2, Banknote, Ticket, UserCircle, UserPlus,
   Save, BookmarkCheck, RotateCcw
@@ -21,7 +21,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { isCampManagerialUser } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
-import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction } from '@/app/dashboard/admin/camps/actions';
+import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction, getCampAccommodationCapacityStatusAction } from '@/app/dashboard/admin/camps/actions';
 import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 
@@ -122,7 +122,7 @@ export default function PublicCampRegistrationPage() {
     lastMealDate: '',
     lastMealType: 'Dinner',
     dinnerType: 'Dinner Meal',
-    accommodation: 'No',
+    accommodation: 'Yes',
     gender: 'Male - Bachelor',
     participantType: 'Camp Participant',
     age: '',
@@ -132,6 +132,39 @@ export default function PublicCampRegistrationPage() {
   // Batch Entries
   const [entries, setEntries] = useState<any[]>([]);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  const isSuperAdmin = useMemo(() => {
+    if (!userData) return false;
+    const roles = (Array.isArray(userData.role) ? userData.role : [userData.role]).map((r: any) => Number(r));
+    return roles.includes(8) || (userData as any).role === 'super_admin';
+  }, [userData]);
+
+  // Check if current user is center-eligible for restricted camps
+  const isDevoteeEligibleForCamp = useMemo(() => {
+    if (!camp) return true;
+    const eligible = camp.eligible_centers;
+    if (!Array.isArray(eligible) || eligible.length === 0) return true;
+    if (isSuperAdmin) return true;
+
+    if (userData) {
+      const userCenters = [
+        userData?.hierarchy?.currentCenter,
+        userData?.hierarchy?.center,
+        (userData as any)?.center,
+        (userData as any)?.current_center,
+        userData?.hierarchy?.otherCenter,
+        (userData as any)?.other_center,
+      ].filter(Boolean).map((s: string) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+      return eligible.some((ec: string) => {
+        const ecNorm = String(ec || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!ecNorm) return false;
+        return userCenters.some((uc: string) => uc === ecNorm || uc.includes(ecNorm) || ecNorm.includes(uc));
+      });
+    }
+
+    return true;
+  }, [camp, userData, isSuperAdmin]);
 
   // Center Devotees for Managerial Quick Registration
   const [centerDevotees, setCenterDevotees] = useState<{
@@ -181,6 +214,12 @@ export default function PublicCampRegistrationPage() {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<CampCoupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
+
+  // Accommodation Capacity & Waiting List State
+  const [capacityStatus, setCapacityStatus] = useState<any>(null);
+  const [hotelBookingName, setHotelBookingName] = useState('');
+  const [hotelReceiptUrl, setHotelReceiptUrl] = useState('');
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   // Success State
   const [registrationSuccess, setRegistrationSuccess] = useState<any | null>(null);
@@ -582,6 +621,11 @@ export default function PublicCampRegistrationPage() {
         const json = await res.json();
         if (json.data) {
           setCamp(json.data);
+          getCampAccommodationCapacityStatusAction(slug)
+            .then((capRes) => {
+              if (capRes.success) setCapacityStatus(capRes);
+            })
+            .catch((e) => console.warn('Capacity status fetch error:', e));
           if (json.data.default_poc_name || json.data.default_poc_contact) {
             setPocDetails((prev) => ({
               ...prev,
@@ -591,11 +635,17 @@ export default function PublicCampRegistrationPage() {
           }
           const meals = json.data.meal_pricing || [];
           if (meals.length > 0) {
+            const initialTrack = json.data.tracks?.[0] || 'GS Camp - 1st Timer';
+            const tf = (json.data.special_waivers?.track_fees || []).find(
+              (t: any) => t.track.toLowerCase() === initialTrack.toLowerCase()
+            );
             setFormData((prev) => ({
               ...prev,
-              firstMealDate: String(meals[0].date),
-              lastMealDate: String(meals[meals.length - 1].date),
-              campTrack: json.data.tracks?.[0] || 'GS Camp - 1st Timer',
+              firstMealDate: tf?.start_date || String(meals[0].date),
+              firstMealType: tf?.start_meal_type || 'Breakfast',
+              lastMealDate: tf?.end_date || String(meals[meals.length - 1].date),
+              lastMealType: tf?.end_meal_type || 'Dinner',
+              campTrack: initialTrack,
             }));
           }
         } else {
@@ -610,6 +660,94 @@ export default function PublicCampRegistrationPage() {
 
     if (slug) fetchCamp();
   }, [slug]);
+
+  // Accommodation Capacity Evaluation
+  const isBrahmachari = useMemo(() => {
+    const pt = (formData.participantType || '').toLowerCase();
+    const g = (formData.gender || '').toLowerCase();
+    return pt.includes('brahmachari') || g.includes('brahmachari');
+  }, [formData.participantType, formData.gender]);
+
+  const isCvFullForSelectedDates = useMemo(() => {
+    if (!capacityStatus || isBrahmachari) return false;
+    if (capacityStatus.globalCapacity?.isFull) return true;
+    const batches = capacityStatus.batches || [];
+    if (batches.length === 0) return false;
+
+    const fStart = String(formData.firstMealDate || '').trim().toLowerCase().replace(/\s+/g, '');
+    const fEnd = String(formData.lastMealDate || '').trim().toLowerCase().replace(/\s+/g, '');
+
+    for (const b of batches) {
+      if (b.isFull) {
+        const bStart = String(b.start_date || '').trim().toLowerCase().replace(/\s+/g, '');
+        const bEnd = String(b.end_date || '').trim().toLowerCase().replace(/\s+/g, '');
+        if (
+          (bStart && (fStart.includes(bStart) || bStart.includes(fStart))) ||
+          (bEnd && (fEnd.includes(bEnd) || bEnd.includes(fEnd))) ||
+          (!bStart && !bEnd)
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [capacityStatus, isBrahmachari, formData.firstMealDate, formData.lastMealDate]);
+
+  const isArrangingOwnStay = useMemo(() => {
+    return !isBrahmachari && (formData.accommodation === 'No' || isCvFullForSelectedDates);
+  }, [isBrahmachari, formData.accommodation, isCvFullForSelectedDates]);
+
+  const recommendedHotelsList = useMemo(() => {
+    const fromCamp = camp?.accommodation_pricing?.recommended_hotels;
+    const fromStatus = capacityStatus?.recommendedHotels;
+    return (Array.isArray(fromCamp) && fromCamp.length > 0)
+      ? fromCamp
+      : (Array.isArray(fromStatus) ? fromStatus : []);
+  }, [camp?.accommodation_pricing?.recommended_hotels, capacityStatus?.recommendedHotels]);
+
+  // When CV Floor is full for non-Brahmachari, default accommodation to 'No'
+  useEffect(() => {
+    if (isCvFullForSelectedDates && !isBrahmachari && formData.accommodation === 'Yes') {
+      setFormData((prev) => ({ ...prev, accommodation: 'No' }));
+    }
+  }, [isCvFullForSelectedDates, isBrahmachari, formData.accommodation]);
+
+  const handleUploadHotelReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 5MB Client-side File Size Limit
+    const MAX_MB = 5;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`File size exceeds ${MAX_MB}MB limit. Please upload an image or PDF under ${MAX_MB}MB.`);
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingReceipt(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      data.append('campTitle', camp?.title || 'Camp');
+      data.append('devoteeName', formData.participantName || 'Devotee');
+      data.append('hotelName', hotelBookingName || 'Nearby Hotel');
+
+      const res = await fetch('/api/camps/upload-accommodation-proof', {
+        method: 'POST',
+        body: data,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        alert(json.error || 'Failed to upload hotel receipt.');
+      } else {
+        setHotelReceiptUrl(json.fileUrl || json.webViewLink);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error uploading hotel receipt');
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
 
   // 2. Recalculate Live Cost on Form Change
   useEffect(() => {
@@ -647,6 +785,18 @@ export default function PublicCampRegistrationPage() {
         ...prev,
         [name]: value,
         accommodation: isFemale ? 'No' : prev.accommodation,
+      }));
+    } else if (name === 'campTrack') {
+      const tf = (camp?.special_waivers?.track_fees || []).find(
+        (t) => t.track.toLowerCase() === value.toLowerCase()
+      );
+      setFormData((prev) => ({
+        ...prev,
+        campTrack: value,
+        ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+        ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+        ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+        ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
       }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -752,12 +902,19 @@ export default function PublicCampRegistrationPage() {
   useEffect(() => {
     if (availableTracksForDevotee.length > 0 && !availableTracksForDevotee.includes(formData.campTrack)) {
       const firstAvailable = availableTracksForDevotee.find((t) => !activeRegisteredTracks.includes(t.trim())) || availableTracksForDevotee[0];
+      const tf = (camp?.special_waivers?.track_fees || []).find(
+        (t) => t.track.toLowerCase() === firstAvailable.toLowerCase()
+      );
       setFormData((prev) => ({
         ...prev,
-        campTrack: firstAvailable
+        campTrack: firstAvailable,
+        ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+        ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+        ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+        ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
       }));
     }
-  }, [availableTracksForDevotee, formData.campTrack, activeRegisteredTracks]);
+  }, [availableTracksForDevotee, formData.campTrack, activeRegisteredTracks, camp]);
 
   const isCurrentTrackAlreadyRegistered = useMemo(() => {
     if (!formData.campTrack) return false;
@@ -789,6 +946,17 @@ export default function PublicCampRegistrationPage() {
         voiceName: found.center || prev.voiceName,
         parentTemple: found.temple || prev.parentTemple,
         campTrack: nextTrack,
+        ...(() => {
+          const tf = (camp?.special_waivers?.track_fees || []).find(
+            (t) => t.track.toLowerCase() === nextTrack.toLowerCase()
+          );
+          return {
+            ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+            ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+            ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+            ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
+          };
+        })(),
       }));
     }
   };
@@ -920,8 +1088,25 @@ export default function PublicCampRegistrationPage() {
       return;
     }
 
+    // Accommodation Capacity Check:
+    const isWaiting = Boolean(isArrangingOwnStay);
+    if (isWaiting && !hotelReceiptUrl) {
+      alert(
+        isCvFullForSelectedDates
+          ? 'CV Floor Accommodation is completely full for your selected dates. Please book a nearby hotel / lodge and upload your booking receipt to proceed.'
+          : 'For self-arranged accommodation / outside stay, please enter hotel name and upload your booking confirmation receipt to proceed.'
+      );
+      return;
+    }
+
     const newEntry = {
       ...formData,
+      is_waiting_list: isWaiting,
+      isWaitingList: isWaiting,
+      hotel_receipt_url: hotelReceiptUrl || null,
+      hotelReceiptUrl: hotelReceiptUrl || null,
+      hotel_name: hotelBookingName || null,
+      hotelName: hotelBookingName || null,
       rounds: formData.rounds !== undefined && formData.rounds !== null ? String(formData.rounds) : '0',
       ...pocDetails,
       pocName: pocDetails.pocName,
@@ -954,6 +1139,8 @@ export default function PublicCampRegistrationPage() {
     }
 
     // Reset attendee specific fields
+    setHotelReceiptUrl('');
+    setHotelBookingName('');
     setFormData((prev) => ({
       ...prev,
       participantName: '',
@@ -964,12 +1151,14 @@ export default function PublicCampRegistrationPage() {
       marriedSinceYear: '',
       participantType: 'Camp Participant',
       dinnerType: 'Dinner Meal',
-      accommodation: 'No',
+      accommodation: isCvFullForSelectedDates ? 'No' : 'Yes',
     }));
   };
 
   const handleEditEntry = (index: number) => {
     const item = entries[index];
+    setHotelBookingName(item.hotel_name || item.hotelName || '');
+    setHotelReceiptUrl(item.hotel_receipt_url || item.hotelReceiptUrl || '');
     setFormData({
       voiceName: item.voiceName || '',
       participantName: item.participantName || '',
@@ -1040,9 +1229,33 @@ export default function PublicCampRegistrationPage() {
   const grandTotalWithSurcharge = Math.round(finalTotalAmount + surchargeAmount);
 
   // Check if current user possesses an allowed managerial role for special transfers (IDT / ITT)
+  // IDT Center Authorization check: only managers/devotees whose center is in the authorized IDT list can see IDT
+  const centerIdtList = (camp?.payment_config?.center_idt_codes || []) as any[];
+  const candidateCentersForIdt = [
+    centerNameFound,
+    formData.voiceName,
+    userData?.hierarchy?.currentCenter,
+    userData?.hierarchy?.center,
+    (userData as any)?.center,
+    (userData as any)?.current_center,
+    userData?.hierarchy?.otherCenter,
+    (userData as any)?.other_center,
+    entries[0]?.voiceName,
+    entries[0]?.voice_name,
+  ].filter(Boolean).map((s: string) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  const isCenterAuthorizedForIdt = centerIdtList.length === 0 || centerIdtList.some((c: any) => {
+    const cNorm = String(c.center_name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cNorm) return false;
+    return candidateCentersForIdt.some(
+      (cand: string) => cand === cNorm || cand.includes(cNorm) || cNorm.includes(cand)
+    );
+  });
+
   const showIdtOption = Boolean(
     camp?.payment_config?.enable_idt &&
-    (camp?.payment_config?.allow_student_idt === true || isManager)
+    (camp?.payment_config?.allow_student_idt === true || isManager) &&
+    isCenterAuthorizedForIdt
   );
   const showIttOption = Boolean(
     camp?.payment_config?.enable_itt &&
@@ -1610,6 +1823,33 @@ export default function PublicCampRegistrationPage() {
                 </p>
               </div>
             )}
+
+            {/* IF LOGGED IN DEVOTEE IS NOT FROM THE ELIGIBLE CENTER */}
+            {Boolean(userData && !isDevoteeEligibleForCamp && (camp.eligible_centers || []).length > 0) ? (
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl border-2 border-amber-300 p-8 shadow-sm text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto border bg-amber-50 text-amber-600 border-amber-300">
+                  <Building className="w-7 h-7" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">Access Restricted to Eligible Centers</h3>
+                <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                  Registration for <strong>{camp.title}</strong> is exclusively reserved for devotees and managers belonging to:
+                </p>
+                <div className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-100 text-amber-950 font-bold text-xs border border-amber-300">
+                  {(camp.eligible_centers || []).join(', ')}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Your registered center on file is <strong>{userData?.hierarchy?.currentCenter || userData?.hierarchy?.center || 'Other'}</strong>.
+                </p>
+                <div className="pt-2">
+                  <Link
+                    href="/dashboard/camp"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs transition-all shadow-md"
+                  >
+                    <span>View Available Camps &rarr;</span>
+                  </Link>
+                </div>
+              </div>
+            ) : null}
 
             {/* IF REGISTRATION HAS NOT STARTED YET OR CAMP IS CLOSED / DEADLINE PASSED */}
             {isRegistrationNotStarted ? (
@@ -2571,14 +2811,154 @@ export default function PublicCampRegistrationPage() {
                                 name="accommodation"
                                 value={formData.accommodation}
                                 onChange={handleChange}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${
+                                  isCvFullForSelectedDates && !isBrahmachari
+                                    ? 'border-amber-400 bg-amber-50/50 text-amber-900'
+                                    : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500'
+                                }`}
                               >
-                                <option value="Yes">Yes, I need accommodation from CV</option>
-                                <option value="No">No, I do not need accommodation</option>
+                                <option value="Yes" disabled={isCvFullForSelectedDates && !isBrahmachari}>
+                                  {isCvFullForSelectedDates && !isBrahmachari
+                                    ? 'CV Floor Accommodation (FULL - Unavailable)'
+                                    : 'Yes, I need accommodation from CV'}
+                                </option>
+                                <option value="No">
+                                  {isCvFullForSelectedDates && !isBrahmachari
+                                    ? 'No, I will arrange own accommodation / Nearby Hotel'
+                                    : 'No, I do not need accommodation'}
+                                </option>
                               </select>
                             )}
                           </div>
                         </div>
+
+                        {/* SELF-ARRANGED / HOTEL RECOMMENDATION & RECEIPT UPLOAD SECTION */}
+                        {isArrangingOwnStay && (
+                          <div className="mt-3.5 space-y-3 pt-3 border-t border-amber-200/80">
+                            {isCvFullForSelectedDates ? (
+                              <div className="p-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5 shadow-2xs">
+                                <div className="flex items-center gap-2 font-black text-xs text-amber-900">
+                                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                  <span>CV Floor Accommodation is Full for Selected Dates</span>
+                                </div>
+                                <p className="text-[11px] text-amber-900 leading-snug">
+                                  Due to limited capacity, CV accommodation is completely booked for this batch. You can still attend by booking a room at a nearby hotel/lodge and attaching your booking confirmation receipt below.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="p-3.5 rounded-xl bg-indigo-50 border-2 border-indigo-200 text-indigo-950 space-y-1.5 shadow-2xs">
+                                <div className="flex items-center gap-2 font-black text-xs text-indigo-900">
+                                  <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  <span>Self-Arranged Accommodation / Nearby Hotel</span>
+                                </div>
+                                <p className="text-[11px] text-indigo-900 leading-snug">
+                                  You have selected to arrange your own stay outside CV floor. Please provide your hotel details and upload your booking confirmation receipt below so the administration can verify and issue your pass.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Recommended Hotels Directory */}
+                            {recommendedHotelsList.length > 0 && (
+                              <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Building2 className="w-4 h-4 text-amber-600" />
+                                    Recommended Nearby Hotels &amp; Lodges ({recommendedHotelsList.length})
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-semibold">Contact directly to book</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {recommendedHotelsList.map((h: any, i: number) => (
+                                    <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
+                                      <span className="font-extrabold text-xs text-slate-900 block">{h.name}</span>
+                                      {h.contact && (
+                                        <a href={`tel:${h.contact}`} className="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded inline-flex items-center gap-1 hover:underline">
+                                          <Phone className="w-3 h-3 text-amber-700" /> {h.contact}
+                                        </a>
+                                      )}
+                                      {h.address && (
+                                        <p className="text-[10.5px] text-slate-600">
+                                          {h.address.startsWith('http') ? (
+                                            <a href={h.address} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1">
+                                              📍 View Location Map &rarr;
+                                            </a>
+                                          ) : (
+                                            <span>📍 {h.address}</span>
+                                          )}
+                                        </p>
+                                      )}
+                                      {(h.tariff || h.notes) && (
+                                        <p className="text-[10px] text-slate-500">
+                                          {h.tariff ? `Tariff: ${h.tariff}` : ''}
+                                          {h.tariff && h.notes ? ' • ' : ''}
+                                          {h.notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Upload External Hotel Booking Receipt (Mandatory for Waiting List) */}
+                            <div className="p-4 rounded-xl bg-indigo-50/70 border-2 border-indigo-200 shadow-2xs space-y-3">
+                              <div>
+                                <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                  <UploadCloud className="w-4 h-4 text-indigo-600" />
+                                  Upload Hotel Booking Receipt (Mandatory) *
+                                </span>
+                                <p className="text-[11px] text-indigo-900 mt-0.5">
+                                  Upload your hotel reservation receipt/invoice (Image or PDF). Your booking will enter the Waiting List for administrative bandwidth verification before pass issuance.
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-1">Hotel / Lodge Name *</label>
+                                  <input
+                                    type="text"
+                                    value={hotelBookingName}
+                                    onChange={(e) => setHotelBookingName(e.target.value)}
+                                    placeholder="e.g. Hotel Sai Palace, Katraj"
+                                    className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-indigo-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                    Upload Receipt (Photo/PDF) * <span className="text-[9.5px] text-slate-400 font-normal">(Max 5MB)</span>
+                                  </label>
+                                  <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={handleUploadHotelReceipt}
+                                    disabled={uploadingReceipt}
+                                    className="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+
+                              {uploadingReceipt && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                                  <span>Uploading receipt to Google Drive...</span>
+                                </div>
+                              )}
+
+                              {hotelReceiptUrl && (
+                                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-between text-xs text-emerald-900 font-bold">
+                                  <span className="flex items-center gap-1.5">
+                                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                    Receipt uploaded successfully
+                                  </span>
+                                  <a href={hotelReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline text-[11px] hover:text-emerald-900">
+                                    View File &rarr;
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Interactive Live Cost Preview Widget */}

@@ -8,7 +8,7 @@ import {
   Calendar, MapPin, User, Phone, Sparkles, AlertCircle,
   ShieldCheck, ExternalLink, QrCode as QrIcon, Ban, Clock
 } from 'lucide-react';
-import { buildMealMatrix, MealMatrixColumn } from '@/lib/camp-cost';
+import { buildMealMatrix, MealMatrixColumn, formatParticipantMealDate, formatParticipantDateRange } from '@/lib/camp-cost';
 
 interface CampPrasadamCardProps {
   registration: any;
@@ -38,8 +38,15 @@ export default function CampPrasadamCard({
     reg.payment_status === 'refunded' ||
     reg.refund_status === 'refunded'
   );
+  const isWaitingList = Boolean(
+    !isCancelled &&
+    (reg.is_waiting_list || reg.payment_status === 'waiting_list') &&
+    !reg.waiting_list_approved_at
+  );
+
   const isPendingApproval = Boolean(
     !isCancelled &&
+    !isWaitingList &&
     (reg.payment_status === 'processing' ||
      reg.payment_status === 'pending' ||
      (reg.payment_status !== 'completed' && reg.payment_method !== 'FREE' && reg.payment_method !== 'ROLE_WAIVER'))
@@ -103,21 +110,52 @@ export default function CampPrasadamCard({
     campEndDate,
   ]);
 
-  // Split matrix into 2 tiers if more than 5 dates, so all dates fit in 8.5cm width with NO scrollbar
-  const tier1 = React.useMemo(() => {
-    if (mealMatrix.length <= 5) return mealMatrix;
-    return mealMatrix.slice(0, 5);
+  // Participant's registered dates (e.g. "28 Dec - 4 Jan" or "28 Dec 2026 - 4 Jan 2027")
+  const participantDateRange = React.useMemo(() => {
+    return formatParticipantDateRange(
+      reg.first_meal_date,
+      reg.last_meal_date,
+      campStartDate,
+      campEndDate,
+      reg.camp_meal_pricing,
+      false
+    );
+  }, [reg.first_meal_date, reg.last_meal_date, campStartDate, campEndDate, reg.camp_meal_pricing]);
+
+  const participantDateRangeWithYear = React.useMemo(() => {
+    return formatParticipantDateRange(
+      reg.first_meal_date,
+      reg.last_meal_date,
+      campStartDate,
+      campEndDate,
+      reg.camp_meal_pricing,
+      true
+    );
+  }, [reg.first_meal_date, reg.last_meal_date, campStartDate, campEndDate, reg.camp_meal_pricing]);
+
+  // Chunk matrix into dynamic tiers of 5 dates each, ensuring all days (5, 10, 15, 18, 20+) are fully included
+  const tiers = React.useMemo(() => {
+    if (!mealMatrix || mealMatrix.length === 0) return [];
+    const chunks: MealMatrixColumn[][] = [];
+    for (let i = 0; i < mealMatrix.length; i += 5) {
+      chunks.push(mealMatrix.slice(i, i + 5));
+    }
+    return chunks;
   }, [mealMatrix]);
 
-  const tier2 = React.useMemo(() => {
-    if (mealMatrix.length <= 5) return [];
-    return mealMatrix.slice(5, 10);
-  }, [mealMatrix]);
+  const tier1 = tiers[0] || [];
+  const tier2 = tiers[1] || [];
 
-  // Tier 2 header text: shows devotee's center if specified and not 'None', else 'MEAL DATES (Contd.)'
+  // Header text for tier 2+: shows devotee's center if specified and not 'None', else 'MEAL DATES (Contd.)'
   const tier2Header = (resolvedUserCenter && !['none', 'null', 'undefined', '-', ''].includes(resolvedUserCenter.toLowerCase()))
     ? resolvedUserCenter
     : 'MEAL DATES (Contd.)';
+
+  const getTierHeader = (tierIndex: number) => {
+    if (tierIndex === 0) return 'Meal Dates';
+    if (tierIndex === 1) return tier2Header;
+    return `Meal Dates (${tierIndex + 1})`;
+  };
 
   // Check whether devotee is eligible for this specific meal on the column date
   const isMealEligible = (col: MealMatrixColumn, mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Milk') => {
@@ -183,6 +221,10 @@ export default function CampPrasadamCard({
   const handlePrint = () => {
     if (isCancelled) {
       alert('This pass has been cancelled/refunded and cannot be printed.');
+      return;
+    }
+    if (isWaitingList) {
+      alert('This pass is on the Waiting List awaiting administrative review of accommodation bandwidth.');
       return;
     }
     if (isPendingApproval) {
@@ -298,6 +340,10 @@ export default function CampPrasadamCard({
       alert('This pass has been cancelled/refunded and cannot be downloaded.');
       return;
     }
+    if (isWaitingList) {
+      alert('This pass is on the Waiting List awaiting administrative review of accommodation bandwidth.');
+      return;
+    }
     if (isPendingApproval) {
       alert('This pass is pending payment verification and cannot be downloaded.');
       return;
@@ -306,7 +352,9 @@ export default function CampPrasadamCard({
     try {
       const scale = 3;
       const w = 390;
-      const h = tier2.length > 0 ? 360 : 285;
+      const numTiers = Math.max(1, tiers.length);
+      const tablesBottom = 148 + (numTiers - 1) * 76 + 70;
+      const h = Math.max(numTiers > 1 ? 360 : 285, tablesBottom + 40);
 
       const canvas = document.createElement('canvas');
       canvas.width = w * scale;
@@ -543,8 +591,8 @@ export default function CampPrasadamCard({
       ctx.fillText('CAMP:', 14, 121);
       ctx.fillStyle = '#92400e';
       ctx.font = '800 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      const trackDateStr = (campStartDate && campEndDate)
-        ? ` (${new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${new Date(campEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})`
+      const trackDateStr = participantDateRange
+        ? ` (${participantDateRange})`
         : '';
       ctx.fillText(`${reg.camp_track || 'Standard Track'}${trackDateStr}`, 56, 120, 234);
 
@@ -671,13 +719,14 @@ export default function CampPrasadamCard({
         });
       };
 
-      // Draw Tier 1 Table
-      drawMealTable(tier1, 148, 'MEAL DATES');
-
-      // Draw Tier 2 Table if present (148 + 5 * 14 = 218, plus 6px gap = 224)
-      if (tier2.length > 0) {
-        drawMealTable(tier2, 224, tier2Header);
-      }
+      // Draw all Meal Table Tiers dynamically (supports all dates without truncation)
+      tiers.forEach((tierChunk, tIdx) => {
+        const tableY = 148 + tIdx * 76;
+        const headerLabel = tIdx === 0
+          ? 'MEAL DATES'
+          : (tIdx === 1 ? tier2Header : `MEAL DATES (${tIdx + 1})`);
+        drawMealTable(tierChunk, tableY, headerLabel);
+      });
 
       // Footer Notes
       const footerY = h - 14;
@@ -797,7 +846,7 @@ export default function CampPrasadamCard({
         >
           <Utensils className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
           <span className="sm:hidden">Prasadam Card</span>
-          <span className="hidden sm:inline">Prasadam Card (8×5 cm)</span>
+          <span className="hidden sm:inline">Prasadam Card</span>
         </button>
         <button
           type="button"
@@ -830,6 +879,24 @@ export default function CampPrasadamCard({
                 <p className="text-[10px] text-rose-800 font-black mt-2 max-w-[220px]">
                   Pass is cancelled/refunded. Not valid for camp entry or prasadam.
                 </p>
+              </div>
+            )}
+
+            {/* Waiting List Overlay */}
+            {isWaitingList && !isCancelled && (
+              <div className="absolute inset-0 bg-white/92 backdrop-blur-[1px] rounded-xl z-20 flex flex-col items-center justify-center p-4 text-center">
+                <div className="px-3.5 py-1.5 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-lg shadow-md -rotate-6 border-2 border-white flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>WAITING LIST</span>
+                </div>
+                <p className="text-[10.5px] text-indigo-950 font-bold mt-2.5 max-w-[260px] leading-relaxed">
+                  Your registration is on the Waiting List awaiting accommodation review. Entry pass will activate once confirmed by administrators.
+                </p>
+                {reg.hotel_name && (
+                  <span className="text-[9px] font-bold text-slate-500 mt-1">
+                    Hotel: {reg.hotel_name}
+                  </span>
+                )}
               </div>
             )}
 
@@ -897,9 +964,9 @@ export default function CampPrasadamCard({
                     <span className="font-bold text-slate-500 uppercase text-[7.5px] sm:text-[8px]">CAMP:</span>
                     <span className="font-bold text-amber-800 truncate">
                       {reg.camp_track || 'Standard Track'}
-                      {campStartDate && campEndDate && (
-                        <span className="text-slate-500 font-normal ml-1">
-                          ({new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(campEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})
+                      {participantDateRange && (
+                        <span className="text-slate-500 font-semibold ml-1">
+                          ({participantDateRange})
                         </span>
                       )}
                     </span>
@@ -924,321 +991,166 @@ export default function CampPrasadamCard({
               </div>
             </div>
 
-            {/* Row 2: MEAL MATRIX TABLE (Compact 2-tier Grid, NO SCROLLBAR!) */}
+            {/* Row 2: MEAL MATRIX TABLE (Multi-tier Grid, rendered in chunks of 5 dates, NO CUTOFF!) */}
             <div className="space-y-1">
-              {/* TIER 1: Days 1 to 5 */}
-              {tier1.length > 0 && (
-                <div className="border border-slate-400 rounded overflow-hidden">
-                  <table className="w-full text-center text-[9px] border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-amber-400 text-slate-950 font-black border-b border-slate-400">
-                        <th className="py-0.5 px-1 w-[26%] bg-amber-400 text-[8px] uppercase tracking-tight border-r border-slate-400 truncate">
-                          Meal Dates
-                        </th>
-                        {tier1.map((col) => (
-                          <th
-                            key={col.date}
-                            className="py-0.5 px-0.5 border-r border-slate-400 last:border-r-0 truncate"
-                          >
-                            {col.label}
+              {tiers.map((tierCols, tIdx) => {
+                const headerTitle = getTierHeader(tIdx);
+                return (
+                  <div key={tIdx} className="border border-slate-400 rounded overflow-hidden">
+                    <table className="w-full text-center text-[9px] border-collapse table-fixed">
+                      <thead>
+                        <tr className="bg-amber-400 text-slate-950 font-black border-b border-slate-400">
+                          <th className="py-0.5 px-1 w-[26%] bg-amber-400 text-[8px] uppercase tracking-tight border-r border-slate-400 truncate">
+                            {headerTitle}
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300 font-bold">
-                      {/* Breakfast */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          BF
-                        </td>
-                        {tier1.map((col) => {
-                          const isEligible = isMealEligible(col, 'Breakfast');
-                          const isServed = isEligible && isMealServed(col, 'Breakfast');
-                          return (
-                            <td
+                          {tierCols.map((col) => (
+                            <th
                               key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
+                              className="py-0.5 px-0.5 border-r border-slate-400 last:border-r-0 truncate"
                             >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>BF</span>
-                                </span>
-                              ) : (
-                                'BF'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Lunch */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Lunch
-                        </td>
-                        {tier1.map((col) => {
-                          const isEligible = isMealEligible(col, 'Lunch');
-                          const isServed = isEligible && isMealServed(col, 'Lunch');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Lunch</span>
-                                </span>
-                              ) : (
-                                'Lunch'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Dinner */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Dinner
-                        </td>
-                        {tier1.map((col) => {
-                          const isEligible = isMealEligible(col, 'Dinner');
-                          const isServed = isEligible && isMealServed(col, 'Dinner');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Dinner</span>
-                                </span>
-                              ) : (
-                                'Dinner'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Milk */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Milk
-                        </td>
-                        {tier1.map((col) => {
-                          const isEligible = isMealEligible(col, 'Milk');
-                          const isServed = isEligible && isMealServed(col, 'Milk');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Milk</span>
-                                </span>
-                              ) : (
-                                'Milk'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* TIER 2: Days 6 to 10 (If camp exceeds 5 days) */}
-              {tier2.length > 0 && (
-                <div className="border border-slate-400 rounded overflow-hidden">
-                  <table className="w-full text-center text-[9px] border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-amber-400 text-slate-950 font-black border-b border-slate-400">
-                        <th className="py-0.5 px-1 w-[26%] bg-amber-400 text-[8px] uppercase tracking-tight border-r border-slate-400 truncate">
-                          {tier2Header}
-                        </th>
-                        {tier2.map((col) => (
-                          <th
-                            key={col.date}
-                            className="py-0.5 px-0.5 border-r border-slate-400 last:border-r-0 truncate"
-                          >
-                            {col.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300 font-bold">
-                      {/* Breakfast */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          BF
-                        </td>
-                        {tier2.map((col) => {
-                          const isEligible = isMealEligible(col, 'Breakfast');
-                          const isServed = isEligible && isMealServed(col, 'Breakfast');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>BF</span>
-                                </span>
-                              ) : (
-                                'BF'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Lunch */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Lunch
-                        </td>
-                        {tier2.map((col) => {
-                          const isEligible = isMealEligible(col, 'Lunch');
-                          const isServed = isEligible && isMealServed(col, 'Lunch');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Lunch</span>
-                                </span>
-                              ) : (
-                                'Lunch'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Dinner */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Dinner
-                        </td>
-                        {tier2.map((col) => {
-                          const isEligible = isMealEligible(col, 'Dinner');
-                          const isServed = isEligible && isMealServed(col, 'Dinner');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Dinner</span>
-                                </span>
-                              ) : (
-                                'Dinner'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {/* Milk */}
-                      <tr>
-                        <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
-                          Milk
-                        </td>
-                        {tier2.map((col) => {
-                          const isEligible = isMealEligible(col, 'Milk');
-                          const isServed = isEligible && isMealServed(col, 'Milk');
-                          return (
-                            <td
-                              key={col.date}
-                              className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
-                                !isEligible
-                                  ? 'bg-slate-200/80 text-slate-400 font-normal'
-                                  : isServed
-                                  ? 'bg-emerald-100 text-emerald-800 font-black'
-                                  : 'bg-white text-slate-700 font-bold'
-                              }`}
-                            >
-                              {!isEligible ? (
-                                'X'
-                              ) : isServed ? (
-                                <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
-                                  <span>✓</span>
-                                  <span>Milk</span>
-                                </span>
-                              ) : (
-                                'Milk'
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                              {col.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-300 font-bold">
+                        {/* Breakfast */}
+                        <tr>
+                          <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                            BF
+                          </td>
+                          {tierCols.map((col) => {
+                            const isEligible = isMealEligible(col, 'Breakfast');
+                            const isServed = isEligible && isMealServed(col, 'Breakfast');
+                            return (
+                              <td
+                                key={col.date}
+                                className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                  !isEligible
+                                    ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                    : isServed
+                                    ? 'bg-emerald-100 text-emerald-800 font-black'
+                                    : 'bg-white text-slate-700 font-bold'
+                                }`}
+                              >
+                                {!isEligible ? (
+                                  'X'
+                                ) : isServed ? (
+                                  <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                    <span>✓</span>
+                                    <span>BF</span>
+                                  </span>
+                                ) : (
+                                  'BF'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {/* Lunch */}
+                        <tr>
+                          <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                            Lunch
+                          </td>
+                          {tierCols.map((col) => {
+                            const isEligible = isMealEligible(col, 'Lunch');
+                            const isServed = isEligible && isMealServed(col, 'Lunch');
+                            return (
+                              <td
+                                key={col.date}
+                                className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                  !isEligible
+                                    ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                    : isServed
+                                    ? 'bg-emerald-100 text-emerald-800 font-black'
+                                    : 'bg-white text-slate-700 font-bold'
+                                }`}
+                              >
+                                {!isEligible ? (
+                                  'X'
+                                ) : isServed ? (
+                                  <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                    <span>✓</span>
+                                    <span>Lunch</span>
+                                  </span>
+                                ) : (
+                                  'Lunch'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {/* Dinner */}
+                        <tr>
+                          <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                            Dinner
+                          </td>
+                          {tierCols.map((col) => {
+                            const isEligible = isMealEligible(col, 'Dinner');
+                            const isServed = isEligible && isMealServed(col, 'Dinner');
+                            return (
+                              <td
+                                key={col.date}
+                                className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                  !isEligible
+                                    ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                    : isServed
+                                    ? 'bg-emerald-100 text-emerald-800 font-black'
+                                    : 'bg-white text-slate-700 font-bold'
+                                }`}
+                              >
+                                {!isEligible ? (
+                                  'X'
+                                ) : isServed ? (
+                                  <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                    <span>✓</span>
+                                    <span>Dinner</span>
+                                  </span>
+                                ) : (
+                                  'Dinner'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {/* Milk */}
+                        <tr>
+                          <td className="py-0.5 px-1 bg-slate-100 border-r border-slate-400 text-slate-800 font-black text-[8px]">
+                            Milk
+                          </td>
+                          {tierCols.map((col) => {
+                            const isEligible = isMealEligible(col, 'Milk');
+                            const isServed = isEligible && isMealServed(col, 'Milk');
+                            return (
+                              <td
+                                key={col.date}
+                                className={`py-0.5 px-0.5 border-r border-slate-300 last:border-r-0 text-[9px] ${
+                                  !isEligible
+                                    ? 'bg-slate-200/80 text-slate-400 font-normal'
+                                    : isServed
+                                    ? 'bg-emerald-100 text-emerald-800 font-black'
+                                    : 'bg-white text-slate-700 font-bold'
+                                }`}
+                              >
+                                {!isEligible ? (
+                                  'X'
+                                ) : isServed ? (
+                                  <span className="inline-flex items-center justify-center gap-0.5 text-emerald-700 font-black">
+                                    <span>✓</span>
+                                    <span>Milk</span>
+                                  </span>
+                                ) : (
+                                  'Milk'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Row 3: Footer Notes */}
@@ -1261,6 +1173,19 @@ export default function CampPrasadamCard({
               </div>
               <p className="text-[10px] text-rose-800 font-black mt-2 max-w-[220px]">
                 Pass is cancelled/refunded. Not valid for camp entry.
+              </p>
+            </div>
+          )}
+
+          {/* Waiting List Overlay */}
+          {isWaitingList && !isCancelled && (
+            <div className="absolute inset-0 bg-white/92 backdrop-blur-[1px] rounded-2xl z-20 flex flex-col items-center justify-center p-4 text-center">
+              <div className="px-4 py-1.5 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-lg shadow-md -rotate-6 border-2 border-white flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>WAITING LIST</span>
+              </div>
+              <p className="text-[10.5px] text-indigo-950 font-bold mt-2.5 max-w-[260px] leading-relaxed">
+                Pass is on the Waiting List awaiting accommodation review.
               </p>
             </div>
           )}
@@ -1311,6 +1236,10 @@ export default function CampPrasadamCard({
                 <span className="font-bold text-amber-700">{reg.camp_track || 'Standard'}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-500">Registered Dates:</span>
+                <span className="font-bold text-gray-800">{participantDateRangeWithYear || participantDateRange}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-500">WhatsApp:</span>
                 <span className="font-mono text-gray-700">{reg.whatsapp || reg.poc_contact}</span>
               </div>
@@ -1355,6 +1284,11 @@ export default function CampPrasadamCard({
           <div className="w-full py-2 px-3 bg-rose-50 border border-rose-200 rounded-xl text-center text-[10.5px] sm:text-xs font-bold text-rose-700 flex items-center justify-center gap-1.5 print:hidden shadow-2xs">
             <Ban className="w-3.5 h-3.5 text-rose-600" />
             <span>Pass Cancelled &bull; Download Disabled</span>
+          </div>
+        ) : isWaitingList ? (
+          <div className="w-full py-2.5 px-3 bg-indigo-50 border border-indigo-200 rounded-xl text-center text-[10.5px] sm:text-xs font-bold text-indigo-900 flex items-center justify-center gap-2 print:hidden shadow-2xs">
+            <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>Registration on Waiting List &bull; Pass Unlocks After Administrative Review</span>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-1.5 sm:gap-2 pt-1.5 sm:pt-2 print:hidden">

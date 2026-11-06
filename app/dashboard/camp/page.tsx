@@ -10,7 +10,7 @@ import {
   CreditCard, ShieldCheck, ArrowRight, Utensils,
   Home, Clock, Loader2, Sparkles, X, ChevronRight,
   Search, FileText, CheckCircle2, HeartHandshake,
-  Building, UserCheck, Award, Tag, Gift, Percent,
+  Building, Building2, UserCheck, Award, Tag, Gift, Percent,
   Landmark, UploadCloud, Copy, Check, AlertTriangle,
   Undo2, Banknote, RefreshCw, Ticket, Download,
   ExternalLink, ArrowLeft, Info, Shield, QrCode,
@@ -31,7 +31,8 @@ import {
   lookupCampRegistrationsAction,
   getUserAllocatedCampsAction,
   getCenterDevoteesForCampRegistrationAction,
-  validateCampCouponAction
+  validateCampCouponAction,
+  getCampAccommodationCapacityStatusAction
 } from '@/app/dashboard/admin/camps/actions';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
@@ -253,6 +254,23 @@ const CANCELLED_PASS_THEME: PassColorScheme = {
   dotColor: 'bg-red-500',
 };
 
+// Waiting List Palette (Royal Purple / Violet)
+const WAITING_LIST_PASS_THEME: PassColorScheme = {
+  name: 'Waiting List',
+  stubGradient: 'bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-800',
+  stubBorder: 'border-purple-400/50',
+  stubGlow: 'bg-purple-300/35',
+  stubIconBg: 'bg-white/20 text-purple-100 border-white/25',
+  stubTag: 'text-purple-100 bg-black/35 border-purple-300/20',
+  cardBorder: 'border-purple-300 border-2 hover:border-purple-400',
+  cardBg: 'bg-purple-50/40',
+  textAccent: 'text-purple-950',
+  iconAccent: 'text-purple-600',
+  paidAccent: 'text-purple-800 font-black',
+  badgeBg: 'bg-purple-100 text-purple-900 border border-purple-300',
+  dotColor: 'bg-purple-600',
+};
+
 // Pending Stage Palette (Warm Amber / Saffron Yellow)
 const PENDING_PASS_THEME: PassColorScheme = {
   name: 'Pending',
@@ -286,10 +304,14 @@ function getPassDynamicTheme(
   isCancelled: boolean,
   isPending: boolean,
   registeredTracks: Array<{ id: string; name: string }>,
-  registeredCamps: Array<{ id: string; title: string }>
+  registeredCamps: Array<{ id: string; title: string }>,
+  isWaitingList: boolean = false
 ): PassColorScheme {
   if (isCancelled) {
     return CANCELLED_PASS_THEME;
+  }
+  if (isWaitingList) {
+    return WAITING_LIST_PASS_THEME;
   }
   if (isPending) {
     return PENDING_PASS_THEME;
@@ -507,7 +529,7 @@ function CampDashboardContent() {
     lastMealDate: '',
     lastMealType: 'Dinner',
     dinnerType: 'Dinner Meal',
-    accommodation: 'No',
+    accommodation: 'Yes',
     gender: 'Male - Bachelor',
     participantType: 'Camp Participant',
     age: '',
@@ -584,6 +606,12 @@ function CampDashboardContent() {
   const [couponError, setCouponError] = useState<string | null>(null);
 
   // Success State
+  // Accommodation Capacity & Waiting List State
+  const [capacityStatus, setCapacityStatus] = useState<any>(null);
+  const [hotelBookingName, setHotelBookingName] = useState('');
+  const [hotelReceiptUrl, setHotelReceiptUrl] = useState('');
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
   const [registrationSuccess, setRegistrationSuccess] = useState<any | null>(null);
 
   // Ticket Modal State
@@ -602,7 +630,7 @@ function CampDashboardContent() {
   const [passViewFilter, setPassViewFilter] = useState<'all' | 'mine' | 'assigned'>('all');
   const [passSearchTerm, setPassSearchTerm] = useState('');
   const [passCampFilter, setPassCampFilter] = useState<string>('all');
-  const [passStatusFilter, setPassStatusFilter] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
+  const [passStatusFilter, setPassStatusFilter] = useState<'all' | 'confirmed' | 'waiting_list' | 'pending' | 'cancelled'>('all');
   const [passSubcampFilter, setPassSubcampFilter] = useState<string>('all');
 
   // Payout details
@@ -720,6 +748,11 @@ function CampDashboardContent() {
   const handleSelectCampForRegistration = (camp: Camp) => {
     setSelectedCamp(camp);
     setActiveTab('register');
+    getCampAccommodationCapacityStatusAction(camp.id, true)
+      .then((res) => {
+        if (res.success) setCapacityStatus(res);
+      })
+      .catch((e) => console.warn('Capacity status fetch error:', e));
     setEntries([]);
     setEditIndex(null);
     setAppliedCoupon(null);
@@ -727,9 +760,14 @@ function CampDashboardContent() {
     setRegistrationSuccess(null);
 
     const meals = camp.meal_pricing || [];
-    const firstMeal = meals.length > 0 ? String(meals[0].date) : '';
-    const lastMeal = meals.length > 0 ? String(meals[meals.length - 1].date) : '';
     const initialTrack = camp.tracks?.[0] || 'GS Camp - 1st Timer';
+    const initTf = (camp.special_waivers?.track_fees || []).find(
+      (t) => t.track.toLowerCase() === initialTrack.toLowerCase()
+    );
+    const firstMeal = initTf?.start_date || (meals.length > 0 ? String(meals[0].date) : '');
+    const firstMealType = initTf?.start_meal_type || 'Breakfast';
+    const lastMeal = initTf?.end_date || (meals.length > 0 ? String(meals[meals.length - 1].date) : '');
+    const lastMealType = initTf?.end_meal_type || 'Dinner';
 
     const userDob = userData?.birthDate || (userData as any)?.birth_date || userData?.hierarchy?.birthDate;
     const calculatedAge = calculateAgeFromBirthDate(userDob);
@@ -783,11 +821,11 @@ function CampDashboardContent() {
       voiceName: resolvedUserCenter,
       campTrack: initialTrack,
       firstMealDate: firstMeal,
-      firstMealType: 'Breakfast',
+      firstMealType: firstMealType,
       lastMealDate: lastMeal,
-      lastMealType: 'Dinner',
+      lastMealType: lastMealType,
       dinnerType: 'Dinner Meal',
-      accommodation: 'No',
+      accommodation: 'Yes',
       gender: 'Male - Bachelor',
       participantType: 'Camp Participant',
       age: calculatedAge || '',
@@ -809,7 +847,7 @@ function CampDashboardContent() {
           firstMealType: 'Breakfast',
           lastMealDate: lastMeal,
           lastMealType: 'Dinner',
-          accommodation: 'No',
+          accommodation: 'Yes',
           participantType: 'Camp Participant',
           campTrack: initialTrack,
         },
@@ -1064,6 +1102,93 @@ function CampDashboardContent() {
     }
   }, [selectedCamp?.id, userData?.id]);
 
+  // Accommodation Capacity Evaluation
+  const isBrahmachari = useMemo(() => {
+    const pt = (formData.participantType || '').toLowerCase();
+    const g = (formData.gender || '').toLowerCase();
+    return pt.includes('brahmachari') || g.includes('brahmachari');
+  }, [formData.participantType, formData.gender]);
+
+  const isCvFullForSelectedDates = useMemo(() => {
+    if (!capacityStatus || isBrahmachari) return false;
+    if (capacityStatus.globalCapacity?.isFull) return true;
+    const batches = capacityStatus.batches || [];
+    if (batches.length === 0) return false;
+
+    const fStart = String(formData.firstMealDate || '').trim().toLowerCase().replace(/\s+/g, '');
+    const fEnd = String(formData.lastMealDate || '').trim().toLowerCase().replace(/\s+/g, '');
+
+    for (const b of batches) {
+      if (b.isFull) {
+        const bStart = String(b.start_date || '').trim().toLowerCase().replace(/\s+/g, '');
+        const bEnd = String(b.end_date || '').trim().toLowerCase().replace(/\s+/g, '');
+        if (
+          (bStart && (fStart.includes(bStart) || bStart.includes(fStart))) ||
+          (bEnd && (fEnd.includes(bEnd) || bEnd.includes(fEnd))) ||
+          (!bStart && !bEnd)
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [capacityStatus, isBrahmachari, formData.firstMealDate, formData.lastMealDate]);
+
+  const isArrangingOwnStay = useMemo(() => {
+    return !isBrahmachari && (formData.accommodation === 'No' || isCvFullForSelectedDates);
+  }, [isBrahmachari, formData.accommodation, isCvFullForSelectedDates]);
+
+  const recommendedHotelsList = useMemo(() => {
+    const fromCamp = selectedCamp?.accommodation_pricing?.recommended_hotels;
+    const fromStatus = capacityStatus?.recommendedHotels;
+    return (Array.isArray(fromCamp) && fromCamp.length > 0)
+      ? fromCamp
+      : (Array.isArray(fromStatus) ? fromStatus : []);
+  }, [selectedCamp?.accommodation_pricing?.recommended_hotels, capacityStatus?.recommendedHotels]);
+
+  useEffect(() => {
+    if (isCvFullForSelectedDates && !isBrahmachari && formData.accommodation === 'Yes') {
+      setFormData((prev) => ({ ...prev, accommodation: 'No' }));
+    }
+  }, [isCvFullForSelectedDates, isBrahmachari, formData.accommodation]);
+
+  const handleUploadHotelReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 5MB Client-side File Size Limit
+    const MAX_MB = 5;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`File size exceeds ${MAX_MB}MB limit. Please upload an image or PDF under ${MAX_MB}MB.`);
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingReceipt(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      data.append('campTitle', selectedCamp?.title || 'Camp');
+      data.append('devoteeName', formData.participantName || 'Devotee');
+      data.append('hotelName', hotelBookingName || 'Nearby Hotel');
+
+      const res = await fetch('/api/camps/upload-accommodation-proof', {
+        method: 'POST',
+        body: data,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        alert(json.error || 'Failed to upload hotel receipt.');
+      } else {
+        setHotelReceiptUrl(json.fileUrl || json.webViewLink);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error uploading hotel receipt');
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
+
   // Recalculate Live Cost on Attendee Form Change
   useEffect(() => {
     if (!selectedCamp) return;
@@ -1095,6 +1220,34 @@ function CampDashboardContent() {
   const isManager = isCampManagerialUser(userData?.role, selectedCamp?.payment_config?.allowed_managerial_roles);
   const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
   const isSuperAdmin = userRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+  // Strict center-based visibility filtering for Active Camps list
+  const visibleActiveCamps = useMemo(() => {
+    if (isSuperAdmin) return activeCamps;
+
+    const userCenters = [
+      managerAssignedCenter,
+      userData?.hierarchy?.currentCenter,
+      userData?.hierarchy?.center,
+      (userData as any)?.center,
+      (userData as any)?.current_center,
+      userData?.hierarchy?.otherCenter,
+      (userData as any)?.other_center,
+    ].filter(Boolean).map((s: string) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+    return activeCamps.filter((camp) => {
+      const eligible = camp.eligible_centers;
+      if (!Array.isArray(eligible) || eligible.length === 0) {
+        // Open to all centers (Public)
+        return true;
+      }
+      return eligible.some((ec: string) => {
+        const ecNorm = String(ec || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!ecNorm) return false;
+        return userCenters.some((uc: string) => uc === ecNorm || uc.includes(ecNorm) || ecNorm.includes(uc));
+      });
+    });
+  }, [activeCamps, isSuperAdmin, userData, managerAssignedCenter]);
 
   // Check center-based registration eligibility for currently selected camp
   const isDevoteeEligibleForCamp = useMemo(() => {
@@ -1292,6 +1445,7 @@ function CampDashboardContent() {
     }
 
     let confirmed = 0;
+    let waiting_list = 0;
     let pending = 0;
     let cancelled = 0;
 
@@ -1300,13 +1454,16 @@ function CampDashboardContent() {
         (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
       );
       const paymentStatus = String(reg.payment_status || '').toLowerCase();
-      const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
+      const isWaitingList = Boolean(reg.is_waiting_list || paymentStatus === 'waiting_list');
+      const isCompleted = !isWaitingList && (['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE');
       const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || refund?.status === 'refunded');
       const isPendingRefund = refund?.status === 'pending';
-      const isPendingApproval = !isCompleted && !isCancelled;
+      const isPendingApproval = !isCompleted && !isCancelled && !isWaitingList;
 
       if (isCancelled) {
         cancelled++;
+      } else if (isWaitingList) {
+        waiting_list++;
       } else if (isPendingApproval || isPendingRefund) {
         pending++;
       } else if (isCompleted) {
@@ -1314,7 +1471,7 @@ function CampDashboardContent() {
       }
     });
 
-    return { confirmed, pending, cancelled, all: list.length };
+    return { confirmed, waiting_list, pending, cancelled, all: list.length };
   }, [scopedRegistrations, passCampFilter, passSubcampFilter, userRefunds]);
 
   const displayedRegistrations = useMemo(() => {
@@ -1336,12 +1493,14 @@ function CampDashboardContent() {
           (ref) => ref.registration_id === reg.id || ref.group_id === reg.group_id
         );
         const paymentStatus = String(reg.payment_status || '').toLowerCase();
-        const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
+        const isWaitingList = Boolean(reg.is_waiting_list || paymentStatus === 'waiting_list');
+        const isCompleted = !isWaitingList && (['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE');
         const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || refund?.status === 'refunded');
         const isPendingRefund = refund?.status === 'pending';
-        const isPendingApproval = !isCompleted && !isCancelled;
+        const isPendingApproval = !isCompleted && !isCancelled && !isWaitingList;
 
         if (passStatusFilter === 'cancelled') return isCancelled;
+        if (passStatusFilter === 'waiting_list') return isWaitingList && !isCancelled;
         if (passStatusFilter === 'pending') return (isPendingApproval || isPendingRefund) && !isCancelled;
         if (passStatusFilter === 'confirmed') return isCompleted && !isCancelled;
         return true;
@@ -1488,12 +1647,19 @@ function CampDashboardContent() {
   useEffect(() => {
     if (availableTracksForDevotee.length > 0 && !availableTracksForDevotee.includes(formData.campTrack)) {
       const firstAvailable = availableTracksForDevotee.find((t) => !activeRegisteredTracks.includes(t.trim())) || availableTracksForDevotee[0];
+      const tf = (selectedCamp?.special_waivers?.track_fees || []).find(
+        (t) => t.track.toLowerCase() === firstAvailable.toLowerCase()
+      );
       setFormData((prev) => ({
         ...prev,
-        campTrack: firstAvailable
+        campTrack: firstAvailable,
+        ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+        ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+        ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+        ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
       }));
     }
-  }, [availableTracksForDevotee, formData.campTrack, activeRegisteredTracks]);
+  }, [availableTracksForDevotee, formData.campTrack, activeRegisteredTracks, selectedCamp]);
 
   // Check if current form track is already registered
   const isCurrentTrackAlreadyRegistered = useMemo(() => {
@@ -1527,6 +1693,17 @@ function CampDashboardContent() {
         voiceName: found.center || prev.voiceName,
         parentTemple: found.temple || prev.parentTemple,
         campTrack: nextTrack,
+        ...(() => {
+          const tf = (selectedCamp?.special_waivers?.track_fees || []).find(
+            (t) => t.track.toLowerCase() === nextTrack.toLowerCase()
+          );
+          return {
+            ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+            ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+            ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+            ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
+          };
+        })(),
       }));
     }
   };
@@ -1556,6 +1733,18 @@ function CampDashboardContent() {
         ...prev,
         [name]: value,
         accommodation: isFemale ? 'No' : prev.accommodation,
+      }));
+    } else if (name === 'campTrack') {
+      const tf = (selectedCamp?.special_waivers?.track_fees || []).find(
+        (t) => t.track.toLowerCase() === value.toLowerCase()
+      );
+      setFormData((prev) => ({
+        ...prev,
+        campTrack: value,
+        ...(tf?.start_date ? { firstMealDate: tf.start_date } : {}),
+        ...(tf?.start_meal_type ? { firstMealType: tf.start_meal_type } : {}),
+        ...(tf?.end_date ? { lastMealDate: tf.end_date } : {}),
+        ...(tf?.end_meal_type ? { lastMealType: tf.end_meal_type } : {}),
       }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -1705,8 +1894,25 @@ function CampDashboardContent() {
       'ISKCON NVCC • PUNE'
     ).trim();
 
+    // Accommodation Capacity Check:
+    const isWaiting = Boolean(isArrangingOwnStay);
+    if (isWaiting && !hotelReceiptUrl) {
+      alert(
+        isCvFullForSelectedDates
+          ? 'CV Floor Accommodation is completely full for selected dates. Please upload external hotel booking receipt to proceed on the Waiting List.'
+          : 'For self-arranged accommodation / outside stay, please enter hotel name and upload booking receipt proof to proceed.'
+      );
+      return;
+    }
+
     const newEntry = {
       ...formData,
+      is_waiting_list: isWaiting,
+      isWaitingList: isWaiting,
+      hotel_receipt_url: hotelReceiptUrl || null,
+      hotelReceiptUrl: hotelReceiptUrl || null,
+      hotel_name: hotelBookingName || null,
+      hotelName: hotelBookingName || null,
       participantType: formData.participantType || 'Camp Participant',
       participant_type: formData.participantType || 'Camp Participant',
       rounds: formData.rounds !== undefined && formData.rounds !== null ? String(formData.rounds) : '0',
@@ -1771,33 +1977,43 @@ function CampDashboardContent() {
     }
 
     // Reset attendee form for next entry (if group registration)
+    setHotelReceiptUrl('');
+    setHotelBookingName('');
     setSelectedDevoteeId('');
     setDevoteeSearchTerm('');
     const meals = selectedCamp?.meal_pricing || [];
-    setFormData((prev) => ({
-      ...prev,
-      participantName: '',
-      whatsapp: '',
-      rounds: '',
-      email: '',
-      dob: '',
-      age: '',
-      introducedToKcSince: '',
-      counselorName: '',
-      otherCounselorName: '',
-      ashram: 'Student and Not decided',
-      gender: 'Male - Bachelor',
-      accommodation: 'No',
-      firstMealDate: meals.length > 0 ? String(meals[0].date) : '',
-      firstMealType: 'Breakfast',
-      lastMealDate: meals.length > 0 ? String(meals[meals.length - 1].date) : '',
-      lastMealType: 'Dinner',
-      dinnerType: 'Dinner Meal',
-    }));
+    setFormData((prev) => {
+      const currentTrack = prev.campTrack || selectedCamp?.tracks?.[0] || '';
+      const tf = (selectedCamp?.special_waivers?.track_fees || []).find(
+        (t) => t.track.toLowerCase() === currentTrack.toLowerCase()
+      );
+      return {
+        ...prev,
+        participantName: '',
+        whatsapp: '',
+        rounds: '',
+        email: '',
+        dob: '',
+        age: '',
+        introducedToKcSince: '',
+        counselorName: '',
+        otherCounselorName: '',
+        ashram: 'Student and Not decided',
+        gender: 'Male - Bachelor',
+        accommodation: isCvFullForSelectedDates ? 'No' : 'Yes',
+        firstMealDate: tf?.start_date || (meals.length > 0 ? String(meals[0].date) : ''),
+        firstMealType: tf?.start_meal_type || 'Breakfast',
+        lastMealDate: tf?.end_date || (meals.length > 0 ? String(meals[meals.length - 1].date) : ''),
+        lastMealType: tf?.end_meal_type || 'Dinner',
+        dinnerType: 'Dinner Meal',
+      };
+    });
   };
 
   const handleEditEntry = (index: number) => {
     const item = entries[index];
+    setHotelBookingName(item.hotel_name || item.hotelName || '');
+    setHotelReceiptUrl(item.hotel_receipt_url || item.hotelReceiptUrl || '');
     setFormData({
       voiceName: item.voiceName || '',
       participantName: item.participantName || '',
@@ -2694,7 +2910,7 @@ function CampDashboardContent() {
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
               activeTab === 'camps' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-100 text-slate-600'
             }`}>
-              {activeCamps.length}
+              {visibleActiveCamps.length}
             </span>
           </button>
 
@@ -2776,17 +2992,17 @@ function CampDashboardContent() {
                   Retry
                 </button>
               </div>
-            ) : activeCamps.length === 0 ? (
+            ) : visibleActiveCamps.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-gray-200">
                 <Tent className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-gray-800">No Active Camps Right Now</h3>
+                <h3 className="text-base font-bold text-gray-800">No Active Camps for Your Center</h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  New youth camps, spiritual retreats, and yatras will be posted here as soon as registrations open.
+                  There are currently no active retreats available for your assigned center. Open retreats will appear here once announced.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {activeCamps.map((camp) => {
+                {visibleActiveCamps.map((camp) => {
                   const deadlinePassed = camp.registration_deadline && new Date() > new Date(camp.registration_deadline);
                   const notStarted = camp.registration_start_date && new Date() < new Date(camp.registration_start_date);
                   const posterUrl = getThumbnailUrl(camp.poster_url) || camp.poster_url;
@@ -3174,11 +3390,12 @@ function CampDashboardContent() {
                     <div className="relative w-full sm:w-44 md:w-48">
                       <select
                         value={passStatusFilter}
-                        onChange={(e) => setPassStatusFilter(e.target.value as 'all' | 'confirmed' | 'pending' | 'cancelled')}
+                        onChange={(e) => setPassStatusFilter(e.target.value as 'all' | 'confirmed' | 'waiting_list' | 'pending' | 'cancelled')}
                         className="w-full appearance-none pl-8 pr-8 py-1.5 sm:py-2 bg-white border border-slate-200 hover:border-emerald-400 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs cursor-pointer transition-all"
                       >
                         <option value="all">📋 All Statuses ({passStatusCounts.all})</option>
                         <option value="confirmed">🟢 Confirmed ({passStatusCounts.confirmed})</option>
+                        <option value="waiting_list">🟣 Waiting List ({passStatusCounts.waiting_list})</option>
                         <option value="pending">🟡 Pending ({passStatusCounts.pending})</option>
                         <option value="cancelled">🔴 Cancelled ({passStatusCounts.cancelled})</option>
                       </select>
@@ -3303,19 +3520,21 @@ function CampDashboardContent() {
                              (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === reg.id))
                   );
                   const paymentStatus = String(reg.payment_status || '').toLowerCase();
-                  const isCompleted = ['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE';
+                  const isWaitingList = Boolean(reg.is_waiting_list || paymentStatus === 'waiting_list');
+                  const isCompleted = !isWaitingList && (['completed', 'free', 'role_waiver'].includes(paymentStatus) || String((reg as any).payment_method || '').toUpperCase() === 'FREE');
                   const isCancelled = Boolean(reg.is_cancelled || paymentStatus === 'refunded' || paymentStatus === 'cancelled' || refund?.status === 'refunded');
                   const isPendingRefund = Boolean(refund?.status === 'pending');
-                  const isPendingApproval = !isCompleted && !isCancelled;
+                  const isPendingApproval = !isCompleted && !isCancelled && !isWaitingList;
                   const tokenNumber = (reg as any).serial_no || (reg as any).token_no || 1;
 
-                  // Dynamic Theme: Cancelled -> Light Red / Off-Red; Pending -> Warm Amber/Yellow; Confirmed -> Subcamp (Medium Green, Purple, Orange, Sky Blue...)
+                  // Dynamic Theme: Cancelled -> Light Red / Off-Red; Waiting List -> Royal Purple; Pending -> Warm Amber/Yellow; Confirmed -> Subcamp
                   const theme = getPassDynamicTheme(
                     reg,
                     isCancelled,
                     isPendingApproval || isPendingRefund,
                     registeredTracksList,
-                    registeredCampsList
+                    registeredCampsList,
+                    isWaitingList
                   );
 
                   return (
@@ -3380,6 +3599,11 @@ function CampDashboardContent() {
                                   <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                   Cancelled
                                 </span>
+                              ) : isWaitingList ? (
+                                <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs">
+                                  <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-700" />
+                                  Waiting List
+                                </span>
                               ) : isCompleted ? (
                                 <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                                   <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600" />
@@ -3429,6 +3653,21 @@ function CampDashboardContent() {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {isWaitingList && !isCancelled && (
+                              <button
+                                type="button"
+                                onClick={() => setViewTicketReg({
+                                  ...reg,
+                                  center: (reg.voice_name && !['none', 'null', 'undefined', 'n/a', '-'].includes(reg.voice_name.toLowerCase()))
+                                    ? reg.voice_name
+                                    : (userData?.hierarchy?.center || (userData as any)?.center || '')
+                                })}
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-black rounded-lg sm:rounded-xl text-[10.5px] sm:text-xs transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-md hover:shadow-lg"
+                              >
+                                <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                <span>Waiting List Pass</span>
+                              </button>
+                            )}
                             {isCompleted && !isCancelled && (
                               <button
                                 type="button"
@@ -4810,14 +5049,126 @@ function CampDashboardContent() {
                                     name="accommodation"
                                     value={formData.accommodation}
                                     onChange={handleFormChange}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 outline-none transition-all cursor-pointer shadow-2xs"
+                                    className={`w-full px-2.5 py-1.5 rounded-lg border text-slate-900 text-xs font-semibold outline-none transition-all cursor-pointer shadow-2xs ${
+                                      isCvFullForSelectedDates && !isBrahmachari
+                                        ? 'border-amber-400 bg-amber-50/50 text-amber-900'
+                                        : 'border-slate-300 bg-white focus:border-amber-500'
+                                    }`}
                                   >
-                                    <option value="Yes">Yes, need CV accommodation</option>
-                                    <option value="No">No, do not need</option>
+                                    <option value="Yes" disabled={isCvFullForSelectedDates && !isBrahmachari}>
+                                      {isCvFullForSelectedDates && !isBrahmachari ? 'CV Accommodation (FULL - Unavailable)' : 'Yes, need CV accommodation'}
+                                    </option>
+                                    <option value="No">No, do not need / arrange own stay</option>
                                   </select>
                                 )}
                               </div>
                             </div>
+
+                            {/* SELF-ARRANGED / HOTEL RECOMMENDATION & RECEIPT UPLOAD SECTION */}
+                            {isArrangingOwnStay && (
+                              <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-2">
+                                <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900">
+                                  {isCvFullForSelectedDates ? (
+                                    <>
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span>CV Floor Accommodation is Full for this Batch</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Building2 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                                      <span>Self-Arranged Accommodation / Nearby Hotel</span>
+                                    </>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-amber-900 leading-snug">
+                                  {isCvFullForSelectedDates
+                                    ? 'Devotee can still attend by arranging external stay at a nearby hotel/lodge and uploading booking proof.'
+                                    : 'Devotee has opted for outside accommodation. Please provide hotel name and upload booking confirmation proof below.'}
+                                </p>
+
+                                {/* Recommended Hotels Directory */}
+                                {recommendedHotelsList.length > 0 && (
+                                  <div className="p-3 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                                        <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                                        Recommended Nearby Hotels &amp; Lodges ({recommendedHotelsList.length})
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 font-semibold">Contact directly to book</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {recommendedHotelsList.map((h: any, i: number) => (
+                                        <div key={h.id || i} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1 hover:border-amber-300 transition-colors">
+                                          <div className="flex items-center justify-between gap-1">
+                                            <span className="font-black text-xs text-slate-900">{h.name}</span>
+                                            {h.tariff && (
+                                              <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                                {h.tariff}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {h.contact && (
+                                            <div>
+                                              <a href={`tel:${h.contact}`} className="text-[10.5px] font-bold text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded inline-flex items-center gap-1 hover:underline">
+                                                <Phone className="w-3 h-3 text-amber-700" /> {h.contact}
+                                              </a>
+                                            </div>
+                                          )}
+                                          {h.address && (
+                                            <p className="text-[10px] text-slate-600">
+                                              {h.address.startsWith('http') ? (
+                                                <a href={h.address} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1">
+                                                  📍 View Location Map &rarr;
+                                                </a>
+                                              ) : (
+                                                <span>📍 {h.address}</span>
+                                              )}
+                                            </p>
+                                          )}
+                                          {h.notes && (
+                                            <p className="text-[9.5px] text-slate-500 italic">
+                                              ℹ️ {h.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-amber-200">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Hotel Name</label>
+                                    <input
+                                      type="text"
+                                      value={hotelBookingName}
+                                      onChange={(e) => setHotelBookingName(e.target.value)}
+                                      placeholder="e.g. Hotel Sai Palace"
+                                      className="w-full px-2 py-1 rounded border border-slate-300 bg-white text-xs font-semibold"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                                      Booking Receipt (Photo/PDF) * <span className="text-[9.5px] text-slate-400 font-normal">(Max 5MB)</span>
+                                    </label>
+                                    <input
+                                      type="file"
+                                      accept="image/*,.pdf"
+                                      onChange={handleUploadHotelReceipt}
+                                      disabled={uploadingReceipt}
+                                      className="w-full text-xs"
+                                    />
+                                  </div>
+                                </div>
+                                {uploadingReceipt && <p className="text-[10px] text-indigo-700 font-bold">Uploading to Google Drive...</p>}
+                                {hotelReceiptUrl && (
+                                  <p className="text-[10px] text-emerald-800 font-bold flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                    <span>Receipt attached successfully.</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Interactive Live Cost Preview Widget */}
@@ -5124,9 +5475,36 @@ function CampDashboardContent() {
 
               {!selectedMethod ? (() => {
                 const isManager = isCampManagerialUser(userData?.role, selectedCamp.payment_config?.allowed_managerial_roles);
+
+                // IDT Center Authorization check: only managers whose center is in the authorized IDT list can see IDT
+                const centerIdtList = (selectedCamp.payment_config?.center_idt_codes || []) as any[];
+                const candidateCentersForIdt = [
+                  managerAssignedCenter,
+                  effectiveCenter,
+                  formData.voiceName,
+                  userData?.hierarchy?.currentCenter,
+                  userData?.hierarchy?.center,
+                  (userData as any)?.center,
+                  (userData as any)?.current_center,
+                  userData?.hierarchy?.otherCenter,
+                  (userData as any)?.other_center,
+                  entries[0]?.voiceName,
+                  entries[0]?.voice_name,
+                  entries[0]?.parentCenter,
+                ].filter(Boolean).map((s: string) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+                const isCenterAuthorizedForIdt = centerIdtList.length === 0 || centerIdtList.some((c: any) => {
+                  const cNorm = String(c.center_name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                  if (!cNorm) return false;
+                  return candidateCentersForIdt.some(
+                    (cand: string) => cand === cNorm || cand.includes(cNorm) || cNorm.includes(cand)
+                  );
+                });
+
                 const showIdtOption = Boolean(
                   selectedCamp.payment_config?.enable_idt &&
-                  (selectedCamp.payment_config?.allow_student_idt === true || isManager)
+                  (selectedCamp.payment_config?.allow_student_idt === true || isManager) &&
+                  isCenterAuthorizedForIdt
                 );
                 const showIttOption = Boolean(
                   selectedCamp.payment_config?.enable_itt &&

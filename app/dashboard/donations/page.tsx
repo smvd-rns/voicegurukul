@@ -1087,9 +1087,29 @@ export default function MyDonationsPage() {
                               <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-0.5">
                                   <span className="text-sm font-black text-slate-900">₹{Number(d.amount).toLocaleString('en-IN')}</span>
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    Verified
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                    d.payment_status === 'captured' || d.payment_status === 'success'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : d.payment_status === 'pending'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  }`}>
+                                    {d.payment_status === 'captured' || d.payment_status === 'success' ? (
+                                      <>
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                        Verified
+                                      </>
+                                    ) : d.payment_status === 'pending' ? (
+                                      <>
+                                        <Clock className="w-3 h-3 text-amber-600" />
+                                        Pending
+                                      </>
+                                    ) : (
+                                      <>
+                                        <AlertCircle className="w-3 h-3 text-rose-600" />
+                                        {d.payment_status || 'Failed'}
+                                      </>
+                                    )}
                                   </span>
                                 </div>
                               </td>
@@ -1120,9 +1140,29 @@ export default function MyDonationsPage() {
                             {/* Amount & Status Badge */}
                             <div className="text-right shrink-0">
                               <span className="text-sm sm:text-base font-black text-slate-900 block leading-tight">₹{Number(d.amount).toLocaleString('en-IN')}</span>
-                              <span className="inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full mt-0.5 text-emerald-700 bg-emerald-50 border border-emerald-200">
-                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                Verified
+                              <span className={`inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full mt-0.5 ${
+                                d.payment_status === 'captured' || d.payment_status === 'success'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : d.payment_status === 'pending'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {d.payment_status === 'captured' || d.payment_status === 'success' ? (
+                                  <>
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                    Verified
+                                  </>
+                                ) : d.payment_status === 'pending' ? (
+                                  <>
+                                    <Clock className="w-2.5 h-2.5 text-amber-600" />
+                                    Pending
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+                                    {d.payment_status || 'Failed'}
+                                  </>
+                                )}
                               </span>
                             </div>
                           </div>

@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 import pool from '../db';
 import dns from 'dns/promises';
+import { formatParticipantMealDate, formatParticipantDateRange } from '@/lib/camp-cost';
 
 // Force Node to prefer IPv4 DNS resolution (avoids broken IPv6 routing on hosting droplets)
 import { setDefaultResultOrder } from 'dns';
@@ -645,10 +646,15 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
         `;
     }
 
-    // Pass details & QR Code generation
-    const formattedDates = (campStartDate && campEndDate)
-        ? `${new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - ${new Date(campEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
-        : (campStartDate ? new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    // Pass details & QR Code generation: use participant's registered dates (not entire camp duration)
+    const formattedDates = formatParticipantDateRange(
+        mealInfo?.firstMealDate,
+        mealInfo?.lastMealDate,
+        campStartDate,
+        campEndDate,
+        undefined,
+        true
+    );
 
     const verifyUrl = registrationId
         ? `${appUrl}/camps/verify-pass?id=${encodeURIComponent(registrationId)}`
@@ -662,17 +668,20 @@ export async function sendCampDevoteeWelcomeAccountEmail(params: {
 
     let mealSummaryHtml = '';
     if (mealInfo && (mealInfo.firstMealDate || mealInfo.lastMealDate || mealInfo.accommodation)) {
+        const formattedFirstMeal = formatParticipantMealDate(mealInfo.firstMealDate, campStartDate);
+        const formattedLastMeal = formatParticipantMealDate(mealInfo.lastMealDate, campStartDate);
+
         mealSummaryHtml = `
             <div style="margin-top: 14px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 14px;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                     <tr>
                         <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
                             🍽️ First Meal:<br/>
-                            <span style="color: #431407; font-weight: 800;">${mealInfo.firstMealDate || 'Included'} ${mealInfo.firstMealType ? `(${mealInfo.firstMealType})` : ''}</span>
+                            <span style="color: #431407; font-weight: 800;">${formattedFirstMeal || mealInfo.firstMealDate || 'Included'} ${mealInfo.firstMealType ? `(${mealInfo.firstMealType})` : ''}</span>
                         </td>
                         <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
                             🍽️ Last Meal:<br/>
-                            <span style="color: #431407; font-weight: 800;">${mealInfo.lastMealDate || 'Included'} ${mealInfo.lastMealType ? `(${mealInfo.lastMealType})` : ''}</span>
+                            <span style="color: #431407; font-weight: 800;">${formattedLastMeal || mealInfo.lastMealDate || 'Included'} ${mealInfo.lastMealType ? `(${mealInfo.lastMealType})` : ''}</span>
                         </td>
                         <td style="color: #9a3412; font-weight: 700; width: 33%; vertical-align: top;">
                             🏠 Accommodation:<br/>

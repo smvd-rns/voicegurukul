@@ -1,5 +1,7 @@
 'use server';
 
+import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
+
 import { query } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
 import { Camp, CampRegistration, CampRefundRequest, CampAuditTransaction, CampAdminAllocation } from '@/types';
@@ -839,11 +841,20 @@ export async function cancelPendingIdtRegistrationAction(
     // Security Check: Verify caller identity & authorization strictly from authenticated session
     const callerUser = await getAuthUserFromCookies().catch(() => null);
     const resolvedUserId = callerUser?.id;
-    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+    let managerLoc: {
+      isSuperAdmin: boolean;
+      isTempleLeadership: boolean;
+      isManager: boolean;
+      assignedTempleNames: string[];
+      assignedCenterNames: string[];
+      directlyAssignedCenterNames: string[];
+    } = {
       isSuperAdmin: false,
+      isTempleLeadership: false,
       isManager: false,
       assignedTempleNames: [],
       assignedCenterNames: [],
+      directlyAssignedCenterNames: [],
     };
     let authUserEmail = '';
     let authUserPhone = '';
@@ -896,7 +907,7 @@ export async function cancelPendingIdtRegistrationAction(
       let isAuthorized = false;
       if (managerLoc.isSuperAdmin) {
         isAuthorized = true;
-      } else if (managerLoc.isManager) {
+      } else if (managerLoc.isTempleLeadership) {
         const isOwn = Boolean(
           (authUserEmail && regEmail === authUserEmail) ||
           (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
@@ -905,10 +916,23 @@ export async function cancelPendingIdtRegistrationAction(
         const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
         const pt = (reg.parent_temple || '').trim().toLowerCase();
         const vn = (reg.voice_name || '').trim().toLowerCase();
+        const cc = (reg.current_center || '').trim().toLowerCase();
 
         const inAssignedTemple = lowerTemples.some(t => pt === t);
-        const inAssignedCenter = lowerCenters.some(c => vn === c);
+        const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
         isAuthorized = isOwn || inAssignedTemple || inAssignedCenter;
+      } else if (managerLoc.isManager) {
+        // Center Managers: only their directly assigned centers or their own registrations
+        const isOwn = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+        const lowerDirectCenters = managerLoc.directlyAssignedCenterNames.map((c: string) => c.trim().toLowerCase()).filter(Boolean);
+        const vn = (reg.voice_name || '').trim().toLowerCase();
+        const cc = (reg.current_center || '').trim().toLowerCase();
+
+        const inAssignedCenter = lowerDirectCenters.some((c: string) => vn === c || cc === c);
+        isAuthorized = isOwn || inAssignedCenter;
       } else if (resolvedUserId) {
         isAuthorized = Boolean(
           (authUserEmail && regEmail === authUserEmail) ||
@@ -1204,7 +1228,7 @@ export async function getManagerAssignedLocations(userId: string, userRoles: num
         assignedCenterNames.push(r.name.trim());
         directlyAssignedCenterNames.push(r.name.trim());
       }
-      if (r.temple_name && r.temple_name.trim()) {
+      if (isTempleLeadership && r.temple_name && r.temple_name.trim()) {
         assignedTempleNames.push(r.temple_name.trim());
       }
     });
@@ -1293,11 +1317,20 @@ export async function lookupCampRegistrationsAction(
     const sessionUser = await getAuthUserFromCookies().catch(() => null);
     const resolvedUserId = sessionUser?.id;
 
-    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+    let managerLoc: {
+      isSuperAdmin: boolean;
+      isTempleLeadership: boolean;
+      isManager: boolean;
+      assignedTempleNames: string[];
+      assignedCenterNames: string[];
+      directlyAssignedCenterNames: string[];
+    } = {
       isSuperAdmin: false,
+      isTempleLeadership: false,
       isManager: false,
       assignedTempleNames: [],
       assignedCenterNames: [],
+      directlyAssignedCenterNames: [],
     };
     let authEmail = '';
     let authPhone = '';
@@ -1399,27 +1432,46 @@ export async function lookupCampRegistrationsAction(
 
     // If caller is a manager (and not super admin), verify that the registrations belong to their assigned temple or center
     if (managerLoc.isManager && !managerLoc.isSuperAdmin) {
-      const lowerTemples = managerLoc.assignedTempleNames.map(t => t.trim().toLowerCase()).filter(Boolean);
-      const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
+      if (managerLoc.isTempleLeadership) {
+        const lowerTemples = managerLoc.assignedTempleNames.map(t => t.trim().toLowerCase()).filter(Boolean);
+        const lowerCenters = managerLoc.assignedCenterNames.map(c => c.trim().toLowerCase()).filter(Boolean);
 
-      matchingRegs = matchingRegs.filter(r => {
-        const pt = (r.parent_temple || '').trim().toLowerCase();
-        const ct = (r.current_temple || '').trim().toLowerCase();
-        const vn = (r.voice_name || '').trim().toLowerCase();
-        const cc = (r.current_center || '').trim().toLowerCase();
-        const rEmail = (r.email || '').trim().toLowerCase();
-        const rPhone = (r.whatsapp || '').replace(/\D/g, '').slice(-10);
-        const rPocPhone = (r.poc_contact || '').replace(/\D/g, '').slice(-10);
+        matchingRegs = matchingRegs.filter(r => {
+          const pt = (r.parent_temple || '').trim().toLowerCase();
+          const ct = (r.current_temple || '').trim().toLowerCase();
+          const vn = (r.voice_name || '').trim().toLowerCase();
+          const cc = (r.current_center || '').trim().toLowerCase();
+          const rEmail = (r.email || '').trim().toLowerCase();
+          const rPhone = (r.whatsapp || '').replace(/\D/g, '').slice(-10);
+          const rPocPhone = (r.poc_contact || '').replace(/\D/g, '').slice(-10);
 
-        const isOwn = Boolean(
-          (authEmail && rEmail === authEmail) ||
-          (authPhone && (rPhone === authPhone || rPocPhone === authPhone))
-        );
-        const inAssignedTemple = lowerTemples.some(t => pt === t || ct === t);
-        const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
+          const isOwn = Boolean(
+            (authEmail && rEmail === authEmail) ||
+            (authPhone && (rPhone === authPhone || rPocPhone === authPhone))
+          );
+          const inAssignedTemple = lowerTemples.some(t => pt === t || ct === t);
+          const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
+          return isOwn || inAssignedTemple || inAssignedCenter;
+        });
+      } else {
+        // Center Managers: strictly restricted to their directly assigned center(s) or own
+        const lowerDirectCenters = managerLoc.directlyAssignedCenterNames.map((c: string) => c.trim().toLowerCase()).filter(Boolean);
 
-        return isOwn || inAssignedTemple || inAssignedCenter;
-      });
+        matchingRegs = matchingRegs.filter(r => {
+          const vn = (r.voice_name || '').trim().toLowerCase();
+          const cc = (r.current_center || '').trim().toLowerCase();
+          const rEmail = (r.email || '').trim().toLowerCase();
+          const rPhone = (r.whatsapp || '').replace(/\D/g, '').slice(-10);
+          const rPocPhone = (r.poc_contact || '').replace(/\D/g, '').slice(-10);
+
+          const isOwn = Boolean(
+            (authEmail && rEmail === authEmail) ||
+            (authPhone && (rPhone === authPhone || rPocPhone === authPhone))
+          );
+          const inAssignedCenter = lowerDirectCenters.some((c: string) => vn === c || cc === c);
+          return isOwn || inAssignedCenter;
+        });
+      }
 
       if (matchingRegs.length === 0) {
         return {
@@ -1531,11 +1583,20 @@ export async function submitCampRefundRequestAction(
     // Security Check: Verify Ownership & Prevent Cancellation / Refund Hijacking
     const callerUser = await getAuthUserFromCookies().catch(() => null);
     const resolvedUserId = callerUser?.id;
-    let managerLoc: { isSuperAdmin: boolean; isManager: boolean; assignedTempleNames: string[]; assignedCenterNames: string[] } = {
+    let managerLoc: {
+      isSuperAdmin: boolean;
+      isTempleLeadership: boolean;
+      isManager: boolean;
+      assignedTempleNames: string[];
+      assignedCenterNames: string[];
+      directlyAssignedCenterNames: string[];
+    } = {
       isSuperAdmin: false,
+      isTempleLeadership: false,
       isManager: false,
       assignedTempleNames: [],
       assignedCenterNames: [],
+      directlyAssignedCenterNames: [],
     };
     let authUserEmail = '';
     let authUserPhone = '';
@@ -1580,8 +1641,8 @@ export async function submitCampRefundRequestAction(
       let isAuthorized = false;
       if (managerLoc.isSuperAdmin) {
         isAuthorized = true;
-      } else if (managerLoc.isManager) {
-        // Roles 11-16 (and other managers) can cancel for themselves OR devotees in their assigned temple/center
+      } else if (managerLoc.isTempleLeadership) {
+        // Temple leadership can cancel for own, assigned temple, or assigned centers
         const isOwn = Boolean(
           (authUserEmail && regEmail === authUserEmail) ||
           (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
@@ -1596,6 +1657,19 @@ export async function submitCampRefundRequestAction(
         const inAssignedTemple = lowerTemples.some(t => pt === t || ct === t);
         const inAssignedCenter = lowerCenters.some(c => vn === c || cc === c);
         isAuthorized = isOwn || inAssignedTemple || inAssignedCenter;
+      } else if (managerLoc.isManager) {
+        // Center Managers (Roles 14, 15, 16, 17) can ONLY cancel registrations for their OWN DIRECTLY ASSIGNED CENTER(S) or their own personal registration!
+        // They CANNOT cancel registrations belonging to other centers!
+        const isOwn = Boolean(
+          (authUserEmail && regEmail === authUserEmail) ||
+          (authUserPhone && (regPhone === authUserPhone || regPocPhone === authUserPhone))
+        );
+        const lowerDirectCenters = managerLoc.directlyAssignedCenterNames.map((c: string) => c.trim().toLowerCase()).filter(Boolean);
+        const vn = (reg.voice_name || '').trim().toLowerCase();
+        const cc = (reg.current_center || '').trim().toLowerCase();
+
+        const inAssignedCenter = lowerDirectCenters.some((c: string) => vn === c || cc === c);
+        isAuthorized = isOwn || inAssignedCenter;
       } else if (resolvedUserId) {
         // Authenticated ordinary users can ONLY cancel registrations matching their OWN verified credentials
         isAuthorized = Boolean(
@@ -2124,7 +2198,7 @@ export async function getAllCentersForCampConfigAction() {
 export async function getActiveCampsForUserAction(clientUserId?: string) {
   try {
     const sessionUser = await getAuthUserFromCookies().catch(() => null);
-    const resolvedUserId = sessionUser?.id;
+    const resolvedUserId = sessionUser?.id || clientUserId;
 
     const sql = `
       SELECT 
@@ -2178,11 +2252,12 @@ export async function getActiveCampsForUserAction(clientUserId?: string) {
       return { success: true, camps: allCamps };
     }
 
-    // Collect all centers belonging to this user
+    // Collect all centers belonging directly to this user or directly managed by them
     const userCenterSet = new Set<string>();
     const addCenter = (val?: string | null) => {
       if (val && typeof val === 'string' && val.trim() && val.trim().toLowerCase() !== 'none') {
-        userCenterSet.add(val.trim().toLowerCase());
+        const clean = val.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (clean) userCenterSet.add(clean);
       }
     };
 
@@ -2193,12 +2268,12 @@ export async function getActiveCampsForUserAction(clientUserId?: string) {
     addCenter(caller.hierarchy?.center);
     if (caller.hierarchy?.currentCenter?.name) addCenter(caller.hierarchy.currentCenter.name);
 
-    // If manager, also check manager assigned centers
+    // If manager, check their directly assigned centers (PM, PA, Acting Manager, OC)
+    // NOTE: We only include directlyAssignedCenterNames so that managers do NOT see camps restricted to other centers!
     const isManagerRole = roles.some((r: any) => [8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(Number(r)));
     if (isManagerRole) {
       try {
         const managerLoc = await getManagerAssignedLocations(caller.id, roles);
-        (managerLoc.assignedCenterNames || []).forEach(c => addCenter(c));
         (managerLoc.directlyAssignedCenterNames || []).forEach(c => addCenter(c));
       } catch (locErr) {
         console.warn('Error fetching manager assigned locations in getActiveCampsForUserAction:', locErr);
@@ -2211,9 +2286,9 @@ export async function getActiveCampsForUserAction(clientUserId?: string) {
       if (eligible.length === 0) return true; // Open to all centers
 
       return eligible.some(ec => {
-        const ecLower = ec.toLowerCase().trim();
+        const ecNorm = ec.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
         for (const uc of userCenterSet) {
-          if (uc === ecLower || uc.includes(ecLower) || ecLower.includes(uc)) {
+          if (uc === ecNorm || uc.includes(ecNorm) || ecNorm.includes(uc)) {
             return true;
           }
         }
@@ -2293,7 +2368,8 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
 
     if (managerLoc.isSuperAdmin) {
       sql += ` OR TRUE `;
-    } else if (managerLoc.isManager) {
+    } else if (managerLoc.isTempleLeadership) {
+      // High-level Temple Leadership (Roles 8, 9, 10, 11, 12, 13) can see all centers under their assigned temple(s)
       const lowerTemples = managerLoc.assignedTempleNames.map(t => t.toLowerCase());
       const lowerCenters = managerLoc.assignedCenterNames.map(c => c.toLowerCase());
       const conditions: string[] = [];
@@ -2306,11 +2382,27 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
       if (lowerCenters.length > 0) {
         params.push(lowerCenters);
         const pIdx = params.length;
-        conditions.push(`LOWER(r.voice_name) = ANY($${pIdx}) OR LOWER(r.current_center) = ANY($${pIdx}) OR LOWER(u.current_center) = ANY($${pIdx}) OR LOWER(u.center) = ANY($${pIdx})`);
+        conditions.push(`LOWER(r.voice_name) = ANY($${pIdx}) OR LOWER(r.current_center) = ANY($${pIdx}) OR LOWER(u.current_center) = ANY($${pIdx}) OR LOWER(u.center) = ANY($${pIdx}) OR LOWER(u.other_center) = ANY($${pIdx})`);
       }
 
       if (conditions.length > 0) {
         sql += ` OR (${conditions.join(' OR ')}) `;
+      }
+    } else if (managerLoc.isManager) {
+      // Center Managers (PM, PA, Acting Manager, OC - Roles 14, 15, 16, 17):
+      // STRICTLY RESTRICTED to their DIRECTLY ASSIGNED CENTERS ONLY!
+      // They must NEVER see registrations from other centers under the same temple!
+      const lowerDirectCenters = managerLoc.directlyAssignedCenterNames.map((c: string) => c.toLowerCase());
+      if (lowerDirectCenters.length > 0) {
+        params.push(lowerDirectCenters);
+        const pIdx = params.length;
+        sql += ` OR (
+          LOWER(r.voice_name) = ANY($${pIdx}) OR
+          LOWER(r.current_center) = ANY($${pIdx}) OR
+          LOWER(u.current_center) = ANY($${pIdx}) OR
+          LOWER(u.center) = ANY($${pIdx}) OR
+          LOWER(u.other_center) = ANY($${pIdx})
+        ) `;
       }
     }
 
@@ -4755,3 +4847,163 @@ export async function validateCampCouponAction(campId: string, couponCode: strin
 
 
 
+
+/**
+ * Check Accommodation Capacity & Batch Limits for a Camp
+ * Counts only active non-Brahmachari CV Floor bookings.
+ */
+export async function getCampAccommodationCapacityStatusAction(campIdOrSlug: string, includeAdminCounts: boolean = false) {
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(campIdOrSlug.trim());
+    const campSql = isUuid
+      ? 'SELECT id, title, slug, start_date, end_date, accommodation_pricing FROM camps WHERE id = $1'
+      : 'SELECT id, title, slug, start_date, end_date, accommodation_pricing FROM camps WHERE slug = $1';
+    
+    const campRes = await query(campSql, [campIdOrSlug.trim()]);
+    if (campRes.rows.length === 0) {
+      return { success: false, error: 'Camp retreat not found.' };
+    }
+
+    const camp = campRes.rows[0];
+    const accPricing = camp.accommodation_pricing || {};
+    const globalCap = Number(accPricing.cv_floor_capacity) || 0;
+    const batches: any[] = Array.isArray(accPricing.batch_capacities) ? accPricing.batch_capacities : [];
+    const recommendedHotels: any[] = Array.isArray(accPricing.recommended_hotels) ? accPricing.recommended_hotels : [];
+
+    // Fetch active non-Brahmachari registrations with CV Floor accommodation
+    const regSql = `
+      SELECT id, first_meal_date, last_meal_date, participant_type, camp_track
+      FROM camp_registrations
+      WHERE camp_id = $1
+        AND is_cancelled = false
+        AND payment_status NOT IN ('rejected', 'failed')
+        AND (LOWER(accommodation) = 'yes' OR LOWER(accommodation) LIKE '%cv%')
+        AND (participant_type IS NULL OR LOWER(participant_type) NOT LIKE '%brahmachari%');
+    `;
+    const regRes = await query(regSql, [camp.id]);
+    const cvBookings = regRes.rows;
+    const totalCvCount = cvBookings.length;
+
+    // Helper to test if a registration falls within / overlaps a batch
+    const normalizeDateStr = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
+
+    const evaluatedBatches = batches.map((b) => {
+      const bCap = Number(b.capacity) || 0;
+      const bStartNorm = normalizeDateStr(b.start_date);
+      const bEndNorm = normalizeDateStr(b.end_date);
+
+      // Count bookings overlapping with this batch
+      let matchCount = 0;
+      for (const reg of cvBookings) {
+        const rStart = normalizeDateStr(reg.first_meal_date);
+        const rEnd = normalizeDateStr(reg.last_meal_date);
+        // Overlap test: either dates match batch boundary, or both dates are present
+        if (
+          (bStartNorm && (rStart.includes(bStartNorm) || bStartNorm.includes(rStart))) ||
+          (bEndNorm && (rEnd.includes(bEndNorm) || bEndNorm.includes(rEnd))) ||
+          (!bStartNorm && !bEndNorm)
+        ) {
+          matchCount++;
+        }
+      }
+
+      const isFull = bCap > 0 && matchCount >= bCap;
+
+      return {
+        id: b.id || `${b.start_date}_${b.end_date}`,
+        name: b.name || 'Camp Batch',
+        start_date: b.start_date,
+        end_date: b.end_date,
+        capacity: bCap,
+        bookedCount: includeAdminCounts ? matchCount : undefined,
+        remaining: includeAdminCounts ? Math.max(0, bCap - matchCount) : undefined,
+        isFull: isFull,
+      };
+    });
+
+    const isGlobalFull = globalCap > 0 && totalCvCount >= globalCap;
+
+    return {
+      success: true,
+      campId: camp.id,
+      campTitle: camp.title,
+      globalCapacity: {
+        capacity: globalCap,
+        bookedCount: includeAdminCounts ? totalCvCount : undefined,
+        remaining: includeAdminCounts && globalCap > 0 ? Math.max(0, globalCap - totalCvCount) : undefined,
+        isFull: isGlobalFull,
+      },
+      batches: evaluatedBatches,
+      recommendedHotels: recommendedHotels,
+    };
+  } catch (error: any) {
+    console.error('getCampAccommodationCapacityStatusAction error:', error);
+    return { success: false, error: error.message || 'Failed to check accommodation capacity.' };
+  }
+}
+
+/**
+ * Approve a Devotee from the Accommodation Waiting List
+ * Updates registration status to confirmed and dispatches their pass email.
+ */
+export async function approveCampWaitingListRegistrationAction(registrationId: string) {
+  try {
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Admin credentials required to approve waiting list registrations.');
+    }
+
+    const authUser = await getAuthUserFromCookies();
+    const adminEmail = authUser?.email || 'Admin';
+
+    const updateSql = `
+      UPDATE camp_registrations
+      SET is_waiting_list = false,
+          waiting_list_approved_at = NOW(),
+          waiting_list_approved_by = $2,
+          payment_status = CASE WHEN payment_status = 'waiting_list' THEN 'completed' ELSE payment_status END,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING *;
+    `;
+    const updateRes = await query(updateSql, [registrationId, adminEmail]);
+    if (updateRes.rows.length === 0) {
+      return { success: false, error: 'Registration record not found.' };
+    }
+
+    const reg = updateRes.rows[0];
+
+    // Fetch camp details to generate pass email
+    const campRes = await query('SELECT title, slug FROM camps WHERE id = $1', [reg.camp_id]);
+    const campTitle = campRes.rows[0]?.title || 'Camp Retreat';
+
+    // Dispatch welcome & pass confirmation email
+    if (reg.email) {
+      try {
+        await sendCampDevoteeWelcomeAccountEmail({
+          userEmail: reg.email,
+          userName: reg.participant_name,
+          campTitle: campTitle,
+          trackName: reg.camp_track || 'Standard Track',
+          registrationId: reg.id,
+          userPhone: reg.whatsapp || '',
+          mealInfo: {
+            firstMealDate: reg.first_meal_date,
+            firstMealType: reg.first_meal_type,
+            lastMealDate: reg.last_meal_date,
+            lastMealType: reg.last_meal_type,
+            accommodation: reg.accommodation,
+          },
+        });
+      } catch (mailErr) {
+        console.warn('Failed to send pass approval email:', mailErr);
+      }
+    }
+
+    revalidatePath('/dashboard/admin/camps');
+    return { success: true, registration: reg };
+  } catch (error: any) {
+    console.error('approveCampWaitingListRegistrationAction error:', error);
+    return { success: false, error: error.message || 'Failed to approve waiting list registration.' };
+  }
+}

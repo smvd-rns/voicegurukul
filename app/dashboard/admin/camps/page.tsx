@@ -20,7 +20,7 @@ import { getThumbnailUrl } from '@/lib/utils/google-drive';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampStaffRoleManagementModal from '@/components/camps/CampStaffRoleManagementModal';
 import AdminGlobalPrasadamAuditTab from '@/components/camps/AdminGlobalPrasadamAuditTab';
-import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest, CenterIdtCode, CampEmailLink } from '@/types';
+import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest, CenterIdtCode, CampEmailLink, CampAccommodationBatchCapacity, CampRecommendedHotel } from '@/types';
 import {
   getCampsAction,
   createCampAction,
@@ -245,6 +245,19 @@ export default function AdminCampsPage() {
   const [activeTab, setActiveTab] = useState<'basic' | 'tracks' | 'meals' | 'accommodation' | 'payment' | 'refund'>('basic');
   const [mealCalendarDate, setMealCalendarDate] = useState<string>('');
 
+  // Accommodation Batch Capacity inputs
+  const [newBatchName, setNewBatchName] = useState('');
+  const [newBatchStartDate, setNewBatchStartDate] = useState('');
+  const [newBatchEndDate, setNewBatchEndDate] = useState('');
+  const [newBatchCapacity, setNewBatchCapacity] = useState<number>(500);
+
+  // Recommended Hotel inputs
+  const [newHotelName, setNewHotelName] = useState('');
+  const [newHotelContact, setNewHotelContact] = useState('');
+  const [newHotelAddress, setNewHotelAddress] = useState('');
+  const [newHotelTariff, setNewHotelTariff] = useState('');
+  const [newHotelNotes, setNewHotelNotes] = useState('');
+
   // Coupon inputs state in Modal
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponType, setNewCouponType] = useState<'PERCENT' | 'FLAT'>('PERCENT');
@@ -325,7 +338,10 @@ export default function AdminCampsPage() {
       facility_charge_label: '',
       ac_charge_billing_type: 'per_day' as 'per_day' | 'fixed',
       ac_charge_applies_to: 'accommodation' as 'accommodation' | 'all',
-      allow_female_cv_accommodation: false
+      allow_female_cv_accommodation: false,
+      cv_floor_capacity: 0,
+      batch_capacities: [] as CampAccommodationBatchCapacity[],
+      recommended_hotels: [] as CampRecommendedHotel[]
     },
     special_waivers: {
       brahmachari_fee: 100,
@@ -961,7 +977,10 @@ export default function AdminCampsPage() {
         facility_charge_label: '',
         ac_charge_billing_type: 'per_day' as 'per_day' | 'fixed',
         ac_charge_applies_to: 'accommodation' as 'accommodation' | 'all',
-        allow_female_cv_accommodation: false
+        allow_female_cv_accommodation: false,
+        cv_floor_capacity: 0,
+        batch_capacities: [],
+        recommended_hotels: []
       },
       special_waivers: {
         brahmachari_fee: 100,
@@ -1065,7 +1084,10 @@ export default function AdminCampsPage() {
         facility_charge_label: camp.accommodation_pricing?.facility_charge_label || '',
         ac_charge_billing_type: (camp.accommodation_pricing?.ac_charge_billing_type || 'per_day') as 'per_day' | 'fixed',
         ac_charge_applies_to: (camp.accommodation_pricing?.ac_charge_applies_to || 'accommodation') as 'accommodation' | 'all',
-        allow_female_cv_accommodation: Boolean(camp.accommodation_pricing?.allow_female_cv_accommodation)
+        allow_female_cv_accommodation: Boolean(camp.accommodation_pricing?.allow_female_cv_accommodation),
+        cv_floor_capacity: camp.accommodation_pricing?.cv_floor_capacity ?? 0,
+        batch_capacities: camp.accommodation_pricing?.batch_capacities || [],
+        recommended_hotels: camp.accommodation_pricing?.recommended_hotels || []
       },
       special_waivers: {
         brahmachari_fee: camp.special_waivers?.brahmachari_fee ?? 100,
@@ -1647,7 +1669,7 @@ export default function AdminCampsPage() {
     });
   };
 
-  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string; min_rounds?: number }) => {
+  const updateTrackFee = (trackName: string, updates: { fee?: number; label?: string; min_rounds?: number; start_date?: string; start_meal_type?: string; end_date?: string; end_meal_type?: string }) => {
     const existing = formData.special_waivers.track_fees || [];
     const index = existing.findIndex((tf) => tf.track.toLowerCase() === trackName.toLowerCase());
     let nextList: CampTrackFee[];
@@ -1676,6 +1698,84 @@ export default function AdminCampsPage() {
         ...formData.special_waivers,
         track_fees: nextList
       }
+    });
+  };
+
+  const addBatchCapacity = () => {
+    const name = newBatchName.trim() || `Batch ${(formData.accommodation_pricing.batch_capacities || []).length + 1}`;
+    if (!newBatchStartDate || !newBatchEndDate) {
+      alert('Please select both start and end dates for the accommodation batch.');
+      return;
+    }
+    const cap = Number(newBatchCapacity) || 500;
+    const existing = formData.accommodation_pricing.batch_capacities || [];
+    const newBatch: CampAccommodationBatchCapacity = {
+      id: `batch_${Date.now()}`,
+      name,
+      start_date: newBatchStartDate,
+      end_date: newBatchEndDate,
+      capacity: cap,
+    };
+    setFormData({
+      ...formData,
+      accommodation_pricing: {
+        ...formData.accommodation_pricing,
+        batch_capacities: [...existing, newBatch],
+      },
+    });
+    setNewBatchName('');
+    setNewBatchStartDate('');
+    setNewBatchEndDate('');
+    setNewBatchCapacity(500);
+  };
+
+  const removeBatchCapacity = (idx: number) => {
+    const existing = formData.accommodation_pricing.batch_capacities || [];
+    setFormData({
+      ...formData,
+      accommodation_pricing: {
+        ...formData.accommodation_pricing,
+        batch_capacities: existing.filter((_, i) => i !== idx),
+      },
+    });
+  };
+
+  const addRecommendedHotel = () => {
+    if (!newHotelName.trim()) {
+      alert('Please enter the hotel name.');
+      return;
+    }
+    const existing = formData.accommodation_pricing.recommended_hotels || [];
+    const newHotel: CampRecommendedHotel = {
+      id: `hotel_${Date.now()}`,
+      name: newHotelName.trim(),
+      contact: newHotelContact.trim(),
+      address: newHotelAddress.trim(),
+      tariff: newHotelTariff.trim(),
+      notes: newHotelNotes.trim(),
+    };
+    setFormData({
+      ...formData,
+      accommodation_pricing: {
+        ...formData.accommodation_pricing,
+        recommended_hotels: [...existing, newHotel],
+      },
+    });
+    setNewHotelName('');
+    setNewHotelContact('');
+    setNewHotelAddress('');
+    setNewHotelTariff('');
+    setNewHotelNotes('');
+  };
+
+  const removeRecommendedHotel = (idx: number) => {
+    const existing = formData.accommodation_pricing.recommended_hotels || [];
+    setFormData({
+      ...formData,
+      accommodation_pricing: {
+        ...formData.accommodation_pricing,
+        recommended_hotels: existing.filter((_, i) => i !== idx),
+      },
     });
   };
 
@@ -4706,6 +4806,10 @@ export default function AdminCampsPage() {
                           const feeVal = tf && tf.fee !== undefined && tf.fee !== null ? tf.fee : 0;
                           const labelVal = tf?.label || '';
                           const minRoundsVal = tf && tf.min_rounds !== undefined && tf.min_rounds !== null ? tf.min_rounds : 0;
+                          const startDateVal = tf?.start_date || '';
+                          const startMealVal = tf?.start_meal_type || 'Breakfast';
+                          const endDateVal = tf?.end_date || '';
+                          const endMealVal = tf?.end_meal_type || 'Dinner';
 
                           return (
                             <div
@@ -4718,6 +4822,16 @@ export default function AdminCampsPage() {
                                   {track}
                                 </span>
                                 <div className="flex items-center gap-2 flex-wrap">
+                                  {startDateVal && endDateVal ? (
+                                    <span className="text-[11px] font-black text-amber-900 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-300 shadow-2xs flex items-center gap-1.5">
+                                      <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>{startDateVal} ({startMealVal}) &rarr; {endDateVal} ({endMealVal})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                      Full Camp Duration (Default)
+                                    </span>
+                                  )}
                                   {minRoundsVal > 0 ? (
                                     <span className="text-[11px] font-black text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200 shadow-2xs flex items-center gap-1">
                                       <span>📿</span> Min. {minRoundsVal} Rounds Chanting
@@ -4801,6 +4915,116 @@ export default function AdminCampsPage() {
                                     0 or empty = open to all. e.g. 16 = only devotees chanting 16+ rounds can see/register.
                                   </span>
                                 </div>
+                              </div>
+
+                              {/* SUB-CAMP DATES & MEAL SLOTS (SCHEDULE) */}
+                              <div className="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200/80 space-y-2.5">
+                                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                                  <span className="text-[11px] font-extrabold text-amber-950 flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                                    Sub-Camp Schedule / Dates (Auto-fills on Registration)
+                                  </span>
+                                  {(startDateVal || endDateVal) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => updateTrackFee(track, { start_date: '', start_meal_type: 'Breakfast', end_date: '', end_meal_type: 'Dinner' })}
+                                      className="text-[10px] font-bold text-rose-600 hover:text-rose-800 hover:underline flex items-center gap-1"
+                                    >
+                                      <X className="w-3 h-3" /> Reset to Full Camp
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                                  <div className="sm:col-span-3">
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                      Start Date
+                                    </label>
+                                    {formData.meal_pricing.length > 0 ? (
+                                      <select
+                                        value={startDateVal}
+                                        onChange={(e) => updateTrackFee(track, { start_date: e.target.value })}
+                                        className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                                      >
+                                        <option value="">Full Camp Start (Default)</option>
+                                        {formData.meal_pricing.map((m) => (
+                                          <option key={m.date} value={m.date}>
+                                            {m.label || `Day ${m.date}`}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        value={startDateVal}
+                                        onChange={(e) => updateTrackFee(track, { start_date: e.target.value })}
+                                        placeholder="e.g. 21 - Dec"
+                                        className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none placeholder:text-slate-400"
+                                      />
+                                    )}
+                                  </div>
+
+                                  <div className="sm:col-span-3">
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                      Start Meal Slot
+                                    </label>
+                                    <select
+                                      value={startMealVal}
+                                      onChange={(e) => updateTrackFee(track, { start_meal_type: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                                    >
+                                      <option value="Breakfast">Breakfast</option>
+                                      <option value="Lunch">Lunch</option>
+                                      <option value="Dinner">Dinner</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="sm:col-span-3">
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                      End Date
+                                    </label>
+                                    {formData.meal_pricing.length > 0 ? (
+                                      <select
+                                        value={endDateVal}
+                                        onChange={(e) => updateTrackFee(track, { end_date: e.target.value })}
+                                        className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                                      >
+                                        <option value="">Full Camp End (Default)</option>
+                                        {formData.meal_pricing.map((m) => (
+                                          <option key={m.date} value={m.date}>
+                                            {m.label || `Day ${m.date}`}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        value={endDateVal}
+                                        onChange={(e) => updateTrackFee(track, { end_date: e.target.value })}
+                                        placeholder="e.g. 25 - Dec"
+                                        className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none placeholder:text-slate-400"
+                                      />
+                                    )}
+                                  </div>
+
+                                  <div className="sm:col-span-3">
+                                    <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                      End Meal Slot
+                                    </label>
+                                    <select
+                                      value={endMealVal}
+                                      onChange={(e) => updateTrackFee(track, { end_meal_type: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                                    >
+                                      <option value="Breakfast">Breakfast</option>
+                                      <option value="Lunch">Lunch</option>
+                                      <option value="Dinner">Dinner</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-slate-500 block">
+                                  When devotees select &ldquo;{track}&rdquo; during registration, their arrival &amp; departure dates will auto-populate with these dates (devotees can still modify them if needed).
+                                </span>
                               </div>
                             </div>
                           );
@@ -5612,6 +5836,294 @@ export default function AdminCampsPage() {
                         </span>
                       </label>
                     </div>
+                  </div>
+
+                  {/* CV Floor Accommodation Capacity & Multi-Batch Management */}
+                  <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                          <Users className="w-4 h-4 text-amber-600" />
+                          CV Floor Accommodation Capacity &amp; Batches
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Set capacity limits for CV floor accommodation (e.g. 500 per batch). When full, non-Brahmachari devotees must arrange external hotels. Brahmacharis are never blocked.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-600">Overall CV Capacity:</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.accommodation_pricing.cv_floor_capacity || ''}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            accommodation_pricing: {
+                              ...formData.accommodation_pricing,
+                              cv_floor_capacity: Math.max(0, Number(e.target.value))
+                            }
+                          })}
+                          placeholder="Unlimited"
+                          className="w-24 px-2 py-1 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-bold shadow-2xs hover:border-amber-400 focus:border-amber-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Add Capacity Batch Form */}
+                    <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                      <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider block">
+                        + Add Date-Range Batch Limit (e.g. 500 for Part 1, 500 for Part 2)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Batch Name / Label</label>
+                          <input
+                            type="text"
+                            value={newBatchName}
+                            onChange={(e) => setNewBatchName(e.target.value)}
+                            placeholder="e.g. Batch 1 (24 Dec - 28 Dec)"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Start Date</label>
+                          {formData.meal_pricing.length > 0 ? (
+                            <select
+                              value={newBatchStartDate}
+                              onChange={(e) => setNewBatchStartDate(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                            >
+                              <option value="">Select Date</option>
+                              {formData.meal_pricing.map((m) => (
+                                <option key={m.date} value={m.date}>{m.label || `Day ${m.date}`}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={newBatchStartDate}
+                              onChange={(e) => setNewBatchStartDate(e.target.value)}
+                              placeholder="e.g. 24 - Dec"
+                              className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                            />
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">End Date</label>
+                          {formData.meal_pricing.length > 0 ? (
+                            <select
+                              value={newBatchEndDate}
+                              onChange={(e) => setNewBatchEndDate(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none cursor-pointer"
+                            >
+                              <option value="">Select Date</option>
+                              {formData.meal_pricing.map((m) => (
+                                <option key={m.date} value={m.date}>{m.label || `Day ${m.date}`}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={newBatchEndDate}
+                              onChange={(e) => setNewBatchEndDate(e.target.value)}
+                              placeholder="e.g. 28 - Dec"
+                              className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                            />
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Max Capacity</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBatchCapacity}
+                            onChange={(e) => setNewBatchCapacity(Math.max(1, Number(e.target.value)))}
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-bold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={addBatchCapacity}
+                          className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Batch Capacity</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Configured Batches List */}
+                    {(formData.accommodation_pricing.batch_capacities || []).length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <span className="text-[11px] font-bold text-slate-700 block">Configured Capacity Batches:</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {(formData.accommodation_pricing.batch_capacities || []).map((batch, idx) => (
+                            <div
+                              key={batch.id || idx}
+                              className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-extrabold text-xs text-slate-900 block truncate">{batch.name}</span>
+                                <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Calendar className="w-3 h-3 text-amber-600" />
+                                  <span>{batch.start_date} &rarr; {batch.end_date}</span>
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-900 text-[11px] font-black">
+                                  {batch.capacity} Beds
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeBatchCapacity(idx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                                  title="Remove batch"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended Nearby Hotels & Lodges (Admin Directory) */}
+                  <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-amber-600" />
+                          Recommended Nearby Hotels &amp; Lodges (Self-Arranged Stay)
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          List recommended hotels and lodges. When CV floor accommodation is full, attendees can review these contact options to book external rooms and upload booking receipts.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Add Hotel Form */}
+                    <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                      <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider block">
+                        + Add Recommended Hotel
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Hotel / Lodge Name *</label>
+                          <input
+                            type="text"
+                            value={newHotelName}
+                            onChange={(e) => setNewHotelName(e.target.value)}
+                            placeholder="e.g. Hotel Sai Palace, Katraj"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Contact / Mobile No.</label>
+                          <input
+                            type="text"
+                            value={newHotelContact}
+                            onChange={(e) => setNewHotelContact(e.target.value)}
+                            placeholder="e.g. 9876543210"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-5">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Address / Landmark</label>
+                          <input
+                            type="text"
+                            value={newHotelAddress}
+                            onChange={(e) => setNewHotelAddress(e.target.value)}
+                            placeholder="e.g. Near Katraj Chowk, 1km from NVCC Temple"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Approx Tariff / Pricing</label>
+                          <input
+                            type="text"
+                            value={newHotelTariff}
+                            onChange={(e) => setNewHotelTariff(e.target.value)}
+                            placeholder="e.g. ₹800 - ₹1200 / night"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-8">
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">Special Notes / Amenities</label>
+                          <input
+                            type="text"
+                            value={newHotelNotes}
+                            onChange={(e) => setNewHotelNotes(e.target.value)}
+                            placeholder="e.g. 24hr hot water, mentions ISKCON camp discount"
+                            className="w-full px-2.5 py-1.5 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-amber-500 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={addRecommendedHotel}
+                          className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Recommended Hotel</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Configured Hotels List */}
+                    {(formData.accommodation_pricing.recommended_hotels || []).length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <span className="text-[11px] font-bold text-slate-700 block">Recommended Hotel Directory ({formData.accommodation_pricing.recommended_hotels.length}):</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {(formData.accommodation_pricing.recommended_hotels || []).map((hotel, idx) => (
+                            <div
+                              key={hotel.id || idx}
+                              className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-extrabold text-xs text-slate-900 truncate">{hotel.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeRecommendedHotel(idx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                                  title="Remove hotel"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {hotel.contact && (
+                                <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded inline-block">
+                                  📞 {hotel.contact}
+                                </span>
+                              )}
+                              {hotel.address && (
+                                <p className="text-[11px] text-slate-500 leading-tight">📍 {hotel.address}</p>
+                              )}
+                              {(hotel.tariff || hotel.notes) && (
+                                <p className="text-[10px] text-slate-400">
+                                  {hotel.tariff ? `Tariff: ${hotel.tariff}` : ''}
+                                  {hotel.tariff && hotel.notes ? ' • ' : ''}
+                                  {hotel.notes}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

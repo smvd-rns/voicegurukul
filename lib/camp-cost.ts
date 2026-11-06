@@ -259,6 +259,165 @@ export function calculateDynamicCampCost(
 
 export const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * Formats a raw meal date string (e.g. "1", "28", "28 - Dec", "2026-12-28") into a human-friendly date with month (e.g. "28 Dec" or "28 Dec 2026").
+ */
+export function formatParticipantMealDate(
+  dateVal: string | undefined,
+  campStartDate?: string,
+  mealPricing?: CampMealConfig[],
+  includeYear: boolean = false
+): string {
+  if (!dateVal || typeof dateVal !== 'string') return '';
+  const trimmed = dateVal.trim();
+  if (!trimmed) return '';
+
+  // 1. If it's an ISO date string (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-').map(Number);
+    const mName = MONTH_NAMES_SHORT[m - 1] || '';
+    return includeYear ? `${d} ${mName} ${y}` : `${d} ${mName}`;
+  }
+
+  // 2. If it contains day and month text (e.g. "28 - Dec", "4 Jan", "28-December")
+  const match = trimmed.match(/(\d{1,2})\s*[-/]?\s*([A-Za-z]{3,9})/i);
+  if (match) {
+    const dNum = parseInt(match[1], 10);
+    const mPrefix = match[2].slice(0, 3).toLowerCase();
+    const mIdx = MONTH_NAMES_SHORT.findIndex((m) => m.toLowerCase() === mPrefix);
+    if (mIdx >= 0) {
+      let year = new Date().getFullYear();
+      if (campStartDate) {
+        const cd = new Date(campStartDate);
+        if (!isNaN(cd.getTime())) {
+          year = cd.getFullYear();
+          if (cd.getMonth() > 9 && mIdx < 3) {
+            year += 1;
+          }
+        }
+      }
+      return includeYear ? `${dNum} ${MONTH_NAMES_SHORT[mIdx]} ${year}` : `${dNum} ${MONTH_NAMES_SHORT[mIdx]}`;
+    }
+  }
+
+  // 3. Search in mealPricing configs if available
+  if (Array.isArray(mealPricing) && mealPricing.length > 0) {
+    const found = mealPricing.find((m) =>
+      String(m.date).trim() === trimmed ||
+      String(m.label || '').trim() === trimmed ||
+      String(m.full_date || '').trim() === trimmed
+    );
+    if (found) {
+      if (found.full_date && /^\d{4}-\d{2}-\d{2}$/.test(found.full_date)) {
+        const [y, m, d] = found.full_date.split('-').map(Number);
+        const mName = MONTH_NAMES_SHORT[m - 1] || '';
+        return includeYear ? `${d} ${mName} ${y}` : `${d} ${mName}`;
+      }
+      if (found.label) {
+        const labelMatch = found.label.match(/(\d{1,2})\s*[-/]?\s*([A-Za-z]{3,9})/i);
+        if (labelMatch) {
+          const dNum = parseInt(labelMatch[1], 10);
+          const mPrefix = labelMatch[2].slice(0, 3).toLowerCase();
+          const mIdx = MONTH_NAMES_SHORT.findIndex((m) => m.toLowerCase() === mPrefix);
+          if (mIdx >= 0) {
+            let year = new Date().getFullYear();
+            if (campStartDate) {
+              const cd = new Date(campStartDate);
+              if (!isNaN(cd.getTime())) {
+                year = cd.getFullYear();
+                if (cd.getMonth() > 9 && mIdx < 3) year += 1;
+              }
+            }
+            return includeYear ? `${dNum} ${MONTH_NAMES_SHORT[mIdx]} ${year}` : `${dNum} ${MONTH_NAMES_SHORT[mIdx]}`;
+          }
+        }
+      }
+      const iso = parseMealDayToIso(found, campStartDate);
+      if (iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        const mName = MONTH_NAMES_SHORT[m - 1] || '';
+        return includeYear ? `${d} ${mName} ${y}` : `${d} ${mName}`;
+      }
+    }
+  }
+
+  // 4. Numeric day only fallback (e.g. "28" or "4")
+  const numOnly = parseInt(trimmed, 10);
+  if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 31 && campStartDate) {
+    const cd = new Date(campStartDate);
+    if (!isNaN(cd.getTime())) {
+      let mIdx = cd.getMonth();
+      let year = cd.getFullYear();
+      const startDay = cd.getDate();
+      // If the day number is smaller than the camp start day, it wrapped into the next month
+      if (numOnly < startDay) {
+        mIdx = (mIdx + 1) % 12;
+        if (mIdx === 0) year += 1;
+      }
+      return includeYear ? `${numOnly} ${MONTH_NAMES_SHORT[mIdx]} ${year}` : `${numOnly} ${MONTH_NAMES_SHORT[mIdx]}`;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
+ * Formats the participant's registered date range (e.g. "28 Dec 2026 - 4 Jan 2027" or "28 Dec - 4 Jan").
+ * Falls back to camp dates if specific participant dates are not provided.
+ */
+export function formatParticipantDateRange(
+  firstDateVal?: string,
+  lastDateVal?: string,
+  campStartDate?: string,
+  campEndDate?: string,
+  mealPricing?: CampMealConfig[],
+  includeYear: boolean = true
+): string {
+  const startStr = formatParticipantMealDate(firstDateVal, campStartDate, mealPricing, false);
+  const endStr = formatParticipantMealDate(lastDateVal, campStartDate, mealPricing, false);
+
+  if (startStr && endStr) {
+    if (startStr === endStr) {
+      if (includeYear && campStartDate) {
+        const yr = new Date(campStartDate).getFullYear();
+        return `${startStr} ${yr}`;
+      }
+      return startStr;
+    }
+
+    if (includeYear) {
+      let startYear = campStartDate ? new Date(campStartDate).getFullYear() : new Date().getFullYear();
+      let endYear = startYear;
+      if (campEndDate) {
+        const ed = new Date(campEndDate);
+        if (!isNaN(ed.getTime())) endYear = ed.getFullYear();
+      }
+      if (startStr.includes('Dec') && endStr.includes('Jan')) {
+        endYear = startYear + 1;
+      }
+      if (startYear === endYear) {
+        return `${startStr} - ${endStr} ${startYear}`;
+      }
+      return `${startStr} ${startYear} - ${endStr} ${endYear}`;
+    }
+
+    return `${startStr} - ${endStr}`;
+  }
+
+  if (startStr) return startStr;
+  if (endStr) return endStr;
+
+  // Fallback to full camp dates
+  if (campStartDate && campEndDate) {
+    const sDate = new Date(campStartDate);
+    const eDate = new Date(campEndDate);
+    if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime())) {
+      return `${sDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - ${eDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+  }
+  return campStartDate ? new Date(campStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+}
+
 export function parseMealDayToIso(day: CampMealConfig, campStartDate?: string): string {
   if (day.full_date && /^\d{4}-\d{2}-\d{2}$/.test(day.full_date)) {
     return day.full_date;
@@ -378,6 +537,40 @@ export function buildMealMatrix(
     flatMeals.push({ sn: snCounter++, date: String(day.date), mealType: 'Dinner' });
   });
 
+  const isDateMatch = (day: CampMealConfig, targetDate?: string) => {
+    if (!targetDate) return false;
+    const t = String(targetDate).trim().toLowerCase();
+    if (!t) return false;
+
+    const dStr = String(day.date).trim().toLowerCase();
+    const lStr = String(day.label || '').trim().toLowerCase();
+    const fStr = String(day.full_date || '').trim().toLowerCase();
+
+    if (dStr === t || lStr === t || fStr === t) return true;
+
+    // Clean match (ignore hyphens, spaces)
+    const cleanT = t.replace(/[\s\-_]/g, '');
+    if (dStr.replace(/[\s\-_]/g, '') === cleanT || lStr.replace(/[\s\-_]/g, '') === cleanT) return true;
+
+    // If target is just day number e.g. "28" or "1"
+    const tNum = t.match(/^\d+/)?.[0];
+    if (tNum) {
+      if (fStr.endsWith(`-${tNum.padStart(2, '0')}`)) return true;
+      const dNum = dStr.match(/^\d+/)?.[0];
+      const lNum = lStr.match(/^\d+/)?.[0];
+      if (dNum === tNum || lNum === tNum) {
+        // If target has month letters, check if day label/date also matches month
+        const tMonth = t.replace(/^\d+[\s\-_]*/, '').slice(0, 3);
+        if (tMonth) {
+          const dayText = (dStr + ' ' + lStr).toLowerCase();
+          return dayText.includes(tMonth);
+        }
+        return true;
+      }
+    }
+    return false;
+  };
+
   const normType = (t?: string): 'Breakfast' | 'Lunch' | 'Dinner' => {
     const lower = (t || '').toLowerCase();
     if (lower.startsWith('b')) return 'Breakfast';
@@ -387,21 +580,41 @@ export function buildMealMatrix(
 
   const firstType = normType(firstMealType || 'Breakfast');
   const lastType = normType(lastMealType || 'Dinner');
-  const firstDateStr = String(firstMealDate || pricing[0]?.date || '');
-  const lastDateStr = String(lastMealDate || pricing[pricing.length - 1]?.date || '');
 
-  const firstMeal = flatMeals.find((m) => m.date === firstDateStr && m.mealType === firstType);
-  const lastMeal = flatMeals.find((m) => m.date === lastDateStr && m.mealType === lastType);
+  const firstDayIndex = firstMealDate
+    ? pricing.findIndex((d) => isDateMatch(d, firstMealDate))
+    : 0;
 
-  const startSn = firstMeal ? firstMeal.sn : 1;
-  const endSn = lastMeal ? lastMeal.sn : flatMeals.length;
+  const lastDayIndex = lastMealDate
+    ? pricing.findIndex((d) => isDateMatch(d, lastMealDate))
+    : pricing.length - 1;
+
+  const validStartDay = firstDayIndex >= 0 ? firstDayIndex : 0;
+  const validEndDay = lastDayIndex >= 0 ? lastDayIndex : pricing.length - 1;
+
+  // The participant's matrix columns start on their arrival date and end on their departure date!
+  const targetPricing = (validStartDay <= validEndDay)
+    ? pricing.slice(validStartDay, validEndDay + 1)
+    : pricing;
+
+  const firstMeal = flatMeals.find((m) => {
+    const day = pricing[validStartDay];
+    return day && String(day.date) === m.date && m.mealType === firstType;
+  });
+  const lastMeal = flatMeals.find((m) => {
+    const day = pricing[validEndDay];
+    return day && String(day.date) === m.date && m.mealType === lastType;
+  });
+
+  const startSn = firstMeal ? firstMeal.sn : (validStartDay * 3 + 1);
+  const endSn = lastMeal ? lastMeal.sn : ((validEndDay + 1) * 3);
 
   const validSet = new Set<number>();
   for (let i = startSn; i <= endSn; i++) {
     validSet.add(i);
   }
 
-  return pricing.map((day) => {
+  return targetPricing.map((day) => {
     const dStr = String(day.date);
     const mB = flatMeals.find((m) => m.date === dStr && m.mealType === 'Breakfast');
     const mL = flatMeals.find((m) => m.date === dStr && m.mealType === 'Lunch');

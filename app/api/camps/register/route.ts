@@ -670,7 +670,8 @@ export async function POST(req: NextRequest) {
           meal_cost, acc_cost, ac_cost, late_fee, entry_cost, total_cost,
           discount_amount, coupon_code,
           payment_method, payment_status, payment_id, order_id, deduction_source, passcode,
-          payment_screenshot_url, transaction_ref, transaction_date
+          payment_screenshot_url, transaction_ref, transaction_date,
+          is_waiting_list, hotel_receipt_url, hotel_name
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9,
@@ -681,7 +682,8 @@ export async function POST(req: NextRequest) {
           $24, $25, $26, $27, $28, $29,
           $30, $31,
           $32, $33, $34, $35, $36, $37,
-          $38, $39, $40
+          $38, $39, $40,
+          $41, $42, $43
         ) RETURNING *
       `;
 
@@ -718,14 +720,17 @@ export async function POST(req: NextRequest) {
         entryDiscountAmount,
         cleanCouponCode,
         paymentMethod,
-        paymentStatus,
+        Boolean(entry.is_waiting_list || entry.isWaitingList) ? 'waiting_list' : paymentStatus,
         paymentMethod === 'RAZORPAY' ? razorpay_payment_id : (cleanCouponCode ? `COUPON_${cleanCouponCode}` : (isItt ? transactionRef : null)),
         paymentMethod === 'RAZORPAY' ? razorpay_order_id : null,
         paymentMethod === 'IDT' ? deductionSource : (deductionSource || (cleanCouponCode ? `Coupon: ${cleanCouponCode}` : (paymentMethod === 'ROLE_WAIVER' ? 'Role Waiver' : null))),
         paymentMethod === 'IDT' ? passcode : null,
         screenshotUrl,
         transactionRef,
-        transactionDate
+        transactionDate,
+        Boolean(entry.is_waiting_list || entry.isWaitingList),
+        entry.hotel_receipt_url || entry.hotelReceiptUrl || null,
+        entry.hotel_name || entry.hotelName || null
       ];
 
       const res = await query(sql, values);
@@ -736,6 +741,11 @@ export async function POST(req: NextRequest) {
     for (const entry of entries) {
       const entryEmail = (entry.email || email || body.email || '').trim().toLowerCase();
       if (!entryEmail) continue;
+      // If registration is placed on Waiting List, skip instant pass release until approved by administration
+      if (Boolean(entry.is_waiting_list || entry.isWaitingList)) {
+        console.log(`[Camp Register] Devotee ${entryEmail} is on Waiting List; holding pass release until admin approval.`);
+        continue;
+      }
 
       const entryParticipantName = entry.participant_name || entry.participantName || entry.poc_name || 'Participant';
       const matchingReg = insertedRecords.find(r => 
