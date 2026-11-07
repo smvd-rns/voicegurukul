@@ -85,9 +85,9 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send reset email');
-      setPasswordMessage({ 
-        type: 'success', 
-        text: `Password reset link sent to ${targetEmail}! Please check your email to set a new password without entering the old one.` 
+      setPasswordMessage({
+        type: 'success',
+        text: `Password reset link sent to ${targetEmail}! Please check your email to set a new password without entering the old one.`
       });
     } catch (err: any) {
       setPasswordMessage({ type: 'error', text: err.message || 'Failed to send reset link' });
@@ -557,6 +557,7 @@ export default function ProfilePage() {
   }, []);
 
   // Filter counselors based on selected temple
+  // Filter counselors based on selected temple (always preserves assigned counselor even if from another temple)
   useEffect(() => {
     if (allCounselors.length > 0) {
       const currentT = formData.currentTemple || '';
@@ -565,27 +566,66 @@ export default function ProfilePage() {
       if (!currentT && !parentT) {
         setCounselors([]);
         return;
+        let filtered = (!currentT && !parentT)
+          ? []
+          : allCounselors.filter(c => {
+            const cTemple = (c as any).temple || '';
+            const matchesCurrent = currentT && cTemple.toLowerCase().includes(currentT.toLowerCase());
+            const matchesParent = parentT && cTemple.toLowerCase().includes(parentT.toLowerCase());
+            return matchesCurrent || matchesParent;
+          });
+
+        // Always include the user's assigned counselor even if from a different temple
+        const assignedId = formData.counselorId;
+        const assignedName = formData.counselor;
+
+        if (assignedId || (assignedName && assignedName !== 'None' && assignedName !== 'Other' && assignedName !== 'Assigned Devotee')) {
+          const isAlreadyInFiltered = filtered.some(c =>
+            (assignedId && c.id === assignedId) ||
+            (assignedName && c.name.toLowerCase() === assignedName.toLowerCase())
+          );
+
+          if (!isAlreadyInFiltered) {
+            const foundInAll = allCounselors.find(c =>
+              (assignedId && c.id === assignedId) ||
+              (assignedName && c.name.toLowerCase() === assignedName.toLowerCase())
+            );
+
+            if (foundInAll) {
+              filtered = [foundInAll, ...filtered];
+            } else if (assignedName) {
+              filtered = [{
+                id: assignedId || assignedName,
+                name: assignedName,
+                email: '',
+                temple: 'Assigned Counselor'
+              } as any, ...filtered];
+            }
+          }
+        }
+
+        const filtered = allCounselors.filter(c => {
+          const cTemple = (c as any).temple || '';
+
+          const matchesCurrent = currentT && cTemple.toLowerCase().includes(currentT.toLowerCase());
+          const matchesParent = parentT && cTemple.toLowerCase().includes(parentT.toLowerCase());
+
+          return matchesCurrent || matchesParent;
+        });
+
+        setCounselors(filtered);
+      } else {
+        setCounselors([]);
       }
+    }, [formData.currentTemple, formData.parentTemple, allCounselors]);
+}, [formData.currentTemple, formData.parentTemple, formData.counselorId, formData.counselor, allCounselors]);
 
-      const filtered = allCounselors.filter(c => {
-        const cTemple = (c as any).temple || '';
-        
-        const matchesCurrent = currentT && cTemple.toLowerCase().includes(currentT.toLowerCase());
-        const matchesParent = parentT && cTemple.toLowerCase().includes(parentT.toLowerCase());
-        
-        return matchesCurrent || matchesParent;
-      });
-      
-      setCounselors(filtered);
-    } else {
-      setCounselors([]);
-    }
-  }, [formData.currentTemple, formData.parentTemple, allCounselors]);
-
-  // Auto-resolve counselorId if missing but counselor name exists
-  useEffect(() => {
-    if (!formData.counselorId && formData.counselor && counselors.length > 0) {
-      const match = counselors.find(c => c.name === formData.counselor);
+// Auto-resolve counselorId if missing but counselor name exists
+useEffect(() => {
+  if (!formData.counselorId && formData.counselor && counselors.length > 0) {
+    const match = counselors.find(c => c.name === formData.counselor);
+    if (!formData.counselorId && formData.counselor && formData.counselor !== 'None' && formData.counselor !== 'Other' && allCounselors.length > 0) {
+      const match = allCounselors.find(c => c.name.toLowerCase() === formData.counselor.toLowerCase());
       if (match) {
         setFormData(prev => ({
           ...prev,
@@ -594,1033 +634,1077 @@ export default function ProfilePage() {
       }
     }
   }, [counselors, formData.counselor, formData.counselorId]);
+  }, [allCounselors, formData.counselor, formData.counselorId]);
 
-  // Load temples from Supabase
-  useEffect(() => {
-    const fetchTemples = async () => {
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase
-          .from('temples')
-          .select('id, name')
-          .order('name');
+// Auto-resolve counselor name if counselorId is provided but name is missing or placeholder
+useEffect(() => {
+  if (formData.counselorId && allCounselors.length > 0) {
+    const match = allCounselors.find(c => c.id === formData.counselorId);
+    if (match && (!formData.counselor || formData.counselor === 'Assigned Devotee' || formData.counselor === formData.counselorId)) {
+      setFormData(prev => ({
+        ...prev,
+        counselor: match.name
+      }));
+    }
+  }
+}, [allCounselors, formData.counselor, formData.counselorId]);
 
-        if (error) {
-          console.error('Error loading temples:', error);
-        } else if (data) {
-          setTemples(data);
-        }
-      } catch (error) {
-        console.error('Error in fetchTemples:', error);
-      } finally {
-        setLoadingTemples(false);
+// Load temples from Supabase
+useEffect(() => {
+  const fetchTemples = async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('temples')
+        .select('id, name')
+        .order('name');
+
+      if (error) {
+        console.error('Error loading temples:', error);
+      } else if (data) {
+        setTemples(data);
       }
-    };
-    fetchTemples();
-  }, []);
+    } catch (error) {
+      console.error('Error in fetchTemples:', error);
+    } finally {
+      setLoadingTemples(false);
+    }
+  };
+  fetchTemples();
+}, []);
 
-  // Load spiritual masters dynamically
-  useEffect(() => {
-    const fetchSpiritualMasters = async () => {
-      try {
-        const res = await fetch('/api/spiritual-masters');
-        const json = await res.json();
-        if (json.success && json.data) {
-          setSpiritualMasters(json.data);
-        } else {
-          setSpiritualMasters(SPIRITUAL_MASTERS.map((name, idx) => ({ id: `fallback-${idx}`, name })));
-        }
-      } catch (error) {
-        console.error('Error in fetchSpiritualMasters:', error);
+// Load spiritual masters dynamically
+useEffect(() => {
+  const fetchSpiritualMasters = async () => {
+    try {
+      const res = await fetch('/api/spiritual-masters');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setSpiritualMasters(json.data);
+      } else {
         setSpiritualMasters(SPIRITUAL_MASTERS.map((name, idx) => ({ id: `fallback-${idx}`, name })));
-      } finally {
-        setLoadingSpiritualMasters(false);
       }
-    };
-    fetchSpiritualMasters();
-  }, []);
+    } catch (error) {
+      console.error('Error in fetchSpiritualMasters:', error);
+      setSpiritualMasters(SPIRITUAL_MASTERS.map((name, idx) => ({ id: `fallback-${idx}`, name })));
+    } finally {
+      setLoadingSpiritualMasters(false);
+    }
+  };
+  fetchSpiritualMasters();
+}, []);
 
-  // Load centers based on selected temple
-  useEffect(() => {
-    const fetchCenters = async () => {
-      if (!supabase || !formData.currentTemple || formData.currentTemple === 'None') {
-        setCenters([]);
-        return;
+// Load centers based on selected temple
+useEffect(() => {
+  const fetchCenters = async () => {
+    if (!supabase || !formData.currentTemple || formData.currentTemple === 'None') {
+      setCenters([]);
+      return;
+    }
+
+    setLoadingCenters(true);
+    try {
+      const { data, error } = await supabase
+        .from('centers')
+        .select('id, name')
+        .eq('temple_name', formData.currentTemple)
+        .order('name');
+
+      if (error) {
+        console.error('Error loading centers:', error);
+      } else if (data) {
+        setCenters(data);
       }
+    } catch (error) {
+      console.error('Error in fetchCenters:', error);
+    } finally {
+      setLoadingCenters(false);
+    }
+  };
+  fetchCenters();
+}, [formData.currentTemple]);
 
-      setLoadingCenters(true);
-      try {
-        const { data, error } = await supabase
-          .from('centers')
-          .select('id, name')
-          .eq('temple_name', formData.currentTemple)
-          .order('name');
+// Load parent centers based on selected parent temple
+useEffect(() => {
+  const fetchParentCenters = async () => {
+    if (!supabase || !formData.parentTemple || formData.parentTemple === 'None') {
+      setParentCenters([]);
+      return;
+    }
 
-        if (error) {
-          console.error('Error loading centers:', error);
-        } else if (data) {
-          setCenters(data);
-        }
-      } catch (error) {
-        console.error('Error in fetchCenters:', error);
-      } finally {
-        setLoadingCenters(false);
+    setLoadingParentCenters(true);
+    try {
+      const { data, error } = await supabase
+        .from('centers')
+        .select('id, name')
+        .eq('temple_name', formData.parentTemple)
+        .order('name');
+
+      if (error) {
+        console.error('Error loading parent centers:', error);
+      } else if (data) {
+        setParentCenters(data);
       }
-    };
-    fetchCenters();
-  }, [formData.currentTemple]);
+    } catch (error) {
+      console.error('Error in fetchParentCenters:', error);
+    } finally {
+      setLoadingParentCenters(false);
+    }
+  };
+  fetchParentCenters();
+}, [formData.parentTemple]);
 
-  // Load parent centers based on selected parent temple
-  useEffect(() => {
-    const fetchParentCenters = async () => {
-      if (!supabase || !formData.parentTemple || formData.parentTemple === 'None') {
-        setParentCenters([]);
-        return;
+// Check for pending profile update requests
+useEffect(() => {
+  if (!user) return;
+
+  const fetchPendingRequest = async () => {
+    if (!supabase) return;
+    try {
+      setLoadingRequest(true);
+      const { data: { session } } = await supabase.auth.getSession();
+
+
+      // Fetch user's latest pending or rejected request
+      const { data, error } = await supabase
+        .from('profile_update_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'rejected', 'approved'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching request status:', error);
+      } else if (data) {
+        setPendingRequest(data);
       }
+    } catch (err) {
+      console.error('Error checking requests:', err);
+    } finally {
+      setLoadingRequest(false);
+    }
+  };
 
-      setLoadingParentCenters(true);
-      try {
-        const { data, error } = await supabase
-          .from('centers')
-          .select('id, name')
-          .eq('temple_name', formData.parentTemple)
-          .order('name');
-
-        if (error) {
-          console.error('Error loading parent centers:', error);
-        } else if (data) {
-          setParentCenters(data);
-        }
-      } catch (error) {
-        console.error('Error in fetchParentCenters:', error);
-      } finally {
-        setLoadingParentCenters(false);
-      }
-    };
-    fetchParentCenters();
-  }, [formData.parentTemple]);
-
-  // Check for pending profile update requests
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchPendingRequest = async () => {
-      if (!supabase) return;
-      try {
-        setLoadingRequest(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        
-
-        // Fetch user's latest pending or rejected request
-        const { data, error } = await supabase
-          .from('profile_update_requests')
-          .select('*')
-          .eq('user_id', user.id)
-          .in('status', ['pending', 'rejected', 'approved'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Error fetching request status:', error);
-        } else if (data) {
-          setPendingRequest(data);
-        }
-      } catch (err) {
-        console.error('Error checking requests:', err);
-      } finally {
-        setLoadingRequest(false);
-      }
-    };
-
-    fetchPendingRequest();
-  }, [user]);
+  fetchPendingRequest();
+}, [user]);
 
 
-  // Load initial data
-  useEffect(() => {
-    if (userData) {
-      const baseHierarchy = userData.hierarchy || {};
-      
-      let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || '';
-      let initialOtherCenter = baseHierarchy.otherCenter || '';
-      if (initialOtherCenter && (initialCurrentCenter === 'Other' || !initialCurrentCenter)) {
-        initialCurrentCenter = 'Other';
+// Load initial data
+useEffect(() => {
+  if (userData) {
+    const baseHierarchy = userData.hierarchy || {};
+
+    let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || '';
+    let initialOtherCenter = baseHierarchy.otherCenter || '';
+    if (initialOtherCenter && (initialCurrentCenter === 'Other' || !initialCurrentCenter)) {
+      initialCurrentCenter = 'Other';
+      let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || (userData as any).currentCenter || (userData as any).center || '';
+      let initialOtherCenter = baseHierarchy.otherCenter || (userData as any).otherCenter || '';
+
+      if (initialCurrentCenter === 'None') {
+        initialOtherCenter = '';
+      } else if (initialCurrentCenter === 'Other') {
+        // retain other center name
       } else if (!initialCurrentCenter) {
         initialCurrentCenter = baseHierarchy.parentCenter === 'None' ? 'None' : (baseHierarchy.parentCenter || 'None');
+        if (initialOtherCenter) {
+          initialCurrentCenter = 'Other';
+        } else {
+          initialCurrentCenter = baseHierarchy.parentCenter === 'None' ? 'None' : (baseHierarchy.parentCenter || 'None');
+        }
+      } else {
+        initialOtherCenter = '';
       }
 
       let initialParentCenter = baseHierarchy.parentCenter || '';
       let initialOtherParentCenter = baseHierarchy.otherParentCenter || '';
       if (initialOtherParentCenter && (initialParentCenter === 'Other' || !initialParentCenter)) {
         initialParentCenter = 'Other';
-      } else if (!initialParentCenter) {
-        initialParentCenter = 'None';
+        let initialParentCenter = baseHierarchy.parentCenter || (userData as any).parentCenter || '';
+        let initialOtherParentCenter = baseHierarchy.otherParentCenter || (userData as any).otherParentCenter || '';
+        if (initialParentCenter === 'None') {
+          initialOtherParentCenter = '';
+        } else if (initialParentCenter === 'Other') {
+          // retain other parent center name
+        } else if (!initialParentCenter) {
+          initialParentCenter = 'None';
+          if (initialOtherParentCenter) {
+            initialParentCenter = 'Other';
+          } else {
+            initialParentCenter = 'None';
+          }
+        } else {
+          initialOtherParentCenter = '';
+        }
+
+        // Basic fields from userData
+        const baseData: any = {
+          name: userData.name || '',
+          email: userData.email || '',
+          phone: userData.phone || '',
+          birthDate: userData.birthDate ? String(userData.birthDate).trim().split('T')[0].split(' ')[0] : '',
+          state: baseHierarchy.state || '',
+          city: baseHierarchy.city || '',
+          center: initialCurrentCenter === 'Other' ? (initialOtherCenter || 'Other') : (initialCurrentCenter || ''),
+          centerId: baseHierarchy.centerId || '',
+
+          // Spiritual fields
+          initiationStatus: (baseHierarchy.initiationStatus || '') as 'initiated' | 'aspiring' | '',
+          initiatedName: baseHierarchy.initiatedName || '',
+          spiritualMasterName: baseHierarchy.spiritualMasterName || '',
+          aspiringSpiritualMasterName: baseHierarchy.aspiringSpiritualMasterName || '',
+          introducedToKcIn: baseHierarchy.introducedToKcIn || '',
+          rounds: baseHierarchy.rounds ? baseHierarchy.rounds.toString() : '',
+          parentTemple: baseHierarchy.parentTemple || '',
+          otherParentTemple: baseHierarchy.otherParentTemple || '',
+          parentCenter: initialParentCenter,
+          currentTemple: baseHierarchy.currentTemple || '',
+          currentCenter: initialCurrentCenter,
+          counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || '',
+          counselorId: baseHierarchy.counselorId || '',
+          otherCounselor: baseHierarchy.otherCounselor || '',
+          counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || (userData as any).counselor || '',
+          counselorId: baseHierarchy.counselorId || baseHierarchy.counselor_id || (userData as any).counselorId || (userData as any).counselor_id || '',
+          otherCounselor: baseHierarchy.otherCounselor || (userData as any).otherCounselor || '',
+          ashram: baseHierarchy.ashram || '',
+          otherCenter: initialOtherCenter,
+          otherParentCenter: initialOtherParentCenter,
+
+          // Relative contact info
+          relative1Name: userData.relative1Name || '',
+          relative1Relationship: userData.relative1Relationship || '',
+          relative1Phone: userData.relative1Phone || '',
+          relative2Name: userData.relative2Name || '',
+          relative2Relationship: userData.relative2Relationship || '',
+          relative2Phone: userData.relative2Phone || '',
+          relative3Name: userData.relative3Name || '',
+          relative3Relationship: userData.relative3Relationship || '',
+          relative3Phone: userData.relative3Phone || '',
+
+          // Health info
+          healthChronicDisease: userData.healthChronicDisease || '',
+          aadharCardImage: userData.aadharCardImage || '',
+
+          // Camp completion fields
+          campDys: userData.campDys || baseHierarchy.campDys || false,
+          campSankalpa: userData.campSankalpa || false,
+          campSphurti: userData.campSphurti || false,
+          campUtkarsh: userData.campUtkarsh || false,
+          campSrcgdWorkshop: userData.campSrcgdWorkshop || false,
+          campNishtha: userData.campNishtha || false,
+          campFtec: userData.campFtec || false,
+          campAshraya: userData.campAshraya || false,
+          campMtec: userData.campMtec || false,
+          campSharanagati: userData.campSharanagati || false,
+          campIdc: userData.campIdc || false,
+          campBhaktiShastri: userData.campBhaktiShastri || false,
+          campPositiveThinker: userData.campPositiveThinker || false,
+          campSelfManager: userData.campSelfManager || false,
+          campProactiveLeader: userData.campProactiveLeader || false,
+
+          // SP Books Study Course fields
+          spbookThirdSsr15: userData.spbookThirdSsr15 || false,
+          spbookThirdComingBack: userData.spbookThirdComingBack || false,
+          spbookThirdPqpa: userData.spbookThirdPqpa || false,
+          spbookThirdMatchlessGift: userData.spbookThirdMatchlessGift || false,
+          spbookThirdRajaVidya: userData.spbookThirdRajaVidya || false,
+          spbookThirdElevationKc: userData.spbookThirdElevationKc || false,
+          spbookThirdBeyondBirthDeath: userData.spbookThirdBeyondBirthDeath || false,
+          spbookThirdKrishnaReservoir: userData.spbookThirdKrishnaReservoir || false,
+          spbookFourthSsr68: userData.spbookFourthSsr68 || false,
+          spbookFourthLawsOfNature: userData.spbookFourthLawsOfNature || false,
+          spbookFourthDharma: userData.spbookFourthDharma || false,
+          spbookFourthSecondChance: userData.spbookFourthSecondChance || false,
+          spbookFourthIsopanishad110: userData.spbookFourthIsopanishad110 || false,
+          spbookFourthQueenKuntiVideo: userData.spbookFourthQueenKuntiVideo || false,
+          spbookFourthEnlightenmentNatural: userData.spbookFourthEnlightenmentNatural || false,
+          spbookFourthKrishnaBook121: userData.spbookFourthKrishnaBook121 || false,
+          spbookFifthLifeFromLife: userData.spbookFifthLifeFromLife || false,
+          spbookFifthPrahladTeachings: userData.spbookFifthPrahladTeachings || false,
+          spbookFifthJourneySelfDiscovery: userData.spbookFifthJourneySelfDiscovery || false,
+          spbookFifthQueenKuntiHearing: userData.spbookFifthQueenKuntiHearing || false,
+          spbookFifthLordKapila: userData.spbookFifthLordKapila || false,
+          spbookFifthNectar16: userData.spbookFifthNectar16 || false,
+          spbookFifthGita16: userData.spbookFifthGita16 || false,
+          spbookFifthKrishnaBook2428: userData.spbookFifthKrishnaBook2428 || false,
+          spbookSixthNectar711: userData.spbookSixthNectar711 || false,
+          spbookSixthPathPerfection: userData.spbookSixthPathPerfection || false,
+          spbookSixthCivilisationTranscendence: userData.spbookSixthCivilisationTranscendence || false,
+          spbookSixthHareKrishnaChallenge: userData.spbookSixthHareKrishnaChallenge || false,
+          spbookSixthGita712: userData.spbookSixthGita712 || false,
+          spbookSixthSb1stCanto16: userData.spbookSixthSb1stCanto16 || false,
+          spbookSixthKrishnaBook3559: userData.spbookSixthKrishnaBook3559 || false,
+          spbookSeventhGita1318: userData.spbookSeventhGita1318 || false,
+          spbookSeventhSb1stCanto713: userData.spbookSeventhSb1stCanto713 || false,
+          spbookSeventhKrishnaBook6378: userData.spbookSeventhKrishnaBook6378 || false,
+          spbookEighthSb1stCanto1419: userData.spbookEighthSb1stCanto1419 || false,
+          spbookEighthKrishnaBook7889: userData.spbookEighthKrishnaBook7889 || false,
+        };
+
+        // Note: Do not overwrite baseData with pending unapproved changes.
+        // Fields strictly display the current approved profile data.
+
+        setFormData(baseData);
+        // Set counselor search values from spiritual fields
+
+        // Set profile image from userData (Google Drive URL)
+        const imageUrl = userData.profileImage || '';
+        setProfileImage(imageUrl);
+
+        const aadharUrl = userData.aadharCardImage || '';
+        setAadharImage(aadharUrl);
+
+        // Load education and work experience
+        if (userData.education && userData.education.length > 0) {
+          const filteredEdu = userData.education.filter(edu => edu.institution || edu.degreeBranch);
+          setEducation(filteredEdu.length > 0 ? filteredEdu : [{ institution: '', degreeBranch: '', startYear: null, endYear: null }]);
+        } else {
+          setEducation([{ institution: '', degreeBranch: '', startYear: null, endYear: null }]);
+        }
+
+        if (userData.workExperience && userData.workExperience.length > 0) {
+          const filteredWork = userData.workExperience.filter(work => work.company || work.position || work.location);
+          setWorkExperience(filteredWork.length > 0 ? filteredWork : [{ company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
+        } else {
+          setWorkExperience([{ company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
+        }
+        // Load languages, skills, and services
+        if (userData.languages && userData.languages.length > 0) {
+          const filteredLangs = userData.languages.filter(lang => lang.name && lang.name.trim());
+          setLanguages(filteredLangs.length > 0 ? filteredLangs : [{ name: '' }]);
+        } else {
+          setLanguages([{ name: '' }]);
+        }
+        if (userData.skills && userData.skills.length > 0) {
+          const filteredSkills = userData.skills.filter(skill => skill.name && skill.name.trim());
+          setSkills(filteredSkills.length > 0 ? filteredSkills : [{ name: '' }]);
+        } else {
+          setSkills([{ name: '' }]);
+        }
+        if (userData.services && userData.services.length > 0) {
+          const filteredServices = userData.services.filter(service => service.name && service.name.trim());
+          setServices(filteredServices.length > 0 ? filteredServices : [{ name: '' }]);
+        } else {
+          setServices([{ name: '' }]);
+        }
+      }
+    }, [userData, pendingRequest]);
+
+
+
+// Load Brahmachari counselors with search (with debounce)
+
+
+
+
+
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+  setSuccess('');
+  setFieldErrors({});
+
+  if (!user || !supabase) {
+    setError('User session not found. Please sign in again.');
+    return;
+  }
+
+  if (formData.initiationStatus === 'initiated' && (!formData.initiatedName || !formData.spiritualMasterName)) {
+    setError('Initiated Name and Spiritual Master Name are mandatory for initiated devotees.');
+    return;
+  }
+
+  // Dynamic 15-day profile completion lock (Enforced only when Super Admin enables the feature switch)
+  if (isProfileLockActive && userData?.createdAt) {
+    const createdAt = new Date(userData.createdAt);
+    const now = new Date();
+    const diffInDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (diffInDays >= 15) {
+      // 1. Profile Photo
+      if (!profileImage && !selectedPhoto) {
+        setError('Profile Photo is mandatory for accounts older than 15 days.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
-      // Basic fields from userData
-      const baseData: any = {
-        name: userData.name || '',
-        email: userData.email || '',
-        phone: userData.phone || '',
-        birthDate: userData.birthDate ? String(userData.birthDate).trim().split('T')[0].split(' ')[0] : '',
-        state: baseHierarchy.state || '',
-        city: baseHierarchy.city || '',
-        center: initialCurrentCenter === 'Other' ? (initialOtherCenter || 'Other') : (initialCurrentCenter || ''),
-        centerId: baseHierarchy.centerId || '',
-        
-        // Spiritual fields
-        initiationStatus: (baseHierarchy.initiationStatus || '') as 'initiated' | 'aspiring' | '',
-        initiatedName: baseHierarchy.initiatedName || '',
-        spiritualMasterName: baseHierarchy.spiritualMasterName || '',
-        aspiringSpiritualMasterName: baseHierarchy.aspiringSpiritualMasterName || '',
-        introducedToKcIn: baseHierarchy.introducedToKcIn || '',
-        rounds: baseHierarchy.rounds ? baseHierarchy.rounds.toString() : '',
-        parentTemple: baseHierarchy.parentTemple || '',
-        otherParentTemple: baseHierarchy.otherParentTemple || '',
-        parentCenter: initialParentCenter,
-        currentTemple: baseHierarchy.currentTemple || '',
-        currentCenter: initialCurrentCenter,
-        counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || '',
-        counselorId: baseHierarchy.counselorId || '',
-        otherCounselor: baseHierarchy.otherCounselor || '',
-        ashram: baseHierarchy.ashram || '',
-        otherCenter: initialOtherCenter,
-        otherParentCenter: initialOtherParentCenter,
-
-        // Relative contact info
-        relative1Name: userData.relative1Name || '',
-        relative1Relationship: userData.relative1Relationship || '',
-        relative1Phone: userData.relative1Phone || '',
-        relative2Name: userData.relative2Name || '',
-        relative2Relationship: userData.relative2Relationship || '',
-        relative2Phone: userData.relative2Phone || '',
-        relative3Name: userData.relative3Name || '',
-        relative3Relationship: userData.relative3Relationship || '',
-        relative3Phone: userData.relative3Phone || '',
-        
-        // Health info
-        healthChronicDisease: userData.healthChronicDisease || '',
-        aadharCardImage: userData.aadharCardImage || '',
-
-        // Camp completion fields
-        campDys: userData.campDys || baseHierarchy.campDys || false,
-        campSankalpa: userData.campSankalpa || false,
-        campSphurti: userData.campSphurti || false,
-        campUtkarsh: userData.campUtkarsh || false,
-        campSrcgdWorkshop: userData.campSrcgdWorkshop || false,
-        campNishtha: userData.campNishtha || false,
-        campFtec: userData.campFtec || false,
-        campAshraya: userData.campAshraya || false,
-        campMtec: userData.campMtec || false,
-        campSharanagati: userData.campSharanagati || false,
-        campIdc: userData.campIdc || false,
-        campBhaktiShastri: userData.campBhaktiShastri || false,
-        campPositiveThinker: userData.campPositiveThinker || false,
-        campSelfManager: userData.campSelfManager || false,
-        campProactiveLeader: userData.campProactiveLeader || false,
-        
-        // SP Books Study Course fields
-        spbookThirdSsr15: userData.spbookThirdSsr15 || false,
-        spbookThirdComingBack: userData.spbookThirdComingBack || false,
-        spbookThirdPqpa: userData.spbookThirdPqpa || false,
-        spbookThirdMatchlessGift: userData.spbookThirdMatchlessGift || false,
-        spbookThirdRajaVidya: userData.spbookThirdRajaVidya || false,
-        spbookThirdElevationKc: userData.spbookThirdElevationKc || false,
-        spbookThirdBeyondBirthDeath: userData.spbookThirdBeyondBirthDeath || false,
-        spbookThirdKrishnaReservoir: userData.spbookThirdKrishnaReservoir || false,
-        spbookFourthSsr68: userData.spbookFourthSsr68 || false,
-        spbookFourthLawsOfNature: userData.spbookFourthLawsOfNature || false,
-        spbookFourthDharma: userData.spbookFourthDharma || false,
-        spbookFourthSecondChance: userData.spbookFourthSecondChance || false,
-        spbookFourthIsopanishad110: userData.spbookFourthIsopanishad110 || false,
-        spbookFourthQueenKuntiVideo: userData.spbookFourthQueenKuntiVideo || false,
-        spbookFourthEnlightenmentNatural: userData.spbookFourthEnlightenmentNatural || false,
-        spbookFourthKrishnaBook121: userData.spbookFourthKrishnaBook121 || false,
-        spbookFifthLifeFromLife: userData.spbookFifthLifeFromLife || false,
-        spbookFifthPrahladTeachings: userData.spbookFifthPrahladTeachings || false,
-        spbookFifthJourneySelfDiscovery: userData.spbookFifthJourneySelfDiscovery || false,
-        spbookFifthQueenKuntiHearing: userData.spbookFifthQueenKuntiHearing || false,
-        spbookFifthLordKapila: userData.spbookFifthLordKapila || false,
-        spbookFifthNectar16: userData.spbookFifthNectar16 || false,
-        spbookFifthGita16: userData.spbookFifthGita16 || false,
-        spbookFifthKrishnaBook2428: userData.spbookFifthKrishnaBook2428 || false,
-        spbookSixthNectar711: userData.spbookSixthNectar711 || false,
-        spbookSixthPathPerfection: userData.spbookSixthPathPerfection || false,
-        spbookSixthCivilisationTranscendence: userData.spbookSixthCivilisationTranscendence || false,
-        spbookSixthHareKrishnaChallenge: userData.spbookSixthHareKrishnaChallenge || false,
-        spbookSixthGita712: userData.spbookSixthGita712 || false,
-        spbookSixthSb1stCanto16: userData.spbookSixthSb1stCanto16 || false,
-        spbookSixthKrishnaBook3559: userData.spbookSixthKrishnaBook3559 || false,
-        spbookSeventhGita1318: userData.spbookSeventhGita1318 || false,
-        spbookSeventhSb1stCanto713: userData.spbookSeventhSb1stCanto713 || false,
-        spbookSeventhKrishnaBook6378: userData.spbookSeventhKrishnaBook6378 || false,
-        spbookEighthSb1stCanto1419: userData.spbookEighthSb1stCanto1419 || false,
-        spbookEighthKrishnaBook7889: userData.spbookEighthKrishnaBook7889 || false,
-      };
-
-      // Note: Do not overwrite baseData with pending unapproved changes.
-      // Fields strictly display the current approved profile data.
-
-      setFormData(baseData);
-      // Set counselor search values from spiritual fields
-
-      // Set profile image from userData (Google Drive URL)
-      const imageUrl = userData.profileImage || '';
-      setProfileImage(imageUrl);
-
-      const aadharUrl = userData.aadharCardImage || '';
-      setAadharImage(aadharUrl);
-
-      // Load education and work experience
-      if (userData.education && userData.education.length > 0) {
-        const filteredEdu = userData.education.filter(edu => edu.institution || edu.degreeBranch);
-        setEducation(filteredEdu.length > 0 ? filteredEdu : [{ institution: '', degreeBranch: '', startYear: null, endYear: null }]);
-      } else {
-        setEducation([{ institution: '', degreeBranch: '', startYear: null, endYear: null }]);
+      // 2. Aadhar Card Photo
+      if (!aadharImage && !selectedAadharPhoto) {
+        setError('Aadhar Card photo upload is mandatory for accounts older than 15 days.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
-      if (userData.workExperience && userData.workExperience.length > 0) {
-        const filteredWork = userData.workExperience.filter(work => work.company || work.position || work.location);
-        setWorkExperience(filteredWork.length > 0 ? filteredWork : [{ company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
-      } else {
-        setWorkExperience([{ company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
+      // 3. Spiritual Information - full section
+      const spiritualMissing = [];
+      if (!formData.initiationStatus) spiritualMissing.push('Initiation Status');
+      if (!formData.ashram) spiritualMissing.push('Ashram');
+      if (!formData.rounds && formData.rounds !== '0') spiritualMissing.push('Rounds');
+      if (!formData.counselor) spiritualMissing.push('Counselor');
+
+      if (spiritualMissing.length > 0) {
+        setError(`Please fill all Spiritual Information (mandatory for accounts older than 15 days): ${spiritualMissing.join(', ')}`);
+        return;
       }
-      // Load languages, skills, and services
-      if (userData.languages && userData.languages.length > 0) {
-        const filteredLangs = userData.languages.filter(lang => lang.name && lang.name.trim());
-        setLanguages(filteredLangs.length > 0 ? filteredLangs : [{ name: '' }]);
-      } else {
-        setLanguages([{ name: '' }]);
+
+      // 4. Camps completed (at least some)
+      const campFields = [
+        'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
+        'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
+        'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
+      ];
+      const hasAnyCamp = campFields.some(field => (formData as any)[field]);
+      if (!hasAnyCamp) {
+        setError('At least one Completed Camp must be selected.');
+        return;
       }
-      if (userData.skills && userData.skills.length > 0) {
-        const filteredSkills = userData.skills.filter(skill => skill.name && skill.name.trim());
-        setSkills(filteredSkills.length > 0 ? filteredSkills : [{ name: '' }]);
-      } else {
-        setSkills([{ name: '' }]);
-      }
-      if (userData.services && userData.services.length > 0) {
-        const filteredServices = userData.services.filter(service => service.name && service.name.trim());
-        setServices(filteredServices.length > 0 ? filteredServices : [{ name: '' }]);
-      } else {
-        setServices([{ name: '' }]);
+
+      // 5. SP Book study (at least some)
+      const spBookFields = Object.keys(formData).filter(key => key.startsWith('spbook'));
+      const hasAnyBook = spBookFields.some(field => (formData as any)[field]);
+      if (!hasAnyBook) {
+        setError('At least one SP Book study entry must be selected.');
+        return;
       }
     }
-  }, [userData, pendingRequest]);
+  }
 
+  setSaving(true);
+  let finalProfileImageUrl = profileImage;
+  let finalAadharCardUrl = aadharImage;
 
+  const uploadFileDirectlyToDrive = async (file: File, prefix: string, userName: string): Promise<string> => {
+    // Clean user name for filename
+    const cleanUserName = userName.trim().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const customFileName = `${prefix}_${cleanUserName}_${new Date().toISOString().split('T')[0]}.${ext}`;
 
-  // Load Brahmachari counselors with search (with debounce)
+    // 1. Get token
+    const tokenRes = await fetch('/api/upload-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: customFileName,
+        fileType: file.type || 'application/octet-stream',
+        targetFolderId: 'profile_uploads',
+        userId: user.id
+      })
+    });
 
-
-
-
-
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setFieldErrors({});
-
-    if (!user || !supabase) {
-      setError('User session not found. Please sign in again.');
-      return;
+    if (!tokenRes.ok) {
+      const errorData = await tokenRes.json();
+      throw new Error(errorData.error || 'Failed to get upload token');
     }
+    const tokenData = await tokenRes.json();
 
-    if (formData.initiationStatus === 'initiated' && (!formData.initiatedName || !formData.spiritualMasterName)) {
-      setError('Initiated Name and Spiritual Master Name are mandatory for initiated devotees.');
-      return;
-    }
-
-    // Dynamic 15-day profile completion lock (Enforced only when Super Admin enables the feature switch)
-    if (isProfileLockActive && userData?.createdAt) {
-      const createdAt = new Date(userData.createdAt);
-      const now = new Date();
-      const diffInDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-
-      if (diffInDays >= 15) {
-        // 1. Profile Photo
-        if (!profileImage && !selectedPhoto) {
-          setError('Profile Photo is mandatory for accounts older than 15 days.');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          return;
-        }
-
-        // 2. Aadhar Card Photo
-        if (!aadharImage && !selectedAadharPhoto) {
-          setError('Aadhar Card photo upload is mandatory for accounts older than 15 days.');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          return;
-        }
-
-        // 3. Spiritual Information - full section
-        const spiritualMissing = [];
-        if (!formData.initiationStatus) spiritualMissing.push('Initiation Status');
-        if (!formData.ashram) spiritualMissing.push('Ashram');
-        if (!formData.rounds && formData.rounds !== '0') spiritualMissing.push('Rounds');
-        if (!formData.counselor) spiritualMissing.push('Counselor');
-
-        if (spiritualMissing.length > 0) {
-          setError(`Please fill all Spiritual Information (mandatory for accounts older than 15 days): ${spiritualMissing.join(', ')}`);
-          return;
-        }
-
-        // 4. Camps completed (at least some)
-        const campFields = [
-          'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
-          'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
-          'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
-        ];
-        const hasAnyCamp = campFields.some(field => (formData as any)[field]);
-        if (!hasAnyCamp) {
-          setError('At least one Completed Camp must be selected.');
-          return;
-        }
-
-        // 5. SP Book study (at least some)
-        const spBookFields = Object.keys(formData).filter(key => key.startsWith('spbook'));
-        const hasAnyBook = spBookFields.some(field => (formData as any)[field]);
-        if (!hasAnyBook) {
-          setError('At least one SP Book study entry must be selected.');
-          return;
-        }
-      }
-    }
-
-    setSaving(true);
-    let finalProfileImageUrl = profileImage;
-    let finalAadharCardUrl = aadharImage;
-
-    const uploadFileDirectlyToDrive = async (file: File, prefix: string, userName: string): Promise<string> => {
-      // Clean user name for filename
-      const cleanUserName = userName.trim().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      const customFileName = `${prefix}_${cleanUserName}_${new Date().toISOString().split('T')[0]}.${ext}`;
-
-      // 1. Get token
-      const tokenRes = await fetch('/api/upload-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: customFileName,
-          fileType: file.type || 'application/octet-stream',
-          targetFolderId: 'profile_uploads',
-          userId: user.id
-        })
-      });
-
-      if (!tokenRes.ok) {
-        const errorData = await tokenRes.json();
-        throw new Error(errorData.error || 'Failed to get upload token');
-      }
-      const tokenData = await tokenRes.json();
-
-      // 2. Initialize Resumable Upload
-      const metadata = {
-        name: customFileName,
-        mimeType: file.type || 'application/octet-stream',
-        parents: [tokenData.folderId]
-      };
-
-      const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
-        method: 'POST',
-        headers: {
-          ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
-          'Content-Type': 'application/json; charset=UTF-8',
-          'X-Upload-Content-Type': file.type || 'application/octet-stream',
-          'X-Upload-Content-Length': file.size.toString()
-        },
-        body: JSON.stringify(metadata)
-      });
-
-      if (!sessionRes.ok) throw new Error('Failed to initialize Google Drive resumable upload');
-      const location = sessionRes.headers.get('Location');
-      if (!location) throw new Error('No upload location received from Google Drive');
-
-      // 3. Upload file binary
-      const uploadRes = await fetch(location, {
-        method: 'PUT',
-        body: file
-      });
-
-      if (!uploadRes.ok) throw new Error('Google Drive upload failed');
-      const driveData = await uploadRes.json();
-
-      // Fetch extra info if links are missing
-      if (!driveData.webViewLink) {
-        const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
-          headers: tokenData.accessToken ? { ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}) } : undefined
-        });
-        if (extraRes.ok) {
-          const extraData = await extraRes.json();
-          Object.assign(driveData, extraData);
-        }
-      }
-
-      // Check directImageUrl / webViewLink / id
-      const directImageUrl = `https://lh3.googleusercontent.com/d/${driveData.id}=s1600`;
-      return directImageUrl || driveData.webViewLink || driveData.id;
+    // 2. Initialize Resumable Upload
+    const metadata = {
+      name: customFileName,
+      mimeType: file.type || 'application/octet-stream',
+      parents: [tokenData.folderId]
     };
 
-    // Parallel upload optimization
-    const uploadPromises = [];
-
-    if (selectedPhoto) {
-      uploadPromises.push(
-        uploadFileDirectlyToDrive(selectedPhoto, 'profile', formData.name).then(url => {
-          finalProfileImageUrl = url;
-        })
-      );
-    }
-
-    if (selectedAadharPhoto) {
-      uploadPromises.push(
-        uploadFileDirectlyToDrive(selectedAadharPhoto, 'adhar', formData.name).then(url => {
-          finalAadharCardUrl = url;
-        })
-      );
-    }
-
-    if (uploadPromises.length > 0) {
-      try {
-        await Promise.all(uploadPromises);
-      } catch (uploadError: any) {
-        console.error('Upload error:', uploadError);
-        setError(`Failed to upload photo(s): ${uploadError.message}`);
-        setSaving(false);
-        return;
-      }
-    }
-
-
-    // Validate and sanitize name
-    const nameValidation = validateTextInput(formData.name, 'Full Name', 100);
-    if (!nameValidation.valid) {
-      setFieldErrors({ name: nameValidation.error || 'Invalid name' });
-      setError(nameValidation.error || 'Invalid name');
-      setSaving(false);
-      return;
-    }
-    const sanitizedName = sanitizeTextInput(formData.name.trim());
-
-    // Validate email
-    const emailValidation = validateEmail(formData.email);
-    if (!emailValidation.valid) {
-      setFieldErrors({ email: emailValidation.error || 'Invalid email address' });
-      setError(emailValidation.error || 'Invalid email address');
-      setSaving(false);
-      return;
-    }
-
-    // Validate and sanitize phone if provided
-    let sanitizedPhone = null;
-    if (formData.phone && formData.phone.trim()) {
-      const phoneValidation = validatePhoneNumber(formData.phone, '+91', false);
-      if (!phoneValidation.valid) {
-        setFieldErrors({ phone: phoneValidation.error || 'Invalid phone number' });
-        setError(phoneValidation.error || 'Invalid phone number');
-        setSaving(false);
-        return;
-      }
-      sanitizedPhone = phoneValidation.normalizedPhone || formData.phone.trim();
-    }
-
-    // ALL FIELDS BELOW ARE NOW OPTIONAL - VALIDATIONS COMMENTED OUT
-
-    // // Validate required hierarchy fields
-    // if (!formData.state || !formData.city || !formData.center) {
-    //   setError('Please fill in all required location fields (State, City, and Center)');
-    //   return;
-    // }
-
-    // // Validate spiritual fields
-    // if (!formData.initiationStatus) {
-    //   setError('Please select whether you are Initiated or Aspiring');
-    //   return;
-    // }
-
-    // if (formData.initiationStatus === 'initiated') {
-    //   if (!formData.initiatedName || !formData.spiritualMasterName) {
-    //     setError('Please fill in Initiated Name and Spiritual Master Name');
-    //     return;
-    //   }
-    // } else if (formData.initiationStatus === 'aspiring') {
-    //   // Aspiring Spiritual Master Name is optional - no validation needed
-    // }
-
-    // if (!formData.chantingSince) {
-    //   setError('Please select Chanting Since date');
-    //   return;
-    // }
-
-    // if (!formData.ashram) {
-    //   setError('Please select Ashram');
-    //   return;
-    // }
-
-    // if (!formData.royalMember) {
-    //   setError('Please select Royal Member status');
-    //   return;
-    // }
-
-    // if (!formData.brahmachariCounselor) {
-    //   setError('Please select Brahmachari Counselor');
-    //   return;
-    // }
-
-    // Validate and sanitize education entries
-    const educationErrors: string[] = [];
-    const sanitizedEducation = education.map((edu, index) => {
-      if (edu.institution?.trim()) {
-        const instValidation = validateEducationField(edu.institution, `Education ${index + 1} - Institution`);
-        if (!instValidation.valid) {
-          educationErrors.push(instValidation.error || `Invalid institution name in entry ${index + 1}`);
-        }
-      }
-      if (edu.degreeBranch?.trim()) {
-        const branchValidation = validateEducationField(edu.degreeBranch, `Education ${index + 1} - Degree-Branch`);
-        if (!branchValidation.valid) {
-          educationErrors.push(branchValidation.error || `Invalid degree-branch name in entry ${index + 1}`);
-        }
-      }
-      return {
-        institution: edu.institution ? sanitizeTextInput(edu.institution.trim()) : '',
-        degreeBranch: edu.degreeBranch ? sanitizeTextInput(edu.degreeBranch.trim()) : '',
-        startYear: edu.startYear,
-        endYear: edu.endYear
-      };
+    const sessionRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+      method: 'POST',
+      headers: {
+        ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}),
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': file.type || 'application/octet-stream',
+        'X-Upload-Content-Length': file.size.toString()
+      },
+      body: JSON.stringify(metadata)
     });
-    if (educationErrors.length > 0) {
-      setError(educationErrors[0]);
-      setFieldErrors({ education: educationErrors[0] });
-      setSaving(false);
-      return;
-    }
 
-    // Validate and sanitize work experience entries
-    const workErrors: string[] = [];
-    const sanitizedWork = workExperience.map((work, index) => {
-      if (work.company?.trim()) {
-        const companyValidation = validateWorkField(work.company, `Work ${index + 1} - Company`);
-        if (!companyValidation.valid) {
-          workErrors.push(companyValidation.error || `Invalid company name in entry ${index + 1}`);
-        }
-      }
-      if (work.position?.trim()) {
-        const positionValidation = validateWorkField(work.position, `Work ${index + 1} - Title/Position`);
-        if (!positionValidation.valid) {
-          workErrors.push(positionValidation.error || `Invalid title/position name in entry ${index + 1}`);
-        }
-      }
-      if (work.location?.trim()) {
-        const locationValidation = validateWorkField(work.location, `Work ${index + 1} - Location`);
-        if (!locationValidation.valid) {
-          workErrors.push(locationValidation.error || `Invalid location in entry ${index + 1}`);
-        }
-      }
-      return {
-        company: work.company ? sanitizeTextInput(work.company.trim()) : '',
-        position: work.position ? sanitizeTextInput(work.position.trim()) : '',
-        location: work.location ? sanitizeTextInput(work.location.trim()) : '',
-        startDate: work.startDate,
-        endDate: work.endDate,
-        current: work.current
-      };
+    if (!sessionRes.ok) throw new Error('Failed to initialize Google Drive resumable upload');
+    const location = sessionRes.headers.get('Location');
+    if (!location) throw new Error('No upload location received from Google Drive');
+
+    // 3. Upload file binary
+    const uploadRes = await fetch(location, {
+      method: 'PUT',
+      body: file
     });
-    if (workErrors.length > 0) {
-      setError(workErrors[0]);
-      setFieldErrors({ work: workErrors[0] });
-      setSaving(false);
-      return;
+
+    if (!uploadRes.ok) throw new Error('Google Drive upload failed');
+    const driveData = await uploadRes.json();
+
+    // Fetch extra info if links are missing
+    if (!driveData.webViewLink) {
+      const extraRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}?fields=id,name,mimeType,size,thumbnailLink,webViewLink`, {
+        headers: tokenData.accessToken ? { ...(tokenData.accessToken ? { "Authorization": `Bearer ${tokenData.accessToken}` } : {}) } : undefined
+      });
+      if (extraRes.ok) {
+        const extraData = await extraRes.json();
+        Object.assign(driveData, extraData);
+      }
     }
 
+    // Check directImageUrl / webViewLink / id
+    const directImageUrl = `https://lh3.googleusercontent.com/d/${driveData.id}=s1600`;
+    return directImageUrl || driveData.webViewLink || driveData.id;
+  };
 
+  // Parallel upload optimization
+  const uploadPromises = [];
+
+  if (selectedPhoto) {
+    uploadPromises.push(
+      uploadFileDirectlyToDrive(selectedPhoto, 'profile', formData.name).then(url => {
+        finalProfileImageUrl = url;
+      })
+    );
+  }
+
+  if (selectedAadharPhoto) {
+    uploadPromises.push(
+      uploadFileDirectlyToDrive(selectedAadharPhoto, 'adhar', formData.name).then(url => {
+        finalAadharCardUrl = url;
+      })
+    );
+  }
+
+  if (uploadPromises.length > 0) {
     try {
-      // Build hierarchy object for backward compatibility (using sanitized values)
-      const hierarchy: any = {};
-      if (formData.birthDate) {
-        const cleanDOB = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
-        hierarchy.birthDate = cleanDOB;
-        hierarchy.birth_date = cleanDOB;
+      await Promise.all(uploadPromises);
+    } catch (uploadError: any) {
+      console.error('Upload error:', uploadError);
+      setError(`Failed to upload photo(s): ${uploadError.message}`);
+      setSaving(false);
+      return;
+    }
+  }
+
+
+  // Validate and sanitize name
+  const nameValidation = validateTextInput(formData.name, 'Full Name', 100);
+  if (!nameValidation.valid) {
+    setFieldErrors({ name: nameValidation.error || 'Invalid name' });
+    setError(nameValidation.error || 'Invalid name');
+    setSaving(false);
+    return;
+  }
+  const sanitizedName = sanitizeTextInput(formData.name.trim());
+
+  // Validate email
+  const emailValidation = validateEmail(formData.email);
+  if (!emailValidation.valid) {
+    setFieldErrors({ email: emailValidation.error || 'Invalid email address' });
+    setError(emailValidation.error || 'Invalid email address');
+    setSaving(false);
+    return;
+  }
+
+  // Validate and sanitize phone if provided
+  let sanitizedPhone = null;
+  if (formData.phone && formData.phone.trim()) {
+    const phoneValidation = validatePhoneNumber(formData.phone, '+91', false);
+    if (!phoneValidation.valid) {
+      setFieldErrors({ phone: phoneValidation.error || 'Invalid phone number' });
+      setError(phoneValidation.error || 'Invalid phone number');
+      setSaving(false);
+      return;
+    }
+    sanitizedPhone = phoneValidation.normalizedPhone || formData.phone.trim();
+  }
+
+  // ALL FIELDS BELOW ARE NOW OPTIONAL - VALIDATIONS COMMENTED OUT
+
+  // // Validate required hierarchy fields
+  // if (!formData.state || !formData.city || !formData.center) {
+  //   setError('Please fill in all required location fields (State, City, and Center)');
+  //   return;
+  // }
+
+  // // Validate spiritual fields
+  // if (!formData.initiationStatus) {
+  //   setError('Please select whether you are Initiated or Aspiring');
+  //   return;
+  // }
+
+  // if (formData.initiationStatus === 'initiated') {
+  //   if (!formData.initiatedName || !formData.spiritualMasterName) {
+  //     setError('Please fill in Initiated Name and Spiritual Master Name');
+  //     return;
+  //   }
+  // } else if (formData.initiationStatus === 'aspiring') {
+  //   // Aspiring Spiritual Master Name is optional - no validation needed
+  // }
+
+  // if (!formData.chantingSince) {
+  //   setError('Please select Chanting Since date');
+  //   return;
+  // }
+
+  // if (!formData.ashram) {
+  //   setError('Please select Ashram');
+  //   return;
+  // }
+
+  // if (!formData.royalMember) {
+  //   setError('Please select Royal Member status');
+  //   return;
+  // }
+
+  // if (!formData.brahmachariCounselor) {
+  //   setError('Please select Brahmachari Counselor');
+  //   return;
+  // }
+
+  // Validate and sanitize education entries
+  const educationErrors: string[] = [];
+  const sanitizedEducation = education.map((edu, index) => {
+    if (edu.institution?.trim()) {
+      const instValidation = validateEducationField(edu.institution, `Education ${index + 1} - Institution`);
+      if (!instValidation.valid) {
+        educationErrors.push(instValidation.error || `Invalid institution name in entry ${index + 1}`);
       }
-      if (formData.state) hierarchy.state = sanitizeTextInput(formData.state.trim());
-      if (formData.city) hierarchy.city = sanitizeTextInput(formData.city.trim());
-      if (formData.center) {
-        hierarchy.center = sanitizeTextInput(formData.center.trim());
-        if (formData.centerId) hierarchy.centerId = formData.centerId;
+    }
+    if (edu.degreeBranch?.trim()) {
+      const branchValidation = validateEducationField(edu.degreeBranch, `Education ${index + 1} - Degree-Branch`);
+      if (!branchValidation.valid) {
+        educationErrors.push(branchValidation.error || `Invalid degree-branch name in entry ${index + 1}`);
       }
+    }
+    return {
+      institution: edu.institution ? sanitizeTextInput(edu.institution.trim()) : '',
+      degreeBranch: edu.degreeBranch ? sanitizeTextInput(edu.degreeBranch.trim()) : '',
+      startYear: edu.startYear,
+      endYear: edu.endYear
+    };
+  });
+  if (educationErrors.length > 0) {
+    setError(educationErrors[0]);
+    setFieldErrors({ education: educationErrors[0] });
+    setSaving(false);
+    return;
+  }
 
-      // Add spiritual fields to hierarchy object
-      if (formData.initiationStatus) hierarchy.initiationStatus = formData.initiationStatus;
-      if (formData.initiatedName) hierarchy.initiatedName = sanitizeTextInput(formData.initiatedName.trim());
-      if (formData.spiritualMasterName) hierarchy.spiritualMasterName = sanitizeTextInput(formData.spiritualMasterName.trim());
-      if (formData.aspiringSpiritualMasterName) hierarchy.aspiringSpiritualMasterName = sanitizeTextInput(formData.aspiringSpiritualMasterName.trim());
-      if (formData.ashram) hierarchy.ashram = formData.ashram;
-      if (formData.introducedToKcIn) hierarchy.introducedToKcIn = sanitizeTextInput(formData.introducedToKcIn.trim());
-      if (formData.rounds) hierarchy.rounds = parseInt(formData.rounds) || 0;
-      const cleanOtherCenter = formData.otherCenter ? sanitizeTextInput(formData.otherCenter.trim()) : null;
-      const cleanOtherParentCenter = formData.otherParentCenter ? sanitizeTextInput(formData.otherParentCenter.trim()) : null;
-
-      if (formData.parentTemple) hierarchy.parentTemple = sanitizeTextInput(formData.parentTemple.trim());
-      if (formData.otherParentTemple) hierarchy.otherParentTemple = sanitizeTextInput(formData.otherParentTemple.trim());
-      if (formData.parentCenter === 'Other') {
-        hierarchy.parentCenter = 'Other';
-        hierarchy.otherParentCenter = cleanOtherParentCenter;
-      } else if (formData.parentCenter) {
-        hierarchy.parentCenter = sanitizeTextInput(formData.parentCenter.trim());
-        hierarchy.otherParentCenter = null;
+  // Validate and sanitize work experience entries
+  const workErrors: string[] = [];
+  const sanitizedWork = workExperience.map((work, index) => {
+    if (work.company?.trim()) {
+      const companyValidation = validateWorkField(work.company, `Work ${index + 1} - Company`);
+      if (!companyValidation.valid) {
+        workErrors.push(companyValidation.error || `Invalid company name in entry ${index + 1}`);
       }
-
-      if (formData.currentTemple) hierarchy.currentTemple = sanitizeTextInput(formData.currentTemple.trim());
-      if (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha') {
-        hierarchy.currentCenter = null;
-        hierarchy.otherCenter = null;
-        hierarchy.center = null;
-      } else if (formData.currentCenter === 'Other') {
-        hierarchy.currentCenter = 'Other';
-        hierarchy.otherCenter = cleanOtherCenter;
-        hierarchy.center = cleanOtherCenter || 'Other';
-      } else if (formData.currentCenter) {
-        hierarchy.currentCenter = sanitizeTextInput(formData.currentCenter.trim());
-        hierarchy.center = hierarchy.currentCenter;
-        hierarchy.otherCenter = null;
+    }
+    if (work.position?.trim()) {
+      const positionValidation = validateWorkField(work.position, `Work ${index + 1} - Title/Position`);
+      if (!positionValidation.valid) {
+        workErrors.push(positionValidation.error || `Invalid title/position name in entry ${index + 1}`);
       }
-      if (formData.counselor) {
-        hierarchy.counselor = sanitizeTextInput(formData.counselor.trim());
-        if (formData.counselorId) hierarchy.counselorId = formData.counselorId;
+    }
+    if (work.location?.trim()) {
+      const locationValidation = validateWorkField(work.location, `Work ${index + 1} - Location`);
+      if (!locationValidation.valid) {
+        workErrors.push(locationValidation.error || `Invalid location in entry ${index + 1}`);
       }
-      if (formData.otherCounselor) hierarchy.otherCounselor = sanitizeTextInput(formData.otherCounselor.trim());
+    }
+    return {
+      company: work.company ? sanitizeTextInput(work.company.trim()) : '',
+      position: work.position ? sanitizeTextInput(work.position.trim()) : '',
+      location: work.location ? sanitizeTextInput(work.location.trim()) : '',
+      startDate: work.startDate,
+      endDate: work.endDate,
+      current: work.current
+    };
+  });
+  if (workErrors.length > 0) {
+    setError(workErrors[0]);
+    setFieldErrors({ work: workErrors[0] });
+    setSaving(false);
+    return;
+  }
 
-      // Build expanded update objects (education, work, etc.)
-      const educationUpdate: any = {};
-      const validEducation = sanitizedEducation.filter(edu => edu.institution?.trim() || edu.degreeBranch?.trim());
-      validEducation.slice(0, 5).forEach((edu, index) => {
-        const num = index + 1;
-        educationUpdate[`edu_${num}_institution`] = edu.institution?.trim() || null;
-        educationUpdate[`edu_${num}_degree_branch`] = edu.degreeBranch?.trim() || null;
-        educationUpdate[`edu_${num}_start_year`] = edu.startYear || null;
-        educationUpdate[`edu_${num}_end_year`] = edu.endYear || null;
-      });
-      for (let i = validEducation.length + 1; i <= 5; i++) {
-        educationUpdate[`edu_${i}_institution`] = null;
-        educationUpdate[`edu_${i}_degree_branch`] = null;
-        educationUpdate[`edu_${i}_start_year`] = null;
-        educationUpdate[`edu_${i}_end_year`] = null;
+
+  try {
+    // Build hierarchy object for backward compatibility (using sanitized values)
+    const hierarchy: any = {};
+    if (formData.birthDate) {
+      const cleanDOB = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
+      hierarchy.birthDate = cleanDOB;
+      hierarchy.birth_date = cleanDOB;
+    }
+    if (formData.state) hierarchy.state = sanitizeTextInput(formData.state.trim());
+    if (formData.city) hierarchy.city = sanitizeTextInput(formData.city.trim());
+    if (formData.center) {
+      hierarchy.center = sanitizeTextInput(formData.center.trim());
+      if (formData.centerId) hierarchy.centerId = formData.centerId;
+    }
+
+    // Add spiritual fields to hierarchy object
+    if (formData.initiationStatus) hierarchy.initiationStatus = formData.initiationStatus;
+    if (formData.initiatedName) hierarchy.initiatedName = sanitizeTextInput(formData.initiatedName.trim());
+    if (formData.spiritualMasterName) hierarchy.spiritualMasterName = sanitizeTextInput(formData.spiritualMasterName.trim());
+    if (formData.aspiringSpiritualMasterName) hierarchy.aspiringSpiritualMasterName = sanitizeTextInput(formData.aspiringSpiritualMasterName.trim());
+    if (formData.ashram) hierarchy.ashram = formData.ashram;
+    if (formData.introducedToKcIn) hierarchy.introducedToKcIn = sanitizeTextInput(formData.introducedToKcIn.trim());
+    if (formData.rounds) hierarchy.rounds = parseInt(formData.rounds) || 0;
+    const cleanOtherCenter = formData.otherCenter ? sanitizeTextInput(formData.otherCenter.trim()) : null;
+    const cleanOtherParentCenter = formData.otherParentCenter ? sanitizeTextInput(formData.otherParentCenter.trim()) : null;
+
+    if (formData.parentTemple) hierarchy.parentTemple = sanitizeTextInput(formData.parentTemple.trim());
+    if (formData.otherParentTemple) hierarchy.otherParentTemple = sanitizeTextInput(formData.otherParentTemple.trim());
+    if (formData.parentCenter === 'Other') {
+      hierarchy.parentCenter = 'Other';
+      hierarchy.otherParentCenter = cleanOtherParentCenter;
+    } else if (formData.parentCenter) {
+      hierarchy.parentCenter = sanitizeTextInput(formData.parentCenter.trim());
+      hierarchy.otherParentCenter = null;
+    }
+
+    if (formData.currentTemple) hierarchy.currentTemple = sanitizeTextInput(formData.currentTemple.trim());
+    if (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha') {
+      hierarchy.currentCenter = null;
+      hierarchy.otherCenter = null;
+      hierarchy.center = null;
+    } else if (formData.currentCenter === 'Other') {
+      hierarchy.currentCenter = 'Other';
+      hierarchy.otherCenter = cleanOtherCenter;
+      hierarchy.center = cleanOtherCenter || 'Other';
+    } else if (formData.currentCenter) {
+      hierarchy.currentCenter = sanitizeTextInput(formData.currentCenter.trim());
+      hierarchy.center = hierarchy.currentCenter;
+      hierarchy.otherCenter = null;
+    }
+    if (formData.counselor) {
+      hierarchy.counselor = sanitizeTextInput(formData.counselor.trim());
+      if (formData.counselorId) hierarchy.counselorId = formData.counselorId;
+    }
+    if (formData.otherCounselor) hierarchy.otherCounselor = sanitizeTextInput(formData.otherCounselor.trim());
+
+    // Build expanded update objects (education, work, etc.)
+    const educationUpdate: any = {};
+    const validEducation = sanitizedEducation.filter(edu => edu.institution?.trim() || edu.degreeBranch?.trim());
+    validEducation.slice(0, 5).forEach((edu, index) => {
+      const num = index + 1;
+      educationUpdate[`edu_${num}_institution`] = edu.institution?.trim() || null;
+      educationUpdate[`edu_${num}_degree_branch`] = edu.degreeBranch?.trim() || null;
+      educationUpdate[`edu_${num}_start_year`] = edu.startYear || null;
+      educationUpdate[`edu_${num}_end_year`] = edu.endYear || null;
+    });
+    for (let i = validEducation.length + 1; i <= 5; i++) {
+      educationUpdate[`edu_${i}_institution`] = null;
+      educationUpdate[`edu_${i}_degree_branch`] = null;
+      educationUpdate[`edu_${i}_start_year`] = null;
+      educationUpdate[`edu_${i}_end_year`] = null;
+    }
+
+    const workUpdate: any = {};
+    const validWork = sanitizedWork.filter(work => work.company?.trim() || work.position?.trim() || work.location?.trim());
+    validWork.slice(0, 5).forEach((work, index) => {
+      const num = index + 1;
+      workUpdate[`work_${num}_company`] = work.company?.trim() || null;
+      workUpdate[`work_${num}_position`] = work.position?.trim() || null;
+      workUpdate[`work_${num}_location`] = work.location?.trim() || null;
+      workUpdate[`work_${num}_start_date`] = work.startDate || null;
+      workUpdate[`work_${num}_end_date`] = work.current ? null : (work.endDate || null);
+      workUpdate[`work_${num}_current`] = work.current || false;
+    });
+    for (let i = validWork.length + 1; i <= 5; i++) {
+      workUpdate[`work_${i}_company`] = null;
+      workUpdate[`work_${i}_position`] = null;
+      workUpdate[`work_${i}_location`] = null;
+      workUpdate[`work_${i}_start_date`] = null;
+      workUpdate[`work_${i}_end_date`] = null;
+      workUpdate[`work_${i}_current`] = false;
+    }
+
+    const languagesUpdate: any = {};
+    const filteredLanguages = languages.filter(lang => lang.name?.trim());
+    filteredLanguages.slice(0, 5).forEach((lang, index) => {
+      const num = index + 1;
+      languagesUpdate[`language_${num}`] = lang.name?.trim() || null;
+    });
+    for (let i = filteredLanguages.length + 1; i <= 5; i++) {
+      languagesUpdate[`language_${i}`] = null;
+    }
+
+    const skillsUpdate: any = {};
+    const filteredSkills = skills.filter(skill => skill.name?.trim());
+    filteredSkills.slice(0, 5).forEach((skill, index) => {
+      const num = index + 1;
+      skillsUpdate[`skill_${num}`] = skill.name?.trim() || null;
+    });
+    for (let i = filteredSkills.length + 1; i <= 5; i++) {
+      skillsUpdate[`skill_${i}`] = null;
+    }
+
+    const servicesUpdate: any = {};
+    const filteredServices = services.filter(service => service.name?.trim());
+    filteredServices.slice(0, 5).forEach((service, index) => {
+      const num = index + 1;
+      servicesUpdate[`service_${num}`] = service.name?.trim() || null;
+    });
+    for (let i = filteredServices.length + 1; i <= 5; i++) {
+      servicesUpdate[`service_${i}`] = null;
+    }
+
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token || '';
+
+    // Construct the main updates object
+    const updates: any = {
+      name: sanitizedName,
+      phone: sanitizedPhone,
+      birth_date: formData.birthDate ? String(formData.birthDate).trim().split('T')[0].split(' ')[0] : null,
+      profile_image: finalProfileImageUrl || null,
+      aadhar_card_image: finalAadharCardUrl || null,
+      state: hierarchy.state || null,
+      city: hierarchy.city || null,
+      center: hierarchy.center || null,
+      center_id: formData.centerId || null,
+      // Spiritual fields
+      initiation_status: formData.initiationStatus || null,
+      initiated_name: formData.initiatedName ? sanitizeTextInput(formData.initiatedName.trim()) : null,
+      spiritual_master_name: formData.spiritualMasterName ? sanitizeTextInput(formData.spiritualMasterName.trim()) : null,
+      aspiring_spiritual_master_name: formData.aspiringSpiritualMasterName ? sanitizeTextInput(formData.aspiringSpiritualMasterName.trim()) : null,
+      ashram: formData.ashram || null,
+      introduced_to_kc_in: formData.introducedToKcIn ? sanitizeTextInput(formData.introducedToKcIn.trim()) : null,
+      rounds: formData.rounds ? parseInt(formData.rounds) : null,
+      parent_temple: formData.parentTemple ? sanitizeTextInput(formData.parentTemple.trim()) : null,
+      other_parent_temple: formData.parentTemple === 'Other' ? (formData.otherParentTemple ? sanitizeTextInput(formData.otherParentTemple.trim()) : null) : null,
+      parent_center: formData.parentCenter === 'Other' ? 'Other' : (formData.parentCenter ? sanitizeTextInput(formData.parentCenter.trim()) : null),
+      other_parent_center: formData.parentCenter === 'Other' ? cleanOtherParentCenter : null,
+      current_temple: formData.currentTemple ? sanitizeTextInput(formData.currentTemple.trim()) : null,
+      current_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
+        ? null
+        : (formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null)),
+      counselor: formData.counselor ? sanitizeTextInput(formData.counselor.trim()) : null,
+      counselor_id: formData.counselorId || null,
+      other_counselor: formData.counselor === 'Other' ? (formData.otherCounselor ? sanitizeTextInput(formData.otherCounselor.trim()) : null) : null,
+      other_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
+        ? null
+        : (formData.currentCenter === 'Other' ? cleanOtherCenter : null),
+      // Relative contact info
+      relative_1_name: formData.relative1Name ? sanitizeTextInput(formData.relative1Name.trim()) : null,
+      relative_1_relationship: formData.relative1Relationship || null,
+      relative_1_phone: formData.relative1Phone ? sanitizeTextInput(formData.relative1Phone.trim()) : null,
+      relative_2_name: formData.relative2Name ? sanitizeTextInput(formData.relative2Name.trim()) : null,
+      relative_2_relationship: formData.relative2Relationship || null,
+      relative_2_phone: formData.relative2Phone ? sanitizeTextInput(formData.relative2Phone.trim()) : null,
+      relative_3_name: formData.relative3Name ? sanitizeTextInput(formData.relative3Name.trim()) : null,
+      relative_3_relationship: formData.relative3Relationship || null,
+      relative_3_phone: formData.relative3Phone ? sanitizeTextInput(formData.relative3Phone.trim()) : null,
+      // Health info
+      health_chronic_disease: formData.healthChronicDisease ? sanitizeTextInput(formData.healthChronicDisease.trim()) : null,
+      // Camp fields
+      camp_dys: formData.campDys || false,
+      camp_sankalpa: formData.campSankalpa || false,
+      camp_sphurti: formData.campSphurti || false,
+      camp_utkarsh: formData.campUtkarsh || false,
+      camp_srcgd_workshop: formData.campSrcgdWorkshop || false,
+      camp_nishtha: formData.campNishtha || false,
+      camp_ftec: formData.campFtec || false,
+      camp_ashraya: formData.campAshraya || false,
+      camp_mtec: formData.campMtec || false,
+      camp_sharanagati: formData.campSharanagati || false,
+      camp_idc: formData.campIdc || false,
+      camp_bhakti_shastri: formData.campBhaktiShastri || false,
+      camp_positive_thinker: formData.campPositiveThinker || false,
+      camp_self_manager: formData.campSelfManager || false,
+      camp_proactive_leader: formData.campProactiveLeader || false,
+      // SP Books fields
+      spbook_third_ssr_1_5: formData.spbookThirdSsr15 || false,
+      spbook_third_coming_back: formData.spbookThirdComingBack || false,
+      spbook_third_pqpa: formData.spbookThirdPqpa || false,
+      spbook_third_matchless_gift: formData.spbookThirdMatchlessGift || false,
+      spbook_third_raja_vidya: formData.spbookThirdRajaVidya || false,
+      spbook_third_elevation_kc: formData.spbookThirdElevationKc || false,
+      spbook_third_beyond_birth_death: formData.spbookThirdBeyondBirthDeath || false,
+      spbook_third_krishna_reservoir: formData.spbookThirdKrishnaReservoir || false,
+      spbook_fourth_ssr_6_8: formData.spbookFourthSsr68 || false,
+      spbook_fourth_laws_of_nature: formData.spbookFourthLawsOfNature || false,
+      spbook_fourth_dharma: formData.spbookFourthDharma || false,
+      spbook_fourth_second_chance: formData.spbookFourthSecondChance || false,
+      spbook_fourth_isopanishad_1_10: formData.spbookFourthIsopanishad110 || false,
+      spbook_fourth_queen_kunti_video: formData.spbookFourthQueenKuntiVideo || false,
+      spbook_fourth_enlightenment_natural: formData.spbookFourthEnlightenmentNatural || false,
+      spbook_fourth_krishna_book_1_21: formData.spbookFourthKrishnaBook121 || false,
+      spbook_fifth_life_from_life: formData.spbookFifthLifeFromLife || false,
+      spbook_fifth_prahlad_teachings: formData.spbookFifthPrahladTeachings || false,
+      spbook_fifth_journey_self_discovery: formData.spbookFifthJourneySelfDiscovery || false,
+      spbook_fifth_queen_kunti_hearing: formData.spbookFifthQueenKuntiHearing || false,
+      spbook_fifth_lord_kapila: formData.spbookFifthLordKapila || false,
+      spbook_fifth_nectar_1_6: formData.spbookFifthNectar16 || false,
+      spbook_fifth_gita_1_6: formData.spbookFifthGita16 || false,
+      spbook_fifth_krishna_book_24_28: formData.spbookFifthKrishnaBook2428 || false,
+      spbook_sixth_nectar_7_11: formData.spbookSixthNectar711 || false,
+      spbook_sixth_path_perfection: formData.spbookSixthPathPerfection || false,
+      spbook_sixth_civilisation_transcendence: formData.spbookSixthCivilisationTranscendence || false,
+      spbook_sixth_hare_krishna_challenge: formData.spbookSixthHareKrishnaChallenge || false,
+      spbook_sixth_gita_7_12: formData.spbookSixthGita712 || false,
+      spbook_sixth_sb_1st_canto_1_6: formData.spbookSixthSb1stCanto16 || false,
+      spbook_sixth_krishna_book_35_59: formData.spbookSixthKrishnaBook3559 || false,
+      spbook_seventh_gita_13_18: formData.spbookSeventhGita1318 || false,
+      spbook_seventh_sb_1st_canto_7_13: formData.spbookSeventhSb1stCanto713 || false,
+      spbook_seventh_krishna_book_63_78: formData.spbookSeventhKrishnaBook6378 || false,
+      spbook_eighth_sb_1st_canto_14_19: formData.spbookEighthSb1stCanto1419 || false,
+      spbook_eighth_krishna_book_78_89: formData.spbookEighthKrishnaBook7889 || false,
+      ...educationUpdate,
+      ...workUpdate,
+      ...languagesUpdate,
+      ...skillsUpdate,
+      ...servicesUpdate,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Split spiritual changes from basic profile changes
+    const spiritualFields = [
+      'initiation_status', 'initiated_name', 'spiritual_master_name',
+      'aspiring_spiritual_master_name', 'rounds', 'introduced_to_kc_in',
+      'parent_temple', 'other_parent_temple', 'parent_center', 'other_parent_center',
+      'current_temple', 'current_center', 'counselor', 'counselor_id',
+      'other_counselor', 'other_center', 'ashram', 'center'
+    ];
+
+    const spiritualUpdates: any = {};
+    const basicUpdates: any = { ...updates };
+
+    // Identify spiritual updates and remove from basic
+    spiritualFields.forEach(field => {
+      if (updates[field] !== undefined) {
+        spiritualUpdates[field] = updates[field];
+        delete basicUpdates[field];
       }
+    });
 
-      const workUpdate: any = {};
-      const validWork = sanitizedWork.filter(work => work.company?.trim() || work.position?.trim() || work.location?.trim());
-      validWork.slice(0, 5).forEach((work, index) => {
-        const num = index + 1;
-        workUpdate[`work_${num}_company`] = work.company?.trim() || null;
-        workUpdate[`work_${num}_position`] = work.position?.trim() || null;
-        workUpdate[`work_${num}_location`] = work.location?.trim() || null;
-        workUpdate[`work_${num}_start_date`] = work.startDate || null;
-        workUpdate[`work_${num}_end_date`] = work.current ? null : (work.endDate || null);
-        workUpdate[`work_${num}_current`] = work.current || false;
-      });
-      for (let i = validWork.length + 1; i <= 5; i++) {
-        workUpdate[`work_${i}_company`] = null;
-        workUpdate[`work_${i}_position`] = null;
-        workUpdate[`work_${i}_location`] = null;
-        workUpdate[`work_${i}_start_date`] = null;
-        workUpdate[`work_${i}_end_date`] = null;
-        workUpdate[`work_${i}_current`] = false;
+    // Check if any spiritual field has actually changed
+    const actualSpiritualChanges: any = {};
+    let hasSpiritualChanges = false;
+    const snakeToCamel = (s: string) => s.replace(/(_\w)/g, k => k[1].toUpperCase());
+
+    spiritualFields.forEach(field => {
+      const camelField = snakeToCamel(field);
+      const newValue = updates[field];
+      const oldValue = userData?.hierarchy?.[camelField];
+
+      const normNew = (newValue === null || newValue === undefined) ? '' : newValue.toString().trim();
+      const normOld = (oldValue === null || oldValue === undefined) ? '' : oldValue.toString().trim();
+
+      if (normNew !== normOld) {
+        actualSpiritualChanges[camelField] = newValue;
+        hasSpiritualChanges = true;
       }
+    });
 
-      const languagesUpdate: any = {};
-      const filteredLanguages = languages.filter(lang => lang.name?.trim());
-      filteredLanguages.slice(0, 5).forEach((lang, index) => {
-        const num = index + 1;
-        languagesUpdate[`language_${num}`] = lang.name?.trim() || null;
-      });
-      for (let i = filteredLanguages.length + 1; i <= 5; i++) {
-        languagesUpdate[`language_${i}`] = null;
+    const spiritualCamelFields = spiritualFields.map(snakeToCamel);
+    // Clean hierarchy: start with current saved hierarchy to keep approved spiritual values
+    const cleanHierarchy: any = { ...(userData?.hierarchy || {}) };
+    // Apply only non-spiritual updates from the newly built hierarchy
+    Object.keys(hierarchy).forEach(key => {
+      if (!spiritualCamelFields.includes(key) && !spiritualFields.includes(key)) {
+        cleanHierarchy[key] = hierarchy[key];
       }
+    });
+    if (formData.birthDate) {
+      const cleanBirth = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
+      cleanHierarchy.birthDate = cleanBirth;
+      cleanHierarchy.birth_date = cleanBirth;
+    }
 
-      const skillsUpdate: any = {};
-      const filteredSkills = skills.filter(skill => skill.name?.trim());
-      filteredSkills.slice(0, 5).forEach((skill, index) => {
-        const num = index + 1;
-        skillsUpdate[`skill_${num}`] = skill.name?.trim() || null;
-      });
-      for (let i = filteredSkills.length + 1; i <= 5; i++) {
-        skillsUpdate[`skill_${i}`] = null;
-      }
+    // Prepare final basic updates in hierarchy (spiritual fields remain untouched)
+    const finalBasicUpdates = {
+      ...basicUpdates,
+      hierarchy: cleanHierarchy
+    };
 
-      const servicesUpdate: any = {};
-      const filteredServices = services.filter(service => service.name?.trim());
-      filteredServices.slice(0, 5).forEach((service, index) => {
-        const num = index + 1;
-        servicesUpdate[`service_${num}`] = service.name?.trim() || null;
-      });
-      for (let i = filteredServices.length + 1; i <= 5; i++) {
-        servicesUpdate[`service_${i}`] = null;
-      }
+    const promises = [];
+    // 1. Update basic info
+    promises.push(
+      fetch('/api/users/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ userId: user.id, updates: finalBasicUpdates })
+      }).then(res => res.json())
+    );
 
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token || '';
-
-      // Construct the main updates object
-      const updates: any = {
-        name: sanitizedName,
-        phone: sanitizedPhone,
-        birth_date: formData.birthDate ? String(formData.birthDate).trim().split('T')[0].split(' ')[0] : null,
-        profile_image: finalProfileImageUrl || null,
-        aadhar_card_image: finalAadharCardUrl || null,
-        state: hierarchy.state || null,
-        city: hierarchy.city || null,
-        center: hierarchy.center || null,
-        center_id: formData.centerId || null,
-        // Spiritual fields
-        initiation_status: formData.initiationStatus || null,
-        initiated_name: formData.initiatedName ? sanitizeTextInput(formData.initiatedName.trim()) : null,
-        spiritual_master_name: formData.spiritualMasterName ? sanitizeTextInput(formData.spiritualMasterName.trim()) : null,
-        aspiring_spiritual_master_name: formData.aspiringSpiritualMasterName ? sanitizeTextInput(formData.aspiringSpiritualMasterName.trim()) : null,
-        ashram: formData.ashram || null,
-        introduced_to_kc_in: formData.introducedToKcIn ? sanitizeTextInput(formData.introducedToKcIn.trim()) : null,
-        rounds: formData.rounds ? parseInt(formData.rounds) : null,
-        parent_temple: formData.parentTemple ? sanitizeTextInput(formData.parentTemple.trim()) : null,
-        other_parent_temple: formData.parentTemple === 'Other' ? (formData.otherParentTemple ? sanitizeTextInput(formData.otherParentTemple.trim()) : null) : null,
-        parent_center: formData.parentCenter === 'Other' ? 'Other' : (formData.parentCenter ? sanitizeTextInput(formData.parentCenter.trim()) : null),
-        other_parent_center: formData.parentCenter === 'Other' ? cleanOtherParentCenter : null,
-        current_temple: formData.currentTemple ? sanitizeTextInput(formData.currentTemple.trim()) : null,
-        current_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
-          ? null
-          : (formData.currentCenter === 'Other' ? 'Other' : (formData.currentCenter ? sanitizeTextInput(formData.currentCenter.trim()) : null)),
-        counselor: formData.counselor ? sanitizeTextInput(formData.counselor.trim()) : null,
-        counselor_id: formData.counselorId || null,
-        other_counselor: formData.counselor === 'Other' ? (formData.otherCounselor ? sanitizeTextInput(formData.otherCounselor.trim()) : null) : null,
-        other_center: (formData.ashram === 'Brahmachari' || formData.ashram === 'Grihastha')
-          ? null
-          : (formData.currentCenter === 'Other' ? cleanOtherCenter : null),
-        // Relative contact info
-        relative_1_name: formData.relative1Name ? sanitizeTextInput(formData.relative1Name.trim()) : null,
-        relative_1_relationship: formData.relative1Relationship || null,
-        relative_1_phone: formData.relative1Phone ? sanitizeTextInput(formData.relative1Phone.trim()) : null,
-        relative_2_name: formData.relative2Name ? sanitizeTextInput(formData.relative2Name.trim()) : null,
-        relative_2_relationship: formData.relative2Relationship || null,
-        relative_2_phone: formData.relative2Phone ? sanitizeTextInput(formData.relative2Phone.trim()) : null,
-        relative_3_name: formData.relative3Name ? sanitizeTextInput(formData.relative3Name.trim()) : null,
-        relative_3_relationship: formData.relative3Relationship || null,
-        relative_3_phone: formData.relative3Phone ? sanitizeTextInput(formData.relative3Phone.trim()) : null,
-        // Health info
-        health_chronic_disease: formData.healthChronicDisease ? sanitizeTextInput(formData.healthChronicDisease.trim()) : null,
-        // Camp fields
-        camp_dys: formData.campDys || false,
-        camp_sankalpa: formData.campSankalpa || false,
-        camp_sphurti: formData.campSphurti || false,
-        camp_utkarsh: formData.campUtkarsh || false,
-        camp_srcgd_workshop: formData.campSrcgdWorkshop || false,
-        camp_nishtha: formData.campNishtha || false,
-        camp_ftec: formData.campFtec || false,
-        camp_ashraya: formData.campAshraya || false,
-        camp_mtec: formData.campMtec || false,
-        camp_sharanagati: formData.campSharanagati || false,
-        camp_idc: formData.campIdc || false,
-        camp_bhakti_shastri: formData.campBhaktiShastri || false,
-        camp_positive_thinker: formData.campPositiveThinker || false,
-        camp_self_manager: formData.campSelfManager || false,
-        camp_proactive_leader: formData.campProactiveLeader || false,
-        // SP Books fields
-        spbook_third_ssr_1_5: formData.spbookThirdSsr15 || false,
-        spbook_third_coming_back: formData.spbookThirdComingBack || false,
-        spbook_third_pqpa: formData.spbookThirdPqpa || false,
-        spbook_third_matchless_gift: formData.spbookThirdMatchlessGift || false,
-        spbook_third_raja_vidya: formData.spbookThirdRajaVidya || false,
-        spbook_third_elevation_kc: formData.spbookThirdElevationKc || false,
-        spbook_third_beyond_birth_death: formData.spbookThirdBeyondBirthDeath || false,
-        spbook_third_krishna_reservoir: formData.spbookThirdKrishnaReservoir || false,
-        spbook_fourth_ssr_6_8: formData.spbookFourthSsr68 || false,
-        spbook_fourth_laws_of_nature: formData.spbookFourthLawsOfNature || false,
-        spbook_fourth_dharma: formData.spbookFourthDharma || false,
-        spbook_fourth_second_chance: formData.spbookFourthSecondChance || false,
-        spbook_fourth_isopanishad_1_10: formData.spbookFourthIsopanishad110 || false,
-        spbook_fourth_queen_kunti_video: formData.spbookFourthQueenKuntiVideo || false,
-        spbook_fourth_enlightenment_natural: formData.spbookFourthEnlightenmentNatural || false,
-        spbook_fourth_krishna_book_1_21: formData.spbookFourthKrishnaBook121 || false,
-        spbook_fifth_life_from_life: formData.spbookFifthLifeFromLife || false,
-        spbook_fifth_prahlad_teachings: formData.spbookFifthPrahladTeachings || false,
-        spbook_fifth_journey_self_discovery: formData.spbookFifthJourneySelfDiscovery || false,
-        spbook_fifth_queen_kunti_hearing: formData.spbookFifthQueenKuntiHearing || false,
-        spbook_fifth_lord_kapila: formData.spbookFifthLordKapila || false,
-        spbook_fifth_nectar_1_6: formData.spbookFifthNectar16 || false,
-        spbook_fifth_gita_1_6: formData.spbookFifthGita16 || false,
-        spbook_fifth_krishna_book_24_28: formData.spbookFifthKrishnaBook2428 || false,
-        spbook_sixth_nectar_7_11: formData.spbookSixthNectar711 || false,
-        spbook_sixth_path_perfection: formData.spbookSixthPathPerfection || false,
-        spbook_sixth_civilisation_transcendence: formData.spbookSixthCivilisationTranscendence || false,
-        spbook_sixth_hare_krishna_challenge: formData.spbookSixthHareKrishnaChallenge || false,
-        spbook_sixth_gita_7_12: formData.spbookSixthGita712 || false,
-        spbook_sixth_sb_1st_canto_1_6: formData.spbookSixthSb1stCanto16 || false,
-        spbook_sixth_krishna_book_35_59: formData.spbookSixthKrishnaBook3559 || false,
-        spbook_seventh_gita_13_18: formData.spbookSeventhGita1318 || false,
-        spbook_seventh_sb_1st_canto_7_13: formData.spbookSeventhSb1stCanto713 || false,
-        spbook_seventh_krishna_book_63_78: formData.spbookSeventhKrishnaBook6378 || false,
-        spbook_eighth_sb_1st_canto_14_19: formData.spbookEighthSb1stCanto1419 || false,
-        spbook_eighth_krishna_book_78_89: formData.spbookEighthKrishnaBook7889 || false,
-        ...educationUpdate,
-        ...workUpdate,
-        ...languagesUpdate,
-        ...skillsUpdate,
-        ...servicesUpdate,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Split spiritual changes from basic profile changes
-      const spiritualFields = [
-        'initiation_status', 'initiated_name', 'spiritual_master_name',
-        'aspiring_spiritual_master_name', 'rounds', 'introduced_to_kc_in',
-        'parent_temple', 'other_parent_temple', 'parent_center', 'other_parent_center',
-        'current_temple', 'current_center', 'counselor', 'counselor_id',
-        'other_counselor', 'other_center', 'ashram', 'center'
-      ];
-
-      const spiritualUpdates: any = {};
-      const basicUpdates: any = { ...updates };
-
-      // Identify spiritual updates and remove from basic
-      spiritualFields.forEach(field => {
-        if (updates[field] !== undefined) {
-          spiritualUpdates[field] = updates[field];
-          delete basicUpdates[field];
-        }
-      });
-
-      // Check if any spiritual field has actually changed
-      const actualSpiritualChanges: any = {};
-      let hasSpiritualChanges = false;
-      const snakeToCamel = (s: string) => s.replace(/(_\w)/g, k => k[1].toUpperCase());
-
+    // 2. Submit spiritual changes for approval (will merge with existing pending request if any)
+    if (hasSpiritualChanges) {
+      const currentSpiritualValues: any = {};
       spiritualFields.forEach(field => {
         const camelField = snakeToCamel(field);
-        const newValue = updates[field];
-        const oldValue = userData?.hierarchy?.[camelField];
-
-        const normNew = (newValue === null || newValue === undefined) ? '' : newValue.toString().trim();
-        const normOld = (oldValue === null || oldValue === undefined) ? '' : oldValue.toString().trim();
-
-        if (normNew !== normOld) {
-          actualSpiritualChanges[camelField] = newValue;
-          hasSpiritualChanges = true;
-        }
+        currentSpiritualValues[camelField] = userData?.hierarchy?.[camelField] || '';
       });
 
-      const spiritualCamelFields = spiritualFields.map(snakeToCamel);
-      // Clean hierarchy: start with current saved hierarchy to keep approved spiritual values
-      const cleanHierarchy: any = { ...(userData?.hierarchy || {}) };
-      // Apply only non-spiritual updates from the newly built hierarchy
-      Object.keys(hierarchy).forEach(key => {
-        if (!spiritualCamelFields.includes(key) && !spiritualFields.includes(key)) {
-          cleanHierarchy[key] = hierarchy[key];
-        }
-      });
-      if (formData.birthDate) {
-        const cleanBirth = String(formData.birthDate).trim().split('T')[0].split(' ')[0];
-        cleanHierarchy.birthDate = cleanBirth;
-        cleanHierarchy.birth_date = cleanBirth;
-      }
-
-      // Prepare final basic updates in hierarchy (spiritual fields remain untouched)
-      const finalBasicUpdates = {
-        ...basicUpdates,
-        hierarchy: cleanHierarchy
-      };
-
-      const promises = [];
-      // 1. Update basic info
       promises.push(
-        fetch('/api/users/update-profile', {
+        fetch('/api/profile-requests', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { "Authorization": `Bearer ${token}` } : {})
           },
-          body: JSON.stringify({ userId: user.id, updates: finalBasicUpdates })
+          body: JSON.stringify({
+            requestedChanges: actualSpiritualChanges,
+            currentValues: currentSpiritualValues
+          })
         }).then(res => res.json())
       );
-
-      // 2. Submit spiritual changes for approval (will merge with existing pending request if any)
-      if (hasSpiritualChanges) {
-        const currentSpiritualValues: any = {};
-        spiritualFields.forEach(field => {
-          const camelField = snakeToCamel(field);
-          currentSpiritualValues[camelField] = userData?.hierarchy?.[camelField] || '';
-        });
-
-        promises.push(
-          fetch('/api/profile-requests', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { "Authorization": `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({
-              requestedChanges: actualSpiritualChanges,
-              currentValues: currentSpiritualValues
-            })
-          }).then(res => res.json())
-        );
-      }
-
-      const results = await Promise.all(promises);
-      if (results[0]?.error) throw new Error(results[0].details || results[0].error);
-      if (hasSpiritualChanges && results[1]?.error) throw new Error(results[1].details || results[1].error);
-
-      setSuccess(hasSpiritualChanges ? 'Profile updated! Spiritual changes pending approval.' : 'Profile updated successfully!');
-      await refreshUserData();
-
-      if (hasSpiritualChanges) {
-        const { data } = await supabase.from('profile_update_requests')
-          .select('*').eq('user_id', user.id).eq('status', 'pending')
-          .order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (data) setPendingRequest(data);
-      }
-
-      setIsDirty(false);
-      isInitializedRef.current = false;
-      setSelectedPhoto(null); // Clear selected photo after successful submission
-
-      // Refresh page after a short delay to ensure all updates are visible
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (err: any) {
-      console.error('Update error:', err);
-      setError(err.message || 'Failed to update profile');
-    } finally {
-      setSaving(false);
     }
-  };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/30 to-amber-50/50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative animate-fadeIn">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-200 border-t-amber-600 mx-auto shadow-lg"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="p-2 bg-amber-100 rounded-full">
-                <User className="h-6 w-6 text-amber-600 animate-pulse" />
-              </div>
+    const results = await Promise.all(promises);
+    if (results[0]?.error) throw new Error(results[0].details || results[0].error);
+    if (hasSpiritualChanges && results[1]?.error) throw new Error(results[1].details || results[1].error);
+
+    setSuccess(hasSpiritualChanges ? 'Profile updated! Spiritual changes pending approval.' : 'Profile updated successfully!');
+    await refreshUserData();
+
+    if (hasSpiritualChanges) {
+      const { data } = await supabase.from('profile_update_requests')
+        .select('*').eq('user_id', user.id).eq('status', 'pending')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (data) setPendingRequest(data);
+    }
+
+    setIsDirty(false);
+    isInitializedRef.current = false;
+    setSelectedPhoto(null); // Clear selected photo after successful submission
+
+    // Refresh page after a short delay to ensure all updates are visible
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  } catch (err: any) {
+    console.error('Update error:', err);
+    setError(err.message || 'Failed to update profile');
+  } finally {
+    setSaving(false);
+  }
+};
+
+if (authLoading) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/30 to-amber-50/50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="relative animate-fadeIn">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-200 border-t-amber-600 mx-auto shadow-lg"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="p-2 bg-amber-100 rounded-full">
+              <User className="h-6 w-6 text-amber-600 animate-pulse" />
             </div>
           </div>
-          <p className="mt-6 text-gray-700 font-semibold text-lg animate-slideInRight" style={{ animationDelay: '0.2s' }}>Loading your profile...</p>
-          <p className="mt-2 text-gray-500 text-sm animate-fadeIn" style={{ animationDelay: '0.3s' }}>Please wait while we fetch your information</p>
-          <div className="mt-4 flex justify-center gap-2">
-            <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-            <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-          </div>
+        </div>
+        <p className="mt-6 text-gray-700 font-semibold text-lg animate-slideInRight" style={{ animationDelay: '0.2s' }}>Loading your profile...</p>
+        <p className="mt-2 text-gray-500 text-sm animate-fadeIn" style={{ animationDelay: '0.3s' }}>Please wait while we fetch your information</p>
+        <div className="mt-4 flex justify-center gap-2">
+          <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+          <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/30 to-amber-50/50 py-4 sm:py-6 lg:py-8 px-3 sm:px-4 lg:px-6">
-      <style jsx>{`
+return (
+  <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/30 to-amber-50/50 py-4 sm:py-6 lg:py-8 px-3 sm:px-4 lg:px-6">
+    <style jsx>{`
         @keyframes fadeInUp {
           from {
             opacity: 0;
@@ -1733,1899 +1817,1911 @@ export default function ProfilePage() {
         }
       `}</style>
 
-      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 lg:space-y-8">
-        {/* Header Section - Devotional and Soothing Colors with Animation */}
-        <div className={`bg-white rounded-xl sm:rounded-2xl shadow-lg border border-amber-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${mounted ? 'animate-fadeInUp' : 'opacity-0'}`}>
-          <div className="bg-gradient-to-r from-amber-400 via-orange-300 to-amber-500 px-4 sm:px-6 lg:px-8 py-3 sm:py-4 lg:py-5 relative overflow-hidden">
-            <div className="absolute inset-0 shimmer opacity-30"></div>
-            <div className="relative z-10">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex-1">
-                  <h1 className={`text-xl sm:text-2xl lg:text-3xl font-bold text-blue-900 mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3 drop-shadow-md font-display tracking-tight ${mounted ? 'animate-slideInRight' : 'opacity-0'}`}>
-                    <div className="p-1.5 sm:p-2 bg-white/30 rounded-lg sm:rounded-xl backdrop-blur-sm shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">
-                      <User className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-blue-900" />
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 lg:space-y-8">
+      {/* Header Section - Devotional and Soothing Colors with Animation */}
+      <div className={`bg-white rounded-xl sm:rounded-2xl shadow-lg border border-amber-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${mounted ? 'animate-fadeInUp' : 'opacity-0'}`}>
+        <div className="bg-gradient-to-r from-amber-400 via-orange-300 to-amber-500 px-4 sm:px-6 lg:px-8 py-3 sm:py-4 lg:py-5 relative overflow-hidden">
+          <div className="absolute inset-0 shimmer opacity-30"></div>
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex-1">
+                <h1 className={`text-xl sm:text-2xl lg:text-3xl font-bold text-blue-900 mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3 drop-shadow-md font-display tracking-tight ${mounted ? 'animate-slideInRight' : 'opacity-0'}`}>
+                  <div className="p-1.5 sm:p-2 bg-white/30 rounded-lg sm:rounded-xl backdrop-blur-sm shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-blue-900" />
+                  </div>
+                  My Profile
+                </h1>
+                <p className={`text-blue-800/80 text-xs sm:text-sm lg:text-base ml-8 sm:ml-10 lg:ml-12 font-medium tracking-wide ${mounted ? 'animate-fadeIn' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>Manage and update your personal information</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alert Messages with Enhanced Animations */}
+      {/* Toasts removed from here and moved to fixed position container at the bottom */}
+
+      {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
+        <div className={`${pendingRequest.status === 'pending' ? 'bg-amber-50 border-amber-400' : pendingRequest.status === 'approved' ? 'bg-emerald-50 border-emerald-400' : 'bg-red-50 border-red-400'} border-l-4 p-4 rounded-r-xl shadow-sm animate-fadeIn`}>
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              {pendingRequest.status === 'pending' ? (
+                <Clock className="h-5 w-5 text-amber-400" />
+              ) : pendingRequest.status === 'approved' ? (
+                <Check className="h-5 w-5 text-emerald-500" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              )}
+            </div>
+            <div className="ml-3 flex-1">
+              <p className={`text-sm font-medium ${pendingRequest.status === 'pending' ? 'text-amber-700' : pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
+                {pendingRequest.status === 'pending'
+                  ? 'Spiritual Information Update Pending Approval'
+                  : pendingRequest.status === 'approved'
+                    ? 'Spiritual Information Update Approved with Remarks'
+                    : 'Spiritual Information Update Rejected'}
+              </p>
+              <div className="mt-1 space-y-2">
+                <p className={`text-xs ${pendingRequest.status === 'pending' ? 'text-amber-600' : pendingRequest.status === 'approved' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {pendingRequest.status === 'pending'
+                    ? `Your changes submitted on ${new Date(pendingRequest.created_at).toLocaleDateString()} are currently under review by authority. Other profile data can still be updated immediately.`
+                    : pendingRequest.status === 'approved'
+                      ? `Your update request from ${new Date(pendingRequest.created_at).toLocaleDateString()} was approved by authority, but with some observations.`
+                      : `Your update request from ${new Date(pendingRequest.created_at).toLocaleDateString()} was reviewed by authority.`}
+                </p>
+
+                {(pendingRequest.status === 'rejected' || pendingRequest.status === 'approved') && pendingRequest.admin_feedback && (
+                  <div className={`bg-white/50 rounded-lg p-2.5 border ${pendingRequest.status === 'approved' ? 'border-emerald-100' : 'border-red-100'} mt-2`}>
+                    <p className={`text-[10px] font-bold ${pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'} uppercase tracking-wider mb-1`}>Reason / Feedback from Authority:</p>
+                    <p className={`text-xs ${pendingRequest.status === 'approved' ? 'text-emerald-700' : 'text-red-700'} italic font-medium leading-relaxed`}>
+                      &quot; {pendingRequest.admin_feedback} &quot;
+                    </p>
+                  </div>
+                )}
+
+                {pendingRequest.status === 'rejected' && (
+                  <p className="text-[10px] text-red-500 font-medium">Please review the feedback above and update your information accordingly.</p>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-8 relative">
+        {/* Personal Information Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-blue-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
+          <div className="bg-gradient-to-r from-sky-400 via-blue-400 to-cyan-400 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 drop-shadow-sm relative z-10">
+              <div className="p-1.5 sm:p-2 bg-white/30 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                <User className="h-4 w-4 sm:h-5 sm:w-5 text-blue-900" />
+              </div>
+              Personal Information
+            </h2>
+          </div>
+
+          {isProfileLockActive && userData?.createdAt && (new Date().getTime() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24) >= 15 && (
+            (() => {
+              const campFields = [
+                'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
+                'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
+                'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
+              ];
+              const hasAnyCamp = campFields.some(field => (formData as any)[field]);
+              const hasAnyBook = Object.keys(formData).some(key => key.startsWith('spbook') && (formData as any)[key]);
+
+              const isIncomplete = (!profileImage && !selectedPhoto) ||
+                (!aadharImage && !selectedAadharPhoto) ||
+                !formData.initiationStatus ||
+                !formData.ashram ||
+                (formData.rounds === null || formData.rounds === undefined || formData.rounds === '') ||
+                !formData.counselor ||
+                !hasAnyCamp ||
+                !hasAnyBook;
+
+              if (!isIncomplete) return null;
+
+              return (
+                <div className="px-4 sm:px-6 pt-4">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800">
+                      <span className="font-bold">Mandatory Profile Update:</span> Your account is more than 15 days old and some required information is missing.
+                      Profile Photo, Aadhar Card, Spiritual Info, and at least one Camp/Book completion are currently required by platform policy.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+
+
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 mb-4 sm:mb-6">
+              <div className="flex flex-col items-center gap-3">
+                <span className="text-sm font-bold text-gray-700">Profile Photo</span>
+                <PhotoUpload
+                  onFileSelect={(file) => {
+                    setSelectedPhoto(file);
+                    if (file) {
+                      const objectUrl = URL.createObjectURL(file);
+                      setProfileImage(objectUrl);
+                    } else if (userData?.profileImage) {
+                      setProfileImage(userData.profileImage);
+                    } else {
+                      setProfileImage('');
+                    }
+                  }}
+                  userName={formData.name || userData?.name || 'user'}
+                  currentImageUrl={profileImage}
+                  disabled={saving}
+                  label=""
+                />
+              </div>
+
+              <div className="flex flex-col items-center gap-3">
+                <span className="text-sm font-bold text-gray-700">Aadhar Card</span>
+                <PhotoUpload
+                  onFileSelect={(file) => {
+                    setSelectedAadharPhoto(file);
+                    if (file) {
+                      const objectUrl = URL.createObjectURL(file);
+                      setAadharImage(objectUrl);
+                    } else if (userData?.aadharCardImage) {
+                      setAadharImage(userData.aadharCardImage);
+                    } else {
+                      setAadharImage('');
+                    }
+                  }}
+                  userName={`${formData.name || userData?.name || 'user'}_aadhar`}
+                  currentImageUrl={aadharImage}
+                  disabled={saving}
+                  label=""
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="group animate-on-scroll" style={{ animationDelay: '0.1s' }}>
+                <label htmlFor="name" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2 transform transition-all duration-200 group-hover:translate-x-1">
+                  <User className="h-3 w-3 sm:h-4 sm:w-4 text-sky-600 transform transition-all duration-200 group-hover:scale-110 group-hover:rotate-12" />
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => {
+                    const sanitized = sanitizeTextInput(e.target.value);
+                    setFormData({ ...formData, name: sanitized });
+                    // Clear error when user starts typing
+                    if (fieldErrors.name) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.name;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  onBlur={() => {
+                    const validation = validateTextInput(formData.name, 'Full Name', 100);
+                    if (!validation.valid) {
+                      setFieldErrors(prev => ({ ...prev, name: validation.error || 'Invalid name' }));
+                    }
+                  }}
+                  required
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-sky-50/50 hover:bg-sky-50 transition-all duration-300 group-hover:border-sky-200 focus:scale-[1.02] focus:shadow-md ${fieldErrors.name
+                    ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                    : 'border-sky-100 focus:ring-sky-400 focus:border-sky-400'
+                    }`}
+                />
+                {fieldErrors.name && (
+                  <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                    <X className="h-3 w-3" />
+                    {fieldErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="group animate-on-scroll" style={{ animationDelay: '0.2s' }}>
+                <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2 transform transition-all duration-200 group-hover:translate-x-1">
+                  <Mail className="h-3 w-3 sm:h-4 sm:w-4 text-sky-600 transform transition-all duration-200 group-hover:scale-110 group-hover:rotate-12" />
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-sky-100 rounded-lg sm:rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 text-gray-600 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1 animate-fadeIn" style={{ animationDelay: '0.3s' }}>
+                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                  Email cannot be changed
+                </p>
+              </div>
+
+              <div className="group animate-on-scroll" style={{ animationDelay: '0.3s' }}>
+                <PhoneInputWithCountry
+                  id="phone"
+                  label="Phone Number"
+                  value={formData.phone}
+                  error={fieldErrors.phone}
+                  onChange={(fullPhone) => {
+                    setFormData(prev => ({ ...prev, phone: fullPhone }));
+                    if (fieldErrors.phone) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.phone;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="group animate-on-scroll" style={{ animationDelay: '0.4s' }}>
+                <label htmlFor="birthDate" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 transform transition-all duration-200 group-hover:translate-x-1">
+                  Date of Birth
+                </label>
+                <input
+                  id="birthDate"
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={(e) => {
+                    const selectedDate = e.target.value;
+                    const today = new Date().toISOString().split('T')[0];
+                    // Prevent future dates
+                    if (selectedDate > today) {
+                      setFieldErrors(prev => ({ ...prev, birthDate: 'Future dates are not allowed' }));
+                      return;
+                    }
+                    setFormData({ ...formData, birthDate: selectedDate });
+                    if (fieldErrors.birthDate) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.birthDate;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  max={new Date().toISOString().split('T')[0]}
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-sky-50/50 hover:bg-sky-50 transition-all duration-300 group-hover:border-sky-200 focus:scale-[1.02] focus:shadow-md ${fieldErrors.birthDate
+                    ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                    : 'border-sky-100 focus:ring-sky-400 focus:border-sky-400'
+                    }`}
+                />
+                {fieldErrors.birthDate && (
+                  <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                    <X className="h-3 w-3" />
+                    {fieldErrors.birthDate}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Relative Contact Details Section */}
+            <div className="mt-8 pt-8 border-t border-sky-100 space-y-6 animate-on-scroll">
+              <h3 className="text-sm sm:text-base font-bold text-sky-800 flex items-center gap-2">
+                <Users className="h-4 w-4 text-sky-600" />
+                Relative Contact Details
+              </h3>
+
+              <div className="space-y-6">
+                {[1, 2, 3].map((num) => (
+                  <div key={num} className="bg-sky-50/30 p-4 rounded-xl border border-sky-100/50 space-y-4">
+                    <p className="text-xs font-bold text-sky-600 uppercase tracking-wider">Contact {num}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="group">
+                        <label htmlFor={`relativeName${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Name</label>
+                        <input
+                          id={`relativeName${num}`}
+                          type="text"
+                          value={(formData as any)[`relative${num}Name`]}
+                          onChange={(e) => setFormData({ ...formData, [`relative${num}Name`]: e.target.value })}
+                          placeholder="Full Name"
+                          className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all text-gray-900"
+                        />
+                      </div>
+                      <div className="group">
+                        <label htmlFor={`relativeRel${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Relationship</label>
+                        <select
+                          id={`relativeRel${num}`}
+                          value={(formData as any)[`relative${num}Relationship`]}
+                          onChange={(e) => setFormData({ ...formData, [`relative${num}Relationship`]: e.target.value })}
+                          className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] bg-[right_0.5rem_center] bg-no-repeat text-gray-900"
+                        >
+                          <option value="">Select...</option>
+                          <option value="Mother">Mother</option>
+                          <option value="Father">Father</option>
+                          <option value="Brother">Brother</option>
+                          <option value="Sister">Sister</option>
+                          <option value="Spouse">Spouse</option>
+                          <option value="Son">Son</option>
+                          <option value="Daughter">Daughter</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="group">
+                        <label htmlFor={`relativePhone${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Phone Number</label>
+                        <input
+                          id={`relativePhone${num}`}
+                          type="tel"
+                          value={(formData as any)[`relative${num}Phone`]}
+                          onChange={(e) => setFormData({ ...formData, [`relative${num}Phone`]: e.target.value.replace(/[^0-9+\-\s()]/g, '') })}
+                          placeholder="Phone Number"
+                          className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all text-gray-900"
+                        />
+                      </div>
                     </div>
-                    My Profile
-                  </h1>
-                  <p className={`text-blue-800/80 text-xs sm:text-sm lg:text-base ml-8 sm:ml-10 lg:ml-12 font-medium tracking-wide ${mounted ? 'animate-fadeIn' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>Manage and update your personal information</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Health Information Section */}
+            <div className="mt-8 pt-8 border-t border-sky-100 space-y-4 animate-on-scroll">
+              <h3 className="text-sm sm:text-base font-bold text-sky-800 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Health Information
+              </h3>
+              <div className="group">
+                <label htmlFor="healthChronicDisease" className="block text-xs font-semibold text-gray-600 mb-2">
+                  Any chronic diseases (Free text)
+                </label>
+                <textarea
+                  id="healthChronicDisease"
+                  value={formData.healthChronicDisease}
+                  onChange={(e) => setFormData({ ...formData, healthChronicDisease: e.target.value })}
+                  placeholder="List any chronic diseases or health conditions here..."
+                  className="w-full px-4 py-3 text-sm border-2 border-sky-100 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-sky-50/30 hover:bg-sky-50 transition-all min-h-[100px] resize-y text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+        {/* Spiritual Information Card with Animations */}
+        {/* Spiritual Information Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-lg sm:rounded-xl shadow-md border border-purple-100 overflow-visible relative" style={{ zIndex: 1 }}>
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-3 sm:px-4 py-2 sm:py-3 relative overflow-hidden group flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 relative z-10">
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+              Spiritual Information
+            </h2>
+            {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
+              <div className={`relative z-10 flex items-center gap-1.5 px-2 py-1 ${pendingRequest.status === 'pending' ? 'bg-white/20' : pendingRequest.status === 'approved' ? 'bg-emerald-500/30' : 'bg-red-500/30'} backdrop-blur-md rounded-lg border border-white/30 text-[10px] sm:text-xs font-bold text-white uppercase tracking-wider animate-pulse transition-all hover:bg-white/30`}>
+                {pendingRequest.status === 'pending' ? <Clock className="h-3 w-3" /> : pendingRequest.status === 'approved' ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                {pendingRequest.status === 'pending' ? 'Pending Approval' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Review Feedback'}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 sm:p-4 space-y-6">
+            {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
+              <div className={`${pendingRequest.status === 'pending' ? 'bg-purple-50 border-purple-100' : pendingRequest.status === 'approved' ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'} border p-3 rounded-xl flex items-start gap-3 animate-fadeIn mb-2`}>
+                <div className={`p-1.5 ${pendingRequest.status === 'pending' ? 'bg-purple-100' : pendingRequest.status === 'approved' ? 'bg-emerald-100' : 'bg-red-100'} rounded-lg`}>
+                  {pendingRequest.status === 'pending'
+                    ? <AlertCircle className="h-4 w-4 text-purple-600" />
+                    : pendingRequest.status === 'approved'
+                      ? <Check className="h-4 w-4 text-emerald-600" />
+                      : <MessageCircle className="h-4 w-4 text-red-600" />}
+                </div>
+                <div className="flex-1">
+                  <p className={`text-xs font-bold leading-tight ${pendingRequest.status === 'pending' ? 'text-purple-800' : pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
+                    {pendingRequest.status === 'pending' ? 'Review in Progress — Pending Fields Locked' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Authority Feedback Available'}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 leading-relaxed ${pendingRequest.status === 'pending' ? 'text-purple-600' : pendingRequest.status === 'approved' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {pendingRequest.status === 'pending'
+                      ? `Changes requested on ${new Date(pendingRequest.created_at).toLocaleDateString()} are under review by authority. Pending fields are locked, but you can still update other fields.`
+                      : pendingRequest.status === 'approved'
+                        ? `Your changes have been approved, but please note the feedback: "${pendingRequest.admin_feedback || 'No detail provided.'}"`
+                        : `Your last request was reviewed. Reason: "${pendingRequest.admin_feedback || 'No detail provided.'}"`}
+                  </p>
+                  {pendingRequest.status === 'pending' && pendingRequest.requested_changes && Object.keys(pendingRequest.requested_changes).length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-purple-200/70">
+                      <p className="text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1.5">Requested Changes Awaiting Approval:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(pendingRequest.requested_changes).map(([k, v]) => {
+                          const formatName = (str: string) => str.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                          return (
+                            <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-white border border-purple-200 text-purple-800 px-2.5 py-1 rounded-md shadow-xs">
+                              <span className="font-semibold text-purple-600">{formatName(k)}:</span>
+                              <span className="font-medium text-purple-950">{String(v || 'None')}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Group 1: Initiation Details - Indigo Theme */}
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 transition-all hover:bg-indigo-50 hover:shadow-sm">
+              <h3 className="text-sm font-bold text-indigo-800 mb-4 border-b border-indigo-100 pb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                Initiation Details
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                {/* Initiated/Aspiring Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="initiationStatus" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Initiated/Aspiring
+                    </label>
+                    {renderPendingBadge('initiationStatus')}
+                  </div>
+                  <select
+                    id="initiationStatus"
+                    disabled={isFieldPending('initiationStatus')}
+                    value={formData.initiationStatus}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as 'initiated' | 'aspiring' | '';
+                      setFormData(prev => {
+                        if (newStatus === 'initiated' && prev.initiationStatus === 'aspiring') {
+                          return { ...prev, initiationStatus: newStatus, aspiringSpiritualMasterName: '' };
+                        } else if (newStatus === 'aspiring' && prev.initiationStatus === 'initiated') {
+                          return { ...prev, initiationStatus: newStatus, initiatedName: '', spiritualMasterName: '' };
+                        } else {
+                          return { ...prev, initiationStatus: newStatus };
+                        }
+                      });
+                    }}
+                    required
+                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('initiationStatus') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
+                  >
+                    <option value="">Select...</option>
+                    <option value="initiated">Initiated</option>
+                    <option value="aspiring">Aspiring</option>
+                  </select>
+                </div>
+
+                {/* Initiated Name - only shown if Initiated */}
+                {formData.initiationStatus === 'initiated' && (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="initiatedName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Initiated Name
+                        </label>
+                        {renderPendingBadge('initiatedName')}
+                      </div>
+                      <input
+                        id="initiatedName"
+                        type="text"
+                        disabled={isFieldPending('initiatedName')}
+                        value={formData.initiatedName}
+                        onChange={(e) => {
+                          const sanitized = sanitizeTextInput(e.target.value);
+                          setFormData({ ...formData, initiatedName: sanitized });
+                          if (fieldErrors.initiatedName) {
+                            setFieldErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.initiatedName;
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        required
+                        placeholder="Enter your initiated name"
+                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md ${isFieldPending('initiatedName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.initiatedName
+                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                          : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
+                          }`}
+                      />
+                      {fieldErrors.initiatedName && (
+                        <p className="mt-1 text-xs text-red-600">{fieldErrors.initiatedName}</p>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="spiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Spiritual Master Name
+                        </label>
+                        {renderPendingBadge('spiritualMasterName')}
+                      </div>
+                      <SearchableSelect
+                        options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
+                        value={formData.spiritualMasterName}
+                        disabled={isFieldPending('spiritualMasterName')}
+                        onChange={(value) => {
+                          setFormData({ ...formData, spiritualMasterName: value });
+                          if (fieldErrors.spiritualMasterName) {
+                            setFieldErrors(prev => {
+                              const newErrors = { ...prev };
+                              delete newErrors.spiritualMasterName;
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        placeholder="Select Spiritual Master"
+                        triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('spiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.spiritualMasterName
+                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                          : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
+                          }`}
+                      />
+                      {fieldErrors.spiritualMasterName && (
+                        <p className="mt-1 text-xs text-red-600">{fieldErrors.spiritualMasterName}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Aspiring Spiritual Master Name - only shown if Aspiring */}
+                {formData.initiationStatus === 'aspiring' && (
+                  <div className="sm:col-span-2 lg:col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="aspiringSpiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Aspiring Spiritual Master Name
+                      </label>
+                      {renderPendingBadge('aspiringSpiritualMasterName')}
+                    </div>
+                    <SearchableSelect
+                      options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
+                      value={formData.aspiringSpiritualMasterName}
+                      disabled={isFieldPending('aspiringSpiritualMasterName')}
+                      onChange={(value) => {
+                        setFormData({ ...formData, aspiringSpiritualMasterName: value });
+                        if (fieldErrors.aspiringSpiritualMasterName) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.aspiringSpiritualMasterName;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      placeholder="Select Aspiring Spiritual Master"
+                      triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('aspiringSpiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.aspiringSpiritualMasterName
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
+                        }`}
+                    />
+                    {fieldErrors.aspiringSpiritualMasterName && (
+                      <p className="mt-1 text-xs text-red-600">{fieldErrors.aspiringSpiritualMasterName}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Group 2: Spiritual Practice - Amber Theme */}
+            <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 transition-all hover:bg-amber-50 hover:shadow-sm">
+              <h3 className="text-sm font-bold text-amber-800 mb-4 border-b border-amber-100 pb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                Spiritual Practice
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                {/* Ashram */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="ashram" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Ashram
+                    </label>
+                    {renderPendingBadge('ashram')}
+                  </div>
+                  <select
+                    id="ashram"
+                    value={formData.ashram}
+                    disabled={isFieldPending('ashram')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const updates: any = { ashram: val };
+                      if (val === 'Brahmachari' || val === 'Grihastha') {
+                        updates.currentCenter = '';
+                        updates.otherCenter = '';
+                        updates.center = '';
+                      }
+                      setFormData({ ...formData, ...updates });
+                    }}
+                    required
+                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('ashram') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
+                  >
+                    <option value="">Select Ashram</option>
+                    <option value="Student and Not decided">Student and Not decided</option>
+                    <option value="Working and Not Decided">Working and Not Decided</option>
+                    <option value="Gauranga Sabha">Gauranga Sabha</option>
+                    <option value="Nityananda Sabha">Nityananda Sabha</option>
+                    <option value="Grihastha">Grihastha</option>
+                    <option value="Brahmachari">Brahmachari</option>
+                    <option value="Staying Single (Not planning to marry)">Staying Single (Not planning to marry)</option>
+                  </select>
+                  {fieldErrors.ashram && (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.ashram}</p>
+                  )}
+                </div>
+
+                {/* Introduced to KC */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="introducedToKcIn" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Introduced to KC on (Date)
+                    </label>
+                    {renderPendingBadge('introducedToKcIn')}
+                  </div>
+                  <div className="relative group">
+                    <input
+                      id="introducedToKcIn"
+                      type={(formData.introducedToKcIn && formData.introducedToKcIn.length === 4) ? 'text' : 'date'}
+                      value={formData.introducedToKcIn}
+                      disabled={!!userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn')}
+                      onChange={(e) => {
+                        const selectedDate = e.target.value;
+                        const today = new Date().toISOString().split('T')[0];
+                        if (selectedDate.length > 4 && selectedDate > today) {
+                          setFieldErrors(prev => ({ ...prev, introducedToKcIn: 'Future dates are not allowed' }));
+                          return;
+                        }
+                        setFormData({ ...formData, introducedToKcIn: selectedDate });
+                        if (fieldErrors.introducedToKcIn) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.introducedToKcIn;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      max={new Date().toISOString().split('T')[0]}
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.introducedToKcIn
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-amber-100 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
+                    />
+                    {userData?.hierarchy?.introducedToKcIn && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-600">
+                        <Save className="w-4 h-4" />
+                      </div>
+                    )}
+                    {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && !userData?.hierarchy?.introducedToKcIn && !isFieldPending('introducedToKcIn') && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, introducedToKcIn: '' })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-600 hover:text-amber-700"
+                      >
+                        Change to Date
+                      </button>
+                    )}
+                  </div>
+                  {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && (
+                    <p className="mt-1 text-[10px] text-amber-600">Currently stored as Year. Use &quot;Change to Date&quot; to select a specific date.</p>
+                  )}
+                  {userData?.hierarchy?.introducedToKcIn && (
+                    <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1">
+                      <Info className="w-3 h-3" />
+                      This field is locked. Contact admin to change.
+                    </p>
+                  )}
+                  {fieldErrors.introducedToKcIn && (
+                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                      <X className="h-3 w-3" />
+                      {fieldErrors.introducedToKcIn}
+                    </p>
+                  )}
+                </div>
+
+                {/* Rounds */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="rounds" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      No. of Rounds Chanting
+                    </label>
+                    {renderPendingBadge('rounds')}
+                  </div>
+                  <input
+                    id="rounds"
+                    type="number"
+                    min="0"
+                    max="64"
+                    disabled={isFieldPending('rounds')}
+                    value={formData.rounds}
+                    onChange={(e) => setFormData({ ...formData, rounds: e.target.value })}
+                    placeholder="e.g., 16"
+                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('rounds') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Group 3: Counseling Details - Emerald Theme */}
+            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 transition-all hover:bg-emerald-50 hover:shadow-sm">
+              <h3 className="text-sm font-bold text-emerald-800 mb-4 border-b border-emerald-100 pb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Counseling Details
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="counselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Counselor Name
+                    </label>
+                    {renderPendingBadge('counselor')}
+                  </div>
+                  <SearchableSelect
+                    options={[
+                      ...counselors.map(c => ({ id: c.id, name: c.name })),
+                      ...counselors.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        email: (c as any).temple ? `Temple: ${(c as any).temple}` : c.email
+                      })),
+                      { id: 'None', name: 'None' },
+                      { id: 'Other', name: 'Other' }
+                    ]}
+                    value={formData.counselorId || formData.counselor}
+                    displayValue={formData.counselor && formData.counselor !== 'None' && formData.counselor !== 'Other' ? formData.counselor : undefined}
+                    valueProperty="id"
+                    onChange={(value) => {
+                      const selected = counselors.find(c => (c.id === value || c.name === value));
+                      const selected = counselors.find(c => (c.id === value || c.name === value))
+                        || allCounselors.find(c => (c.id === value || c.name === value));
+                      if (selected) {
+                        setFormData({
+                          ...formData,
+                          counselor: selected.name,
+                          counselorId: selected.id
+                        });
+                      } else if (value === 'None') {
+                        setFormData({ ...formData, counselor: 'None', counselorId: '', otherCounselor: '' });
+                      } else if (value === 'Other') {
+                        setFormData({ ...formData, counselor: 'Other', counselorId: '' });
+                      } else {
+                        setFormData({ ...formData, counselor: value, counselorId: '' });
+                      }
+                    }}
+                    placeholder="Select Counselor"
+                    disabled={loadingCounselors || isFieldPending('counselor')}
+                  />
+                </div>
+
+                {formData.counselor === 'Other' && (
+                  <div className="animate-fadeIn">
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="otherCounselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Other Counselor Name
+                      </label>
+                      {renderPendingBadge('otherCounselor')}
+                    </div>
+                    <input
+                      id="otherCounselor"
+                      type="text"
+                      disabled={isFieldPending('otherCounselor')}
+                      value={formData.otherCounselor}
+                      onChange={(e) => setFormData({ ...formData, otherCounselor: e.target.value })}
+                      placeholder="Enter counselor name"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-emerald-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 bg-emerald-50/50 hover:bg-emerald-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('otherCounselor') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Group 4: Current Location - Sky Theme */}
+            <div className="bg-sky-50/50 border border-sky-100 rounded-xl p-4 transition-all hover:bg-sky-50 hover:shadow-sm">
+              <h3 className="text-sm font-bold text-sky-800 mb-4 border-b border-sky-100 pb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                Current Location
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="currentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Current Temple
+                    </label>
+                    {renderPendingBadge('currentTemple')}
+                  </div>
+                  <SearchableSelect
+                    options={[
+                      ...temples.map(t => ({ id: t.name, name: t.name }))
+                    ]}
+                    value={formData.currentTemple}
+                    onChange={(value) => setFormData({ ...formData, currentTemple: value })}
+                    placeholder="Select Current Temple"
+                    disabled={loadingTemples || isFieldPending('currentTemple')}
+                  />
+                </div>
+
+                {/* Current Center - Hidden for Brahmachari & Grihastha */}
+                {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                          Current Center
+                        </label>
+                        {renderPendingBadge('currentCenter')}
+                      </div>
+                      <SearchableSelect
+                        options={[
+                          { id: 'None', name: 'None' },
+                          ...centers.map(c => ({ id: c.name, name: c.name })),
+                          { id: 'Other', name: formData.otherCenter ? `Other (${formData.otherCenter})` : 'Other' },
+                          ...(formData.currentCenter && formData.currentCenter !== 'None' && formData.currentCenter !== 'Other' && !centers.some(c => c.name === formData.currentCenter)
+                            ? [{ id: formData.currentCenter, name: formData.currentCenter }]
+                            : [])
+                        ]}
+                        value={formData.currentCenter}
+                        onChange={(value) => {
+                          if (value === 'Other') {
+                            setFormData({ ...formData, currentCenter: value, center: formData.otherCenter || 'Other' });
+                          } else {
+                            setFormData({ ...formData, currentCenter: value, center: value });
+                          }
+                        }}
+                        placeholder="Select Current Center"
+                        disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None' || isFieldPending('currentCenter')}
+                      />
+                    </div>
+
+                    {formData.currentCenter === 'Other' && (
+                      <div className="animate-fadeIn">
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                            Other Center Name
+                          </label>
+                          {renderPendingBadge('otherCenter')}
+                        </div>
+                        <input
+                          id="otherCenter"
+                          type="text"
+                          disabled={isFieldPending('otherCenter')}
+                          value={formData.otherCenter}
+                          onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
+                          className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border ${isFieldPending('otherCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                          placeholder="Type center name"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Group 5: Parent Location - Fuchsia Theme */}
+            <div className="bg-fuchsia-50/50 border border-fuchsia-100 rounded-xl p-4 transition-all hover:bg-fuchsia-50 hover:shadow-sm">
+              <h3 className="text-sm font-bold text-fuchsia-800 mb-4 border-b border-fuchsia-100 pb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-500"></span>
+                Parent Location
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="parentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Parent Temple
+                    </label>
+                    {renderPendingBadge('parentTemple')}
+                  </div>
+                  <SearchableSelect
+                    options={[
+                      ...temples.map(t => ({ id: t.name, name: t.name })),
+                      { id: 'Other', name: formData.otherParentTemple ? `Other (${formData.otherParentTemple})` : 'Other' }
+                    ]}
+                    value={formData.parentTemple}
+                    onChange={(value) => setFormData({ ...formData, parentTemple: value })}
+                    placeholder="Select Parent Temple"
+                    disabled={loadingTemples || !!userData?.hierarchy?.parentTemple || isFieldPending('parentTemple')}
+                  />
+                  {userData?.hierarchy?.parentTemple && (
+                    <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
+                      <Info className="w-3 h-3" />
+                      Locked. Contact admin to change.
+                    </p>
+                  )}
+                </div>
+
+                {formData.parentTemple === 'Other' && (
+                  <div className="animate-fadeIn">
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="otherParentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Other Parent Temple Name
+                      </label>
+                      {renderPendingBadge('otherParentTemple')}
+                    </div>
+                    <input
+                      id="otherParentTemple"
+                      type="text"
+                      value={formData.otherParentTemple}
+                      disabled={!!userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple')}
+                      onChange={(e) => setFormData({ ...formData, otherParentTemple: e.target.value })}
+                      placeholder="Enter temple name"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                    />
+                    {userData?.hierarchy?.otherParentTemple && (
+                      <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
+                        <Info className="w-3 h-3" />
+                        Locked. Contact admin to change.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="parentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                      Parent Center
+                    </label>
+                    {renderPendingBadge('parentCenter')}
+                  </div>
+                  <SearchableSelect
+                    options={[
+                      { id: 'None', name: 'None' },
+                      ...parentCenters.map(c => ({ id: c.name, name: c.name })),
+                      { id: 'Other', name: formData.otherParentCenter ? `Other (${formData.otherParentCenter})` : 'Other' },
+                      ...(formData.parentCenter && formData.parentCenter !== 'None' && formData.parentCenter !== 'Other' && !parentCenters.some(c => c.name === formData.parentCenter)
+                        ? [{ id: formData.parentCenter, name: formData.parentCenter }]
+                        : [])
+                    ]}
+                    value={formData.parentCenter}
+                    onChange={(value) => {
+                      if (value === 'Other') {
+                        setFormData({ ...formData, parentCenter: value });
+                      } else {
+                        setFormData({ ...formData, parentCenter: value, otherParentCenter: '' });
+                      }
+                    }}
+                    placeholder="Select Parent Center"
+                    disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter || isFieldPending('parentCenter')}
+                  />
+                  {userData?.hierarchy?.parentCenter && (
+                    <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
+                      <Info className="w-3 h-3" />
+                      Locked. Contact admin to change.
+                    </p>
+                  )}
+                </div>
+
+                {formData.parentCenter === 'Other' && (
+                  <div className="animate-fadeIn">
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="otherParentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
+                        Other Parent Center Name
+                      </label>
+                      {renderPendingBadge('otherParentCenter')}
+                    </div>
+                    <input
+                      id="otherParentCenter"
+                      type="text"
+                      value={formData.otherParentCenter}
+                      disabled={!!userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter')}
+                      onChange={(e) => setFormData({ ...formData, otherParentCenter: e.target.value })}
+                      placeholder="Enter center name"
+                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
+                    />
+                    {userData?.hierarchy?.otherParentCenter && (
+                      <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
+                        <Info className="w-3 h-3" />
+                        Locked. Contact admin to change.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Education Section Card with Animations */}
+        {/* Education Section Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-visible transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1 relative" style={{ zIndex: 1 }}>
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
+              <div className="flex-1">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                    <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </div>
+                  Education
+                </h2>
+                <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
+                  Enter your higher education details (up to 5 entries)
+                </p>
+              </div>
+              {education.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEducation(prev => [...prev, { institution: '', degreeBranch: '', startYear: null, endYear: null }]);
+                  }}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
+                  Add Education
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            {education.map((edu, index) => (
+              <div key={index} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-amber-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 hover:border-amber-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
+                      {index + 1}
+                    </div>
+                    <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Education Entry {index + 1}</h3>
+                  </div>
+                  {education.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEducation(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
+                    >
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="flex flex-col h-full">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
+                      <span className="flex items-center gap-1">🏛️ Institution/University</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={edu.institution}
+                      onChange={(e) => {
+                        const sanitized = sanitizeTextInput(e.target.value);
+                        const updated = [...education];
+                        updated[index] = { ...updated[index], institution: sanitized };
+                        setEducation(updated);
+                        if (fieldErrors[`edu_${index}_institution`]) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors[`edu_${index}_institution`];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (edu.institution && edu.institution.trim()) {
+                          const validation = validateEducationField(edu.institution, `Education ${index + 1} - Institution`);
+                          if (!validation.valid) {
+                            setFieldErrors(prev => ({ ...prev, [`edu_${index}_institution`]: validation.error || 'Invalid text' }));
+                          }
+                        }
+                      }}
+                      placeholder="e.g., University of Delhi"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200 ${fieldErrors[`edu_${index}_institution`]
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
+                    />
+                    {fieldErrors[`edu_${index}_institution`] && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                        <X className="h-2 w-2" />
+                        {fieldErrors[`edu_${index}_institution`]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col h-full">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
+                      <span className="flex items-center gap-1">🎓 Degree-Branch</span>
+                      <span className="text-[10px] sm:text-xs font-normal text-gray-500">eg. B.Tech. Electronics Engineering</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={edu.degreeBranch}
+                      onChange={(e) => {
+                        const sanitized = sanitizeTextInput(e.target.value);
+                        const updated = [...education];
+                        updated[index] = { ...updated[index], degreeBranch: sanitized };
+                        setEducation(updated);
+                        if (fieldErrors[`edu_${index}_degreeBranch`]) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors[`edu_${index}_degreeBranch`];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (edu.degreeBranch && edu.degreeBranch.trim()) {
+                          const validation = validateEducationField(edu.degreeBranch, `Education ${index + 1} - Degree-Branch`);
+                          if (!validation.valid) {
+                            setFieldErrors(prev => ({ ...prev, [`edu_${index}_degreeBranch`]: validation.error || 'Invalid text' }));
+                          }
+                        }
+                      }}
+                      placeholder="e.g., B.Tech. Electronics Engineering"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200 ${fieldErrors[`edu_${index}_degreeBranch`]
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
+                    />
+                    {fieldErrors[`edu_${index}_degreeBranch`] && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                        <X className="h-2 w-2" />
+                        {fieldErrors[`edu_${index}_degreeBranch`]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col h-full sm:col-span-2 lg:col-span-1">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
+                      <span className="flex items-center gap-1">📅 Time Period (From - To)</span>
+                    </label>
+                    <div className="flex items-center gap-2 h-full">
+                      <div className="relative flex-1 group">
+                        <input
+                          type="number"
+                          value={edu.startYear || ''}
+                          onChange={(e) => {
+                            const updated = [...education];
+                            updated[index] = { ...updated[index], startYear: e.target.value ? parseInt(e.target.value) : null };
+                            setEducation(updated);
+                          }}
+                          placeholder="From"
+                          min="1900"
+                          max={new Date().getFullYear() + 10}
+                          className="w-full px-3 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200"
+                        />
+                      </div>
+                      <span className="text-gray-400 font-bold">-</span>
+                      <div className="relative flex-1 group">
+                        <input
+                          type="number"
+                          value={edu.endYear || ''}
+                          onChange={(e) => {
+                            const updated = [...education];
+                            updated[index] = { ...updated[index], endYear: e.target.value ? parseInt(e.target.value) : null };
+                            setEducation(updated);
+                          }}
+                          placeholder="To"
+                          min="1900"
+                          max={new Date().getFullYear() + 10}
+                          className="w-full px-3 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Work Experience Section Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
+              <div className="flex-1">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                    <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </div>
+                  Work Experience
+                </h2>
+                <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
+                  Enter your professional work experience (up to 5 entries)
+                </p>
+              </div>
+              {workExperience.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkExperience(prev => [...prev, { company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
+                  }}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
+                  Add Work Experience
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            {workExperience.map((work, index) => (
+              <div key={index} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-indigo-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 hover:border-indigo-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
+                      {index + 1}
+                    </div>
+                    <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Work Experience {index + 1}</h3>
+                  </div>
+                  {workExperience.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorkExperience(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
+                    >
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-3 sm:mb-4">
+                  <div className="flex flex-col h-full">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
+                      <span className="flex items-center gap-1">🏢 Company Name</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={work.company}
+                      onChange={(e) => {
+                        const sanitized = sanitizeTextInput(e.target.value);
+                        const updated = [...workExperience];
+                        updated[index] = { ...updated[index], company: sanitized };
+                        setWorkExperience(updated);
+                        if (fieldErrors[`work_${index}_company`]) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors[`work_${index}_company`];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (work.company && work.company.trim()) {
+                          const validation = validateWorkField(work.company, `Work ${index + 1} - Company`);
+                          if (!validation.valid) {
+                            setFieldErrors(prev => ({ ...prev, [`work_${index}_company`]: validation.error || 'Invalid text' }));
+                          }
+                        }
+                      }}
+                      placeholder="e.g., Google Inc."
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_company`]
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
+                        }`}
+                    />
+                    {fieldErrors[`work_${index}_company`] && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                        <X className="h-2 w-2" />
+                        {fieldErrors[`work_${index}_company`]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col h-full">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
+                      <span className="flex items-center gap-1">💼 Title/Position</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={work.position}
+                      onChange={(e) => {
+                        const sanitized = sanitizeTextInput(e.target.value);
+                        const updated = [...workExperience];
+                        updated[index] = { ...updated[index], position: sanitized };
+                        setWorkExperience(updated);
+                        if (fieldErrors[`work_${index}_position`]) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors[`work_${index}_position`];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (work.position && work.position.trim()) {
+                          const validation = validateWorkField(work.position, `Work ${index + 1} - Title/Position`);
+                          if (!validation.valid) {
+                            setFieldErrors(prev => ({ ...prev, [`work_${index}_position`]: validation.error || 'Invalid text' }));
+                          }
+                        }
+                      }}
+                      placeholder="e.g., Software Engineer"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_position`]
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
+                        }`}
+                    />
+                    {fieldErrors[`work_${index}_position`] && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                        <X className="h-2 w-2" />
+                        {fieldErrors[`work_${index}_position`]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col h-full sm:col-span-2 lg:col-span-1">
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
+                      <span className="flex items-center gap-1">📍 Location(City, State, Country)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={work.location}
+                      onChange={(e) => {
+                        const sanitized = sanitizeTextInput(e.target.value);
+                        const updated = [...workExperience];
+                        updated[index] = { ...updated[index], location: sanitized };
+                        setWorkExperience(updated);
+                        if (fieldErrors[`work_${index}_location`]) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors[`work_${index}_location`];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (work.location && work.location.trim()) {
+                          const validation = validateWorkField(work.location, `Work ${index + 1} - Location`);
+                          if (!validation.valid) {
+                            setFieldErrors(prev => ({ ...prev, [`work_${index}_location`]: validation.error || 'Invalid text' }));
+                          }
+                        }
+                      }}
+                      placeholder="e.g., Pune, Maharashtra, India"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_location`]
+                        ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
+                        : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
+                        }`}
+                    />
+                    {fieldErrors[`work_${index}_location`] && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
+                        <X className="h-2 w-2" />
+                        {fieldErrors[`work_${index}_location`]}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 transform transition-all duration-200 group-hover:scale-110" />
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={work.startDate || ''}
+                      onChange={(e) => {
+                        const selectedDate = e.target.value;
+                        const today = new Date().toISOString().split('T')[0];
+                        if (selectedDate > today) {
+                          return; // Or show error, but max attribute usually handles this UI-wise
+                        }
+                        const updated = [...workExperience];
+                        updated[index] = { ...updated[index], startDate: selectedDate || null };
+                        setWorkExperience(updated);
+                      }}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 transform transition-all duration-200 group-hover:scale-110" />
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={work.endDate || ''}
+                      onChange={(e) => {
+                        const selectedDate = e.target.value;
+                        const today = new Date().toISOString().split('T')[0];
+                        if (selectedDate > today) {
+                          return;
+                        }
+                        const updated = [...workExperience];
+                        updated[index] = { ...updated[index], endDate: selectedDate || null, current: false };
+                        setWorkExperience(updated);
+                      }}
+                      disabled={work.current}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 focus:scale-[1.02] focus:shadow-md"
+                    />
+                  </div>
+                  <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                    <label className="flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 border-2 border-indigo-100 rounded-lg sm:rounded-xl hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer w-full transition-all duration-300 bg-white transform hover:scale-[1.02]">
+                      <input
+                        type="checkbox"
+                        checked={work.current}
+                        onChange={(e) => {
+                          const updated = [...workExperience];
+                          updated[index] = { ...updated[index], current: e.target.checked, endDate: e.target.checked ? null : updated[index].endDate };
+                          setWorkExperience(updated);
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className="text-xs sm:text-sm font-semibold text-gray-700">✓ Currently working here</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Camps Section Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 relative z-10">
+              <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
+              Camps Completed
+            </h2>
+            <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11 relative z-10">
+              Mark the camps you have successfully completed
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {[
+                { key: 'campDys', label: 'DYS', emoji: '🎓' },
+                { key: 'campSankalpa', label: 'Sankalpa', emoji: '🌱' },
+                { key: 'campSphurti', label: 'Sphurti', emoji: '⚡' },
+                { key: 'campUtkarsh', label: 'Utkarsh', emoji: '🚀' },
+                { key: 'campSrcgdWorkshop', label: 'SRCGD Workshop', emoji: '🎯' },
+                { key: 'campNishtha', label: 'Nishtha', emoji: '💎' },
+                { key: 'campFtec', label: 'FTEC', emoji: '🏗️' },
+                { key: 'campAshraya', label: 'Ashraya', emoji: '🛡️' },
+                { key: 'campMtec', label: 'MTEC', emoji: '📈' },
+                { key: 'campSharanagati', label: 'Sharanagati', emoji: '🙏' },
+                { key: 'campIdc', label: 'IDC', emoji: '🔑' },
+                { key: 'campBhaktiShastri', label: 'Bhakti Shastri', emoji: '📜' },
+                { key: 'campPositiveThinker', label: 'Positive Thinker', emoji: '🧠' },
+                { key: 'campSelfManager', label: 'Self Manager', emoji: '⌚' },
+                { key: 'campProactiveLeader', label: 'Proactive Leader', emoji: '👑' },
+              ].map((camp, index) => (
+                <label
+                  key={camp.key}
+                  className={`group flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[camp.key as keyof typeof formData] as boolean
+                    ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 shadow-lg ring-2 ring-emerald-200 scale-105'
+                    : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md'
+                    }`}
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData[camp.key as keyof typeof formData] as boolean}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        [camp.key]: e.target.checked,
+                      }));
+                    }}
+                    className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                  />
+                  <span className={`text-xs sm:text-sm font-semibold flex items-center gap-1 sm:gap-2 flex-1 transform transition-all duration-200 group-hover:translate-x-1 ${formData[camp.key as keyof typeof formData] as boolean
+                    ? 'text-emerald-800'
+                    : 'text-gray-700 group-hover:text-emerald-700'
+                    }`}>
+                    <span className="text-base sm:text-lg transform transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12">{camp.emoji}</span>
+                    {camp.label}
+                  </span>
+                  {formData[camp.key as keyof typeof formData] as boolean && (
+                    <span className="ml-auto text-emerald-600 text-sm sm:text-base flex-shrink-0 animate-scaleIn transform transition-all duration-300">
+                      ✓
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* SP Books Study Course Section Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
+          <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 relative z-10">
+              <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
+              SP Books Study Course
+            </h2>
+            <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11 relative z-10">
+              Track your progress through the systematic study course
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            {/* Third Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-cyan-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-blue-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">3rd</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Third Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 3.5 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookThirdSsr15', label: 'Science of Self Realisation (Chapters 1-5)' },
+                    { key: 'spbookThirdComingBack', label: 'Coming Back' },
+                    { key: 'spbookThirdPqpa', label: 'Perfect Questions and Perfect Answers' },
+                    { key: 'spbookThirdMatchlessGift', label: 'Matchless Gift' },
+                    { key: 'spbookThirdRajaVidya', label: 'Raja Vidya' },
+                    { key: 'spbookThirdElevationKc', label: 'Elevation to KC' },
+                    { key: 'spbookThirdBeyondBirthDeath', label: 'Beyond Birth and Death' },
+                    { key: 'spbookThirdKrishnaReservoir', label: 'Krishna – the reservoir of all Pleasure' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-blue-500 bg-blue-100 shadow-lg ring-2 ring-blue-200 scale-105'
+                        : 'border-blue-200 bg-white hover:border-blue-400 hover:bg-blue-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-blue-900'
+                        : 'text-gray-700 group-hover:text-blue-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Fourth Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 rounded-xl sm:rounded-2xl border-2 border-green-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-green-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-green-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">4th</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Fourth Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 4 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookFourthSsr68', label: 'Science of Self Realisation (Chapters 6-8)' },
+                    { key: 'spbookFourthLawsOfNature', label: 'Laws of Nature' },
+                    { key: 'spbookFourthDharma', label: 'Dharma' },
+                    { key: 'spbookFourthSecondChance', label: 'Second chance book' },
+                    { key: 'spbookFourthIsopanishad110', label: 'Isopanishad Mantra (Mantra 1-10)' },
+                    { key: 'spbookFourthQueenKuntiVideo', label: 'Teachings of Queen Kunti (see SP Video)' },
+                    { key: 'spbookFourthEnlightenmentNatural', label: 'Enlightenment by Natural Path' },
+                    { key: 'spbookFourthKrishnaBook121', label: 'Krishna Book (Chapters 1-21)' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-green-500 bg-green-100 shadow-lg ring-2 ring-green-200 scale-105'
+                        : 'border-green-200 bg-white hover:border-green-400 hover:bg-green-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-green-900'
+                        : 'text-gray-700 group-hover:text-green-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Fifth Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-violet-50 to-purple-100 rounded-xl sm:rounded-2xl border-2 border-purple-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-purple-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-violet-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-purple-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">5th</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Fifth Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 4.5 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookFifthLifeFromLife', label: 'Life comes from Life' },
+                    { key: 'spbookFifthPrahladTeachings', label: 'Teachings of Prahlad maharaja' },
+                    { key: 'spbookFifthJourneySelfDiscovery', label: 'Journey of Self Discovery' },
+                    { key: 'spbookFifthQueenKuntiHearing', label: 'Teachings of Queen Kunti (only hearing RSP classes)' },
+                    { key: 'spbookFifthLordKapila', label: 'Teachings of Lord Kapila' },
+                    { key: 'spbookFifthNectar16', label: 'Nectar of Instruction (Text 1-6)' },
+                    { key: 'spbookFifthGita16', label: 'Bhagavad gita As It Is (Chapters 1-6)' },
+                    { key: 'spbookFifthKrishnaBook2428', label: 'Krishna Book (Chapters 24-28)' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-purple-500 bg-purple-100 shadow-lg ring-2 ring-purple-200 scale-105'
+                        : 'border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-purple-900'
+                        : 'text-gray-700 group-hover:text-purple-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sixth Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 rounded-xl sm:rounded-2xl border-2 border-amber-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-amber-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-yellow-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-amber-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">6th</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Sixth Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 5 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookSixthNectar711', label: 'Nectar of Instruction (Text 7-11)' },
+                    { key: 'spbookSixthPathPerfection', label: 'Path of Perfection' },
+                    { key: 'spbookSixthCivilisationTranscendence', label: 'Civilisation and Transcendence' },
+                    { key: 'spbookSixthHareKrishnaChallenge', label: 'Hare Krishna Challenge' },
+                    { key: 'spbookSixthGita712', label: 'Bhagavad gita As It Is (Chapters 7-12)' },
+                    { key: 'spbookSixthSb1stCanto16', label: 'Srimad Bhagavatam 1st canto (Chapters 1-6)' },
+                    { key: 'spbookSixthKrishnaBook3559', label: 'Krishna Book (Chapters 35-59)' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-amber-500 bg-amber-100 shadow-lg ring-2 ring-amber-200 scale-105'
+                        : 'border-amber-200 bg-white hover:border-amber-400 hover:bg-amber-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-amber-900'
+                        : 'text-gray-700 group-hover:text-amber-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Seventh Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-indigo-50 via-blue-50 to-indigo-100 rounded-xl sm:rounded-2xl border-2 border-indigo-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-indigo-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-blue-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">7th</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Seventh Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 5 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookSeventhGita1318', label: 'Bhagavad gita As It Is (Chapters 13-18)' },
+                    { key: 'spbookSeventhSb1stCanto713', label: 'Srimad Bhagavatam 1st canto (Chapters 7-13)' },
+                    { key: 'spbookSeventhKrishnaBook6378', label: 'Krishna Book (Chapters 63-78)' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-indigo-500 bg-indigo-100 shadow-lg ring-2 ring-indigo-200 scale-105'
+                        : 'border-indigo-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-indigo-900'
+                        : 'text-gray-700 group-hover:text-indigo-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Eighth Semester */}
+            <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-rose-50 via-pink-50 to-rose-100 rounded-xl sm:rounded-2xl border-2 border-rose-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
+              <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-rose-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-pink-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
+                    <span className="px-2 sm:px-3 py-1 bg-rose-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">8th</span>
+                    <span className="text-sm sm:text-base lg:text-lg">Eighth Semester</span>
+                  </h3>
+                  <span className="px-2 sm:px-3 py-1 bg-rose-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
+                    📚 5 hrs/week
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                  {[
+                    { key: 'spbookEighthSb1stCanto1419', label: 'Srimad Bhagavatam 1st canto (Chapters 14-19)' },
+                    { key: 'spbookEighthKrishnaBook7889', label: 'Krishna Book (Chapters 78-89)' },
+                  ].map((book, index) => (
+                    <label
+                      key={book.key}
+                      className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'border-rose-500 bg-rose-100 shadow-lg ring-2 ring-rose-200 scale-105'
+                        : 'border-rose-200 bg-white hover:border-rose-400 hover:bg-rose-50 hover:shadow-md'
+                        }`}
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData[book.key as keyof typeof formData] as boolean}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            [book.key]: e.target.checked,
+                          }));
+                        }}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-rose-600 border-gray-300 rounded focus:ring-rose-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
+                      />
+                      <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
+                        ? 'text-rose-900'
+                        : 'text-gray-700 group-hover:text-rose-800'
+                        }`}>
+                        {book.label}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Alert Messages with Enhanced Animations */}
-        {/* Toasts removed from here and moved to fixed position container at the bottom */}
-
-        {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
-          <div className={`${pendingRequest.status === 'pending' ? 'bg-amber-50 border-amber-400' : pendingRequest.status === 'approved' ? 'bg-emerald-50 border-emerald-400' : 'bg-red-50 border-red-400'} border-l-4 p-4 rounded-r-xl shadow-sm animate-fadeIn`}>
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                {pendingRequest.status === 'pending' ? (
-                  <Clock className="h-5 w-5 text-amber-400" />
-                ) : pendingRequest.status === 'approved' ? (
-                  <Check className="h-5 w-5 text-emerald-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                )}
-              </div>
-              <div className="ml-3 flex-1">
-                <p className={`text-sm font-medium ${pendingRequest.status === 'pending' ? 'text-amber-700' : pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
-                  {pendingRequest.status === 'pending'
-                    ? 'Spiritual Information Update Pending Approval'
-                    : pendingRequest.status === 'approved'
-                      ? 'Spiritual Information Update Approved with Remarks'
-                      : 'Spiritual Information Update Rejected'}
+        {/* Languages Section Card with Animations */}
+        <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
+          <div className="bg-gradient-to-r from-blue-600 to-cyan-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
+              <div className="flex-1">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
+                    <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </div>
+                  Languages
+                </h2>
+                <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
+                  Enter languages you know (up to 5 entries)
                 </p>
-                <div className="mt-1 space-y-2">
-                  <p className={`text-xs ${pendingRequest.status === 'pending' ? 'text-amber-600' : pendingRequest.status === 'approved' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {pendingRequest.status === 'pending'
-                      ? `Your changes submitted on ${new Date(pendingRequest.created_at).toLocaleDateString()} are currently under review by authority. Other profile data can still be updated immediately.`
-                      : pendingRequest.status === 'approved'
-                        ? `Your update request from ${new Date(pendingRequest.created_at).toLocaleDateString()} was approved by authority, but with some observations.`
-                        : `Your update request from ${new Date(pendingRequest.created_at).toLocaleDateString()} was reviewed by authority.`}
-                  </p>
-
-                  {(pendingRequest.status === 'rejected' || pendingRequest.status === 'approved') && pendingRequest.admin_feedback && (
-                    <div className={`bg-white/50 rounded-lg p-2.5 border ${pendingRequest.status === 'approved' ? 'border-emerald-100' : 'border-red-100'} mt-2`}>
-                      <p className={`text-[10px] font-bold ${pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'} uppercase tracking-wider mb-1`}>Reason / Feedback from Authority:</p>
-                      <p className={`text-xs ${pendingRequest.status === 'approved' ? 'text-emerald-700' : 'text-red-700'} italic font-medium leading-relaxed`}>
-                        &quot; {pendingRequest.admin_feedback} &quot;
-                      </p>
-                    </div>
-                  )}
-
-                  {pendingRequest.status === 'rejected' && (
-                    <p className="text-[10px] text-red-500 font-medium">Please review the feedback above and update your information accordingly.</p>
-                  )}
-                </div>
-
               </div>
+              {languages.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLanguages(prev => [...prev, { name: '' }]);
+                  }}
+                  className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
+                  Add Language
+                </button>
+              )}
             </div>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-8 relative">
-          {/* Personal Information Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-blue-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
-            <div className="bg-gradient-to-r from-sky-400 via-blue-400 to-cyan-400 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 drop-shadow-sm relative z-10">
-                <div className="p-1.5 sm:p-2 bg-white/30 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-blue-900" />
-                </div>
-                Personal Information
-              </h2>
-            </div>
-
-            {isProfileLockActive && userData?.createdAt && (new Date().getTime() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24) >= 15 && (
-              (() => {
-                const campFields = [
-                  'campDys', 'campSankalpa', 'campSphurti', 'campUtkarsh', 'campSrcgdWorkshop',
-                  'campNishtha', 'campFtec', 'campAshraya', 'campMtec', 'campSharanagati',
-                  'campIdc', 'campBhaktiShastri', 'campPositiveThinker', 'campSelfManager', 'campProactiveLeader'
-                ];
-                const hasAnyCamp = campFields.some(field => (formData as any)[field]);
-                const hasAnyBook = Object.keys(formData).some(key => key.startsWith('spbook') && (formData as any)[key]);
-                
-                const isIncomplete = (!profileImage && !selectedPhoto) || 
-                                   (!aadharImage && !selectedAadharPhoto) || 
-                                   !formData.initiationStatus || 
-                                   !formData.ashram || 
-                                   (formData.rounds === null || formData.rounds === undefined || formData.rounds === '') || 
-                                   !formData.counselor ||
-                                   !hasAnyCamp || 
-                                   !hasAnyBook;
-                
-                if (!isIncomplete) return null;
-
-                return (
-                  <div className="px-4 sm:px-6 pt-4">
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-                      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-800">
-                        <span className="font-bold">Mandatory Profile Update:</span> Your account is more than 15 days old and some required information is missing. 
-                        Profile Photo, Aadhar Card, Spiritual Info, and at least one Camp/Book completion are currently required by platform policy.
-                      </p>
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            {languages.map((lang, index) => (
+              <div key={`lang-${index}`} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-blue-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 hover:border-blue-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
+                      {index + 1}
                     </div>
+                    <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Language {index + 1}</h3>
                   </div>
-                );
-              })()
-            )}
-
-
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 mb-4 sm:mb-6">
-                <div className="flex flex-col items-center gap-3">
-                  <span className="text-sm font-bold text-gray-700">Profile Photo</span>
-                  <PhotoUpload
-                    onFileSelect={(file) => {
-                      setSelectedPhoto(file);
-                      if (file) {
-                        const objectUrl = URL.createObjectURL(file);
-                        setProfileImage(objectUrl);
-                      } else if (userData?.profileImage) {
-                        setProfileImage(userData.profileImage);
-                      } else {
-                        setProfileImage('');
-                      }
-                    }}
-                    userName={formData.name || userData?.name || 'user'}
-                    currentImageUrl={profileImage}
-                    disabled={saving}
-                    label=""
-                  />
+                  {languages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLanguages(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
+                    >
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  )}
                 </div>
-
-                <div className="flex flex-col items-center gap-3">
-                  <span className="text-sm font-bold text-gray-700">Aadhar Card</span>
-                  <PhotoUpload
-                    onFileSelect={(file) => {
-                      setSelectedAadharPhoto(file);
-                      if (file) {
-                        const objectUrl = URL.createObjectURL(file);
-                        setAadharImage(objectUrl);
-                      } else if (userData?.aadharCardImage) {
-                        setAadharImage(userData.aadharCardImage);
-                      } else {
-                        setAadharImage('');
-                      }
-                    }}
-                    userName={`${formData.name || userData?.name || 'user'}_aadhar`}
-                    currentImageUrl={aadharImage}
-                    disabled={saving}
-                    label=""
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <div className="group animate-on-scroll" style={{ animationDelay: '0.1s' }}>
-                  <label htmlFor="name" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2 transform transition-all duration-200 group-hover:translate-x-1">
-                    <User className="h-3 w-3 sm:h-4 sm:w-4 text-sky-600 transform transition-all duration-200 group-hover:scale-110 group-hover:rotate-12" />
-                    Full Name <span className="text-red-500">*</span>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
+                    🌐 Language Name
                   </label>
                   <input
-                    id="name"
                     type="text"
-                    value={formData.name}
+                    value={lang?.name ?? ''}
                     onChange={(e) => {
                       const sanitized = sanitizeTextInput(e.target.value);
-                      setFormData({ ...formData, name: sanitized });
-                      // Clear error when user starts typing
-                      if (fieldErrors.name) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev };
-                          delete newErrors.name;
-                          return newErrors;
-                        });
-                      }
+                      setLanguages(prev => {
+                        const updated = [...prev];
+                        updated[index] = { ...updated[index], name: sanitized };
+                        return updated;
+                      });
                     }}
-                    onBlur={() => {
-                      const validation = validateTextInput(formData.name, 'Full Name', 100);
-                      if (!validation.valid) {
-                        setFieldErrors(prev => ({ ...prev, name: validation.error || 'Invalid name' }));
-                      }
-                    }}
-                    required
-                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-sky-50/50 hover:bg-sky-50 transition-all duration-300 group-hover:border-sky-200 focus:scale-[1.02] focus:shadow-md ${fieldErrors.name
-                      ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                      : 'border-sky-100 focus:ring-sky-400 focus:border-sky-400'
-                      }`}
-                  />
-                  {fieldErrors.name && (
-                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                      <X className="h-3 w-3" />
-                      {fieldErrors.name}
-                    </p>
-                  )}
-                </div>
-
-                <div className="group animate-on-scroll" style={{ animationDelay: '0.2s' }}>
-                  <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2 transform transition-all duration-200 group-hover:translate-x-1">
-                    <Mail className="h-3 w-3 sm:h-4 sm:w-4 text-sky-600 transform transition-all duration-200 group-hover:scale-110 group-hover:rotate-12" />
-                    Email Address
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    disabled
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-sky-100 rounded-lg sm:rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 text-gray-600 cursor-not-allowed"
-                  />
-                  <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1 animate-fadeIn" style={{ animationDelay: '0.3s' }}>
-                    <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                    Email cannot be changed
-                  </p>
-                </div>
-
-                <div className="group animate-on-scroll" style={{ animationDelay: '0.3s' }}>
-                  <PhoneInputWithCountry
-                    id="phone"
-                    label="Phone Number"
-                    value={formData.phone}
-                    error={fieldErrors.phone}
-                    onChange={(fullPhone) => {
-                      setFormData(prev => ({ ...prev, phone: fullPhone }));
-                      if (fieldErrors.phone) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev };
-                          delete newErrors.phone;
-                          return newErrors;
-                        });
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="group animate-on-scroll" style={{ animationDelay: '0.4s' }}>
-                  <label htmlFor="birthDate" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 transform transition-all duration-200 group-hover:translate-x-1">
-                    Date of Birth
-                  </label>
-                  <input
-                    id="birthDate"
-                    type="date"
-                    value={formData.birthDate}
-                    onChange={(e) => {
-                      const selectedDate = e.target.value;
-                      const today = new Date().toISOString().split('T')[0];
-                      // Prevent future dates
-                      if (selectedDate > today) {
-                        setFieldErrors(prev => ({ ...prev, birthDate: 'Future dates are not allowed' }));
-                        return;
-                      }
-                      setFormData({ ...formData, birthDate: selectedDate });
-                      if (fieldErrors.birthDate) {
-                        setFieldErrors(prev => {
-                          const newErrors = { ...prev };
-                          delete newErrors.birthDate;
-                          return newErrors;
-                        });
-                      }
-                    }}
-                    max={new Date().toISOString().split('T')[0]}
-                    className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-sky-50/50 hover:bg-sky-50 transition-all duration-300 group-hover:border-sky-200 focus:scale-[1.02] focus:shadow-md ${fieldErrors.birthDate
-                      ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                      : 'border-sky-100 focus:ring-sky-400 focus:border-sky-400'
-                      }`}
-                  />
-                  {fieldErrors.birthDate && (
-                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                      <X className="h-3 w-3" />
-                      {fieldErrors.birthDate}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Relative Contact Details Section */}
-              <div className="mt-8 pt-8 border-t border-sky-100 space-y-6 animate-on-scroll">
-                <h3 className="text-sm sm:text-base font-bold text-sky-800 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-sky-600" />
-                  Relative Contact Details
-                </h3>
-
-                <div className="space-y-6">
-                  {[1, 2, 3].map((num) => (
-                    <div key={num} className="bg-sky-50/30 p-4 rounded-xl border border-sky-100/50 space-y-4">
-                      <p className="text-xs font-bold text-sky-600 uppercase tracking-wider">Contact {num}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="group">
-                          <label htmlFor={`relativeName${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Name</label>
-                          <input
-                            id={`relativeName${num}`}
-                            type="text"
-                            value={(formData as any)[`relative${num}Name`]}
-                            onChange={(e) => setFormData({ ...formData, [`relative${num}Name`]: e.target.value })}
-                            placeholder="Full Name"
-                            className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all text-gray-900"
-                          />
-                        </div>
-                        <div className="group">
-                          <label htmlFor={`relativeRel${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Relationship</label>
-                          <select
-                            id={`relativeRel${num}`}
-                            value={(formData as any)[`relative${num}Relationship`]}
-                            onChange={(e) => setFormData({ ...formData, [`relative${num}Relationship`]: e.target.value })}
-                            className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] bg-[right_0.5rem_center] bg-no-repeat text-gray-900"
-                          >
-                            <option value="">Select...</option>
-                            <option value="Mother">Mother</option>
-                            <option value="Father">Father</option>
-                            <option value="Brother">Brother</option>
-                            <option value="Sister">Sister</option>
-                            <option value="Spouse">Spouse</option>
-                            <option value="Son">Son</option>
-                            <option value="Daughter">Daughter</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div className="group">
-                          <label htmlFor={`relativePhone${num}`} className="block text-xs font-semibold text-gray-600 mb-1.5">Phone Number</label>
-                          <input
-                            id={`relativePhone${num}`}
-                            type="tel"
-                            value={(formData as any)[`relative${num}Phone`]}
-                            onChange={(e) => setFormData({ ...formData, [`relative${num}Phone`]: e.target.value.replace(/[^0-9+\-\s()]/g, '') })}
-                            placeholder="Phone Number"
-                            className="w-full px-3 py-2 text-sm border-2 border-sky-100 rounded-lg focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white transition-all text-gray-900"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Health Information Section */}
-              <div className="mt-8 pt-8 border-t border-sky-100 space-y-4 animate-on-scroll">
-                <h3 className="text-sm sm:text-base font-bold text-sky-800 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Health Information
-                </h3>
-                <div className="group">
-                  <label htmlFor="healthChronicDisease" className="block text-xs font-semibold text-gray-600 mb-2">
-                    Any chronic diseases (Free text)
-                  </label>
-                  <textarea
-                    id="healthChronicDisease"
-                    value={formData.healthChronicDisease}
-                    onChange={(e) => setFormData({ ...formData, healthChronicDisease: e.target.value })}
-                    placeholder="List any chronic diseases or health conditions here..."
-                    className="w-full px-4 py-3 text-sm border-2 border-sky-100 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-sky-50/30 hover:bg-sky-50 transition-all min-h-[100px] resize-y text-gray-900"
+                    placeholder="e.g., English, Hindi, Sanskrit"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-blue-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white hover:bg-blue-50/50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md"
                   />
                 </div>
               </div>
-            </div>
+            ))}
           </div>
+        </div>
 
-
-
-          {/* Spiritual Information Card with Animations */}
-          {/* Spiritual Information Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-lg sm:rounded-xl shadow-md border border-purple-100 overflow-visible relative" style={{ zIndex: 1 }}>
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-3 sm:px-4 py-2 sm:py-3 relative overflow-hidden group flex items-center justify-between">
-              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 relative z-10">
-                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                Spiritual Information
-              </h2>
-              {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
-                <div className={`relative z-10 flex items-center gap-1.5 px-2 py-1 ${pendingRequest.status === 'pending' ? 'bg-white/20' : pendingRequest.status === 'approved' ? 'bg-emerald-500/30' : 'bg-red-500/30'} backdrop-blur-md rounded-lg border border-white/30 text-[10px] sm:text-xs font-bold text-white uppercase tracking-wider animate-pulse transition-all hover:bg-white/30`}>
-                  {pendingRequest.status === 'pending' ? <Clock className="h-3 w-3" /> : pendingRequest.status === 'approved' ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  {pendingRequest.status === 'pending' ? 'Pending Approval' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Review Feedback'}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 sm:p-4 space-y-6">
-              {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'rejected' || (pendingRequest.status === 'approved' && pendingRequest.admin_feedback && pendingRequest.admin_feedback.trim() !== '')) && (
-                <div className={`${pendingRequest.status === 'pending' ? 'bg-purple-50 border-purple-100' : pendingRequest.status === 'approved' ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'} border p-3 rounded-xl flex items-start gap-3 animate-fadeIn mb-2`}>
-                  <div className={`p-1.5 ${pendingRequest.status === 'pending' ? 'bg-purple-100' : pendingRequest.status === 'approved' ? 'bg-emerald-100' : 'bg-red-100'} rounded-lg`}>
-                    {pendingRequest.status === 'pending'
-                      ? <AlertCircle className="h-4 w-4 text-purple-600" />
-                      : pendingRequest.status === 'approved'
-                        ? <Check className="h-4 w-4 text-emerald-600" />
-                        : <MessageCircle className="h-4 w-4 text-red-600" />}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-xs font-bold leading-tight ${pendingRequest.status === 'pending' ? 'text-purple-800' : pendingRequest.status === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
-                      {pendingRequest.status === 'pending' ? 'Review in Progress — Pending Fields Locked' : pendingRequest.status === 'approved' ? 'Approved with Remarks' : 'Authority Feedback Available'}
-                    </p>
-                    <p className={`text-[10px] mt-0.5 leading-relaxed ${pendingRequest.status === 'pending' ? 'text-purple-600' : pendingRequest.status === 'approved' ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {pendingRequest.status === 'pending'
-                        ? `Changes requested on ${new Date(pendingRequest.created_at).toLocaleDateString()} are under review by authority. Pending fields are locked, but you can still update other fields.`
-                        : pendingRequest.status === 'approved'
-                          ? `Your changes have been approved, but please note the feedback: "${pendingRequest.admin_feedback || 'No detail provided.'}"`
-                          : `Your last request was reviewed. Reason: "${pendingRequest.admin_feedback || 'No detail provided.'}"`}
-                    </p>
-                    {pendingRequest.status === 'pending' && pendingRequest.requested_changes && Object.keys(pendingRequest.requested_changes).length > 0 && (
-                      <div className="mt-2.5 pt-2 border-t border-purple-200/70">
-                        <p className="text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1.5">Requested Changes Awaiting Approval:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {Object.entries(pendingRequest.requested_changes).map(([k, v]) => {
-                            const formatName = (str: string) => str.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
-                            return (
-                              <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-white border border-purple-200 text-purple-800 px-2.5 py-1 rounded-md shadow-xs">
-                                <span className="font-semibold text-purple-600">{formatName(k)}:</span>
-                                <span className="font-medium text-purple-950">{String(v || 'None')}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Group 1: Initiation Details - Indigo Theme */}
-              <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 transition-all hover:bg-indigo-50 hover:shadow-sm">
-                <h3 className="text-sm font-bold text-indigo-800 mb-4 border-b border-indigo-100 pb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                  Initiation Details
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
-                  {/* Initiated/Aspiring Field */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="initiationStatus" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Initiated/Aspiring
-                      </label>
-                      {renderPendingBadge('initiationStatus')}
-                    </div>
-                    <select
-                      id="initiationStatus"
-                      disabled={isFieldPending('initiationStatus')}
-                      value={formData.initiationStatus}
-                      onChange={(e) => {
-                        const newStatus = e.target.value as 'initiated' | 'aspiring' | '';
-                        setFormData(prev => {
-                          if (newStatus === 'initiated' && prev.initiationStatus === 'aspiring') {
-                            return { ...prev, initiationStatus: newStatus, aspiringSpiritualMasterName: '' };
-                          } else if (newStatus === 'aspiring' && prev.initiationStatus === 'initiated') {
-                            return { ...prev, initiationStatus: newStatus, initiatedName: '', spiritualMasterName: '' };
-                          } else {
-                            return { ...prev, initiationStatus: newStatus };
-                          }
-                        });
-                      }}
-                      required
-                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('initiationStatus') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
-                    >
-                      <option value="">Select...</option>
-                      <option value="initiated">Initiated</option>
-                      <option value="aspiring">Aspiring</option>
-                    </select>
-                  </div>
-
-                  {/* Initiated Name - only shown if Initiated */}
-                  {formData.initiationStatus === 'initiated' && (
-                    <>
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label htmlFor="initiatedName" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                            Initiated Name
-                          </label>
-                          {renderPendingBadge('initiatedName')}
-                        </div>
-                        <input
-                          id="initiatedName"
-                          type="text"
-                          disabled={isFieldPending('initiatedName')}
-                          value={formData.initiatedName}
-                          onChange={(e) => {
-                            const sanitized = sanitizeTextInput(e.target.value);
-                            setFormData({ ...formData, initiatedName: sanitized });
-                            if (fieldErrors.initiatedName) {
-                              setFieldErrors(prev => {
-                                const newErrors = { ...prev };
-                                delete newErrors.initiatedName;
-                                return newErrors;
-                              });
-                            }
-                          }}
-                          required
-                          placeholder="Enter your initiated name"
-                          className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md ${isFieldPending('initiatedName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.initiatedName
-                            ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                            : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
-                            }`}
-                        />
-                        {fieldErrors.initiatedName && (
-                          <p className="mt-1 text-xs text-red-600">{fieldErrors.initiatedName}</p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label htmlFor="spiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                            Spiritual Master Name
-                          </label>
-                          {renderPendingBadge('spiritualMasterName')}
-                        </div>
-                        <SearchableSelect
-                          options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
-                          value={formData.spiritualMasterName}
-                          disabled={isFieldPending('spiritualMasterName')}
-                          onChange={(value) => {
-                            setFormData({ ...formData, spiritualMasterName: value });
-                            if (fieldErrors.spiritualMasterName) {
-                              setFieldErrors(prev => {
-                                const newErrors = { ...prev };
-                                delete newErrors.spiritualMasterName;
-                                return newErrors;
-                              });
-                            }
-                          }}
-                          placeholder="Select Spiritual Master"
-                          triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('spiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.spiritualMasterName
-                            ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                            : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
-                            }`}
-                        />
-                        {fieldErrors.spiritualMasterName && (
-                          <p className="mt-1 text-xs text-red-600">{fieldErrors.spiritualMasterName}</p>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Aspiring Spiritual Master Name - only shown if Aspiring */}
-                  {formData.initiationStatus === 'aspiring' && (
-                    <div className="sm:col-span-2 lg:col-span-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="aspiringSpiritualMasterName" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                          Aspiring Spiritual Master Name
-                        </label>
-                        {renderPendingBadge('aspiringSpiritualMasterName')}
-                      </div>
-                      <SearchableSelect
-                        options={spiritualMasters.map(m => ({ id: m.name, name: m.name }))}
-                        value={formData.aspiringSpiritualMasterName}
-                        disabled={isFieldPending('aspiringSpiritualMasterName')}
-                        onChange={(value) => {
-                          setFormData({ ...formData, aspiringSpiritualMasterName: value });
-                          if (fieldErrors.aspiringSpiritualMasterName) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors.aspiringSpiritualMasterName;
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        placeholder="Select Aspiring Spiritual Master"
-                        triggerClassName={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-indigo-50/50 hover:bg-indigo-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('aspiringSpiritualMasterName') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.aspiringSpiritualMasterName
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
-                          }`}
-                      />
-                      {fieldErrors.aspiringSpiritualMasterName && (
-                        <p className="mt-1 text-xs text-red-600">{fieldErrors.aspiringSpiritualMasterName}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Group 2: Spiritual Practice - Amber Theme */}
-              <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 transition-all hover:bg-amber-50 hover:shadow-sm">
-                <h3 className="text-sm font-bold text-amber-800 mb-4 border-b border-amber-100 pb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                  Spiritual Practice
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
-                  {/* Ashram */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="ashram" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Ashram
-                      </label>
-                      {renderPendingBadge('ashram')}
-                    </div>
-                    <select
-                      id="ashram"
-                      value={formData.ashram}
-                      disabled={isFieldPending('ashram')}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const updates: any = { ashram: val };
-                        if (val === 'Brahmachari' || val === 'Grihastha') {
-                          updates.currentCenter = '';
-                          updates.otherCenter = '';
-                          updates.center = '';
-                        }
-                        setFormData({ ...formData, ...updates });
-                      }}
-                      required
-                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYgOUwxMiAxNUwxOCA5IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGlub2pvaW49InJvdW5kIi8+Cjwvc3ZnPg==')] bg-[length:16px] sm:bg-[length:20px] bg-[right_0.75rem_center] sm:bg-[right_1rem_center] bg-no-repeat ${isFieldPending('ashram') ? 'opacity-70 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}`}
-                    >
-                      <option value="">Select Ashram</option>
-                      <option value="Student and Not decided">Student and Not decided</option>
-                      <option value="Working and Not Decided">Working and Not Decided</option>
-                      <option value="Gauranga Sabha">Gauranga Sabha</option>
-                      <option value="Nityananda Sabha">Nityananda Sabha</option>
-                      <option value="Grihastha">Grihastha</option>
-                      <option value="Brahmachari">Brahmachari</option>
-                      <option value="Staying Single (Not planning to marry)">Staying Single (Not planning to marry)</option>
-                    </select>
-                    {fieldErrors.ashram && (
-                      <p className="mt-1 text-xs text-red-600">{fieldErrors.ashram}</p>
-                    )}
-                  </div>
-
-                  {/* Introduced to KC */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="introducedToKcIn" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Introduced to KC on (Date)
-                      </label>
-                      {renderPendingBadge('introducedToKcIn')}
-                    </div>
-                    <div className="relative group">
-                      <input
-                        id="introducedToKcIn"
-                        type={(formData.introducedToKcIn && formData.introducedToKcIn.length === 4) ? 'text' : 'date'}
-                        value={formData.introducedToKcIn}
-                        disabled={!!userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn')}
-                        onChange={(e) => {
-                          const selectedDate = e.target.value;
-                          const today = new Date().toISOString().split('T')[0];
-                          if (selectedDate.length > 4 && selectedDate > today) {
-                            setFieldErrors(prev => ({ ...prev, introducedToKcIn: 'Future dates are not allowed' }));
-                            return;
-                          }
-                          setFormData({ ...formData, introducedToKcIn: selectedDate });
-                          if (fieldErrors.introducedToKcIn) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors.introducedToKcIn;
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        max={new Date().toISOString().split('T')[0]}
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.introducedToKcIn || isFieldPending('introducedToKcIn') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''} ${fieldErrors.introducedToKcIn
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-amber-100 focus:ring-amber-500 focus:border-amber-500'
-                          }`}
-                      />
-                      {userData?.hierarchy?.introducedToKcIn && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-600">
-                          <Save className="w-4 h-4" />
-                        </div>
-                      )}
-                      {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && !userData?.hierarchy?.introducedToKcIn && !isFieldPending('introducedToKcIn') && (
-                        <button 
-                          type="button"
-                          onClick={() => setFormData({...formData, introducedToKcIn: ''})}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-600 hover:text-amber-700"
-                        >
-                          Change to Date
-                        </button>
-                      )}
-                    </div>
-                    {formData.introducedToKcIn && formData.introducedToKcIn.length === 4 && (
-                      <p className="mt-1 text-[10px] text-amber-600">Currently stored as Year. Use &quot;Change to Date&quot; to select a specific date.</p>
-                    )}
-                    {userData?.hierarchy?.introducedToKcIn && (
-                      <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1">
-                        <Info className="w-3 h-3" />
-                        This field is locked. Contact admin to change.
-                      </p>
-                    )}
-                    {fieldErrors.introducedToKcIn && (
-                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                        <X className="h-3 w-3" />
-                        {fieldErrors.introducedToKcIn}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Rounds */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="rounds" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        No. of Rounds Chanting
-                      </label>
-                      {renderPendingBadge('rounds')}
-                    </div>
-                    <input
-                      id="rounds"
-                      type="number"
-                      min="0"
-                      max="64"
-                      disabled={isFieldPending('rounds')}
-                      value={formData.rounds}
-                      onChange={(e) => setFormData({ ...formData, rounds: e.target.value })}
-                      placeholder="e.g., 16"
-                      className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-amber-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-amber-50/50 hover:bg-amber-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('rounds') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Group 3: Counseling Details - Emerald Theme */}
-              <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 transition-all hover:bg-emerald-50 hover:shadow-sm">
-                <h3 className="text-sm font-bold text-emerald-800 mb-4 border-b border-emerald-100 pb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Counseling Details
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="counselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Counselor Name
-                      </label>
-                      {renderPendingBadge('counselor')}
-                    </div>
-                    <SearchableSelect
-                      options={[
-                        ...counselors.map(c => ({ id: c.id, name: c.name })),
-                        { id: 'None', name: 'None' },
-                        { id: 'Other', name: 'Other' }
-                      ]}
-                      value={formData.counselorId || formData.counselor}
-                      valueProperty="id"
-                      onChange={(value) => {
-                        const selected = counselors.find(c => (c.id === value || c.name === value));
-                        if (selected) {
-                          setFormData({
-                            ...formData,
-                            counselor: selected.name,
-                            counselorId: selected.id
-                          });
-                        } else {
-                          setFormData({ ...formData, counselor: value, counselorId: '' });
-                        }
-                      }}
-                      placeholder="Select Counselor"
-                      disabled={loadingCounselors || isFieldPending('counselor')}
-                    />
-                  </div>
-
-                  {formData.counselor === 'Other' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="otherCounselor" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                          Other Counselor Name
-                        </label>
-                        {renderPendingBadge('otherCounselor')}
-                      </div>
-                      <input
-                        id="otherCounselor"
-                        type="text"
-                        disabled={isFieldPending('otherCounselor')}
-                        value={formData.otherCounselor}
-                        onChange={(e) => setFormData({ ...formData, otherCounselor: e.target.value })}
-                        placeholder="Enter counselor name"
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-emerald-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 bg-emerald-50/50 hover:bg-emerald-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${isFieldPending('otherCounselor') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Group 4: Current Location - Sky Theme */}
-              <div className="bg-sky-50/50 border border-sky-100 rounded-xl p-4 transition-all hover:bg-sky-50 hover:shadow-sm">
-                <h3 className="text-sm font-bold text-sky-800 mb-4 border-b border-sky-100 pb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                  Current Location
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="currentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Current Temple
-                      </label>
-                      {renderPendingBadge('currentTemple')}
-                    </div>
-                    <SearchableSelect
-                      options={[
-                        ...temples.map(t => ({ id: t.name, name: t.name }))
-                      ]}
-                      value={formData.currentTemple}
-                      onChange={(value) => setFormData({ ...formData, currentTemple: value })}
-                      placeholder="Select Current Temple"
-                      disabled={loadingTemples || isFieldPending('currentTemple')}
-                    />
-                  </div>
-
-                  {/* Current Center - Hidden for Brahmachari & Grihastha */}
-                  {formData.ashram !== 'Brahmachari' && formData.ashram !== 'Grihastha' && (
-                    <>
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label htmlFor="currentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                            Current Center
-                          </label>
-                          {renderPendingBadge('currentCenter')}
-                        </div>
-                        <SearchableSelect
-                          options={[
-                            { id: 'None', name: 'None' },
-                            ...centers.map(c => ({ id: c.name, name: c.name })),
-                            { id: 'Other', name: formData.otherCenter ? `Other (${formData.otherCenter})` : 'Other' },
-                            ...(formData.currentCenter && formData.currentCenter !== 'None' && formData.currentCenter !== 'Other' && !centers.some(c => c.name === formData.currentCenter)
-                              ? [{ id: formData.currentCenter, name: formData.currentCenter }]
-                              : [])
-                          ]}
-                          value={formData.currentCenter}
-                          onChange={(value) => {
-                            if (value === 'Other') {
-                              setFormData({ ...formData, currentCenter: value, center: formData.otherCenter || 'Other' });
-                            } else {
-                              setFormData({ ...formData, currentCenter: value, center: value });
-                            }
-                          }}
-                          placeholder="Select Current Center"
-                          disabled={loadingCenters || !formData.currentTemple || formData.currentTemple === 'None' || isFieldPending('currentCenter')}
-                        />
-                      </div>
-
-                      {formData.currentCenter === 'Other' && (
-                        <div className="animate-fadeIn">
-                          <div className="flex items-center justify-between mb-2">
-                            <label htmlFor="otherCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                              Other Center Name
-                            </label>
-                            {renderPendingBadge('otherCenter')}
-                          </div>
-                          <input
-                            id="otherCenter"
-                            type="text"
-                            disabled={isFieldPending('otherCenter')}
-                            value={formData.otherCenter}
-                            onChange={(e) => setFormData({ ...formData, otherCenter: e.target.value, center: e.target.value })}
-                            className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-xs sm:text-sm p-3 border ${isFieldPending('otherCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                            placeholder="Type center name"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Group 5: Parent Location - Fuchsia Theme */}
-              <div className="bg-fuchsia-50/50 border border-fuchsia-100 rounded-xl p-4 transition-all hover:bg-fuchsia-50 hover:shadow-sm">
-                <h3 className="text-sm font-bold text-fuchsia-800 mb-4 border-b border-fuchsia-100 pb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-500"></span>
-                  Parent Location
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="parentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Parent Temple
-                      </label>
-                      {renderPendingBadge('parentTemple')}
-                    </div>
-                    <SearchableSelect
-                      options={[
-                        ...temples.map(t => ({ id: t.name, name: t.name })),
-                        { id: 'Other', name: formData.otherParentTemple ? `Other (${formData.otherParentTemple})` : 'Other' }
-                      ]}
-                      value={formData.parentTemple}
-                      onChange={(value) => setFormData({ ...formData, parentTemple: value })}
-                      placeholder="Select Parent Temple"
-                      disabled={loadingTemples || !!userData?.hierarchy?.parentTemple || isFieldPending('parentTemple')}
-                    />
-                    {userData?.hierarchy?.parentTemple && (
-                      <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
-                        <Info className="w-3 h-3" />
-                        Locked. Contact admin to change.
-                      </p>
-                    )}
-                  </div>
-
-                  {formData.parentTemple === 'Other' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="otherParentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                          Other Parent Temple Name
-                        </label>
-                        {renderPendingBadge('otherParentTemple')}
-                      </div>
-                      <input
-                        id="otherParentTemple"
-                        type="text"
-                        value={formData.otherParentTemple}
-                        disabled={!!userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple')}
-                        onChange={(e) => setFormData({ ...formData, otherParentTemple: e.target.value })}
-                        placeholder="Enter temple name"
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentTemple || isFieldPending('otherParentTemple') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                      />
-                      {userData?.hierarchy?.otherParentTemple && (
-                        <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
-                          <Info className="w-3 h-3" />
-                          Locked. Contact admin to change.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label htmlFor="parentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Parent Center
-                      </label>
-                      {renderPendingBadge('parentCenter')}
-                    </div>
-                    <SearchableSelect
-                      options={[
-                        { id: 'None', name: 'None' },
-                        ...parentCenters.map(c => ({ id: c.name, name: c.name })),
-                        { id: 'Other', name: formData.otherParentCenter ? `Other (${formData.otherParentCenter})` : 'Other' },
-                        ...(formData.parentCenter && formData.parentCenter !== 'None' && formData.parentCenter !== 'Other' && !parentCenters.some(c => c.name === formData.parentCenter)
-                          ? [{ id: formData.parentCenter, name: formData.parentCenter }]
-                          : [])
-                      ]}
-                      value={formData.parentCenter}
-                      onChange={(value) => {
-                        if (value === 'Other') {
-                          setFormData({ ...formData, parentCenter: value });
-                        } else {
-                          setFormData({ ...formData, parentCenter: value, otherParentCenter: '' });
-                        }
-                      }}
-                      placeholder="Select Parent Center"
-                      disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter || isFieldPending('parentCenter')}
-                    />
-                    {userData?.hierarchy?.parentCenter && (
-                      <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
-                        <Info className="w-3 h-3" />
-                        Locked. Contact admin to change.
-                      </p>
-                    )}
-                  </div>
-
-                  {formData.parentCenter === 'Other' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="otherParentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                          Other Parent Center Name
-                        </label>
-                        {renderPendingBadge('otherParentCenter')}
-                      </div>
-                      <input
-                        id="otherParentCenter"
-                        type="text"
-                        value={formData.otherParentCenter}
-                        disabled={!!userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter')}
-                        onChange={(e) => setFormData({ ...formData, otherParentCenter: e.target.value })}
-                        placeholder="Enter center name"
-                        className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-fuchsia-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-gray-900 bg-fuchsia-50/50 hover:bg-fuchsia-50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${userData?.hierarchy?.otherParentCenter || isFieldPending('otherParentCenter') ? 'opacity-70 cursor-not-allowed bg-gray-50' : ''}`}
-                      />
-                      {userData?.hierarchy?.otherParentCenter && (
-                        <p className="mt-1 text-[10px] text-gray-500 flex items-center gap-1 px-1">
-                          <Info className="w-3 h-3" />
-                          Locked. Contact admin to change.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Education Section Card with Animations */}
-          {/* Education Section Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-visible transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1 relative" style={{ zIndex: 1 }}>
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
-                <div className="flex-1">
-                  <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                      <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    Education
-                  </h2>
-                  <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
-                    Enter your higher education details (up to 5 entries)
-                  </p>
-                </div>
-                {education.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEducation(prev => [...prev, { institution: '', degreeBranch: '', startYear: null, endYear: null }]);
-                    }}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
-                  >
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
-                    Add Education
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-              {education.map((edu, index) => (
-                <div key={index} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-amber-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 hover:border-amber-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
-                        {index + 1}
-                      </div>
-                      <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Education Entry {index + 1}</h3>
-                    </div>
-                    {education.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEducation(prev => prev.filter((_, i) => i !== index));
-                        }}
-                        className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
-                      >
-                        <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div className="flex flex-col h-full">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
-                        <span className="flex items-center gap-1">🏛️ Institution/University</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={edu.institution}
-                        onChange={(e) => {
-                          const sanitized = sanitizeTextInput(e.target.value);
-                          const updated = [...education];
-                          updated[index] = { ...updated[index], institution: sanitized };
-                          setEducation(updated);
-                          if (fieldErrors[`edu_${index}_institution`]) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[`edu_${index}_institution`];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (edu.institution && edu.institution.trim()) {
-                            const validation = validateEducationField(edu.institution, `Education ${index + 1} - Institution`);
-                            if (!validation.valid) {
-                              setFieldErrors(prev => ({ ...prev, [`edu_${index}_institution`]: validation.error || 'Invalid text' }));
-                            }
-                          }
-                        }}
-                        placeholder="e.g., University of Delhi"
-                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200 ${fieldErrors[`edu_${index}_institution`]
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
-                          }`}
-                      />
-                      {fieldErrors[`edu_${index}_institution`] && (
-                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                          <X className="h-2 w-2" />
-                          {fieldErrors[`edu_${index}_institution`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col h-full">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
-                        <span className="flex items-center gap-1">🎓 Degree-Branch</span>
-                        <span className="text-[10px] sm:text-xs font-normal text-gray-500">eg. B.Tech. Electronics Engineering</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={edu.degreeBranch}
-                        onChange={(e) => {
-                          const sanitized = sanitizeTextInput(e.target.value);
-                          const updated = [...education];
-                          updated[index] = { ...updated[index], degreeBranch: sanitized };
-                          setEducation(updated);
-                          if (fieldErrors[`edu_${index}_degreeBranch`]) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[`edu_${index}_degreeBranch`];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (edu.degreeBranch && edu.degreeBranch.trim()) {
-                            const validation = validateEducationField(edu.degreeBranch, `Education ${index + 1} - Degree-Branch`);
-                            if (!validation.valid) {
-                              setFieldErrors(prev => ({ ...prev, [`edu_${index}_degreeBranch`]: validation.error || 'Invalid text' }));
-                            }
-                          }
-                        }}
-                        placeholder="e.g., B.Tech. Electronics Engineering"
-                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200 ${fieldErrors[`edu_${index}_degreeBranch`]
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
-                          }`}
-                      />
-                      {fieldErrors[`edu_${index}_degreeBranch`] && (
-                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                          <X className="h-2 w-2" />
-                          {fieldErrors[`edu_${index}_degreeBranch`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col h-full sm:col-span-2 lg:col-span-1">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start">
-                        <span className="flex items-center gap-1">📅 Time Period (From - To)</span>
-                      </label>
-                      <div className="flex items-center gap-2 h-full">
-                        <div className="relative flex-1 group">
-                          <input
-                            type="number"
-                            value={edu.startYear || ''}
-                            onChange={(e) => {
-                              const updated = [...education];
-                              updated[index] = { ...updated[index], startYear: e.target.value ? parseInt(e.target.value) : null };
-                              setEducation(updated);
-                            }}
-                            placeholder="From"
-                            min="1900"
-                            max={new Date().getFullYear() + 10}
-                            className="w-full px-3 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200"
-                          />
-                        </div>
-                        <span className="text-gray-400 font-bold">-</span>
-                        <div className="relative flex-1 group">
-                          <input
-                            type="number"
-                            value={edu.endYear || ''}
-                            onChange={(e) => {
-                              const updated = [...education];
-                              updated[index] = { ...updated[index], endYear: e.target.value ? parseInt(e.target.value) : null };
-                              setEducation(updated);
-                            }}
-                            placeholder="To"
-                            min="1900"
-                            max={new Date().getFullYear() + 10}
-                            className="w-full px-3 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white hover:bg-gray-50 transition-all duration-200"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Work Experience Section Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
-                <div className="flex-1">
-                  <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                      <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    Work Experience
-                  </h2>
-                  <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
-                    Enter your professional work experience (up to 5 entries)
-                  </p>
-                </div>
-                {workExperience.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWorkExperience(prev => [...prev, { company: '', position: '', location: '', startDate: null, endDate: null, current: false }]);
-                    }}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
-                  >
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
-                    Add Work Experience
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-              {workExperience.map((work, index) => (
-                <div key={index} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-indigo-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 hover:border-indigo-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
-                        {index + 1}
-                      </div>
-                      <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Work Experience {index + 1}</h3>
-                    </div>
-                    {workExperience.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWorkExperience(prev => prev.filter((_, i) => i !== index));
-                        }}
-                        className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
-                      >
-                        <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-3 sm:mb-4">
-                    <div className="flex flex-col h-full">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
-                        <span className="flex items-center gap-1">🏢 Company Name</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={work.company}
-                        onChange={(e) => {
-                          const sanitized = sanitizeTextInput(e.target.value);
-                          const updated = [...workExperience];
-                          updated[index] = { ...updated[index], company: sanitized };
-                          setWorkExperience(updated);
-                          if (fieldErrors[`work_${index}_company`]) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[`work_${index}_company`];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (work.company && work.company.trim()) {
-                            const validation = validateWorkField(work.company, `Work ${index + 1} - Company`);
-                            if (!validation.valid) {
-                              setFieldErrors(prev => ({ ...prev, [`work_${index}_company`]: validation.error || 'Invalid text' }));
-                            }
-                          }
-                        }}
-                        placeholder="e.g., Google Inc."
-                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_company`]
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
-                          }`}
-                      />
-                      {fieldErrors[`work_${index}_company`] && (
-                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                          <X className="h-2 w-2" />
-                          {fieldErrors[`work_${index}_company`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col h-full">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
-                        <span className="flex items-center gap-1">💼 Title/Position</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={work.position}
-                        onChange={(e) => {
-                          const sanitized = sanitizeTextInput(e.target.value);
-                          const updated = [...workExperience];
-                          updated[index] = { ...updated[index], position: sanitized };
-                          setWorkExperience(updated);
-                          if (fieldErrors[`work_${index}_position`]) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[`work_${index}_position`];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (work.position && work.position.trim()) {
-                            const validation = validateWorkField(work.position, `Work ${index + 1} - Title/Position`);
-                            if (!validation.valid) {
-                              setFieldErrors(prev => ({ ...prev, [`work_${index}_position`]: validation.error || 'Invalid text' }));
-                            }
-                          }
-                        }}
-                        placeholder="e.g., Software Engineer"
-                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_position`]
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-indigo-100 focus:ring-indigo-500 focus:border-indigo-500'
-                          }`}
-                      />
-                      {fieldErrors[`work_${index}_position`] && (
-                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                          <X className="h-2 w-2" />
-                          {fieldErrors[`work_${index}_position`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col h-full sm:col-span-2 lg:col-span-1">
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 min-h-[2.5rem] flex flex-col justify-start transform transition-all duration-200 group-hover:translate-x-1">
-                        <span className="flex items-center gap-1">📍 Location(City, State, Country)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={work.location}
-                        onChange={(e) => {
-                          const sanitized = sanitizeTextInput(e.target.value);
-                          const updated = [...workExperience];
-                          updated[index] = { ...updated[index], location: sanitized };
-                          setWorkExperience(updated);
-                          if (fieldErrors[`work_${index}_location`]) {
-                            setFieldErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[`work_${index}_location`];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (work.location && work.location.trim()) {
-                            const validation = validateWorkField(work.location, `Work ${index + 1} - Location`);
-                            if (!validation.valid) {
-                              setFieldErrors(prev => ({ ...prev, [`work_${index}_location`]: validation.error || 'Invalid text' }));
-                            }
-                          }
-                        }}
-                        placeholder="e.g., Pune, Maharashtra, India"
-                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg sm:rounded-xl focus:ring-2 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md ${fieldErrors[`work_${index}_location`]
-                          ? 'border-red-300 focus:ring-red-400 focus:border-red-400'
-                          : 'border-gray-200 focus:ring-amber-500 focus:border-amber-500'
-                          }`}
-                      />
-                      {fieldErrors[`work_${index}_location`] && (
-                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1 animate-fadeIn">
-                          <X className="h-2 w-2" />
-                          {fieldErrors[`work_${index}_location`]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <div>
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
-                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 transform transition-all duration-200 group-hover:scale-110" />
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={work.startDate || ''}
-                        onChange={(e) => {
-                          const selectedDate = e.target.value;
-                          const today = new Date().toISOString().split('T')[0];
-                          if (selectedDate > today) {
-                            return; // Or show error, but max attribute usually handles this UI-wise
-                          }
-                          const updated = [...workExperience];
-                          updated[index] = { ...updated[index], startDate: selectedDate || null };
-                          setWorkExperience(updated);
-                        }}
-                        max={new Date().toISOString().split('T')[0]}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 focus:scale-[1.02] focus:shadow-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
-                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-indigo-600 transform transition-all duration-200 group-hover:scale-110" />
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={work.endDate || ''}
-                        onChange={(e) => {
-                          const selectedDate = e.target.value;
-                          const today = new Date().toISOString().split('T')[0];
-                          if (selectedDate > today) {
-                            return;
-                          }
-                          const updated = [...workExperience];
-                          updated[index] = { ...updated[index], endDate: selectedDate || null, current: false };
-                          setWorkExperience(updated);
-                        }}
-                        disabled={work.current}
-                        max={new Date().toISOString().split('T')[0]}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 border-indigo-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white hover:bg-indigo-50/50 transition-all duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 focus:scale-[1.02] focus:shadow-md"
-                      />
-                    </div>
-                    <div className="flex items-end sm:col-span-2 lg:col-span-1">
-                      <label className="flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 border-2 border-indigo-100 rounded-lg sm:rounded-xl hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer w-full transition-all duration-300 bg-white transform hover:scale-[1.02]">
-                        <input
-                          type="checkbox"
-                          checked={work.current}
-                          onChange={(e) => {
-                            const updated = [...workExperience];
-                            updated[index] = { ...updated[index], current: e.target.checked, endDate: e.target.checked ? null : updated[index].endDate };
-                            setWorkExperience(updated);
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className="text-xs sm:text-sm font-semibold text-gray-700">✓ Currently working here</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Camps Section Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 relative z-10">
-                <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                Camps Completed
-              </h2>
-              <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11 relative z-10">
-                Mark the camps you have successfully completed
-              </p>
-            </div>
-
-            <div className="p-4 sm:p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {[
-                  { key: 'campDys', label: 'DYS', emoji: '🎓' },
-                  { key: 'campSankalpa', label: 'Sankalpa', emoji: '🌱' },
-                  { key: 'campSphurti', label: 'Sphurti', emoji: '⚡' },
-                  { key: 'campUtkarsh', label: 'Utkarsh', emoji: '🚀' },
-                  { key: 'campSrcgdWorkshop', label: 'SRCGD Workshop', emoji: '🎯' },
-                  { key: 'campNishtha', label: 'Nishtha', emoji: '💎' },
-                  { key: 'campFtec', label: 'FTEC', emoji: '🏗️' },
-                  { key: 'campAshraya', label: 'Ashraya', emoji: '🛡️' },
-                  { key: 'campMtec', label: 'MTEC', emoji: '📈' },
-                  { key: 'campSharanagati', label: 'Sharanagati', emoji: '🙏' },
-                  { key: 'campIdc', label: 'IDC', emoji: '🔑' },
-                  { key: 'campBhaktiShastri', label: 'Bhakti Shastri', emoji: '📜' },
-                  { key: 'campPositiveThinker', label: 'Positive Thinker', emoji: '🧠' },
-                  { key: 'campSelfManager', label: 'Self Manager', emoji: '⌚' },
-                  { key: 'campProactiveLeader', label: 'Proactive Leader', emoji: '👑' },
-                ].map((camp, index) => (
-                  <label
-                    key={camp.key}
-                    className={`group flex items-center space-x-2 sm:space-x-3 p-3 sm:p-4 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[camp.key as keyof typeof formData] as boolean
-                      ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 shadow-lg ring-2 ring-emerald-200 scale-105'
-                      : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md'
-                      }`}
-                    style={{ animationDelay: `${index * 0.05}s` }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData[camp.key as keyof typeof formData] as boolean}
-                      onChange={(e) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          [camp.key]: e.target.checked,
-                        }));
-                      }}
-                      className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                    />
-                    <span className={`text-xs sm:text-sm font-semibold flex items-center gap-1 sm:gap-2 flex-1 transform transition-all duration-200 group-hover:translate-x-1 ${formData[camp.key as keyof typeof formData] as boolean
-                      ? 'text-emerald-800'
-                      : 'text-gray-700 group-hover:text-emerald-700'
-                      }`}>
-                      <span className="text-base sm:text-lg transform transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12">{camp.emoji}</span>
-                      {camp.label}
-                    </span>
-                    {formData[camp.key as keyof typeof formData] as boolean && (
-                      <span className="ml-auto text-emerald-600 text-sm sm:text-base flex-shrink-0 animate-scaleIn transform transition-all duration-300">
-                        ✓
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* SP Books Study Course Section Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
-            <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3 relative z-10">
-                <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                SP Books Study Course
-              </h2>
-              <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11 relative z-10">
-                Track your progress through the systematic study course
-              </p>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-              {/* Third Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-cyan-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-blue-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">3rd</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Third Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 3.5 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookThirdSsr15', label: 'Science of Self Realisation (Chapters 1-5)' },
-                      { key: 'spbookThirdComingBack', label: 'Coming Back' },
-                      { key: 'spbookThirdPqpa', label: 'Perfect Questions and Perfect Answers' },
-                      { key: 'spbookThirdMatchlessGift', label: 'Matchless Gift' },
-                      { key: 'spbookThirdRajaVidya', label: 'Raja Vidya' },
-                      { key: 'spbookThirdElevationKc', label: 'Elevation to KC' },
-                      { key: 'spbookThirdBeyondBirthDeath', label: 'Beyond Birth and Death' },
-                      { key: 'spbookThirdKrishnaReservoir', label: 'Krishna – the reservoir of all Pleasure' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-blue-500 bg-blue-100 shadow-lg ring-2 ring-blue-200 scale-105'
-                          : 'border-blue-200 bg-white hover:border-blue-400 hover:bg-blue-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-blue-900'
-                          : 'text-gray-700 group-hover:text-blue-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Fourth Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 rounded-xl sm:rounded-2xl border-2 border-green-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-green-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-green-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">4th</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Fourth Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 4 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookFourthSsr68', label: 'Science of Self Realisation (Chapters 6-8)' },
-                      { key: 'spbookFourthLawsOfNature', label: 'Laws of Nature' },
-                      { key: 'spbookFourthDharma', label: 'Dharma' },
-                      { key: 'spbookFourthSecondChance', label: 'Second chance book' },
-                      { key: 'spbookFourthIsopanishad110', label: 'Isopanishad Mantra (Mantra 1-10)' },
-                      { key: 'spbookFourthQueenKuntiVideo', label: 'Teachings of Queen Kunti (see SP Video)' },
-                      { key: 'spbookFourthEnlightenmentNatural', label: 'Enlightenment by Natural Path' },
-                      { key: 'spbookFourthKrishnaBook121', label: 'Krishna Book (Chapters 1-21)' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-green-500 bg-green-100 shadow-lg ring-2 ring-green-200 scale-105'
-                          : 'border-green-200 bg-white hover:border-green-400 hover:bg-green-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-green-900'
-                          : 'text-gray-700 group-hover:text-green-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Fifth Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-violet-50 to-purple-100 rounded-xl sm:rounded-2xl border-2 border-purple-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-purple-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-violet-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-purple-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">5th</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Fifth Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 4.5 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookFifthLifeFromLife', label: 'Life comes from Life' },
-                      { key: 'spbookFifthPrahladTeachings', label: 'Teachings of Prahlad maharaja' },
-                      { key: 'spbookFifthJourneySelfDiscovery', label: 'Journey of Self Discovery' },
-                      { key: 'spbookFifthQueenKuntiHearing', label: 'Teachings of Queen Kunti (only hearing RSP classes)' },
-                      { key: 'spbookFifthLordKapila', label: 'Teachings of Lord Kapila' },
-                      { key: 'spbookFifthNectar16', label: 'Nectar of Instruction (Text 1-6)' },
-                      { key: 'spbookFifthGita16', label: 'Bhagavad gita As It Is (Chapters 1-6)' },
-                      { key: 'spbookFifthKrishnaBook2428', label: 'Krishna Book (Chapters 24-28)' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-purple-500 bg-purple-100 shadow-lg ring-2 ring-purple-200 scale-105'
-                          : 'border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-purple-900'
-                          : 'text-gray-700 group-hover:text-purple-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sixth Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 rounded-xl sm:rounded-2xl border-2 border-amber-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-amber-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-yellow-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-amber-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">6th</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Sixth Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 5 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookSixthNectar711', label: 'Nectar of Instruction (Text 7-11)' },
-                      { key: 'spbookSixthPathPerfection', label: 'Path of Perfection' },
-                      { key: 'spbookSixthCivilisationTranscendence', label: 'Civilisation and Transcendence' },
-                      { key: 'spbookSixthHareKrishnaChallenge', label: 'Hare Krishna Challenge' },
-                      { key: 'spbookSixthGita712', label: 'Bhagavad gita As It Is (Chapters 7-12)' },
-                      { key: 'spbookSixthSb1stCanto16', label: 'Srimad Bhagavatam 1st canto (Chapters 1-6)' },
-                      { key: 'spbookSixthKrishnaBook3559', label: 'Krishna Book (Chapters 35-59)' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-amber-500 bg-amber-100 shadow-lg ring-2 ring-amber-200 scale-105'
-                          : 'border-amber-200 bg-white hover:border-amber-400 hover:bg-amber-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-amber-900'
-                          : 'text-gray-700 group-hover:text-amber-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Seventh Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-indigo-50 via-blue-50 to-indigo-100 rounded-xl sm:rounded-2xl border-2 border-indigo-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-indigo-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-blue-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">7th</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Seventh Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 5 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookSeventhGita1318', label: 'Bhagavad gita As It Is (Chapters 13-18)' },
-                      { key: 'spbookSeventhSb1stCanto713', label: 'Srimad Bhagavatam 1st canto (Chapters 7-13)' },
-                      { key: 'spbookSeventhKrishnaBook6378', label: 'Krishna Book (Chapters 63-78)' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-indigo-500 bg-indigo-100 shadow-lg ring-2 ring-indigo-200 scale-105'
-                          : 'border-indigo-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-indigo-900'
-                          : 'text-gray-700 group-hover:text-indigo-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Eighth Semester */}
-              <div className="animate-on-scroll relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-rose-50 via-pink-50 to-rose-100 rounded-xl sm:rounded-2xl border-2 border-rose-200 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01] hover:-translate-y-1">
-                <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-rose-200/30 rounded-full -mr-12 -mt-12 sm:-mr-16 sm:-mt-16 animate-float" style={{ animationDelay: '0s' }}></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 bg-pink-200/30 rounded-full -ml-8 -mb-8 sm:-ml-12 sm:-mb-12 animate-float" style={{ animationDelay: '1.5s' }}></div>
-                <div className="relative z-10">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 transform transition-all duration-300 hover:scale-105">
-                      <span className="px-2 sm:px-3 py-1 bg-rose-500 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transform transition-all duration-300 hover:scale-110 hover:rotate-3">8th</span>
-                      <span className="text-sm sm:text-base lg:text-lg">Eighth Semester</span>
-                    </h3>
-                    <span className="px-2 sm:px-3 py-1 bg-rose-600 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap transform transition-all duration-300 hover:scale-110">
-                      📚 5 hrs/week
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {[
-                      { key: 'spbookEighthSb1stCanto1419', label: 'Srimad Bhagavatam 1st canto (Chapters 14-19)' },
-                      { key: 'spbookEighthKrishnaBook7889', label: 'Krishna Book (Chapters 78-89)' },
-                    ].map((book, index) => (
-                      <label
-                        key={book.key}
-                        className={`group flex items-start space-x-2 p-2 sm:p-3 border-2 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'border-rose-500 bg-rose-100 shadow-lg ring-2 ring-rose-200 scale-105'
-                          : 'border-rose-200 bg-white hover:border-rose-400 hover:bg-rose-50 hover:shadow-md'
-                          }`}
-                        style={{ animationDelay: `${index * 0.03}s` }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData[book.key as keyof typeof formData] as boolean}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              [book.key]: e.target.checked,
-                            }));
-                          }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 text-rose-600 border-gray-300 rounded focus:ring-rose-500 focus:ring-2 mt-0.5 cursor-pointer flex-shrink-0 transform transition-all duration-200 checked:scale-110"
-                        />
-                        <span className={`text-xs font-medium flex-1 leading-relaxed transform transition-all duration-200 group-hover:translate-x-1 ${formData[book.key as keyof typeof formData] as boolean
-                          ? 'text-rose-900'
-                          : 'text-gray-700 group-hover:text-rose-800'
-                          }`}>
-                          {book.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Languages Section Card with Animations */}
-          <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
-            <div className="bg-gradient-to-r from-blue-600 to-cyan-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 relative z-10">
-                <div className="flex-1">
-                  <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg backdrop-blur-sm shadow-sm transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-                      <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    Languages
-                  </h2>
-                  <p className="text-white/90 text-xs sm:text-sm mt-2 ml-8 sm:ml-11">
-                    Enter languages you know (up to 5 entries)
-                  </p>
-                </div>
-                {languages.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLanguages(prev => [...prev, { name: '' }]);
-                    }}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-white font-medium transition-all duration-300 hover:scale-110 hover:rotate-2 active:scale-95 whitespace-nowrap transform shadow-lg hover:shadow-xl"
-                  >
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4 transform transition-transform duration-300 group-hover:rotate-90" />
-                    Add Language
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-              {languages.map((lang, index) => (
-                <div key={`lang-${index}`} className="animate-fadeInUp group relative p-4 sm:p-5 border-2 border-blue-100 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 hover:border-blue-300 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1" style={{ animationDelay: `${index * 0.1}s` }}>
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-md transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12 group-hover:shadow-lg">
-                        {index + 1}
-                      </div>
-                      <h3 className="text-sm sm:text-base font-bold text-gray-800 transform transition-all duration-200 group-hover:translate-x-1">Language {index + 1}</h3>
-                    </div>
-                    {languages.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLanguages(prev => prev.filter((_, i) => i !== index));
-                        }}
-                        className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 transform hover:scale-110 hover:rotate-90 active:scale-95"
-                      >
-                        <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </button>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1 transform transition-all duration-200 group-hover:translate-x-1">
-                      🌐 Language Name
-                    </label>
-                    <input
-                      type="text"
-                      value={lang?.name ?? ''}
-                      onChange={(e) => {
-                        const sanitized = sanitizeTextInput(e.target.value);
-                        setLanguages(prev => {
-                          const updated = [...prev];
-                          updated[index] = { ...updated[index], name: sanitized };
-                          return updated;
-                        });
-                      }}
-                      placeholder="e.g., English, Hindi, Sanskrit"
-                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-blue-100 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white hover:bg-blue-50/50 transition-all duration-300 placeholder:text-gray-400 focus:scale-[1.02] focus:shadow-md"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Skills Section Card - Hidden for now
+        {/* Skills Section Card - Hidden for now
           <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
             <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
@@ -3702,7 +3798,7 @@ export default function ProfilePage() {
             </div>
           </div> */}
 
-          {/* Services Rendered Section Card - Hidden for now
+        {/* Services Rendered Section Card - Hidden for now
           <div className="animate-on-scroll bg-white rounded-xl sm:rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] hover:-translate-y-1">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden group">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
@@ -3779,286 +3875,285 @@ export default function ProfilePage() {
             </div>
           </div> */}
 
-          {/* Submit Button - Devotional Colors with Enhanced Animations */}
-          <div className="flex justify-center pt-4 sm:pt-6 animate-on-scroll">
-            <button
-              type="submit"
-              disabled={saving}
-              className="group relative flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-white sm:bg-gradient-to-r sm:from-amber-500 sm:via-orange-400 sm:to-amber-600 text-blue-900 sm:text-white lg:text-blue-900 lg:font-bold rounded-lg sm:rounded-xl font-bold text-sm sm:text-base lg:text-lg shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 overflow-hidden w-full sm:w-auto border-2 border-blue-600 sm:border-amber-300 ripple-effect"
-            >
-              <div className="absolute inset-0 sm:bg-gradient-to-r sm:from-amber-600 sm:to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-30"></div>
-              <Save className="h-5 w-5 sm:h-6 sm:w-6 relative z-10 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 drop-shadow-sm" />
-              <span className="relative z-10 drop-shadow-sm text-center w-full">
-                {saving ? (
-                  <span className="flex items-center justify-center gap-2 w-full">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-xs sm:text-sm lg:text-base font-semibold">Saving Changes...</span>
-                  </span>
-                ) : (
-                  <span className="text-xs sm:text-sm lg:text-base transform transition-all duration-300 group-hover:scale-105 font-semibold">Save All Changes</span>
-                )}
-              </span>
-            </button>
-          </div>
-        </form>
-
-        {/* Account Security & Password Management Card */}
-        <div className="mt-10 bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 px-6 py-5 text-white flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                <Key className="w-5 h-5 text-amber-100" />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-xl font-bold font-serif">Account Security & Login Credentials</h3>
-                <p className="text-xs sm:text-sm text-amber-100/90 font-medium">
-                  {hasPassword 
-                    ? 'Change your login password or manage direct username sign-in' 
-                    : 'Set a password to sign in with your Email / Phone without Google'}
-                </p>
-              </div>
-            </div>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/15 border border-white/20 text-white">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-200" />
-              {isGoogleSession ? 'Google Verified Session' : hasPassword ? 'Password Active' : 'Google Auth Only'}
+        {/* Submit Button - Devotional Colors with Enhanced Animations */}
+        <div className="flex justify-center pt-4 sm:pt-6 animate-on-scroll">
+          <button
+            type="submit"
+            disabled={saving}
+            className="group relative flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-white sm:bg-gradient-to-r sm:from-amber-500 sm:via-orange-400 sm:to-amber-600 text-blue-900 sm:text-white lg:text-blue-900 lg:font-bold rounded-lg sm:rounded-xl font-bold text-sm sm:text-base lg:text-lg shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 overflow-hidden w-full sm:w-auto border-2 border-blue-600 sm:border-amber-300 ripple-effect"
+          >
+            <div className="absolute inset-0 sm:bg-gradient-to-r sm:from-amber-600 sm:to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-30"></div>
+            <Save className="h-5 w-5 sm:h-6 sm:w-6 relative z-10 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 drop-shadow-sm" />
+            <span className="relative z-10 drop-shadow-sm text-center w-full">
+              {saving ? (
+                <span className="flex items-center justify-center gap-2 w-full">
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs sm:text-sm lg:text-base font-semibold">Saving Changes...</span>
+                </span>
+              ) : (
+                <span className="text-xs sm:text-sm lg:text-base transform transition-all duration-300 group-hover:scale-105 font-semibold">Save All Changes</span>
+              )}
             </span>
+          </button>
+        </div>
+      </form>
+
+      {/* Account Security & Password Management Card */}
+      <div className="mt-10 bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden">
+        <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 px-6 py-5 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+              <Key className="w-5 h-5 text-amber-100" />
+            </div>
+            <div>
+              <h3 className="text-lg sm:text-xl font-bold font-serif">Account Security & Login Credentials</h3>
+              <p className="text-xs sm:text-sm text-amber-100/90 font-medium">
+                {hasPassword
+                  ? 'Change your login password or manage direct username sign-in'
+                  : 'Set a password to sign in with your Email / Phone without Google'}
+              </p>
+            </div>
           </div>
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/15 border border-white/20 text-white">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-200" />
+            {isGoogleSession ? 'Google Verified Session' : hasPassword ? 'Password Active' : 'Google Auth Only'}
+          </span>
+        </div>
 
-          <div className="p-6 sm:p-8 space-y-6">
-            {/* Account Credentials Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-amber-50/60 p-4 rounded-xl border border-amber-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Login Email</div>
-                  <div className="text-sm font-semibold text-gray-800 truncate">{formData.email || user?.email || 'N/A'}</div>
-                </div>
+        <div className="p-6 sm:p-8 space-y-6">
+          {/* Account Credentials Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-amber-50/60 p-4 rounded-xl border border-amber-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                <Mail className="w-4 h-4" />
               </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-orange-800 uppercase tracking-wide">Login Mobile (Username)</div>
-                  <div className="text-sm font-semibold text-gray-800 truncate">{formData.phone || userData?.phone || 'Not provided'}</div>
-                </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Login Email</div>
+                <div className="text-sm font-semibold text-gray-800 truncate">{formData.email || user?.email || 'N/A'}</div>
               </div>
             </div>
 
-            {/* Password update notification banner */}
-            {passwordMessage && (
-              <div className={`p-4 rounded-xl text-sm flex items-start gap-3 border ${
-                passwordMessage.type === 'success' 
-                  ? 'bg-green-50 border-green-200 text-green-800' 
-                  : 'bg-red-50 border-red-200 text-red-800'
-              }`}>
-                {passwordMessage.type === 'success' ? (
-                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                )}
-                <p className="font-medium">{passwordMessage.text}</p>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
+                <Phone className="w-4 h-4" />
               </div>
-            )}
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-orange-800 uppercase tracking-wide">Login Mobile (Username)</div>
+                <div className="text-sm font-semibold text-gray-800 truncate">{formData.phone || userData?.phone || 'Not provided'}</div>
+              </div>
+            </div>
+          </div>
 
-            {/* Password Form */}
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              {isGoogleSession ? (
-                <div className="flex items-start gap-2.5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs sm:text-sm">
-                  <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Google Authenticated Session:</span> Your identity is verified by Google. You can set or change your password directly below without entering your previous password.
-                  </div>
-                </div>
-              ) : hasPassword ? (
+          {/* Password update notification banner */}
+          {passwordMessage && (
+            <div className={`p-4 rounded-xl text-sm flex items-start gap-3 border ${passwordMessage.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+              }`}>
+              {passwordMessage.type === 'success' ? (
+                <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              )}
+              <p className="font-medium">{passwordMessage.text}</p>
+            </div>
+          )}
+
+          {/* Password Form */}
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            {isGoogleSession ? (
+              <div className="flex items-start gap-2.5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs sm:text-sm">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-gray-700 uppercase">
-                      Current Password
-                    </label>
+                  <span className="font-bold">Google Authenticated Session:</span> Your identity is verified by Google. You can set or change your password directly below without entering your previous password.
+                </div>
+              </div>
+            ) : hasPassword ? (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-700 uppercase">
+                    Current Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleSendResetEmail}
+                    disabled={resetEmailSending}
+                    className="text-xs font-semibold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    {resetEmailSending ? 'Sending reset link...' : 'Forgot current password?'}
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your existing password"
+                    className="w-full pl-10 pr-10 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Reset Options if Devotee Forgot Current Password */}
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-amber-50/80 rounded-xl border border-amber-200/80 text-xs text-amber-950">
+                  <span className="text-gray-600">Don&apos;t remember your old password?</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleVerifyGoogleToReset}
+                      className="inline-flex items-center gap-1.5 font-bold text-amber-800 hover:text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm hover:shadow transition-all cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                      </svg>
+                      <span>Verify with Google</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleSendResetEmail}
                       disabled={resetEmailSending}
-                      className="text-xs font-semibold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer disabled:opacity-50"
+                      className="font-bold text-amber-800 hover:text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
                     >
-                      {resetEmailSending ? 'Sending reset link...' : 'Forgot current password?'}
+                      {resetEmailSending ? 'Sending Link...' : 'Email Reset Link'}
                     </button>
-                  </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your existing password"
-                      className="w-full pl-10 pr-10 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                    >
-                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-
-                  {/* Reset Options if Devotee Forgot Current Password */}
-                  <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-amber-50/80 rounded-xl border border-amber-200/80 text-xs text-amber-950">
-                    <span className="text-gray-600">Don&apos;t remember your old password?</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleVerifyGoogleToReset}
-                        className="inline-flex items-center gap-1.5 font-bold text-amber-800 hover:text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm hover:shadow transition-all cursor-pointer"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                        </svg>
-                        <span>Verify with Google</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSendResetEmail}
-                        disabled={resetEmailSending}
-                        className="font-bold text-amber-800 hover:text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {resetEmailSending ? 'Sending Link...' : 'Email Reset Link'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1.5">
-                    {hasPassword ? 'New Password' : 'Set New Password'}
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      placeholder="At least 6 characters"
-                      className="w-full pl-10 pr-10 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                    >
-                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1.5">
-                    Confirm New Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      placeholder="Re-type new password"
-                      className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
-                    />
                   </div>
                 </div>
               </div>
+            ) : null}
 
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
-                <p className="text-xs text-gray-500">
-                  💡 Once saved, you can log in directly using your <strong>Email</strong> or <strong>Mobile Number</strong> with this password.
-                </p>
-                <button
-                  type="submit"
-                  disabled={passwordUpdating}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:from-amber-700 hover:to-orange-700 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex-shrink-0"
-                >
-                  {passwordUpdating ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Key className="w-4 h-4" />
-                  )}
-                  <span>{hasPassword ? 'Change Password' : 'Set Password'}</span>
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1.5">
+                  {hasPassword ? 'New Password' : 'Set New Password'}
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    placeholder="At least 6 characters"
+                    className="w-full pl-10 pr-10 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </form>
-          </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1.5">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    placeholder="Re-type new password"
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+              <p className="text-xs text-gray-500">
+                💡 Once saved, you can log in directly using your <strong>Email</strong> or <strong>Mobile Number</strong> with this password.
+              </p>
+              <button
+                type="submit"
+                disabled={passwordUpdating}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:from-amber-700 hover:to-orange-700 active:scale-95 transition-all disabled:opacity-50 cursor-pointer flex-shrink-0"
+              >
+                {passwordUpdating ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Key className="w-4 h-4" />
+                )}
+                <span>{hasPassword ? 'Change Password' : 'Set Password'}</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
-
-      {/* Fixed Toast Notifications */}
-      <div className="fixed top-24 right-4 z-[1000000] flex flex-col gap-4 w-full max-w-md pointer-events-none p-4">
-        {error && (
-          <div className="pointer-events-auto bg-white border-l-4 border-red-500 text-gray-800 px-6 py-4 rounded-xl shadow-2xl flex items-start gap-4 animate-slideInRight ring-1 ring-black/5">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
-              </div>
-            </div>
-            <div className="flex-1 pt-1">
-              <h3 className="font-bold text-red-800 text-lg mb-1">Error</h3>
-              <p className="text-sm text-gray-600 leading-relaxed break-words">{error}</p>
-            </div>
-            <button onClick={() => setError('')} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-full">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-        {success && (
-          <div className="pointer-events-auto bg-white border-l-4 border-green-500 text-gray-800 px-6 py-4 rounded-xl shadow-2xl flex items-start gap-4 animate-slideInRight ring-1 ring-black/5">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <Check className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <div className="flex-1 pt-1">
-              <h3 className="font-bold text-green-800 text-lg mb-1">Success</h3>
-              <p className="text-sm text-gray-600 leading-relaxed break-words">{success}</p>
-            </div>
-            <button onClick={() => setSuccess('')} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-full">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Sticky Save Button - Floating Action Button Style */}
-      <div className={`fixed bottom-6 right-6 z-[101] transform transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1) ${isDirty ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-75 pointer-events-none'}`}>
-        <button
-          type="button"
-          onClick={(e) => handleSubmit({ preventDefault: () => { } } as React.FormEvent)}
-          disabled={saving}
-          className="flex items-center gap-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white px-5 sm:px-7 py-3 sm:py-3.5 rounded-full shadow-2xl hover:shadow-[0_10px_30px_rgba(245,158,11,0.5)] hover:scale-105 active:scale-95 transition-all duration-300 font-bold text-sm sm:text-lg border-2 border-white/20 backdrop-blur-sm group"
-        >
-          {saving ? (
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <div className="relative">
-              <Save className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-12 transition-transform duration-300" />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-amber-600 animate-pulse"></span>
-            </div>
-          )}
-          <span>Save Changes</span>
-        </button>
-      </div>
     </div>
-  );
+
+    {/* Fixed Toast Notifications */}
+    <div className="fixed top-24 right-4 z-[1000000] flex flex-col gap-4 w-full max-w-md pointer-events-none p-4">
+      {error && (
+        <div className="pointer-events-auto bg-white border-l-4 border-red-500 text-gray-800 px-6 py-4 rounded-xl shadow-2xl flex items-start gap-4 animate-slideInRight ring-1 ring-black/5">
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+          </div>
+          <div className="flex-1 pt-1">
+            <h3 className="font-bold text-red-800 text-lg mb-1">Error</h3>
+            <p className="text-sm text-gray-600 leading-relaxed break-words">{error}</p>
+          </div>
+          <button onClick={() => setError('')} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-full">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+      {success && (
+        <div className="pointer-events-auto bg-white border-l-4 border-green-500 text-gray-800 px-6 py-4 rounded-xl shadow-2xl flex items-start gap-4 animate-slideInRight ring-1 ring-black/5">
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <Check className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+          <div className="flex-1 pt-1">
+            <h3 className="font-bold text-green-800 text-lg mb-1">Success</h3>
+            <p className="text-sm text-gray-600 leading-relaxed break-words">{success}</p>
+          </div>
+          <button onClick={() => setSuccess('')} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-full">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+    </div>
+
+    {/* Sticky Save Button - Floating Action Button Style */}
+    <div className={`fixed bottom-6 right-6 z-[101] transform transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1) ${isDirty ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-32 opacity-0 scale-75 pointer-events-none'}`}>
+      <button
+        type="button"
+        onClick={(e) => handleSubmit({ preventDefault: () => { } } as React.FormEvent)}
+        disabled={saving}
+        className="flex items-center gap-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white px-5 sm:px-7 py-3 sm:py-3.5 rounded-full shadow-2xl hover:shadow-[0_10px_30px_rgba(245,158,11,0.5)] hover:scale-105 active:scale-95 transition-all duration-300 font-bold text-sm sm:text-lg border-2 border-white/20 backdrop-blur-sm group"
+      >
+        {saving ? (
+          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : (
+          <div className="relative">
+            <Save className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-12 transition-transform duration-300" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-amber-600 animate-pulse"></span>
+          </div>
+        )}
+        <span>Save Changes</span>
+      </button>
+    </div>
+  </div>
+);
 }

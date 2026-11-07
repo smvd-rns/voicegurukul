@@ -47,24 +47,30 @@ export default function UserDetailsModal({
   // Resolved Center / Temple / Counselor with "Other" recognition
   const otherCenterText = user.otherCenter || hierarchy.otherCenter || (user as any).other_center;
   const rawCenter = hierarchy.currentCenter || hierarchy.center || user.currentCenter || user.parentCenter;
-  const isOtherCenter = rawCenter === 'Other' || Boolean(otherCenterText);
-  const displayCenter = isOtherCenter
-    ? (otherCenterText ? `Other: ${otherCenterText}` : 'Other (Unspecified)')
-    : (rawCenter || 'None / Not Assigned');
+  const isOtherCenter = rawCenter === 'Other';
+  const displayCenter = rawCenter === 'None'
+    ? 'None'
+    : isOtherCenter
+      ? (otherCenterText ? `Other: ${otherCenterText}` : 'Other (Unspecified)')
+      : (rawCenter || 'None / Not Assigned');
 
   const otherTempleText = user.otherTemple || hierarchy.otherTemple || (user as any).other_temple;
   const rawTemple = hierarchy.currentTemple || user.currentTemple || user.parentTemple;
-  const isOtherTemple = rawTemple === 'Other' || Boolean(otherTempleText);
-  const displayTemple = isOtherTemple
-    ? (otherTempleText ? `Other: ${otherTempleText}` : 'Other (Unspecified)')
-    : (rawTemple || 'None / Not Assigned');
+  const isOtherTemple = rawTemple === 'Other';
+  const displayTemple = rawTemple === 'None'
+    ? 'None'
+    : isOtherTemple
+      ? (otherTempleText ? `Other: ${otherTempleText}` : 'Other (Unspecified)')
+      : (rawTemple || 'None / Not Assigned');
 
   const otherCounselorText = user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor;
   const rawCounselor = hierarchy.counselor || hierarchy.brahmachariCounselor || hierarchy.grihasthaCounselor;
-  const isOtherCounselor = rawCounselor === 'Other' || Boolean(otherCounselorText);
-  const displayCounselor = isOtherCounselor
-    ? (otherCounselorText ? `Other: ${otherCounselorText}` : 'Other (Unspecified)')
-    : (rawCounselor || 'None / No Counselor');
+  const isOtherCounselor = rawCounselor === 'Other';
+  const displayCounselor = rawCounselor === 'None'
+    ? 'None'
+    : isOtherCounselor
+      ? (otherCounselorText ? `Other: ${otherCounselorText}` : 'Other (Unspecified)')
+      : (rawCounselor || 'None / No Counselor');
 
   // Camps list
   const campsList = [
@@ -147,10 +153,10 @@ export default function UserDetailsModal({
 
                 <span
                   className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${isPending
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : isApproved
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : isApproved
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
                     }`}
                 >
                   Status: {user.verificationStatus || 'Unknown'}
@@ -245,8 +251,8 @@ export default function UserDetailsModal({
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${isActive
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
                   }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -603,8 +609,8 @@ export default function UserDetailsModal({
                       <div
                         key={camp.key}
                         className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${isDone
-                            ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold'
-                            : 'bg-slate-50 border-slate-200 text-slate-400'
+                          ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold'
+                          : 'bg-slate-50 border-slate-200 text-slate-400'
                           }`}
                       >
                         <span>{camp.name}</span>
