@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Check, Info, ChevronRight, User, Landmark } from 'lucide-react';
+import { X, Shield, Check, Info, ChevronRight, User, Landmark, Receipt } from 'lucide-react';
 import { UserRole, User as UserType } from '@/types';
 import { getRoleHierarchyNumber, getRoleDisplayName } from '@/lib/utils/roles';
 
 interface RoleAssignmentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (userId: string, roles: UserRole[], templeId?: string) => Promise<void>;
+    onSave: (userId: string, roles: UserRole[], templeId?: string, centerId?: string, canViewAllDonations?: boolean) => Promise<void>;
     user: UserType | null;
     currentUserRoles: UserRole[];
     temples: any[];
@@ -66,12 +66,19 @@ export default function RoleAssignmentModal({
 }: RoleAssignmentModalProps) {
     const [selectedRoles, setSelectedRoles] = useState<UserRole[]>([]);
     const [selectedTempleId, setSelectedTempleId] = useState<string>('');
+    const [canViewAllDonations, setCanViewAllDonations] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (user) {
             const roles = Array.isArray(user.role) ? user.role : [user.role];
             setSelectedRoles(roles);
+            setCanViewAllDonations(Boolean(
+                user.canViewAllDonations || 
+                (user as any).can_view_all_donations || 
+                user.hierarchy?.canViewAllDonations || 
+                user.hierarchy?.can_view_all_donations
+            ));
 
             // Check if user is already assigned to a temple
             const assignedTemple = temples.find(t =>
@@ -106,7 +113,7 @@ export default function RoleAssignmentModal({
         try {
             let finalRoles = [...selectedRoles];
             if (finalRoles.length === 0) finalRoles = ['student'];
-            await onSave(user.id, finalRoles, selectedTempleId || undefined);
+            await onSave(user.id, finalRoles, selectedTempleId || undefined, undefined, canViewAllDonations);
             onClose();
         } catch (error) {
             console.error('Failed to save roles', error);
@@ -235,6 +242,33 @@ export default function RoleAssignmentModal({
                             </div>
                         </div>
                     ))}
+
+                    {/* Special Financial View Privileges */}
+                    <div className="pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                                Special Financial Permissions
+                            </h3>
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                                Optional
+                            </span>
+                        </div>
+                        <label className="flex items-start gap-3 p-3.5 bg-amber-50/70 hover:bg-amber-50 border border-amber-200/90 rounded-2xl cursor-pointer transition-colors shadow-xs">
+                            <input
+                                type="checkbox"
+                                checked={canViewAllDonations}
+                                onChange={e => setCanViewAllDonations(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 accent-amber-600"
+                            />
+                            <div>
+                                <span className="text-xs font-bold text-gray-900 block">All Donation Logs (View-Only Access)</span>
+                                <span className="text-[11px] text-gray-600 leading-relaxed block mt-0.5">
+                                    Allows this user to access the full donation logs page to view all temple collections and behalf devotee names without giving them gateway or user management access.
+                                </span>
+                            </div>
+                        </label>
+                    </div>
                 </div>
 
                 {/* Footer - Fixed */}

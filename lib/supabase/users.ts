@@ -134,6 +134,9 @@ export const getUsersByHierarchy = async (hierarchy: any) => {
       if (updates.profileImage !== undefined) dbUpdates.profile_image = updates.profileImage;
       if (updates.birthDate !== undefined) dbUpdates.birth_date = updates.birthDate ? String(updates.birthDate).trim().split('T')[0].split(' ')[0] : null;
       if (updates.pushTokens !== undefined) dbUpdates.push_tokens = updates.pushTokens;
+      if (updates.canViewAllDonations !== undefined || (updates as any).can_view_all_donations !== undefined) {
+        dbUpdates.can_view_all_donations = Boolean(updates.canViewAllDonations ?? (updates as any).can_view_all_donations);
+      }
 
       // Map education array to flat columns
       if (updates.education !== undefined) {
@@ -239,6 +242,9 @@ export const getUsersByHierarchy = async (hierarchy: any) => {
         }
 
         if (enrichedHierarchy !== undefined) {
+          if (dbUpdates.can_view_all_donations !== undefined) {
+            enrichedHierarchy.can_view_all_donations = dbUpdates.can_view_all_donations;
+          }
           dbUpdates.hierarchy = enrichedHierarchy;
         }
 

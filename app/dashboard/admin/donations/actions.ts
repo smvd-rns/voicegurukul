@@ -28,12 +28,41 @@ async function verifySuperAdmin() {
 }
 
 /**
+ * Helper to verify whether user is Super Admin or has granted View-Only access to All Donations.
+ */
+async function verifyDonationsViewerOrAdmin() {
+  const user = await getAuthUserFromCookies();
+  if (!user) throw new Error('Unauthorized');
+
+  const primaryAdmin = getAdminClient();
+  const { data: userData, error: roleError } = await primaryAdmin
+    .from('users')
+    .select('role, can_view_all_donations, hierarchy')
+    .eq('id', user.id)
+    .single();
+
+  const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+  const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+  const canViewAllDonations = Boolean(
+    userData?.can_view_all_donations || 
+    userData?.hierarchy?.can_view_all_donations || 
+    userData?.hierarchy?.canViewAllDonations
+  );
+
+  if (roleError || (!isSuperAdmin && !canViewAllDonations)) {
+    throw new Error('Unauthorized: You do not have permission to view donation logs.');
+  }
+
+  return { user, isSuperAdmin, isViewOnly: !isSuperAdmin };
+}
+
+/**
  * Fetches all donations and enriches collector information directly from the database.
- * Only allowed for Super Admins (Role 8).
+ * Allowed for Super Admins (Role 8) and Authorized View-Only Donors/Accountants.
  */
 export async function fetchAllDonations(accessToken?: string) {
   try {
-    await verifySuperAdmin();
+    const { isSuperAdmin, isViewOnly } = await verifyDonationsViewerOrAdmin();
 
     // 3. Fetch Donations directly from database
     const { rows: donations } = await query(
@@ -103,7 +132,9 @@ export async function fetchAllDonations(accessToken?: string) {
     return { 
       success: true, 
       donations: enrichedDonations, 
-      collectors: collectorsMap 
+      collectors: collectorsMap,
+      isViewOnly,
+      isSuperAdmin
     };
 
   } catch (error: any) {
@@ -113,11 +144,12 @@ export async function fetchAllDonations(accessToken?: string) {
 }
 
 /**
- * Fetches the Behalf Devotees list for Super Admin, enriched with total amount raised.
+ * Fetches the Behalf Devotees list, enriched with total amount raised.
+ * Allowed for Super Admin and View-Only Donors/Accountants.
  */
 export async function fetchBehalfDevotees() {
   try {
-    await verifySuperAdmin();
+    await verifyDonationsViewerOrAdmin();
 
     const { rows: devotees } = await query(
       `SELECT d.*, 
@@ -247,7 +279,10 @@ export async function toggleBehalfDevoteeStatus(id: string, isActive: boolean) {
  */
 export async function fetchBehalfChangeRequests() {
   try {
-    await verifySuperAdmin();
+    const { isSuperAdmin } = await verifyDonationsViewerOrAdmin();
+    if (!isSuperAdmin) {
+      return { success: true, requests: [] };
+    }
 
     const { rows: requests } = await query(
       `SELECT u.id, u.name, u.email, u.phone, u.current_center, u.current_temple, 

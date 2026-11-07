@@ -171,6 +171,8 @@ export interface User {
   healthChronicDisease?: string;
   bv_group?: string;
   ashram?: string;
+  canViewAllDonations?: boolean;
+  can_view_all_donations?: boolean;
 }
 
 export interface EducationEntry {
@@ -639,6 +641,14 @@ export interface CampEmailLink {
   type?: 'whatsapp' | 'document' | 'video' | 'map' | 'website' | 'other';
 }
 
+export interface CampShareAnnouncementConfig {
+  procedure_guide_url?: string;
+  support_email?: string;
+  whatsapp_group_url?: string;
+  custom_note?: string;
+  custom_whatsapp_override?: string;
+}
+
 export interface Camp {
   id: string;
   slug: string;
@@ -668,6 +678,7 @@ export interface Camp {
   default_poc_contact?: string; // Optional default POC mobile number
   email_instructions?: string; // Custom instructions/announcement for registration emails
   email_links?: CampEmailLink[]; // Dynamic action links/buttons (WhatsApp groups, docs, videos, maps)
+  share_announcement_config?: CampShareAnnouncementConfig; // Auto-generated circular share parameters
   created_at?: string;
   updated_at?: string;
 }

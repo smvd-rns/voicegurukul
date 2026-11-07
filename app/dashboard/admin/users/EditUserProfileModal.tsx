@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, User as UserIcon, Mail, Phone, Calendar, Landmark, Building2,
-  Users, Sparkles, Check, Loader2, Award, AlertCircle, Plus
+  Users, Sparkles, Check, Loader2, Award, AlertCircle, Plus,
+  Receipt, ShieldCheck
 } from 'lucide-react';
 import { User, TempleData } from '@/types';
 import { CenterData, addCenterToSupabase } from '@/lib/supabase/centers';
@@ -93,6 +94,7 @@ export default function EditUserProfileModal({
     spiritualMasterName: '',
     introducedToKcIn: '',
     rounds: '',
+    canViewAllDonations: false,
     camps: {} as Record<string, boolean>
   });
 
@@ -147,6 +149,7 @@ export default function EditUserProfileModal({
         spiritualMasterName: hierarchy.spiritualMasterName || '',
         introducedToKcIn: hierarchy.introducedToKcIn || user.introducedToKcIn || '',
         rounds: hierarchy.rounds ? String(hierarchy.rounds) : '',
+        canViewAllDonations: Boolean(user.canViewAllDonations || (user as any).can_view_all_donations || hierarchy.can_view_all_donations || hierarchy.canViewAllDonations),
         camps: campsMap
       });
       setActiveTab('basic');
@@ -405,7 +408,8 @@ export default function EditUserProfileModal({
         initiatedName: formData.initiatedName || null,
         spiritualMasterName: formData.spiritualMasterName || null,
         introducedToKcIn: formData.introducedToKcIn || null,
-        rounds: formData.rounds ? parseInt(formData.rounds) || null : null
+        rounds: formData.rounds ? parseInt(formData.rounds) || null : null,
+        can_view_all_donations: formData.canViewAllDonations
       };
 
         const payload: any = {
@@ -414,6 +418,8 @@ export default function EditUserProfileModal({
           phone: formData.phone.trim() || undefined,
           birthDate: formData.birthDate || undefined,
           verificationStatus: formData.verificationStatus as any,
+          canViewAllDonations: formData.canViewAllDonations,
+          can_view_all_donations: formData.canViewAllDonations,
           hierarchy: updatedHierarchy,
           currentTemple: resolvedTemple,
           otherTemple: resolvedOtherTemple,
@@ -802,6 +808,31 @@ export default function EditUserProfileModal({
                       <option value="rejected">Rejected</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Special Permissions / Delegation */}
+                <div className="pt-3 border-t border-gray-100">
+                  <label className="block text-xs font-bold text-gray-700 mb-2">Special Financial & View Privileges</label>
+                  <label className="flex items-start gap-3 p-3.5 bg-amber-50/70 hover:bg-amber-50 border border-amber-200/90 rounded-2xl cursor-pointer transition-colors shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!formData.canViewAllDonations}
+                      onChange={e => setFormData({ ...formData, canViewAllDonations: e.target.checked })}
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 accent-amber-600"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="text-xs font-black text-slate-800">Allow View Access to All Donation Logs</span>
+                        <span className="ml-auto text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                          Read-Only Access
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                        Grants this user a dedicated <strong>&ldquo;All Donation Logs&rdquo;</strong> page in their sidebar to view all temple collections and behalf devotee receipts. They cannot modify payment gateways or manage devotees.
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
             )}

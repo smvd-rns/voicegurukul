@@ -504,7 +504,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleSaveRoles = async (userId: string, newRoles: UserRole[], templeId?: string, centerId?: string) => {
+  const handleSaveRoles = async (userId: string, newRoles: UserRole[], templeId?: string, centerId?: string, canViewAllDonations?: boolean) => {
     try {
       const userToUpdate = users.find(u => u.id === userId);
       if (!userToUpdate) return;
@@ -585,8 +585,26 @@ export default function UsersPage() {
         }
       }
 
+      // 3. Update users table in db
+      await updateUser(userId, {
+        role: newRoles,
+        ...(canViewAllDonations !== undefined ? { canViewAllDonations, can_view_all_donations: canViewAllDonations } : {})
+      });
+
       // Refresh local state
-      setUsers(users.map(u => u.id === userId ? { ...u, role: newRoles } : u));
+      setUsers(users.map(u => u.id === userId ? { 
+        ...u, 
+        role: newRoles,
+        ...(canViewAllDonations !== undefined ? { canViewAllDonations, can_view_all_donations: canViewAllDonations } : {})
+      } : u));
+
+      if (selectedUserDetails && selectedUserDetails.id === userId) {
+        setSelectedUserDetails({
+          ...selectedUserDetails,
+          role: newRoles,
+          ...(canViewAllDonations !== undefined ? { canViewAllDonations, can_view_all_donations: canViewAllDonations } : {})
+        });
+      }
 
       const updatedTemples = await getTemplesFromSupabase();
       setTemplesList(updatedTemples);

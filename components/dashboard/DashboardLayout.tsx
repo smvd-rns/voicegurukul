@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { logout } from '@/lib/supabase/auth';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
-import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen, Tent, Clock } from 'lucide-react';
+import { Menu, X, Home, BarChart3, Users, Settings, LogOut, Upload, Building2, MapPin, UserCheck, CheckCircle2, UserCircle2, Briefcase, Mic, Globe, Radio, Shield, BookOpen, Calendar, CreditCard, MoreHorizontal, ShoppingBag, Database, Heart, PanelLeftClose, PanelLeftOpen, Tent, Clock, Receipt } from 'lucide-react';
 import ProfileCompletionModal from '@/components/auth/ProfileCompletionModal';
 import ChangePasswordModal from '@/components/dashboard/ChangePasswordModal';
 import { KeyRound } from 'lucide-react';
@@ -233,6 +233,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // For Super Admins, this is accessed via Admin Dashboard, so hide it here
       if (hasCounselorRole && !isSuperAdmin) {
         baseNavigation.push({ name: 'Counselor', href: '/dashboard/counselor', icon: UserCheck });
+      }
+
+      // Add "All Donation Logs" page if user has granted view-only donation logs permission
+      const hasAllDonationsView = !isSuperAdmin && Boolean(
+        userData?.canViewAllDonations || 
+        (userData as any)?.can_view_all_donations || 
+        userData?.hierarchy?.canViewAllDonations || 
+        userData?.hierarchy?.can_view_all_donations
+      );
+      if (hasAllDonationsView) {
+        baseNavigation.push({ name: 'All Donation Logs', href: '/dashboard/admin/donations', icon: Receipt });
       }
 
 

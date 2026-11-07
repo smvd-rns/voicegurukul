@@ -6,7 +6,7 @@ import {
   X, User as UserIcon, Mail, Phone, Calendar, Landmark, Building2,
   Users, Sparkles, Shield, GraduationCap, Briefcase, Heart, CheckCircle2,
   Clock, AlertTriangle, ExternalLink, MessageCircle, Pencil, Crown, Award,
-  MapPin, Check
+  MapPin, Check, Receipt
 } from 'lucide-react';
 import { User, UserRole } from '@/types';
 import { getRoleDisplayName, getHighestRole } from '@/lib/utils/roles';
@@ -400,6 +400,12 @@ export default function UserDetailsModal({
                     <span className="font-bold text-slate-900 mt-0.5 block">
                       {Array.isArray(user.role) ? user.role.map(r => getRoleDisplayName(r)).join(', ') : roleName}
                     </span>
+                    {(user.canViewAllDonations || (user as any).can_view_all_donations || hierarchy.can_view_all_donations) && (
+                      <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">
+                        <Receipt className="w-3 h-3 text-amber-600" />
+                        All Donations (View Only)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

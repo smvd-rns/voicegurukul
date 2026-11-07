@@ -2,20 +2,20 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Download, 
-  MoreVertical, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  LayoutGrid, 
-  List, 
-  ArrowUpRight, 
-  IndianRupee, 
-  Users, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
+  MoreVertical,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  LayoutGrid,
+  List,
+  ArrowUpRight,
+  IndianRupee,
+  Users,
   ShieldCheck,
   CreditCard,
   Zap,
@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/config';
-import { 
+import {
   fetchAllDonations,
   fetchBehalfDevotees,
   searchUsersForBehalf,
@@ -56,7 +56,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, gateway, isLoading }: a
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="bg-white rounded-[2rem] shadow-2xl border border-white max-w-md w-full overflow-hidden"
@@ -68,25 +68,25 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, gateway, isLoading }: a
           <h2 className="text-2xl font-black text-center mb-2 tracking-tight">Security Approval</h2>
           <p className="text-orange-100 text-sm text-center font-bold opacity-80 uppercase tracking-widest">Action Required</p>
         </div>
-        
+
         <div className="p-8 space-y-6">
           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex items-center gap-4">
             <div className={`p-3 rounded-xl ${gateway === 'razorpay' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'}`}>
-               <Zap className="w-6 h-6" />
+              <Zap className="w-6 h-6" />
             </div>
             <div>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Switching to</p>
-               <h3 className="text-lg font-black text-slate-800">{gateway?.toUpperCase()}</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Switching to</p>
+              <h3 className="text-lg font-black text-slate-800">{gateway?.toUpperCase()}</h3>
             </div>
           </div>
 
           <p className="text-slate-500 text-sm font-bold leading-relaxed text-center px-4">
-            For security, an approval link will be sent to <span className="text-orange-600">smvd@voicepune.com</span>. 
+            For security, an approval link will be sent to <span className="text-orange-600">smvd@voicepune.com</span>.
             The gateway will only change after email confirmation.
           </p>
 
           <div className="flex flex-col gap-3">
-            <button 
+            <button
               disabled={isLoading}
               onClick={onConfirm}
               className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-900 transition-all flex items-center justify-center gap-2 group"
@@ -109,6 +109,7 @@ export default function AdminDonationsPage() {
   const [view, setView] = useState<'grid' | 'table'>('table');
   const [donations, setDonations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isViewOnly, setIsViewOnly] = useState(false);
   const [activeGateway, setActiveGateway] = useState('razorpay');
   const [pendingGateway, setPendingGateway] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +157,7 @@ export default function AdminDonationsPage() {
   const [behalfChangeRequests, setBehalfChangeRequests] = useState<any[]>([]);
   const [loadingChangeRequests, setLoadingChangeRequests] = useState(false);
   const [isProcessingRequest, setIsProcessingRequest] = useState<string | null>(null);
-  
+
   // Helper to extract parent and current center/temple for any donation
   const getDonationCenters = (donation: any) => {
     const collector = collectors[donation.tag_user_id];
@@ -260,8 +261,8 @@ export default function AdminDonationsPage() {
       }
     });
     return Array.from(ids)
-      .map(id => ({ 
-        id, 
+      .map(id => ({
+        id,
         name: collectors[id]?.name || 'Unknown',
         slug: collectors[id]?.slug || ''
       }))
@@ -279,27 +280,27 @@ export default function AdminDonationsPage() {
       const collectorObj = collectors[d.tag_user_id];
       const collectorName = (collectorObj?.name || d.metadata?.collector?.name || '').toLowerCase();
       const collectorSlug = (
-        collectorObj?.slug || 
-        d.collector_slug || 
-        d.metadata?.collector_slug || 
-        d.metadata?.collector?.slug || 
-        d.tag_user_id || 
+        collectorObj?.slug ||
+        d.collector_slug ||
+        d.metadata?.collector_slug ||
+        d.metadata?.collector?.slug ||
+        d.tag_user_id ||
         ''
       ).toLowerCase();
       const onBehalfName = (d.on_behalf_of_name || d.metadata?.on_behalf_of?.name || '').toLowerCase();
 
-      const matchesSearch = !search || 
-        name.includes(search) || 
-        email.includes(search) || 
-        phone.includes(search) || 
-        pan.includes(search) || 
+      const matchesSearch = !search ||
+        name.includes(search) ||
+        email.includes(search) ||
+        phone.includes(search) ||
+        pan.includes(search) ||
         tx.includes(search) ||
         collectorName.includes(search) ||
         collectorSlug.includes(search) ||
         onBehalfName.includes(search);
 
       const matchesCollector = selectedCollector === 'all' || d.tag_user_id === selectedCollector;
-      
+
       const matchesOnBehalf = selectedOnBehalf === 'all'
         ? true
         : selectedOnBehalf === 'direct'
@@ -307,19 +308,19 @@ export default function AdminDonationsPage() {
           : selectedOnBehalf === 'any_behalf'
             ? Boolean(d.on_behalf_of_id || d.on_behalf_of_name)
             : (
-                d.on_behalf_of_id === selectedOnBehalf ||
-                (d.on_behalf_of_name && behalfDevotees.find(bd => bd.id === selectedOnBehalf)?.name?.toLowerCase() === d.on_behalf_of_name.toLowerCase())
-              );
-      
+              d.on_behalf_of_id === selectedOnBehalf ||
+              (d.on_behalf_of_name && behalfDevotees.find(bd => bd.id === selectedOnBehalf)?.name?.toLowerCase() === d.on_behalf_of_name.toLowerCase())
+            );
+
       const { parentCenter, parentTemple, currentCenter, currentTemple } = getDonationCenters(d);
       const matchesCurrentTemple = selectedCurrentTemple === 'all' || currentTemple === selectedCurrentTemple;
       const matchesCurrentCenter = selectedCurrentCenter === 'all' || currentCenter === selectedCurrentCenter;
       const matchesParentTemple = selectedParentTemple === 'all' || parentTemple === selectedParentTemple;
       const matchesParentCenter = selectedParentCenter === 'all' || parentCenter === selectedParentCenter;
-      
-      const matchesStatus = selectedStatus === 'all' 
-        ? true 
-        : selectedStatus === 'captured' 
+
+      const matchesStatus = selectedStatus === 'all'
+        ? true
+        : selectedStatus === 'captured'
           ? (d.payment_status === 'captured' || d.payment_status === 'success')
           : d.payment_status === selectedStatus;
 
@@ -365,7 +366,7 @@ export default function AdminDonationsPage() {
   const filteredBehalfDevotees = useMemo(() => {
     if (!behalfSearchTerm.trim()) return behalfDevotees;
     const q = behalfSearchTerm.toLowerCase().trim();
-    return behalfDevotees.filter(d => 
+    return behalfDevotees.filter(d =>
       (d.name || '').toLowerCase().includes(q) ||
       (d.email || '').toLowerCase().includes(q) ||
       (d.phone || '').toLowerCase().includes(q) ||
@@ -503,21 +504,46 @@ export default function AdminDonationsPage() {
     const { data: { session } } = await supabase.auth.getSession();
     setUser(user);
     setAccessToken(session?.access_token || null);
+
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role, can_view_all_donations, hierarchy')
+        .eq('id', user.id)
+        .single();
+
+      const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+      const isSuperAdmin = roles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+      const canView = Boolean(
+        userData?.can_view_all_donations ||
+        userData?.hierarchy?.can_view_all_donations ||
+        userData?.hierarchy?.canViewAllDonations
+      );
+
+      if (!isSuperAdmin && !canView) {
+        router.push('/dashboard');
+        return;
+      }
+
+      if (!isSuperAdmin && canView) {
+        setIsViewOnly(true);
+      }
+    }
   };
 
   const fetchPlatformSettings = async () => {
-    if (!supabase) return;
+    if (!supabase || isViewOnly) return;
     try {
       const { data } = await supabase
         .from('platform_settings')
         .select('*')
         .eq('id', 'active_payment_gateway')
         .single();
-      
+
       if (data) {
         const active = String(data.value).replace(/^["']|["']$/g, '');
         const pending = data.pending_value ? String(data.pending_value).replace(/^["']|["']$/g, '') : null;
-        
+
         setActiveGateway(active || 'razorpay');
         setPendingGateway(pending);
       }
@@ -530,11 +556,15 @@ export default function AdminDonationsPage() {
     setLoading(true);
     try {
       if (!supabase) return;
-      
+
       const result = await fetchAllDonations(accessToken || undefined);
-      
+
       if (!result.success || !result.donations) {
-         throw new Error(result.error || 'Failed to fetch donations');
+        throw new Error(result.error || 'Failed to fetch donations');
+      }
+
+      if (result.isViewOnly) {
+        setIsViewOnly(true);
       }
 
       const rawDonations = result.donations;
@@ -572,8 +602,8 @@ export default function AdminDonationsPage() {
               currentTemple = u.current_temple === 'Other' && u.other_temple ? u.other_temple.trim() : u.current_temple.trim();
             }
 
-            userMap[u.id] = { 
-              name: u.name || 'Unknown', 
+            userMap[u.id] = {
+              name: u.name || 'Unknown',
               slug: u.donation_slug || '',
               parentCenter,
               parentTemple,
@@ -614,14 +644,14 @@ export default function AdminDonationsPage() {
     setLoadingUsers(true);
     try {
       if (!supabase) return;
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('id, name, email, center, created_at')
         .or('donation_slug.is.null,donation_slug.eq.""')
         .order('created_at', { ascending: false })
         .limit(100);
-      
+
       if (error) throw error;
       setUsersWithoutSlugs(data || []);
     } catch (err) {
@@ -630,7 +660,7 @@ export default function AdminDonationsPage() {
       setLoadingUsers(false);
     }
   };
-  
+
   const loadBehalfDevotees = async () => {
     setLoadingBehalfDevotees(true);
     try {
@@ -870,7 +900,7 @@ export default function AdminDonationsPage() {
       const result = await response.json();
       if (result.success) {
         setPendingGateway(null);
-        await fetchPlatformSettings(); 
+        await fetchPlatformSettings();
       } else {
         alert(result.error || 'Failed to cancel request');
       }
@@ -907,56 +937,66 @@ export default function AdminDonationsPage() {
               <p className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider mb-0.5">Unique Donors</p>
               <span className="text-xl sm:text-2xl font-black text-gray-900">{stats.uniqueDonors}</span>
             </div>
-            
-            <div className="h-12 w-px bg-gray-200 mx-2 hidden lg:block" />
 
-            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-              <div className="bg-gray-100/80 p-1 sm:p-1.5 rounded-2xl border border-gray-200/80 flex items-center gap-1.5">
-                <button 
-                  disabled={activeGateway === 'razorpay' || !!pendingGateway}
-                  onClick={() => handleGatewayToggleRequest('razorpay')}
-                  className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${
-                    activeGateway === 'razorpay' 
-                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' 
-                      : 'text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-not-allowed'
-                  }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span className="text-[11px] uppercase tracking-wider">Razorpay</span>
-                </button>
-                <button 
-                   disabled={activeGateway === 'easebuzz' || !!pendingGateway}
-                   onClick={() => handleGatewayToggleRequest('easebuzz')}
-                   className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${
-                    activeGateway === 'easebuzz' 
-                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' 
-                      : 'text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-not-allowed'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span className="text-[11px] uppercase tracking-wider">Easebuzz</span>
-                  {activeGateway === 'easebuzz' && <span className="text-[8px] bg-white/20 px-1 py-0.5 rounded text-white animate-pulse">LIVE</span>}
-                </button>
-              </div>
-              
-              {pendingGateway && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl">
-                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
-                    <Clock className="w-3 h-3 text-amber-600" />
-                  </motion.div>
-                  <span className="text-[9px] font-bold uppercase tracking-tight text-amber-700">
-                    Switching to {pendingGateway.toUpperCase()} awaiting approval
-                  </span>
-                  <button 
-                    disabled={isToggling}
-                    onClick={handleCancelRequest}
-                    className="ml-auto p-0.5 hover:bg-rose-100 rounded transition-colors group"
-                  >
-                    <X className="w-3 h-3 text-rose-500 group-hover:scale-110 transition-transform" />
-                  </button>
+            {isViewOnly ? (
+              <div className="px-4 py-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl flex items-center gap-2.5 text-amber-900">
+                <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider block text-amber-950">Auditor Access</span>
+                  <span className="text-[11px] text-amber-800 font-semibold">View-Only Logs</span>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="h-12 w-px bg-gray-200 mx-2 hidden lg:block" />
+
+                <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+                  <div className="bg-gray-100/80 p-1 sm:p-1.5 rounded-2xl border border-gray-200/80 flex items-center gap-1.5">
+                    <button
+                      disabled={activeGateway === 'razorpay' || !!pendingGateway}
+                      onClick={() => handleGatewayToggleRequest('razorpay')}
+                      className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${activeGateway === 'razorpay'
+                          ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                          : 'text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-not-allowed'
+                        }`}
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span className="text-[11px] uppercase tracking-wider">Razorpay</span>
+                    </button>
+                    <button
+                      disabled={activeGateway === 'easebuzz' || !!pendingGateway}
+                      onClick={() => handleGatewayToggleRequest('easebuzz')}
+                      className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${activeGateway === 'easebuzz'
+                          ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                          : 'text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-not-allowed'
+                        }`}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span className="text-[11px] uppercase tracking-wider">Easebuzz</span>
+                      {activeGateway === 'easebuzz' && <span className="text-[8px] bg-white/20 px-1 py-0.5 rounded text-white animate-pulse">LIVE</span>}
+                    </button>
+                  </div>
+
+                  {pendingGateway && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl">
+                      <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
+                        <Clock className="w-3 h-3 text-amber-600" />
+                      </motion.div>
+                      <span className="text-[9px] font-bold uppercase tracking-tight text-amber-700">
+                        Switching to {pendingGateway.toUpperCase()} awaiting approval
+                      </span>
+                      <button
+                        disabled={isToggling}
+                        onClick={handleCancelRequest}
+                        className="ml-auto p-0.5 hover:bg-rose-100 rounded transition-colors group"
+                      >
+                        <X className="w-3 h-3 text-rose-500 group-hover:scale-110 transition-transform" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -964,76 +1004,94 @@ export default function AdminDonationsPage() {
         <div className="absolute bottom-[-20%] left-[-5%] w-80 h-80 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
       </div>
 
+      {/* View-Only Mode Banner */}
+      {isViewOnly && (
+        <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">Donation Logs (View-Only Mode)</h4>
+              <p className="text-xs text-amber-800 font-medium mt-0.5">
+                You have authorized view access to all donation transactions and devotee behalf collection names. Administrative controls are locked.
+              </p>
+            </div>
+          </div>
+          <span className="self-start sm:self-center px-3 py-1 bg-amber-200/70 text-amber-950 text-[10px] font-black uppercase tracking-widest rounded-full shrink-0">
+            Read Only
+          </span>
+        </div>
+      )}
+
       {/* Primary Tab Switcher - Clean & Scrollbar-free */}
       <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200/80 shadow-sm w-full sm:w-fit overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => setActiveTab('donations')}
-          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
-            activeTab === 'donations' 
-              ? 'bg-orange-600 text-white shadow-sm' 
+          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'donations'
+              ? 'bg-orange-600 text-white shadow-sm'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
+            }`}
         >
           <CreditCard className="w-3.5 h-3.5" />
           Live Audit Log
         </button>
         <button
           onClick={() => setActiveTab('behalf-list')}
-          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 relative whitespace-nowrap ${
-            activeTab === 'behalf-list' 
-              ? 'bg-orange-600 text-white shadow-sm' 
+          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 relative whitespace-nowrap ${activeTab === 'behalf-list'
+              ? 'bg-orange-600 text-white shadow-sm'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
+            }`}
         >
           <HeartHandshake className="w-3.5 h-3.5" />
           Behalf Name List
           {behalfDevotees.length > 0 && (
-            <span className={`w-4 h-4 text-[9px] flex items-center justify-center rounded-full ml-1 ${
-              activeTab === 'behalf-list' ? 'bg-white text-orange-600 font-black' : 'bg-orange-100 text-orange-800 font-bold'
-            }`}>
+            <span className={`w-4 h-4 text-[9px] flex items-center justify-center rounded-full ml-1 ${activeTab === 'behalf-list' ? 'bg-white text-orange-600 font-black' : 'bg-orange-100 text-orange-800 font-bold'
+              }`}>
               {behalfDevotees.length}
             </span>
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('missing-links')}
-          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 relative whitespace-nowrap ${
-            activeTab === 'missing-links' 
-              ? 'bg-orange-600 text-white shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          Collectors without Links
-          {usersWithoutSlugs.length > 0 && (
-            <span className="w-4 h-4 bg-rose-600 text-white text-[9px] flex items-center justify-center rounded-full ml-1">
-              {usersWithoutSlugs.length}
-            </span>
-          )}
-        </button>
+        {!isViewOnly && (
+          <button
+            onClick={() => setActiveTab('missing-links')}
+            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 relative whitespace-nowrap ${activeTab === 'missing-links'
+                ? 'bg-orange-600 text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            Collectors without Links
+            {usersWithoutSlugs.length > 0 && (
+              <span className="w-4 h-4 bg-rose-600 text-white text-[9px] flex items-center justify-center rounded-full ml-1">
+                {usersWithoutSlugs.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {activeTab === 'donations' && (
         <>
           {error && (
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3">
-               <XCircle className="w-5 h-5 text-rose-500" />
-               <p className="text-rose-700 font-bold text-xs tracking-tight">{error}</p>
-               <button onClick={() => fetchData()} className="ml-auto px-4 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-rose-700 transition-colors">Retry</button>
+              <XCircle className="w-5 h-5 text-rose-500" />
+              <p className="text-rose-700 font-bold text-xs tracking-tight">{error}</p>
+              <button onClick={() => fetchData()} className="ml-auto px-4 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-rose-700 transition-colors">Retry</button>
             </div>
           )}
 
           {/* Main Content Filters & Search */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
             <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-gray-200/80 shadow-sm">
-              <button 
+              <button
                 onClick={() => setView('grid')}
                 className={`p-2 rounded-lg transition-all ${view === 'grid' ? 'bg-orange-50 text-orange-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
                 title="Grid View"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={() => setView('table')}
                 className={`p-2 rounded-lg transition-all ${view === 'table' ? 'bg-orange-50 text-orange-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
                 title="Table View"
@@ -1045,8 +1103,8 @@ export default function AdminDonationsPage() {
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto flex-1 sm:justify-end">
               <div className="relative flex-1 sm:max-w-xs group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -1085,7 +1143,7 @@ export default function AdminDonationsPage() {
                 </button>
               )}
 
-              <button 
+              <button
                 onClick={handleExportCSV}
                 className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-xl active:scale-95 transition-all shadow-md shadow-emerald-600/20"
                 title="Download CSV Audit Report"
@@ -1274,7 +1332,7 @@ export default function AdminDonationsPage() {
                               <div className="flex items-center gap-1.5">
                                 <UserCheck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
                                 <span className="text-gray-900 font-bold text-xs tracking-tight truncate">
-                                   {collector?.name || 'System Executive'}
+                                  {collector?.name || 'System Executive'}
                                 </span>
                               </div>
                               {collectorSlug ? (
@@ -1310,11 +1368,10 @@ export default function AdminDonationsPage() {
                           {/* 3. Collector Parent Column */}
                           <td className="px-5 py-3.5">
                             <div className="flex flex-col gap-1 min-w-[140px]">
-                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
-                                parentCenter === 'None'
+                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${parentCenter === 'None'
                                   ? 'text-gray-400 bg-gray-50 border border-gray-200'
                                   : 'text-orange-800 bg-orange-50 border border-orange-200/80 font-bold'
-                              }`}>
+                                }`}>
                                 {parentCenter}
                               </span>
                               {parentTemple && parentTemple !== 'None' ? (
@@ -1330,11 +1387,10 @@ export default function AdminDonationsPage() {
                           {/* 3. Collector Current Column */}
                           <td className="px-5 py-3.5">
                             <div className="flex flex-col gap-1 min-w-[140px]">
-                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${
-                                currentCenter === 'None'
+                              <span className={`font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md w-fit whitespace-nowrap ${currentCenter === 'None'
                                   ? 'text-gray-400 bg-gray-50 border border-gray-200'
                                   : 'text-blue-800 bg-blue-50 border border-blue-200/80 font-bold'
-                              }`}>
+                                }`}>
                                 {currentCenter}
                               </span>
                               {currentTemple && currentTemple !== 'None' ? (
@@ -1405,7 +1461,7 @@ export default function AdminDonationsPage() {
                               <div className="flex items-center gap-1.5 text-gray-400">
                                 <Clock className="w-2.5 h-2.5" />
                                 <span className="text-[10px] font-medium text-gray-500">
-                                   {formatDonationDate(donation)}
+                                  {formatDonationDate(donation)}
                                 </span>
                               </div>
                             </div>
@@ -1413,11 +1469,10 @@ export default function AdminDonationsPage() {
 
                           {/* 7. Status */}
                           <td className="px-5 py-3.5">
-                             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border w-fit ${
-                              donation.payment_status === 'captured' || donation.payment_status === 'success'
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border w-fit ${donation.payment_status === 'captured' || donation.payment_status === 'success'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}>
+                              }`}>
                               <CheckCircle2 className="w-3 h-3" />
                               <span className="text-[9px] font-bold uppercase tracking-wider">{donation.payment_status}</span>
                             </div>
@@ -1458,11 +1513,10 @@ export default function AdminDonationsPage() {
                         </div>
                         <div className="shrink-0 text-right">
                           <p className="text-gray-900 font-black text-sm">₹{Number(donation.amount || 0).toLocaleString('en-IN')}</p>
-                          <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase mt-0.5 ${
-                            donation.payment_status === 'captured' || donation.payment_status === 'success'
+                          <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase mt-0.5 ${donation.payment_status === 'captured' || donation.payment_status === 'success'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
+                            }`}>
                             <CheckCircle2 className="w-2 h-2" />
                             {donation.payment_status}
                           </div>
@@ -1500,26 +1554,26 @@ export default function AdminDonationsPage() {
 
                       {/* Separate spaces for Collector Parent and Collector Current */}
                       <div className="grid grid-cols-2 gap-2">
-                         <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
-                           <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
-                           </span>
-                           <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
-                           <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
-                         </div>
-                         <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
-                           <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
-                           </span>
-                           <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
-                           <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
-                         </div>
+                        <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
+                          <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
+                          </span>
+                          <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
+                          <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
+                          <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
+                          </span>
+                          <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
+                          <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
+                        </div>
                       </div>
                       <div className="pt-2 border-t border-gray-100 flex justify-between items-center text-[9px] text-gray-500">
-                         <span className="font-mono truncate max-w-[140px] text-gray-600">{donation.txnid}</span>
-                         <span className="text-[9px] font-medium text-gray-500 flex items-center gap-1">
-                           <Clock className="w-2.5 h-2.5" /> {formatDonationDate(donation)}
-                         </span>
+                        <span className="font-mono truncate max-w-[140px] text-gray-600">{donation.txnid}</span>
+                        <span className="text-[9px] font-medium text-gray-500 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" /> {formatDonationDate(donation)}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1536,96 +1590,95 @@ export default function AdminDonationsPage() {
 
                 return (
                   <div key={donation.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-md hover:border-orange-200 hover:shadow-lg transition-all group flex flex-col justify-between">
-                     <div>
-                       <div className="flex justify-between items-start mb-4">
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
-                              {collectorSlug && (
-                                <span className="font-mono text-[9px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/80 truncate">
-                                  @{collectorSlug}
-                                </span>
-                              )}
-                              {donation.ashram && (
-                                <span className="text-gray-600 font-semibold text-[9px] bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[130px]">
-                                  {donation.ashram}
-                                </span>
-                              )}
-                            </div>
-                            <h3 className="text-gray-900 font-bold text-sm tracking-tight truncate">{collector?.name || 'System Executive'}</h3>
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-orange-700 font-bold text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 border border-orange-200/70 rounded">Collector</span>
+                            {collectorSlug && (
+                              <span className="font-mono text-[9px] text-orange-800 font-bold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/80 truncate">
+                                @{collectorSlug}
+                              </span>
+                            )}
+                            {donation.ashram && (
+                              <span className="text-gray-600 font-semibold text-[9px] bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[130px]">
+                                {donation.ashram}
+                              </span>
+                            )}
                           </div>
-                          <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100 shadow-inner group-hover:bg-orange-100/60 transition-all shrink-0">
-                            <IndianRupee className="w-4 h-4 text-orange-600" />
-                          </div>
-                       </div>
-                       
-                       {/* Separate spaces for Collector Parent and Collector Current */}
-                       <div className="grid grid-cols-2 gap-2 mb-4">
-                         <div className="p-2 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
-                           <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
-                           </span>
-                           <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
-                           <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
-                         </div>
-                         <div className="p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
-                           <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
-                           </span>
-                           <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
-                           <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
-                         </div>
-                       </div>
-
-                       {donation.on_behalf_of_name && (
-                         <div className="mb-4 px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between">
-                           <div className="flex items-center gap-1.5 min-w-0">
-                             <HeartHandshake className="w-4 h-4 text-purple-600 shrink-0" />
-                             <span className="text-xs font-bold text-purple-900 truncate">
-                               On Behalf: {donation.on_behalf_of_name}
-                             </span>
-                           </div>
-                           <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded shrink-0">
-                             Behalf
-                           </span>
-                         </div>
-                       )}
-                       
-                       <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-sm font-bold text-orange-700 border border-orange-200/80 shadow-sm shrink-0">
-                             {donation.donor_name ? donation.donor_name.charAt(0).toUpperCase() : 'D'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                              <p className="text-gray-900 font-bold truncate text-xs">{donation.donor_name}</p>
-                              <p className="text-[10px] text-gray-500 flex items-center gap-1 truncate font-medium">
-                                 <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
-                                 {donation.donor_email}
-                              </p>
-                              {donorPhone && (
-                                 <p className="text-[10px] text-gray-600 flex items-center gap-1 truncate font-semibold mt-0.5">
-                                    <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                                    {donorPhone}
-                                 </p>
-                              )}
-                              <p className="text-[9px] font-mono text-gray-500 truncate mt-0.5">{donation.txnid}</p>
-                          </div>
-                       </div>
-                     </div>
-
-                     <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                        <div className="flex flex-col">
-                           <span className="text-base font-black text-gray-900">₹{Number(donation.amount || 0).toLocaleString('en-IN')}</span>
-                           <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">{donation.payment_method || 'Razorpay'}</span>
+                          <h3 className="text-gray-900 font-bold text-sm tracking-tight truncate">{collector?.name || 'System Executive'}</h3>
                         </div>
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${
-                           donation.payment_status === 'captured' || donation.payment_status === 'success'
-                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                             : 'bg-amber-50 text-amber-700 border-amber-200'
-                         }`}>
-                           <CheckCircle2 className="w-3 h-3" />
-                           <span className="text-[9px] font-bold uppercase tracking-wider">{donation.payment_status}</span>
+                        <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100 shadow-inner group-hover:bg-orange-100/60 transition-all shrink-0">
+                          <IndianRupee className="w-4 h-4 text-orange-600" />
                         </div>
-                     </div>
+                      </div>
+
+                      {/* Separate spaces for Collector Parent and Collector Current */}
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div className="p-2 rounded-xl bg-orange-50/70 border border-orange-200/80 flex flex-col gap-0.5">
+                          <span className="text-[8px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Collector Parent
+                          </span>
+                          <span className="font-bold text-[10px] text-orange-950 truncate">{parentCenter}</span>
+                          <span className="text-[9px] text-stone-600 truncate">{parentTemple !== 'None' ? parentTemple : 'No Temple'}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col gap-0.5">
+                          <span className="text-[8px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Collector Current
+                          </span>
+                          <span className="font-bold text-[10px] text-blue-950 truncate">{currentCenter}</span>
+                          <span className="text-[9px] text-sky-700 truncate">{currentTemple !== 'None' ? currentTemple : 'No Temple'}</span>
+                        </div>
+                      </div>
+
+                      {donation.on_behalf_of_name && (
+                        <div className="mb-4 px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <HeartHandshake className="w-4 h-4 text-purple-600 shrink-0" />
+                            <span className="text-xs font-bold text-purple-900 truncate">
+                              On Behalf: {donation.on_behalf_of_name}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded shrink-0">
+                            Behalf
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-4">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-sm font-bold text-orange-700 border border-orange-200/80 shadow-sm shrink-0">
+                          {donation.donor_name ? donation.donor_name.charAt(0).toUpperCase() : 'D'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-gray-900 font-bold truncate text-xs">{donation.donor_name}</p>
+                          <p className="text-[10px] text-gray-500 flex items-center gap-1 truncate font-medium">
+                            <Mail className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                            {donation.donor_email}
+                          </p>
+                          {donorPhone && (
+                            <p className="text-[10px] text-gray-600 flex items-center gap-1 truncate font-semibold mt-0.5">
+                              <Phone className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                              {donorPhone}
+                            </p>
+                          )}
+                          <p className="text-[9px] font-mono text-gray-500 truncate mt-0.5">{donation.txnid}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <div className="flex flex-col">
+                        <span className="text-base font-black text-gray-900">₹{Number(donation.amount || 0).toLocaleString('en-IN')}</span>
+                        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">{donation.payment_method || 'Razorpay'}</span>
+                      </div>
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${donation.payment_status === 'captured' || donation.payment_status === 'success'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">{donation.payment_status}</span>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1634,13 +1687,13 @@ export default function AdminDonationsPage() {
 
           {filteredDonations.length === 0 && (
             <div className="p-16 text-center space-y-4 bg-white rounded-2xl border border-gray-200/80 shadow-sm">
-               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto border border-gray-200 shadow-sm">
-                  <Search className="w-6 h-6 text-gray-400" />
-               </div>
-               <div className="space-y-1">
-                 <h3 className="text-gray-900 font-bold text-base tracking-tight">No records discovered</h3>
-                 <p className="text-gray-500 text-xs max-w-sm mx-auto leading-relaxed">Adjust your filters or search query to find donations.</p>
-               </div>
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto border border-gray-200 shadow-sm">
+                <Search className="w-6 h-6 text-gray-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-gray-900 font-bold text-base tracking-tight">No records discovered</h3>
+                <p className="text-gray-500 text-xs max-w-sm mx-auto leading-relaxed">Adjust your filters or search query to find donations.</p>
+              </div>
             </div>
           )}
 
@@ -1673,12 +1726,12 @@ export default function AdminDonationsPage() {
                       className="w-8 h-8 rounded-lg bg-white text-gray-600 hover:text-gray-900 disabled:opacity-30 transition-all font-bold text-sm flex items-center justify-center border border-gray-200 shadow-sm"
                     >‹</button>
                     <div className="flex gap-1">
-                       {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                         const page = totalPages <= 5 ? i + 1 : Math.max(1, Math.min(currentPage - 2, totalPages - 4)) + i;
                         if (page > totalPages || page < 1) return null;
                         return (
-                          <button 
-                            key={page} 
+                          <button
+                            key={page}
                             onClick={() => setCurrentPage(page)}
                             className={`w-8 h-8 rounded-lg text-xs font-bold transition-all border ${currentPage === page ? 'bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/20' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                           >{page}</button>
@@ -1720,54 +1773,55 @@ export default function AdminDonationsPage() {
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setFeedbackNotice(null);
-                  setDevoteeSearchQuery('');
-                  setDevoteeSearchResults([]);
-                  setIsAddDevoteeModalOpen(true);
-                }}
-                className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-purple-700 transition-all flex items-center gap-2 group shadow-md shadow-purple-600/20 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                Issue New Devotee
-              </button>
+              {!isViewOnly && (
+                <button
+                  onClick={() => {
+                    setFeedbackNotice(null);
+                    setDevoteeSearchQuery('');
+                    setDevoteeSearchResults([]);
+                    setIsAddDevoteeModalOpen(true);
+                  }}
+                  className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-purple-700 transition-all flex items-center gap-2 group shadow-md shadow-purple-600/20 whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                  Issue New Devotee
+                </button>
+              )}
             </div>
 
             {/* Sub-Tab Switcher: Authorized Devotees vs Change Requests */}
             <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
               <button
                 onClick={() => setBehalfSubTab('devotees')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                  behalfSubTab === 'devotees'
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${behalfSubTab === 'devotees'
                     ? 'bg-purple-600 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <HeartHandshake className="w-4 h-4" />
                 Authorized Devotees ({behalfDevotees.length})
               </button>
 
-              <button
-                onClick={() => setBehalfSubTab('requests')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 relative ${
-                  behalfSubTab === 'requests'
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                Change Requests
-                {behalfChangeRequests.length > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                    behalfSubTab === 'requests'
-                      ? 'bg-white text-purple-700'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {behalfChangeRequests.length} Pending
-                  </span>
-                )}
-              </button>
+              {!isViewOnly && (
+                <button
+                  onClick={() => setBehalfSubTab('requests')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 relative ${behalfSubTab === 'requests'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  Change Requests
+                  {behalfChangeRequests.length > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${behalfSubTab === 'requests'
+                        ? 'bg-white text-purple-700'
+                        : 'bg-amber-100 text-amber-800'
+                      }`}>
+                      {behalfChangeRequests.length} Pending
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {behalfSubTab === 'devotees' && (
@@ -1823,8 +1877,8 @@ export default function AdminDonationsPage() {
                       {behalfSearchTerm ? 'No matching devotees found' : 'No Behalf Devotees Issued Yet'}
                     </h3>
                     <p className="text-gray-500 text-xs max-w-sm mx-auto">
-                      {behalfSearchTerm 
-                        ? 'Try adjusting your search criteria.' 
+                      {behalfSearchTerm
+                        ? 'Try adjusting your search criteria.'
                         : 'Click "Issue New Devotee" above to add registered users or create custom devotee entries.'}
                     </p>
                   </div>
@@ -1837,7 +1891,9 @@ export default function AdminDonationsPage() {
                           <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider whitespace-nowrap">Center & Temple</th>
                           <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Funds Raised on Behalf</th>
                           <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Status</th>
-                          <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                          {!isViewOnly && (
+                            <th className="px-5 py-3 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1903,30 +1959,41 @@ export default function AdminDonationsPage() {
 
                             {/* 4. Active Status Toggle */}
                             <td className="px-5 py-3.5 text-center">
-                              <button
-                                onClick={() => handleToggleDevoteeStatus(devotee.id, devotee.is_active)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${
-                                  devotee.is_active
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
-                                }`}
-                                title={devotee.is_active ? 'Click to deactivate' : 'Click to activate'}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${devotee.is_active ? 'bg-emerald-600 animate-pulse' : 'bg-gray-400'}`}></span>
-                                {devotee.is_active ? 'Active' : 'Disabled'}
-                              </button>
+                              {isViewOnly ? (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase ${devotee.is_active
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                  }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${devotee.is_active ? 'bg-emerald-600' : 'bg-gray-400'}`}></span>
+                                  {devotee.is_active ? 'Active' : 'Disabled'}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleDevoteeStatus(devotee.id, devotee.is_active)}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${devotee.is_active
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                      : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                                    }`}
+                                  title={devotee.is_active ? 'Click to deactivate' : 'Click to activate'}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${devotee.is_active ? 'bg-emerald-600 animate-pulse' : 'bg-gray-400'}`}></span>
+                                  {devotee.is_active ? 'Active' : 'Disabled'}
+                                </button>
+                              )}
                             </td>
 
                             {/* 5. Actions */}
-                            <td className="px-5 py-3.5 text-right">
-                              <button
-                                onClick={() => handleDeleteDevotee(devotee.id, devotee.name)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                                title="Remove from Behalf List"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
+                            {!isViewOnly && (
+                              <td className="px-5 py-3.5 text-right">
+                                <button
+                                  onClick={() => handleDeleteDevotee(devotee.id, devotee.name)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="Remove from Behalf List"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -2095,8 +2162,8 @@ export default function AdminDonationsPage() {
                 </h2>
                 <p className="text-gray-500 text-xs">Members who need a Membership ID generated to activate their donation page.</p>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => router.push('/dashboard/admin/membership')}
                 className="px-5 py-2.5 bg-orange-600 text-white rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-orange-700 transition-all flex items-center gap-2 group shadow-md shadow-orange-600/20"
               >
@@ -2121,10 +2188,10 @@ export default function AdminDonationsPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {usersWithoutSlugs.map((user) => (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    key={user.id} 
+                    key={user.id}
                     className="bg-gray-50/60 rounded-2xl p-4 border border-gray-200 hover:border-orange-300 hover:bg-white transition-all group shadow-sm"
                   >
                     <div className="flex items-start justify-between mb-4">
@@ -2135,7 +2202,7 @@ export default function AdminDonationsPage() {
                         {user.center || 'No Center'}
                       </div>
                     </div>
-                    
+
                     <div className="space-y-0.5 mb-4">
                       <h4 className="text-gray-900 font-bold text-sm tracking-tight line-clamp-1">{user.name}</h4>
                       <p className="text-[10px] text-gray-500 line-clamp-1 flex items-center gap-1">
@@ -2145,19 +2212,19 @@ export default function AdminDonationsPage() {
                     </div>
 
                     <div className="pt-3 border-t border-gray-200">
-                      <button 
+                      <button
                         onClick={() => router.push('/dashboard/admin/membership')}
                         className="w-full py-2 bg-gray-900 text-white rounded-lg font-bold uppercase text-[9px] tracking-wider hover:bg-orange-600 transition-all flex items-center justify-center gap-1.5 shadow-sm"
                       >
-                         Generate Link
-                         <ArrowUpRight className="w-3 h-3" />
+                        Generate Link
+                        <ArrowUpRight className="w-3 h-3" />
                       </button>
                     </div>
                   </motion.div>
                 ))}
               </div>
             )}
-            
+
             <div className="mt-8 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
               <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-800 leading-relaxed font-medium">
@@ -2169,8 +2236,8 @@ export default function AdminDonationsPage() {
       )}
 
       {/* Modals */}
-      <ConfirmationModal 
-        isOpen={modalOpen} 
+      <ConfirmationModal
+        isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onConfirm={handleConfirmGatewayChange}
         gateway={selectedGateway}
@@ -2208,11 +2275,10 @@ export default function AdminDonationsPage() {
             <div className="p-6 overflow-y-auto space-y-5 flex-1">
               {/* Feedback Notice */}
               {feedbackNotice && (
-                <div className={`p-3 rounded-xl text-xs font-bold border flex items-center gap-2 ${
-                  feedbackNotice.type === 'error'
+                <div className={`p-3 rounded-xl text-xs font-bold border flex items-center gap-2 ${feedbackNotice.type === 'error'
                     ? 'bg-rose-50 text-rose-700 border-rose-200'
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                }`}>
+                  }`}>
                   {feedbackNotice.type === 'error' ? <XCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
                   <span>{feedbackNotice.message}</span>
                 </div>
@@ -2223,18 +2289,16 @@ export default function AdminDonationsPage() {
                 <button
                   type="button"
                   onClick={() => setManualDevoteeMode(false)}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                    !manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Select from Users
                 </button>
                 <button
                   type="button"
                   onClick={() => setManualDevoteeMode(true)}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                    manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${manualDevoteeMode ? 'bg-white text-purple-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   Enter Manually
                 </button>
@@ -2285,11 +2349,10 @@ export default function AdminDonationsPage() {
                           <button
                             disabled={alreadyAdded || isAddingDevotee}
                             onClick={() => handleSelectAndAddDevotee(u)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 shrink-0 ${
-                              alreadyAdded
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 shrink-0 ${alreadyAdded
                                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                 : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm'
-                            }`}
+                              }`}
                           >
                             {alreadyAdded ? 'Issued' : '+ Issue'}
                           </button>

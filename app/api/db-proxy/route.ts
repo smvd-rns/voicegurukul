@@ -253,9 +253,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Block role escalation: non-admins cannot change roles!
-        if (updateData && 'role' in updateData && !isSuperAdmin && !isHigherAdmin) {
-          delete updateData.role;
+        // Block role and permission escalation: non-admins cannot change roles or grant donation audit access!
+        if (updateData && !isSuperAdmin && !isHigherAdmin) {
+          if ('role' in updateData) delete updateData.role;
+          if ('can_view_all_donations' in updateData) delete updateData.can_view_all_donations;
         }
 
         // Non-admins can only update their own profile

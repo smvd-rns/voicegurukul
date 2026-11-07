@@ -432,6 +432,57 @@ export async function updateCampAction(id: string, data: Partial<Camp>) {
 }
 
 /**
+ * Update announcement share configuration for a camp (Super Admin only).
+ * Saves custom procedure guide links, WhatsApp community links, support email, notes, or message override.
+ */
+export async function updateCampShareConfigAction(
+  campId: string,
+  config: {
+    procedure_guide_url?: string;
+    support_email?: string;
+    whatsapp_group_url?: string;
+    custom_note?: string;
+    custom_whatsapp_override?: string;
+  }
+) {
+  try {
+    const { isSuperAdmin, isHigherAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin && !isHigherAdmin) {
+      throw new Error('Forbidden: Super Admin privileges required to update announcement settings');
+    }
+
+    // Ensure share_announcement_config column exists
+    try {
+      await query(`
+        ALTER TABLE camps ADD COLUMN IF NOT EXISTS share_announcement_config JSONB DEFAULT '{}'::jsonb;
+      `);
+    } catch (e: any) {
+      console.warn('Notice: DDL auto-check for camp share_announcement_config column:', e?.message);
+    }
+
+    const { rows } = await query(
+      `UPDATE camps 
+       SET share_announcement_config = $1,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, title, slug, share_announcement_config`,
+      [JSON.stringify(config), campId]
+    );
+
+    if (rows.length === 0) {
+      return { success: false, error: 'Camp not found' };
+    }
+
+    revalidatePath('/dashboard/admin/camps');
+    revalidatePath('/dashboard/camp');
+    return { success: true, camp: rows[0], config };
+  } catch (error: any) {
+    console.error('updateCampShareConfigAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Toggle camp active status
  */
 export async function toggleCampStatusAction(id: string, newStatus: 'draft' | 'active' | 'closed' | 'completed' | 'archived') {

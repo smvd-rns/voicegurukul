@@ -16,11 +16,16 @@ import {
   Send,
   MessageCircle,
   HelpCircle,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Save,
+  Edit3,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp } from '@/types';
+import { updateCampShareConfigAction } from '@/app/dashboard/admin/camps/actions';
 
 interface CampShareModalProps {
   isOpen: boolean;
@@ -45,27 +50,59 @@ export default function CampShareModal({ isOpen, onClose, camp, isSuperAdmin }: 
   const [contactEmail, setContactEmail] = useState('adas@voicepune.com');
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState('');
   const [customNote, setCustomNote] = useState('');
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isEditingDirectly, setIsEditingDirectly] = useState(false);
+  const [customMessageOverride, setCustomMessageOverride] = useState('');
 
-  // Extract initial guide/whatsapp links from camp.email_links if present
+  // Extract initial guide/whatsapp links from camp.share_announcement_config or camp.email_links
   useEffect(() => {
     if (camp) {
+      const config = camp.share_announcement_config;
       const emailLinks = (camp as any).email_links || [];
       const docLink = emailLinks.find((l: any) => l.type === 'document' || l.url?.includes('drive.google.com'));
-      if (docLink && docLink.url) {
+      const waLink = emailLinks.find((l: any) => l.type === 'whatsapp' || l.url?.includes('chat.whatsapp.com'));
+
+      // 1. Guide Link
+      if (config?.procedure_guide_url !== undefined) {
+        setGuideUrl(config.procedure_guide_url);
+      } else if (docLink?.url) {
         setGuideUrl(docLink.url);
       } else {
         setGuideUrl('https://drive.google.com/file/d/1Rj03YmNXdaQvE41yL5AZOxVPoGsx9fr3/view?usp=drive_link');
       }
 
-      const waLink = emailLinks.find((l: any) => l.type === 'whatsapp' || l.url?.includes('chat.whatsapp.com'));
-      if (waLink && waLink.url) {
+      // 2. WhatsApp Group Link (If config explicitly has it, even empty "", respect it so it doesn't reappear)
+      if (config?.whatsapp_group_url !== undefined) {
+        setWhatsappGroupUrl(config.whatsapp_group_url);
+      } else if (waLink?.url) {
         setWhatsappGroupUrl(waLink.url);
       } else {
         setWhatsappGroupUrl('');
       }
 
-      setContactEmail('adas@voicepune.com');
-      setCustomNote('');
+      // 3. Support Email
+      if (config?.support_email !== undefined) {
+        setContactEmail(config.support_email);
+      } else {
+        setContactEmail('adas@voicepune.com');
+      }
+
+      // 4. Custom Note
+      if (config?.custom_note !== undefined) {
+        setCustomNote(config.custom_note);
+      } else {
+        setCustomNote('');
+      }
+
+      // 5. Custom Direct Message Override (if previously saved by Superadmin)
+      if (config?.custom_whatsapp_override) {
+        setCustomMessageOverride(config.custom_whatsapp_override);
+        setIsEditingDirectly(true);
+      } else {
+        setCustomMessageOverride('');
+        setIsEditingDirectly(false);
+      }
+
       setCopied(false);
       setEmailCopied(false);
     }
@@ -144,6 +181,9 @@ export default function CampShareModal({ isOpen, onClose, camp, isSuperAdmin }: 
     }
 
     if (templateType === 'crisp') {
+      const cleanGuideUrl = guideUrl.trim();
+      const cleanWaUrl = whatsappGroupUrl.trim();
+
       return `✨ *REGISTRATIONS OPEN: ${camp.title}* ✨
 _${description} | ${venue}_ 🏕️
 
@@ -151,10 +191,9 @@ _${description} | ${venue}_ 🏕️
 📍 *Venue:* ${venue}
 ${tracks.length > 0 ? `🎯 *Tracks / Camps:* ${tracks.join(' | ')}\n` : ''}
 ${lateFeeStr ? `⏳ *Late Fee Starts:* ${lateFeeStr}\n` : ''}${refundStr ? `❌ *Cancellation:* ${refundStr}\n` : ''}${deadlineStr ? `🛑 *Registration Deadline:* ${deadlineStr}\n` : ''}
-${guideUrl ? `📲 *Step-by-Step Registration Guide:*
-👉 ${guideUrl}\n\n` : ''}🔗 *Register directly at:*
-👉 ${registrationUrl}
-${whatsappGroupUrl ? `\n💬 *Official WhatsApp Group:* ${whatsappGroupUrl}` : ''}
+${cleanGuideUrl ? `📲 *Step-by-Step Registration Guide:*
+👉 ${cleanGuideUrl}\n\n` : ''}🔗 *Register directly at:*
+👉 ${registrationUrl}${cleanWaUrl ? `\n\n💬 *Official WhatsApp Group:* ${cleanWaUrl}` : ''}
 
 _Limited accommodations available — please register soon!_ 🙏`;
     }
@@ -201,20 +240,27 @@ ${tracksFormatted}
       msg += `\n📌 *Special Announcement:*\n${customNote.trim()}\n`;
     }
 
-    msg += `━━━━━━━━━━━━━━━━━━━━
+    const cleanGuideUrl = guideUrl.trim();
+    const cleanWaUrl = whatsappGroupUrl.trim();
+
+    if (cleanGuideUrl) {
+      msg += `━━━━━━━━━━━━━━━━━━━━
 📖 *STEP-BY-STEP REGISTRATION GUIDE:*
 ━━━━━━━━━━━━━━━━━━━━
 To ensure a smooth registration without any issues, please refer to the visual PDF guide:
 👉 *Click here to view the Guide:*
-${guideUrl}
+${cleanGuideUrl}
 
-🌐 *Register now on VOICE Gurukul:*
+`;
+    }
+
+    msg += `🌐 *Register now on VOICE Gurukul:*
 👉 ${registrationUrl}
 `;
 
-    if (whatsappGroupUrl.trim()) {
+    if (cleanWaUrl) {
       msg += `\n💬 *Join Official Camp WhatsApp Community:*
-👉 ${whatsappGroupUrl.trim()}
+👉 ${cleanWaUrl}
 `;
     }
 
@@ -228,33 +274,80 @@ Your servants,
     return msg;
   }, [camp, templateType, guideUrl, contactEmail, whatsappGroupUrl, customNote, registrationUrl]);
 
+  // Active message to display/copy: respects manual direct override if active
+  const activeWhatsAppMessage = useMemo(() => {
+    if (isEditingDirectly && customMessageOverride.trim()) {
+      return customMessageOverride;
+    }
+    return generatedWhatsAppMessage;
+  }, [isEditingDirectly, customMessageOverride, generatedWhatsAppMessage]);
+
   if (!isOpen || !camp) return null;
 
+  const handleToggleDirectEdit = () => {
+    if (!isEditingDirectly) {
+      setCustomMessageOverride(generatedWhatsAppMessage);
+      setIsEditingDirectly(true);
+      toast('Direct text editing enabled. You can now edit the circular text directly in the box below.', { icon: '✏️' });
+    } else {
+      setIsEditingDirectly(false);
+      setCustomMessageOverride('');
+      toast('Reset to auto-generated circular based on your parameters.', { icon: '↺' });
+    }
+  };
+
+  const handleSaveShareConfig = async () => {
+    if (!camp?.id) return;
+    setIsSavingConfig(true);
+    try {
+      const payload = {
+        procedure_guide_url: guideUrl.trim(),
+        support_email: contactEmail.trim(),
+        whatsapp_group_url: whatsappGroupUrl.trim(),
+        custom_note: customNote.trim(),
+        custom_whatsapp_override: isEditingDirectly ? customMessageOverride.trim() : ''
+      };
+
+      const res = await updateCampShareConfigAction(camp.id, payload);
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to save announcement settings');
+      }
+
+      camp.share_announcement_config = payload;
+      toast.success('Announcement settings saved! All devotees and coordinators will now see this exact message.', { duration: 4000 });
+    } catch (err: any) {
+      console.error('Error saving share config:', err);
+      toast.error(err.message || 'Failed to save announcement settings');
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
   const handleCopyWhatsApp = () => {
-    if (!generatedWhatsAppMessage) return;
-    navigator.clipboard.writeText(generatedWhatsAppMessage);
+    if (!activeWhatsAppMessage) return;
+    navigator.clipboard.writeText(activeWhatsAppMessage);
     setCopied(true);
     toast.success('WhatsApp announcement copied to clipboard! 📋');
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleOpenWhatsApp = () => {
-    if (!generatedWhatsAppMessage) return;
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(generatedWhatsAppMessage)}`;
+    if (!activeWhatsAppMessage) return;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(activeWhatsAppMessage)}`;
     window.open(url, '_blank');
   };
 
   const handleOpenEmail = () => {
-    if (!camp || !generatedWhatsAppMessage) return;
+    if (!camp || !activeWhatsAppMessage) return;
     const subject = encodeURIComponent(`Camp Registration Open: ${camp.title}`);
-    const body = encodeURIComponent(generatedWhatsAppMessage.replace(/\*/g, ''));
+    const body = encodeURIComponent(activeWhatsAppMessage.replace(/\*/g, ''));
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
   const handleCopyEmail = () => {
-    if (!generatedWhatsAppMessage) return;
+    if (!activeWhatsAppMessage) return;
     // Strip WhatsApp markdown asterisks for plain text email
-    const cleanEmail = generatedWhatsAppMessage.replace(/\*/g, '');
+    const cleanEmail = activeWhatsAppMessage.replace(/\*/g, '');
     navigator.clipboard.writeText(cleanEmail);
     setEmailCopied(true);
     toast.success('Clean text copied for Email broadcast! ✉️');
@@ -348,32 +441,44 @@ Your servants,
 
           {/* Superadmin Only: Editable Dynamic Parameters */}
           {isUserSuperAdmin && (
-            <div className="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-3.5 sm:p-4 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="bg-emerald-50/50 border border-emerald-200/90 rounded-2xl p-3.5 sm:p-4 space-y-3.5 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Customize Announcement Parameters</span>
                   <span className="px-1.5 py-0.5 rounded text-[9.5px] font-black bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
-                    Superadmin Only
+                    Superadmin Controls
                   </span>
                 </h3>
                 <span className="text-[10.5px] text-emerald-700 font-medium">
-                  Changes update the preview live below
+                  Saving persists these links in database for all sharing devotees
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Registration Procedure Guide Link (Google Drive / PDF)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700">
+                      Registration Procedure Guide Link (Google Drive / PDF)
+                    </label>
+                    {guideUrl.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setGuideUrl('')}
+                        className="text-[10px] text-rose-600 hover:text-rose-700 font-bold"
+                      >
+                        Clear Link
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="url"
                     value={guideUrl}
                     onChange={(e) => setGuideUrl(e.target.value)}
-                    placeholder="https://drive.google.com/..."
+                    placeholder="https://drive.google.com/... (optional)"
                     className="w-full px-3 py-1.5 rounded-xl border border-emerald-200 bg-white font-mono text-[11px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Leave empty to omit guide from announcement</span>
                 </div>
 
                 <div>
@@ -387,19 +492,34 @@ Your servants,
                     placeholder="adas@voicepune.com"
                     className="w-full px-3 py-1.5 rounded-xl border border-emerald-200 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Displayed in contact section of message</span>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Official WhatsApp Group Link (Optional)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700">
+                      Official WhatsApp Group Link (Optional)
+                    </label>
+                    {whatsappGroupUrl.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setWhatsappGroupUrl('')}
+                        className="text-[10px] text-rose-600 hover:text-rose-700 font-bold"
+                      >
+                        Remove Link
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="url"
                     value={whatsappGroupUrl}
                     onChange={(e) => setWhatsappGroupUrl(e.target.value)}
-                    placeholder="https://chat.whatsapp.com/..."
+                    placeholder="Leave blank if you don't want WhatsApp group link"
                     className="w-full px-3 py-1.5 rounded-xl border border-emerald-200 bg-white font-mono text-[11px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
+                  <span className="text-[10px] text-amber-700 font-semibold mt-0.5 block">
+                    {whatsappGroupUrl.trim() ? '✓ WhatsApp group will be included in circular' : '✓ WhatsApp group is excluded from circular'}
+                  </span>
                 </div>
 
                 <div>
@@ -413,7 +533,43 @@ Your servants,
                     placeholder="e.g. Special bus arranged from Pune station"
                     className="w-full px-3 py-1.5 rounded-xl border border-emerald-200 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Added as special note in circular</span>
                 </div>
+              </div>
+
+              {/* Action Bar for Superadmin */}
+              <div className="pt-2.5 border-t border-emerald-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleToggleDirectEdit}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 hover:bg-emerald-100/60 text-emerald-900 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                >
+                  {isEditingDirectly ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Reset to Auto-Generated Message</span>
+                    </>
+                  ) : (
+                    <>
+                      <Edit3 className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Edit Full Message Text Directly</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveShareConfig}
+                  disabled={isSavingConfig}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.02] cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingConfig ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Announcement for All Users</span>
+                </button>
               </div>
             </div>
           )}
@@ -426,6 +582,11 @@ Your servants,
                 <span className="text-[10px] font-semibold text-slate-400">
                   ({templateType === 'detailed' ? 'Option 1' : 'Option 2'})
                 </span>
+                {isEditingDirectly && (
+                  <span className="ml-1 px-2 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                    Direct Edit Mode (Type below to edit)
+                  </span>
+                )}
               </label>
               <span className="text-[10.5px] text-slate-400">
                 Formatted with WhatsApp markdown (*bold*, _italic_)
@@ -434,10 +595,19 @@ Your servants,
 
             <div className="relative">
               <textarea
-                readOnly
-                value={generatedWhatsAppMessage}
+                readOnly={!isUserSuperAdmin || !isEditingDirectly}
+                value={activeWhatsAppMessage}
+                onChange={(e) => {
+                  if (isEditingDirectly) {
+                    setCustomMessageOverride(e.target.value);
+                  }
+                }}
                 rows={12}
-                className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-900 text-emerald-300 font-mono text-xs leading-relaxed focus:outline-none resize-none shadow-inner selection:bg-emerald-500 selection:text-white"
+                className={`w-full p-4 rounded-2xl border transition-all ${
+                  isEditingDirectly
+                    ? 'border-amber-400 bg-slate-900 text-amber-200 ring-2 ring-amber-400/30'
+                    : 'border-slate-200 bg-slate-900 text-emerald-300'
+                } font-mono text-xs leading-relaxed focus:outline-none resize-y shadow-inner selection:bg-emerald-500 selection:text-white`}
               />
               <button
                 type="button"

@@ -263,5 +263,7 @@ export const transformUserProfile = (data: any): User => {
 
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
+    canViewAllDonations: Boolean(data.can_view_all_donations || data.hierarchy?.can_view_all_donations || data.hierarchy?.canViewAllDonations),
+    can_view_all_donations: Boolean(data.can_view_all_donations || data.hierarchy?.can_view_all_donations || data.hierarchy?.canViewAllDonations),
   } as User;
 };
