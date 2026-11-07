@@ -556,36 +556,60 @@ export default function ProfilePage() {
     fetchCounselors();
   }, []);
 
-  // Filter counselors based on selected temple
+  // Filter counselors based on selected temple (always preserves assigned counselor even if from another temple)
   useEffect(() => {
     if (allCounselors.length > 0) {
       const currentT = formData.currentTemple || '';
       const parentT = formData.parentTemple || '';
 
-      if (!currentT && !parentT) {
-        setCounselors([]);
-        return;
+      let filtered = (!currentT && !parentT)
+        ? []
+        : allCounselors.filter(c => {
+            const cTemple = (c as any).temple || '';
+            const matchesCurrent = currentT && cTemple.toLowerCase().includes(currentT.toLowerCase());
+            const matchesParent = parentT && cTemple.toLowerCase().includes(parentT.toLowerCase());
+            return matchesCurrent || matchesParent;
+          });
+
+      // Always include the user's assigned counselor even if from a different temple
+      const assignedId = formData.counselorId;
+      const assignedName = formData.counselor;
+
+      if (assignedId || (assignedName && assignedName !== 'None' && assignedName !== 'Other' && assignedName !== 'Assigned Devotee')) {
+        const isAlreadyInFiltered = filtered.some(c => 
+          (assignedId && c.id === assignedId) || 
+          (assignedName && c.name.toLowerCase() === assignedName.toLowerCase())
+        );
+
+        if (!isAlreadyInFiltered) {
+          const foundInAll = allCounselors.find(c => 
+            (assignedId && c.id === assignedId) || 
+            (assignedName && c.name.toLowerCase() === assignedName.toLowerCase())
+          );
+
+          if (foundInAll) {
+            filtered = [foundInAll, ...filtered];
+          } else if (assignedName) {
+            filtered = [{
+              id: assignedId || assignedName,
+              name: assignedName,
+              email: '',
+              temple: 'Assigned Counselor'
+            } as any, ...filtered];
+          }
+        }
       }
 
-      const filtered = allCounselors.filter(c => {
-        const cTemple = (c as any).temple || '';
-        
-        const matchesCurrent = currentT && cTemple.toLowerCase().includes(currentT.toLowerCase());
-        const matchesParent = parentT && cTemple.toLowerCase().includes(parentT.toLowerCase());
-        
-        return matchesCurrent || matchesParent;
-      });
-      
       setCounselors(filtered);
     } else {
       setCounselors([]);
     }
-  }, [formData.currentTemple, formData.parentTemple, allCounselors]);
+  }, [formData.currentTemple, formData.parentTemple, formData.counselorId, formData.counselor, allCounselors]);
 
   // Auto-resolve counselorId if missing but counselor name exists
   useEffect(() => {
-    if (!formData.counselorId && formData.counselor && counselors.length > 0) {
-      const match = counselors.find(c => c.name === formData.counselor);
+    if (!formData.counselorId && formData.counselor && formData.counselor !== 'None' && formData.counselor !== 'Other' && allCounselors.length > 0) {
+      const match = allCounselors.find(c => c.name.toLowerCase() === formData.counselor.toLowerCase());
       if (match) {
         setFormData(prev => ({
           ...prev,
@@ -593,7 +617,20 @@ export default function ProfilePage() {
         }));
       }
     }
-  }, [counselors, formData.counselor, formData.counselorId]);
+  }, [allCounselors, formData.counselor, formData.counselorId]);
+
+  // Auto-resolve counselor name if counselorId is provided but name is missing or placeholder
+  useEffect(() => {
+    if (formData.counselorId && allCounselors.length > 0) {
+      const match = allCounselors.find(c => c.id === formData.counselorId);
+      if (match && (!formData.counselor || formData.counselor === 'Assigned Devotee' || formData.counselor === formData.counselorId)) {
+        setFormData(prev => ({
+          ...prev,
+          counselor: match.name
+        }));
+      }
+    }
+  }, [allCounselors, formData.counselor, formData.counselorId]);
 
   // Load temples from Supabase
   useEffect(() => {
@@ -742,20 +779,37 @@ export default function ProfilePage() {
     if (userData) {
       const baseHierarchy = userData.hierarchy || {};
       
-      let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || '';
-      let initialOtherCenter = baseHierarchy.otherCenter || '';
-      if (initialOtherCenter && (initialCurrentCenter === 'Other' || !initialCurrentCenter)) {
-        initialCurrentCenter = 'Other';
+      let initialCurrentCenter = baseHierarchy.currentCenter || baseHierarchy.center || (userData as any).currentCenter || (userData as any).center || '';
+      let initialOtherCenter = baseHierarchy.otherCenter || (userData as any).otherCenter || '';
+
+      if (initialCurrentCenter === 'None') {
+        initialOtherCenter = '';
+      } else if (initialCurrentCenter === 'Other') {
+        // retain other center name
       } else if (!initialCurrentCenter) {
-        initialCurrentCenter = baseHierarchy.parentCenter === 'None' ? 'None' : (baseHierarchy.parentCenter || 'None');
+        if (initialOtherCenter) {
+          initialCurrentCenter = 'Other';
+        } else {
+          initialCurrentCenter = baseHierarchy.parentCenter === 'None' ? 'None' : (baseHierarchy.parentCenter || 'None');
+        }
+      } else {
+        initialOtherCenter = '';
       }
 
-      let initialParentCenter = baseHierarchy.parentCenter || '';
-      let initialOtherParentCenter = baseHierarchy.otherParentCenter || '';
-      if (initialOtherParentCenter && (initialParentCenter === 'Other' || !initialParentCenter)) {
-        initialParentCenter = 'Other';
+      let initialParentCenter = baseHierarchy.parentCenter || (userData as any).parentCenter || '';
+      let initialOtherParentCenter = baseHierarchy.otherParentCenter || (userData as any).otherParentCenter || '';
+      if (initialParentCenter === 'None') {
+        initialOtherParentCenter = '';
+      } else if (initialParentCenter === 'Other') {
+        // retain other parent center name
       } else if (!initialParentCenter) {
-        initialParentCenter = 'None';
+        if (initialOtherParentCenter) {
+          initialParentCenter = 'Other';
+        } else {
+          initialParentCenter = 'None';
+        }
+      } else {
+        initialOtherParentCenter = '';
       }
 
       // Basic fields from userData
@@ -781,9 +835,9 @@ export default function ProfilePage() {
         parentCenter: initialParentCenter,
         currentTemple: baseHierarchy.currentTemple || '',
         currentCenter: initialCurrentCenter,
-        counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || '',
-        counselorId: baseHierarchy.counselorId || '',
-        otherCounselor: baseHierarchy.otherCounselor || '',
+        counselor: baseHierarchy.counselor || baseHierarchy.brahmachariCounselor || baseHierarchy.grihasthaCounselor || (userData as any).counselor || '',
+        counselorId: baseHierarchy.counselorId || baseHierarchy.counselor_id || (userData as any).counselorId || (userData as any).counselor_id || '',
+        otherCounselor: baseHierarchy.otherCounselor || (userData as any).otherCounselor || '',
         ashram: baseHierarchy.ashram || '',
         otherCenter: initialOtherCenter,
         otherParentCenter: initialOtherParentCenter,
@@ -2459,20 +2513,30 @@ export default function ProfilePage() {
                     </div>
                     <SearchableSelect
                       options={[
-                        ...counselors.map(c => ({ id: c.id, name: c.name })),
+                        ...counselors.map(c => ({
+                          id: c.id,
+                          name: c.name,
+                          email: (c as any).temple ? `Temple: ${(c as any).temple}` : c.email
+                        })),
                         { id: 'None', name: 'None' },
                         { id: 'Other', name: 'Other' }
                       ]}
                       value={formData.counselorId || formData.counselor}
+                      displayValue={formData.counselor && formData.counselor !== 'None' && formData.counselor !== 'Other' ? formData.counselor : undefined}
                       valueProperty="id"
                       onChange={(value) => {
-                        const selected = counselors.find(c => (c.id === value || c.name === value));
+                        const selected = counselors.find(c => (c.id === value || c.name === value))
+                          || allCounselors.find(c => (c.id === value || c.name === value));
                         if (selected) {
                           setFormData({
                             ...formData,
                             counselor: selected.name,
                             counselorId: selected.id
                           });
+                        } else if (value === 'None') {
+                          setFormData({ ...formData, counselor: 'None', counselorId: '', otherCounselor: '' });
+                        } else if (value === 'Other') {
+                          setFormData({ ...formData, counselor: 'Other', counselorId: '' });
                         } else {
                           setFormData({ ...formData, counselor: value, counselorId: '' });
                         }

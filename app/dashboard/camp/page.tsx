@@ -16,13 +16,14 @@ import {
   ExternalLink, ArrowLeft, Info, Shield, QrCode,
   Users, FileSpreadsheet, Ban, UserCircle, UserPlus,
   Filter, ChevronDown, Save, BookmarkCheck, RotateCcw,
-  MessageCircle, Receipt
+  MessageCircle, Receipt, Share2
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
 import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { toast } from 'react-hot-toast';
+import CampShareModal from '@/components/camps/CampShareModal';
 import {
   getActiveCampsForUserAction,
   getUserCampRegistrationsAction,
@@ -359,6 +360,7 @@ function CampDashboardContent() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerCampId, setScannerCampId] = useState<string>('');
   const [scannerCampTitle, setScannerCampTitle] = useState<string>('');
+  const [shareCamp, setShareCamp] = useState<Camp | null>(null);
 
   const getStaffRoleMeta = (role: string, roles?: string[]) => {
     const allRoles = roles && roles.length > 0 ? roles : [role];
@@ -3211,7 +3213,7 @@ function CampDashboardContent() {
 
                       {/* Card Actions: Explore Overview Modal + Direct Register */}
                       <div className="p-3.5 sm:p-4 pt-0 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 sm:gap-2">
                           <button
                             type="button"
                             onClick={() => setSelectedPreviewCamp(camp)}
@@ -3239,6 +3241,15 @@ function CampDashboardContent() {
                               <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => setShareCamp(camp)}
+                            className="px-2.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105"
+                            title="Share Camp Announcement (WhatsApp & Email)"
+                          >
+                            <Share2 className="w-4 h-4 text-emerald-700" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -7294,14 +7305,26 @@ function CampDashboardContent() {
           </div>
 
           {/* Modal Bottom Actions */}
-            <div className="p-3.5 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedPreviewCamp(null)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
-              >
-                Close
-              </button>
+            <div className="p-3.5 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPreviewCamp(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShareCamp(selectedPreviewCamp)}
+                  className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-[1.02]"
+                  title="Share Camp Announcement on WhatsApp & Email"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden sm:inline">WhatsApp Announcement</span>
+                  <span className="sm:hidden">Share</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -7326,6 +7349,14 @@ function CampDashboardContent() {
         onClose={() => setIsScannerOpen(false)}
         defaultCampId={scannerCampId}
         defaultCampTitle={scannerCampTitle}
+      />
+
+      {/* Camp WhatsApp & Email Share Announcement Modal */}
+      <CampShareModal
+        isOpen={Boolean(shareCamp)}
+        onClose={() => setShareCamp(null)}
+        camp={shareCamp}
+        isSuperAdmin={isSuperAdmin}
       />
     </>
   );

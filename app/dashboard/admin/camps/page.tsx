@@ -12,7 +12,7 @@ import {
   Undo2, Banknote, HelpCircle, ArrowUpDown, BookOpen,
   Search, Eye, Download, FileSpreadsheet, CheckCheck, Image as ImageIcon,
   Copy, Check, ShieldCheck, Printer, MessageCircle, FileCheck, Palette, QrCode,
-  Upload, UploadCloud, Sparkles, XCircle, UserCheck, Mail, Link2
+  Upload, UploadCloud, Sparkles, XCircle, UserCheck, Mail, Link2, Share2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -20,6 +20,7 @@ import { getThumbnailUrl } from '@/lib/utils/google-drive';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampStaffRoleManagementModal from '@/components/camps/CampStaffRoleManagementModal';
 import AdminGlobalPrasadamAuditTab from '@/components/camps/AdminGlobalPrasadamAuditTab';
+import CampShareModal from '@/components/camps/CampShareModal';
 import { Camp, CampMealConfig, CampRoleWaiver, CampCoupon, CampIttBankDetails, CampRefundTier, CampRefundConfig, CampTrackFee, CampAuditTransaction, CampRefundRequest, CenterIdtCode, CampEmailLink, CampAccommodationBatchCapacity, CampRecommendedHotel } from '@/types';
 import {
   getCampsAction,
@@ -292,6 +293,7 @@ export default function AdminCampsPage() {
   // QR Scanner & Staff Role Management Modals
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [shareCamp, setShareCamp] = useState<Camp | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -2443,6 +2445,13 @@ export default function AdminCampsPage() {
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
+                            <button
+                              onClick={() => setShareCamp(camp)}
+                              className="p-1 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors"
+                              title="WhatsApp & Email Announcement"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
                             {/* Regular Cards: Show Archive instead of Delete */}
                             <button
                               onClick={() => handleArchiveCamp(camp.id)}
@@ -2522,6 +2531,17 @@ export default function AdminCampsPage() {
                         <span>{isPastCamp ? 'Lookup' : 'Public Portal'}</span>
                       </Link>
                     </div>
+
+                    {/* WhatsApp & Email Share Announcement Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShareCamp(camp)}
+                      className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all shadow-2xs cursor-pointer hover:scale-[1.01]"
+                      title="Generate ready-to-share WhatsApp & Email Announcement"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>WhatsApp Announcement</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -7480,6 +7500,14 @@ export default function AdminCampsPage() {
           camps={camps}
         />
       )}
+
+      {/* Camp WhatsApp & Email Share Announcement Modal */}
+      <CampShareModal
+        isOpen={Boolean(shareCamp)}
+        onClose={() => setShareCamp(null)}
+        camp={shareCamp}
+        isSuperAdmin={isSuperAdmin}
+      />
     </div>
   );
 }
