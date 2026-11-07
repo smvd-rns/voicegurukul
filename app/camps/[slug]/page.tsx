@@ -371,7 +371,7 @@ export default function PublicCampRegistrationPage() {
   const [cancelRegs, setCancelRegs] = useState<CampRegistration[] | null>(null);
   const [cancelExistingRefunds, setCancelExistingRefunds] = useState<CampRefundRequest[]>([]);
   const [selectedRegIdsToCancel, setSelectedRegIdsToCancel] = useState<string[]>([]);
-  
+
   // Payout details
   const [cancelPayoutType, setCancelPayoutType] = useState<'UPI' | 'BANK'>('UPI');
   const [cancelUpiId, setCancelUpiId] = useState('');
@@ -488,7 +488,7 @@ export default function PublicCampRegistrationPage() {
       }
     }
 
-    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r => 
+    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r =>
       ['INTER_TEMPLE_TRANSFER', 'ITT', 'IDT', 'COUPON', 'ROLE_WAIVER', 'FREE'].includes((r.payment_method || '').toUpperCase())
     );
     const configuredSurcharge = Number(
@@ -892,7 +892,7 @@ export default function PublicCampRegistrationPage() {
     const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
     const attendeeRoyal = isManager && selectedDevotee
       ? selectedDevotee.royalMember
-      : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+      : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
 
     const trackFees = camp?.special_waivers?.track_fees || [];
 
@@ -1091,7 +1091,7 @@ export default function PublicCampRegistrationPage() {
       const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
       const attendeeRoyal = isManager && selectedDevotee
         ? selectedDevotee.royalMember
-        : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+        : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
       const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
       if (!isRoleEligible) {
         alert(`The "${formData.campTrack}" sub-camp is restricted to specific roles (${selectedTrackFeeObj.applicable_roles.join(', ')}). This devotee does not have an eligible role.`);
@@ -1516,10 +1516,10 @@ export default function PublicCampRegistrationPage() {
       try {
         const callerId = userData?.id || user?.id || '';
         if (camp?.id) {
-          fetch(`/api/camps/draft?campId=${camp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => {});
+          fetch(`/api/camps/draft?campId=${camp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => { });
         }
         setActiveDraft(null);
-      } catch (e) {}
+      } catch (e) { }
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to submit registration');
     } finally {
@@ -1604,11 +1604,10 @@ export default function PublicCampRegistrationPage() {
         <PublicNavbar />
         <div className="flex-1 py-12 px-4 sm:px-6">
           <div className="max-w-2xl mx-auto bg-white rounded-3xl border border-amber-200/80 p-8 sm:p-10 shadow-2xl shadow-amber-500/5 text-center">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border ${
-              registrationSuccess.paymentStatus === 'processing'
-                ? 'bg-amber-50 text-amber-600 border-amber-200'
-                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-            }`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border ${registrationSuccess.paymentStatus === 'processing'
+              ? 'bg-amber-50 text-amber-600 border-amber-200'
+              : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+              }`}>
               {registrationSuccess.paymentStatus === 'processing' ? (
                 <Clock className="w-9 h-9 animate-pulse" />
               ) : (
@@ -1616,11 +1615,10 @@ export default function PublicCampRegistrationPage() {
               )}
             </div>
 
-            <span className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${
-              registrationSuccess.paymentStatus === 'processing'
-                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                : 'bg-emerald-100/60 text-emerald-800'
-            }`}>
+            <span className={`inline-block px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wider mb-2 ${registrationSuccess.paymentStatus === 'processing'
+              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+              : 'bg-emerald-100/60 text-emerald-800'
+              }`}>
               {registrationSuccess.paymentStatus === 'processing'
                 ? 'Camp Registration Submitted - Pending Verification ⏳'
                 : 'Registration Successful'}
@@ -1659,8 +1657,8 @@ export default function PublicCampRegistrationPage() {
                   {registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER'
                     ? 'Inter-Temple Transfer'
                     : registrationSuccess.paymentMethod === 'IDT'
-                    ? 'Inter-Department Transfer (IDT)'
-                    : registrationSuccess.paymentMethod}
+                      ? 'Inter-Department Transfer (IDT)'
+                      : registrationSuccess.paymentMethod}
                 </span>
               </div>
               {(registrationSuccess.paymentMethod === 'INTER_TEMPLE_TRANSFER' || registrationSuccess.paymentMethod === 'IDT') && (
@@ -1745,7 +1743,7 @@ export default function PublicCampRegistrationPage() {
 
         <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-4xl mx-auto space-y-8">
-            
+
             {/* HERO BANNER: Matches Home Screen Warm Spiritual Aesthetics */}
             <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 p-5 sm:p-8 md:p-10 text-white shadow-xl shadow-orange-500/15">
               <div className="relative z-10 space-y-3">
@@ -1772,11 +1770,10 @@ export default function PublicCampRegistrationPage() {
                     <span className="text-[11px] sm:text-xs truncate max-w-[200px] sm:max-w-none">{camp.venue || 'Central VOICE, Pune'}</span>
                   </div>
                   {camp.late_fee > 0 && !isCampOverOrClosed && (
-                    <div className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md font-semibold text-xs ${
-                      isLateFeeActive
-                        ? 'bg-rose-950/60 border border-rose-300/40 text-rose-100 animate-pulse'
-                        : 'bg-black/25 text-amber-100'
-                    }`}>
+                    <div className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md font-semibold text-xs ${isLateFeeActive
+                      ? 'bg-rose-950/60 border border-rose-300/40 text-rose-100 animate-pulse'
+                      : 'bg-black/25 text-amber-100'
+                      }`}>
                       <Clock className="w-4 h-4 text-amber-200" />
                       <span>
                         {isLateFeeActive
@@ -1785,12 +1782,6 @@ export default function PublicCampRegistrationPage() {
                             ? `Late Fee ₹${camp.late_fee} starts on ${lateFeeStartDateStr}`
                             : `Late Fee: ₹${camp.late_fee}`}
                       </span>
-                    </div>
-                  )}
-                  {deadlineDateStr && !isCampOverOrClosed && (
-                    <div className="flex items-center gap-1.5 bg-black/25 px-3.5 py-2 rounded-xl backdrop-blur-md text-amber-100 text-xs font-semibold">
-                      <Clock className="w-4 h-4 text-amber-200" />
-                      <span>Registration Deadline: {deadlineDateStr}</span>
                     </div>
                   )}
 
@@ -1895,9 +1886,8 @@ export default function PublicCampRegistrationPage() {
               </div>
             ) : isCampOverOrClosed ? (
               <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 p-8 shadow-sm text-center space-y-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto border ${
-                  isArchived ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                }`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto border ${isArchived ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                  }`}>
                   <Clock className="w-7 h-7" />
                 </div>
                 <div>
@@ -1975,7 +1965,7 @@ export default function PublicCampRegistrationPage() {
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-orange-500/20">
                   <Tent className="w-8 h-8" />
                 </div>
-                
+
                 <div className="max-w-xl mx-auto space-y-2">
                   <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-bold text-xs uppercase tracking-wider">
                     Account Required for Registration
@@ -2093,13 +2083,12 @@ export default function PublicCampRegistrationPage() {
                                 </span>
                               )}
                             </div>
-                            <span className={`font-bold px-2.5 py-1 rounded-full text-[10px] shrink-0 ${
-                              isCancelled
-                                ? 'text-rose-700 bg-rose-50 border border-rose-200'
-                                : isCompleted
+                            <span className={`font-bold px-2.5 py-1 rounded-full text-[10px] shrink-0 ${isCancelled
+                              ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                              : isCompleted
                                 ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
                                 : 'text-amber-800 bg-amber-100 border border-amber-200 animate-pulse'
-                            }`}>
+                              }`}>
                               {isCancelled ? 'Cancelled' : isCompleted ? 'Confirmed' : 'Pending Approval'}
                             </span>
                           </div>
@@ -2154,11 +2143,10 @@ export default function PublicCampRegistrationPage() {
 
                 {/* Toast/Alert for Save Draft Feedback */}
                 {draftToast && (
-                  <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${
-                    draftToast.type === 'success'
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
-                      : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
-                  }`}>
+                  <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${draftToast.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                    : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
+                    }`}>
                     <div className="flex items-center gap-2">
                       {draftToast.type === 'success' ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -2290,8 +2278,8 @@ export default function PublicCampRegistrationPage() {
                               {editIndex !== null
                                 ? 'Edit Devotee Entry'
                                 : isManager
-                                ? 'Add Devotees to Batch (Center Manager)'
-                                : 'Devotee Registration (Self-Registration)'}
+                                  ? 'Add Devotees to Batch (Center Manager)'
+                                  : 'Devotee Registration (Self-Registration)'}
                             </h2>
                             {!isManager ? (
                               <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[10px] border-2 border-blue-200">
@@ -2364,11 +2352,10 @@ export default function PublicCampRegistrationPage() {
                                 <button
                                   type="button"
                                   onClick={() => setEntryMode('select')}
-                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                                    entryMode === 'select'
-                                      ? 'bg-teal-600 text-white shadow-2xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
+                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${entryMode === 'select'
+                                    ? 'bg-teal-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                                 >
                                   Select from Center
                                 </button>
@@ -2378,11 +2365,10 @@ export default function PublicCampRegistrationPage() {
                                     setEntryMode('manual');
                                     setSelectedDevoteeId('');
                                   }}
-                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                                    entryMode === 'manual'
-                                      ? 'bg-teal-600 text-white shadow-2xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
+                                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${entryMode === 'manual'
+                                    ? 'bg-teal-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                                 >
                                   Manual Entry
                                 </button>
@@ -2438,7 +2424,7 @@ export default function PublicCampRegistrationPage() {
                         )}
 
                         <form onSubmit={handleAddEntry} className="space-y-6">
-                          
+
                           {/* Section A: Personal & Contact Information */}
                           <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
                             <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
@@ -2462,606 +2448,602 @@ export default function PublicCampRegistrationPage() {
                                   onChange={handleChange}
                                   readOnly={!isManager}
                                   placeholder="Devotee / Student name"
-                                  className={`w-full px-4 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-xs outline-none transition-all placeholder:text-slate-400 ${
-                                    !isManager
-                                      ? 'bg-slate-100 text-slate-700 border-slate-200 cursor-not-allowed'
-                                      : 'border-slate-300 bg-white text-slate-900 hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
-                                  }`}
+                                  className={`w-full px-4 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-xs outline-none transition-all placeholder:text-slate-400 ${!isManager
+                                    ? 'bg-slate-100 text-slate-700 border-slate-200 cursor-not-allowed'
+                                    : 'border-slate-300 bg-white text-slate-900 hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                                    }`}
                                 />
                               </div>
 
-                               <div>
-                                 <PhoneInputWithCountry
-                                   label="WhatsApp Number"
-                                   required
-                                   value={formData.whatsapp}
-                                   onChange={(fullPhone) => setFormData((p) => ({ ...p, whatsapp: fullPhone }))}
-                                   disabled={!isManager}
-                                   placeholder="e.g. 9876543210"
-                                 />
-                               </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Age (Years) *
-                            </label>
-                            <input
-                              type="number"
-                              required
-                              min={1}
-                              max={120}
-                              name="age"
-                              value={formData.age}
-                              onChange={handleChange}
-                              placeholder="e.g. 23"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                              <span>No. of Rounds Chanting *</span>
-                              {formData.rounds && (
-                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                  {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'} / day
-                                </span>
-                              )}
-                            </label>
-                            <input
-                              type="number"
-                              required
-                              min={0}
-                              max={64}
-                              name="rounds"
-                              value={formData.rounds}
-                              onChange={handleChange}
-                              placeholder="e.g. 16 (Daily chanting rounds)"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
-                            <span className="text-[10px] text-slate-400 mt-0.5 block">
-                              Sub-camps with minimum round requirements (e.g. Nistha) appear dynamically based on your daily chanting rounds.
-                            </span>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Gender &amp; Marital Status *
-                            </label>
-                            <select
-                              name="gender"
-                              value={formData.gender}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              <option value="Male - Bachelor">Male - Bachelor</option>
-                              <option value="Male - Married">Male - Married</option>
-                              <option value="Female - Bachelor">Female - Bachelor</option>
-                              <option value="Female - Married">Female - Married</option>
-                            </select>
-                          </div>
-
-                          {(formData.gender === 'Male - Married' || formData.gender === 'Female - Married') && (
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs font-bold text-slate-700 mb-1">
-                                Married Since (Year) *
-                              </label>
-                              <input
-                                type="number"
-                                min={1950}
-                                max={new Date().getFullYear()}
-                                name="marriedSinceYear"
-                                value={formData.marriedSinceYear}
-                                onChange={handleChange}
-                                placeholder="e.g. 2019"
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Section B: Temple and Centre */}
-                      <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
-                        <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
-                          <Building className="w-4 h-4 text-amber-600" />
-                          <span>Temple and Centre</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Parent Temple *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              name="parentTemple"
-                              value={formData.parentTemple}
-                              onChange={handleChange}
-                              placeholder="e.g. NVCC Pune, ISKCON"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              VOICE Centre Name *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              name="voiceName"
-                              value={formData.voiceName}
-                              onChange={handleChange}
-                              placeholder="e.g. Bageshree, Nilachal"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Counselor / Mentor Name *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              name="counselorName"
-                              value={formData.counselorName}
-                              onChange={handleChange}
-                              placeholder="Counselor's name"
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section C: Camp Category & Track */}
-                      <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
-                        <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
-                          <Award className="w-4 h-4 text-amber-600" />
-                          <span>Camp &amp; Role</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                              <span>Select Camp (Category) *</span>
-                              {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
-                                <span className="text-[10px] font-medium text-amber-700">
-                                  ({availableTracksForDevotee.length}/{camp.tracks.length} eligible)
-                                </span>
-                              )}
-                            </label>
-                            <select
-                              name="campTrack"
-                              value={formData.campTrack}
-                              onChange={handleChange}
-                              className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${
-                                isCurrentTrackAlreadyRegistered
-                                  ? 'border-amber-400 ring-4 ring-amber-300/30 text-amber-900 bg-amber-50/50'
-                                  : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
-                              }`}
-                            >
-                              {availableTracksForDevotee.length === 0 ? (
-                                <option value="" disabled>No eligible camp tracks for {formData.rounds || 0} rounds</option>
-                              ) : (
-                                availableTracksForDevotee.map((track) => {
-                                  const isTaken = activeRegisteredTracks.includes(track.trim());
-                                  return (
-                                    <option key={track} value={track} disabled={isTaken} className={isTaken ? 'text-gray-400 bg-gray-50' : ''}>
-                                      {track} {isTaken ? '• (Already Registered)' : ''}
-                                    </option>
-                                  );
-                                })
-                              )}
-                            </select>
-                            {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
-                              <p className="mt-1 text-[11px] text-slate-500 italic">
-                                * Sub-camps requiring higher chanting rounds (e.g. 16 rounds) unlock automatically when your chanting rounds meet the requirement.
-                              </p>
-                            )}
-                            {isCurrentTrackAlreadyRegistered && (
-                              <p className="mt-1 text-[11px] font-bold text-amber-700 flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                <span>
-                                  {isManager && selectedDevotee ? selectedDevotee.name : 'You'} is already registered for &quot;{formData.campTrack}&quot;. Please select another camp/track.
-                                </span>
-                              </p>
-                            )}
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Participation Role *
-                            </label>
-                            <select
-                              name="participantType"
-                              value={formData.participantType}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              {((camp?.participant_types && camp.participant_types.length > 0)
-                                ? camp.participant_types
-                                : ['Camp Participant', 'Mentor', 'Volunteer', 'Brahmachari']
-                              ).map((role) => (
-                                <option key={role} value={role}>
-                                  {role}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Dynamic Role Perk / Waiver Notice */}
-                        {(() => {
-                          const waivers: CampRoleWaiver[] = camp.special_waivers?.role_waivers || [];
-                          const w = waivers.find((x) => x.role.toLowerCase() === formData.participantType.toLowerCase());
-                          if (w) {
-                            const perks: string[] = [];
-                            if (w.fixed_token_fee !== null && w.fixed_token_fee !== undefined) {
-                              if (w.fixed_token_fee === 0) perks.push('100% Complimentary Registration (₹0)');
-                              else perks.push(`Fixed confirmation token fee: ₹${w.fixed_token_fee}`);
-                            } else {
-                              if (w.free_meals && w.free_accommodation) perks.push('Complimentary Meals & Accommodation');
-                              else if (w.free_meals) perks.push('Complimentary Meals (₹0)');
-                              else if (w.free_accommodation) perks.push('Complimentary Stay (₹0)');
-                            }
-
-                            if (perks.length > 0 || w.notice_message) {
-                              return (
-                                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-950 flex items-start gap-2.5">
-                                  <Gift className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                  <div>
-                                    <strong className="block text-amber-900 font-bold mb-0.5">
-                                      {formData.participantType} Benefit: {perks.join(' • ')}
-                                    </strong>
-                                    {w.notice_message && <span className="text-amber-800">{w.notice_message}</span>}
-                                  </div>
-                                </div>
-                              );
-                            }
-                          } else if (formData.participantType === 'Brahmachari') {
-                            return (
-                              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs font-medium text-amber-950">
-                                <strong>Brahmachari Notice:</strong>{' '}
-                                {camp.special_waivers?.brahmachari_message
-                                  ? camp.special_waivers.brahmachari_message.replace(/₹?\s*\d+/g, `₹${camp.special_waivers?.brahmachari_fee ?? 0}`)
-                                  : `Brahmacharis are required to pay a nominal confirmation fee of ₹${camp.special_waivers?.brahmachari_fee ?? 0} under Donate As You Like.`}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-
-                      {/* Section D: Meals & Accommodation Itinerary */}
-                      <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
-                        <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
-                          <Utensils className="w-4 h-4 text-amber-600" />
-                          <span>Meals &amp; Stay Itinerary</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Arrival First Meal Date *
-                            </label>
-                            <select
-                              name="firstMealDate"
-                              value={formData.firstMealDate}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              {(camp.meal_pricing || []).map((m) => (
-                                <option key={m.date} value={m.date}>
-                                  {formatMealOptionLabel(m, camp.start_date)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              First Meal Slot *
-                            </label>
-                            <select
-                              name="firstMealType"
-                              value={formData.firstMealType}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              <option value="Breakfast">Breakfast</option>
-                              <option value="Lunch">Lunch</option>
-                              <option value="Dinner">Dinner</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Departure Last Meal Date *
-                            </label>
-                            <select
-                              name="lastMealDate"
-                              value={formData.lastMealDate}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              {(camp.meal_pricing || []).map((m) => (
-                                <option key={m.date} value={m.date}>
-                                  {formatMealOptionLabel(m, camp.start_date)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Last Meal Slot *
-                            </label>
-                            <select
-                              name="lastMealType"
-                              value={formData.lastMealType}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              <option value="Breakfast">Breakfast</option>
-                              <option value="Lunch">Lunch</option>
-                              <option value="Dinner">Dinner</option>
-                            </select>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Dinner Meal Preference
-                            </label>
-                            <select
-                              name="dinnerType"
-                              value={formData.dinnerType}
-                              onChange={handleChange}
-                              className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
-                            >
-                              <option value="Dinner Meal">Complete Dinner Meal</option>
-                              <option value="Only Milk">Only Milk</option>
-                            </select>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Accommodation from Central VOICE
-                            </label>
-                            {formData.gender.startsWith('Female') && !camp.accommodation_pricing?.allow_female_cv_accommodation ? (
-                              <div className="px-4 py-2.5 rounded-xl bg-slate-200/70 text-xs text-slate-700 font-semibold border border-slate-300">
-                                Arranged externally for Matajis / Females
-                              </div>
-                            ) : (
-                              <select
-                                name="accommodation"
-                                value={formData.accommodation}
-                                onChange={handleChange}
-                                className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${
-                                  isCvFullForSelectedDates && !isBrahmachari
-                                    ? 'border-amber-400 bg-amber-50/50 text-amber-900'
-                                    : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500'
-                                }`}
-                              >
-                                <option value="Yes" disabled={isCvFullForSelectedDates && !isBrahmachari}>
-                                  {isCvFullForSelectedDates && !isBrahmachari
-                                    ? 'CV Floor Accommodation (FULL - Unavailable)'
-                                    : 'Yes, I need accommodation from CV'}
-                                </option>
-                                <option value="No">
-                                  {isCvFullForSelectedDates && !isBrahmachari
-                                    ? 'No, I will arrange own accommodation / Nearby Hotel'
-                                    : 'No, I do not need accommodation'}
-                                </option>
-                              </select>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* SELF-ARRANGED / HOTEL RECOMMENDATION & RECEIPT UPLOAD SECTION */}
-                        {isArrangingOwnStay && (
-                          <div className="mt-3.5 space-y-3 pt-3 border-t border-amber-200/80">
-                            {isCvFullForSelectedDates ? (
-                              <div className="p-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5 shadow-2xs">
-                                <div className="flex items-center gap-2 font-black text-xs text-amber-900">
-                                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                                  <span>CV Floor Accommodation is Full for Selected Dates</span>
-                                </div>
-                                <p className="text-[11px] text-amber-900 leading-snug">
-                                  Due to limited capacity, CV accommodation is completely booked for this batch. You can still attend by booking a room at a nearby hotel/lodge and attaching your booking confirmation receipt below.
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="p-3.5 rounded-xl bg-indigo-50 border-2 border-indigo-200 text-indigo-950 space-y-1.5 shadow-2xs">
-                                <div className="flex items-center gap-2 font-black text-xs text-indigo-900">
-                                  <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                                  <span>Self-Arranged Accommodation / Nearby Hotel</span>
-                                </div>
-                                <p className="text-[11px] text-indigo-900 leading-snug">
-                                  You have selected to arrange your own stay outside CV floor. Please provide your hotel details and upload your booking confirmation receipt below so the administration can verify and issue your pass.
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Recommended Hotels Directory */}
-                            {recommendedHotelsList.length > 0 && (
-                              <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-                                    <Building2 className="w-4 h-4 text-amber-600" />
-                                    Recommended Nearby Hotels &amp; Lodges ({recommendedHotelsList.length})
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 font-semibold">Contact directly to book</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {recommendedHotelsList.map((h: any, i: number) => (
-                                    <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
-                                      <span className="font-extrabold text-xs text-slate-900 block">{h.name}</span>
-                                      {h.contact && (
-                                        <a href={`tel:${h.contact}`} className="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded inline-flex items-center gap-1 hover:underline">
-                                          <Phone className="w-3 h-3 text-amber-700" /> {h.contact}
-                                        </a>
-                                      )}
-                                      {h.address && (
-                                        <p className="text-[10.5px] text-slate-600">
-                                          {h.address.startsWith('http') ? (
-                                            <a href={h.address} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1">
-                                              📍 View Location Map &rarr;
-                                            </a>
-                                          ) : (
-                                            <span>📍 {h.address}</span>
-                                          )}
-                                        </p>
-                                      )}
-                                      {(h.tariff || h.notes) && (
-                                        <p className="text-[10px] text-slate-500">
-                                          {h.tariff ? `Tariff: ${h.tariff}` : ''}
-                                          {h.tariff && h.notes ? ' • ' : ''}
-                                          {h.notes}
-                                        </p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Upload External Hotel Booking Receipt (Mandatory for Waiting List) */}
-                            <div className="p-4 rounded-xl bg-indigo-50/70 border-2 border-indigo-200 shadow-2xs space-y-3">
                               <div>
-                                <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
-                                  <UploadCloud className="w-4 h-4 text-indigo-600" />
-                                  Upload Hotel Booking Receipt (Mandatory) *
-                                </span>
-                                <p className="text-[11px] text-indigo-900 mt-0.5">
-                                  Upload your hotel reservation receipt/invoice (Image or PDF). Your booking will enter the Waiting List for administrative bandwidth verification before pass issuance.
-                                </p>
+                                <PhoneInputWithCountry
+                                  label="WhatsApp Number"
+                                  required
+                                  value={formData.whatsapp}
+                                  onChange={(fullPhone) => setFormData((p) => ({ ...p, whatsapp: fullPhone }))}
+                                  disabled={!isManager}
+                                  placeholder="e.g. 9876543210"
+                                />
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                <div>
-                                  <label className="block text-[10px] font-bold text-slate-700 mb-1">Hotel / Lodge Name *</label>
-                                  <input
-                                    type="text"
-                                    value={hotelBookingName}
-                                    onChange={(e) => setHotelBookingName(e.target.value)}
-                                    placeholder="e.g. Hotel Sai Palace, Katraj"
-                                    className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-indigo-500 outline-none"
-                                  />
-                                </div>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Age (Years) *
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  min={1}
+                                  max={120}
+                                  name="age"
+                                  value={formData.age}
+                                  onChange={handleChange}
+                                  placeholder="e.g. 23"
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                                />
+                              </div>
 
-                                <div>
-                                  <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                                    Upload Receipt (Photo/PDF) * <span className="text-[9.5px] text-slate-400 font-normal">(Max 5MB)</span>
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                  <span>No. of Rounds Chanting *</span>
+                                  {formData.rounds && (
+                                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                      {formData.rounds} {Number(formData.rounds) === 1 ? 'Round' : 'Rounds'} / day
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  min={0}
+                                  max={64}
+                                  name="rounds"
+                                  value={formData.rounds}
+                                  onChange={handleChange}
+                                  placeholder="e.g. 16 (Daily chanting rounds)"
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                                />
+                                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                                  Sub-camps with minimum round requirements (e.g. Nistha) appear dynamically based on your daily chanting rounds.
+                                </span>
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Gender &amp; Marital Status *
+                                </label>
+                                <select
+                                  name="gender"
+                                  value={formData.gender}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  <option value="Male - Bachelor">Male - Bachelor</option>
+                                  <option value="Male - Married">Male - Married</option>
+                                  <option value="Female - Bachelor">Female - Bachelor</option>
+                                  <option value="Female - Married">Female - Married</option>
+                                </select>
+                              </div>
+
+                              {(formData.gender === 'Male - Married' || formData.gender === 'Female - Married') && (
+                                <div className="sm:col-span-2">
+                                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Married Since (Year) *
                                   </label>
                                   <input
-                                    type="file"
-                                    accept="image/*,.pdf"
-                                    onChange={handleUploadHotelReceipt}
-                                    disabled={uploadingReceipt}
-                                    className="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"
+                                    type="number"
+                                    min={1950}
+                                    max={new Date().getFullYear()}
+                                    name="marriedSinceYear"
+                                    value={formData.marriedSinceYear}
+                                    onChange={handleChange}
+                                    placeholder="e.g. 2019"
+                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
                                   />
                                 </div>
-                              </div>
-
-                              {uploadingReceipt && (
-                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                                  <span>Uploading receipt to Google Drive...</span>
-                                </div>
-                              )}
-
-                              {hotelReceiptUrl && (
-                                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-between text-xs text-emerald-900 font-bold">
-                                  <span className="flex items-center gap-1.5">
-                                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                                    Receipt uploaded successfully
-                                  </span>
-                                  <a href={hotelReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline text-[11px] hover:text-emerald-900">
-                                    View File &rarr;
-                                  </a>
-                                </div>
                               )}
                             </div>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Interactive Live Cost Preview Widget */}
-                      {liveCost && (
-                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/70 to-orange-50/70 border border-amber-200/80 flex flex-wrap items-center justify-between gap-4 text-xs">
-                          <div className="flex flex-wrap items-center gap-5 text-slate-700">
-                            <div>
-                              <span className="text-slate-400 block text-[10px] font-semibold">Meals ({liveCost.mealCount})</span>
-                              <span className="font-bold text-slate-900">₹{liveCost.mealCost}</span>
+                          {/* Section B: Temple and Centre */}
+                          <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
+                            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
+                              <Building className="w-4 h-4 text-amber-600" />
+                              <span>Temple and Centre</span>
                             </div>
-                            <div>
-                              <span className="text-slate-400 block text-[10px] font-semibold">Stay ({liveCost.daysOfStay} days)</span>
-                              <span className="font-bold text-slate-900">₹{liveCost.accCost}</span>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Parent Temple *
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  name="parentTemple"
+                                  value={formData.parentTemple}
+                                  onChange={handleChange}
+                                  placeholder="e.g. NVCC Pune, ISKCON"
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  VOICE Centre Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  name="voiceName"
+                                  value={formData.voiceName}
+                                  onChange={handleChange}
+                                  placeholder="e.g. Bageshree, Nilachal"
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Counselor / Mentor Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  name="counselorName"
+                                  value={formData.counselorName}
+                                  onChange={handleChange}
+                                  placeholder="Counselor's name"
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all placeholder:text-slate-400"
+                                />
+                              </div>
                             </div>
-                            {liveCost.acCost > 0 && (
+                          </div>
+
+                          {/* Section C: Camp Category & Track */}
+                          <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
+                            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
+                              <Award className="w-4 h-4 text-amber-600" />
+                              <span>Camp &amp; Role</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                               <div>
-                                <span className="text-slate-400 block text-[10px] font-semibold">
-                                  {camp.accommodation_pricing?.facility_charge_label || 'Other Charges'}
-                                  {camp.accommodation_pricing?.ac_charge_billing_type !== 'fixed' && ` (${Math.max(1, liveCost.daysOfStay)}d)`}
-                                </span>
-                                <span className="font-bold text-slate-900">₹{liveCost.acCost}</span>
+                                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                  <span>Select Camp (Category) *</span>
+                                  {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
+                                    <span className="text-[10px] font-medium text-amber-700">
+                                      ({availableTracksForDevotee.length}/{camp.tracks.length} eligible)
+                                    </span>
+                                  )}
+                                </label>
+                                <select
+                                  name="campTrack"
+                                  value={formData.campTrack}
+                                  onChange={handleChange}
+                                  className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${isCurrentTrackAlreadyRegistered
+                                    ? 'border-amber-400 ring-4 ring-amber-300/30 text-amber-900 bg-amber-50/50'
+                                    : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                                    }`}
+                                >
+                                  {availableTracksForDevotee.length === 0 ? (
+                                    <option value="" disabled>No eligible camp tracks for {formData.rounds || 0} rounds</option>
+                                  ) : (
+                                    availableTracksForDevotee.map((track) => {
+                                      const isTaken = activeRegisteredTracks.includes(track.trim());
+                                      return (
+                                        <option key={track} value={track} disabled={isTaken} className={isTaken ? 'text-gray-400 bg-gray-50' : ''}>
+                                          {track} {isTaken ? '• (Already Registered)' : ''}
+                                        </option>
+                                      );
+                                    })
+                                  )}
+                                </select>
+                                {camp.tracks && camp.tracks.length > availableTracksForDevotee.length && (
+                                  <p className="mt-1 text-[11px] text-slate-500 italic">
+                                    * Sub-camps requiring higher chanting rounds (e.g. 16 rounds) unlock automatically when your chanting rounds meet the requirement.
+                                  </p>
+                                )}
+                                {isCurrentTrackAlreadyRegistered && (
+                                  <p className="mt-1 text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                    <span>
+                                      {isManager && selectedDevotee ? selectedDevotee.name : 'You'} is already registered for &quot;{formData.campTrack}&quot;. Please select another camp/track.
+                                    </span>
+                                  </p>
+                                )}
                               </div>
-                            )}
-                            {liveCost.baseCost > 0 && (
+
                               <div>
-                                <span className="text-slate-400 block text-[10px] font-semibold">
-                                  {liveCost.baseCostLabel || 'Material / Kit Fee'}
-                                </span>
-                                <span className="font-bold text-amber-800">₹{liveCost.baseCost}</span>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Participation Role *
+                                </label>
+                                <select
+                                  name="participantType"
+                                  value={formData.participantType}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  {((camp?.participant_types && camp.participant_types.length > 0)
+                                    ? camp.participant_types
+                                    : ['Camp Participant', 'Mentor', 'Volunteer', 'Brahmachari']
+                                  ).map((role) => (
+                                    <option key={role} value={role}>
+                                      {role}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
-                            )}
-                            {liveCost.lateFee > 0 && (
+                            </div>
+
+                            {/* Dynamic Role Perk / Waiver Notice */}
+                            {(() => {
+                              const waivers: CampRoleWaiver[] = camp.special_waivers?.role_waivers || [];
+                              const w = waivers.find((x) => x.role.toLowerCase() === formData.participantType.toLowerCase());
+                              if (w) {
+                                const perks: string[] = [];
+                                if (w.fixed_token_fee !== null && w.fixed_token_fee !== undefined) {
+                                  if (w.fixed_token_fee === 0) perks.push('100% Complimentary Registration (₹0)');
+                                  else perks.push(`Fixed confirmation token fee: ₹${w.fixed_token_fee}`);
+                                } else {
+                                  if (w.free_meals && w.free_accommodation) perks.push('Complimentary Meals & Accommodation');
+                                  else if (w.free_meals) perks.push('Complimentary Meals (₹0)');
+                                  else if (w.free_accommodation) perks.push('Complimentary Stay (₹0)');
+                                }
+
+                                if (perks.length > 0 || w.notice_message) {
+                                  return (
+                                    <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-950 flex items-start gap-2.5">
+                                      <Gift className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                      <div>
+                                        <strong className="block text-amber-900 font-bold mb-0.5">
+                                          {formData.participantType} Benefit: {perks.join(' • ')}
+                                        </strong>
+                                        {w.notice_message && <span className="text-amber-800">{w.notice_message}</span>}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              } else if (formData.participantType === 'Brahmachari') {
+                                return (
+                                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs font-medium text-amber-950">
+                                    <strong>Brahmachari Notice:</strong>{' '}
+                                    {camp.special_waivers?.brahmachari_message
+                                      ? camp.special_waivers.brahmachari_message.replace(/₹?\s*\d+/g, `₹${camp.special_waivers?.brahmachari_fee ?? 0}`)
+                                      : `Brahmacharis are required to pay a nominal confirmation fee of ₹${camp.special_waivers?.brahmachari_fee ?? 0} under Donate As You Like.`}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+
+                          {/* Section D: Meals & Accommodation Itinerary */}
+                          <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3.5 shadow-xs">
+                            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-200/80">
+                              <Utensils className="w-4 h-4 text-amber-600" />
+                              <span>Meals &amp; Stay Itinerary</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                               <div>
-                                <span className="text-slate-400 block text-[10px] font-semibold">Late Fee</span>
-                                <span className="font-bold text-rose-600">₹{liveCost.lateFee}</span>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Arrival First Meal Date *
+                                </label>
+                                <select
+                                  name="firstMealDate"
+                                  value={formData.firstMealDate}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  {(camp.meal_pricing || []).map((m) => (
+                                    <option key={m.date} value={m.date}>
+                                      {formatMealOptionLabel(m, camp.start_date)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  First Meal Slot *
+                                </label>
+                                <select
+                                  name="firstMealType"
+                                  value={formData.firstMealType}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  <option value="Breakfast">Breakfast</option>
+                                  <option value="Lunch">Lunch</option>
+                                  <option value="Dinner">Dinner</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Departure Last Meal Date *
+                                </label>
+                                <select
+                                  name="lastMealDate"
+                                  value={formData.lastMealDate}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  {(camp.meal_pricing || []).map((m) => (
+                                    <option key={m.date} value={m.date}>
+                                      {formatMealOptionLabel(m, camp.start_date)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Last Meal Slot *
+                                </label>
+                                <select
+                                  name="lastMealType"
+                                  value={formData.lastMealType}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  <option value="Breakfast">Breakfast</option>
+                                  <option value="Lunch">Lunch</option>
+                                  <option value="Dinner">Dinner</option>
+                                </select>
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Dinner Meal Preference
+                                </label>
+                                <select
+                                  name="dinnerType"
+                                  value={formData.dinnerType}
+                                  onChange={handleChange}
+                                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold shadow-xs hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 outline-none transition-all cursor-pointer"
+                                >
+                                  <option value="Dinner Meal">Complete Dinner Meal</option>
+                                  <option value="Only Milk">Only Milk</option>
+                                </select>
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Accommodation from Central VOICE
+                                </label>
+                                {formData.gender.startsWith('Female') && !camp.accommodation_pricing?.allow_female_cv_accommodation ? (
+                                  <div className="px-4 py-2.5 rounded-xl bg-slate-200/70 text-xs text-slate-700 font-semibold border border-slate-300">
+                                    Arranged externally for Matajis / Females
+                                  </div>
+                                ) : (
+                                  <select
+                                    name="accommodation"
+                                    value={formData.accommodation}
+                                    onChange={handleChange}
+                                    className={`w-full px-4 py-2.5 rounded-xl border-2 text-slate-900 text-xs font-semibold shadow-xs outline-none transition-all cursor-pointer ${isCvFullForSelectedDates && !isBrahmachari
+                                      ? 'border-amber-400 bg-amber-50/50 text-amber-900'
+                                      : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500'
+                                      }`}
+                                  >
+                                    <option value="Yes" disabled={isCvFullForSelectedDates && !isBrahmachari}>
+                                      {isCvFullForSelectedDates && !isBrahmachari
+                                        ? 'CV Floor Accommodation (FULL - Unavailable)'
+                                        : 'Yes, I need accommodation from CV'}
+                                    </option>
+                                    <option value="No">
+                                      {isCvFullForSelectedDates && !isBrahmachari
+                                        ? 'No, I will arrange own accommodation / Nearby Hotel'
+                                        : 'No, I do not need accommodation'}
+                                    </option>
+                                  </select>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* SELF-ARRANGED / HOTEL RECOMMENDATION & RECEIPT UPLOAD SECTION */}
+                            {isArrangingOwnStay && (
+                              <div className="mt-3.5 space-y-3 pt-3 border-t border-amber-200/80">
+                                {isCvFullForSelectedDates ? (
+                                  <div className="p-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center gap-2 font-black text-xs text-amber-900">
+                                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <span>CV Floor Accommodation is Full for Selected Dates</span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-900 leading-snug">
+                                      Due to limited capacity, CV accommodation is completely booked for this batch. You can still attend by booking a room at a nearby hotel/lodge and attaching your booking confirmation receipt below.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="p-3.5 rounded-xl bg-indigo-50 border-2 border-indigo-200 text-indigo-950 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center gap-2 font-black text-xs text-indigo-900">
+                                      <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                                      <span>Self-Arranged Accommodation / Nearby Hotel</span>
+                                    </div>
+                                    <p className="text-[11px] text-indigo-900 leading-snug">
+                                      You have selected to arrange your own stay outside CV floor. Please provide your hotel details and upload your booking confirmation receipt below so the administration can verify and issue your pass.
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Recommended Hotels Directory */}
+                                {recommendedHotelsList.length > 0 && (
+                                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                                        <Building2 className="w-4 h-4 text-amber-600" />
+                                        Recommended Nearby Hotels &amp; Lodges ({recommendedHotelsList.length})
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 font-semibold">Contact directly to book</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {recommendedHotelsList.map((h: any, i: number) => (
+                                        <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
+                                          <span className="font-extrabold text-xs text-slate-900 block">{h.name}</span>
+                                          {h.contact && (
+                                            <a href={`tel:${h.contact}`} className="text-[11px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded inline-flex items-center gap-1 hover:underline">
+                                              <Phone className="w-3 h-3 text-amber-700" /> {h.contact}
+                                            </a>
+                                          )}
+                                          {h.address && (
+                                            <p className="text-[10.5px] text-slate-600">
+                                              {h.address.startsWith('http') ? (
+                                                <a href={h.address} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1">
+                                                  📍 View Location Map &rarr;
+                                                </a>
+                                              ) : (
+                                                <span>📍 {h.address}</span>
+                                              )}
+                                            </p>
+                                          )}
+                                          {(h.tariff || h.notes) && (
+                                            <p className="text-[10px] text-slate-500">
+                                              {h.tariff ? `Tariff: ${h.tariff}` : ''}
+                                              {h.tariff && h.notes ? ' • ' : ''}
+                                              {h.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Upload External Hotel Booking Receipt (Mandatory for Waiting List) */}
+                                <div className="p-4 rounded-xl bg-indigo-50/70 border-2 border-indigo-200 shadow-2xs space-y-3">
+                                  <div>
+                                    <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                      <UploadCloud className="w-4 h-4 text-indigo-600" />
+                                      Upload Hotel Booking Receipt (Mandatory) *
+                                    </span>
+                                    <p className="text-[11px] text-indigo-900 mt-0.5">
+                                      Upload your hotel reservation receipt/invoice (Image or PDF). Your booking will enter the Waiting List for administrative bandwidth verification before pass issuance.
+                                    </p>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-700 mb-1">Hotel / Lodge Name *</label>
+                                      <input
+                                        type="text"
+                                        value={hotelBookingName}
+                                        onChange={(e) => setHotelBookingName(e.target.value)}
+                                        placeholder="e.g. Hotel Sai Palace, Katraj"
+                                        className="w-full px-3 py-2 rounded-lg border-2 border-slate-300 bg-white text-slate-900 text-xs font-semibold hover:border-amber-400 focus:border-indigo-500 outline-none"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                                        Upload Receipt (Photo/PDF) * <span className="text-[9.5px] text-slate-400 font-normal">(Max 5MB)</span>
+                                      </label>
+                                      <input
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        onChange={handleUploadHotelReceipt}
+                                        disabled={uploadingReceipt}
+                                        className="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {uploadingReceipt && (
+                                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                                      <span>Uploading receipt to Google Drive...</span>
+                                    </div>
+                                  )}
+
+                                  {hotelReceiptUrl && (
+                                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 flex items-center justify-between text-xs text-emerald-900 font-bold">
+                                      <span className="flex items-center gap-1.5">
+                                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                        Receipt uploaded successfully
+                                      </span>
+                                      <a href={hotelReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline text-[11px] hover:text-emerald-900">
+                                        View File &rarr;
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
 
-                          <div className="text-right">
-                            <span className="text-slate-500 block text-[10px] font-semibold uppercase tracking-wider">
-                              Entry Fee
-                            </span>
-                            <span className="text-xl font-black text-amber-700">
-                              ₹{liveCost.totalCost}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                          {/* Interactive Live Cost Preview Widget */}
+                          {liveCost && (
+                            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/70 to-orange-50/70 border border-amber-200/80 flex flex-wrap items-center justify-between gap-4 text-xs">
+                              <div className="flex flex-wrap items-center gap-5 text-slate-700">
+                                <div>
+                                  <span className="text-slate-400 block text-[10px] font-semibold">Meals ({liveCost.mealCount})</span>
+                                  <span className="font-bold text-slate-900">₹{liveCost.mealCost}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[10px] font-semibold">Stay ({liveCost.daysOfStay} days)</span>
+                                  <span className="font-bold text-slate-900">₹{liveCost.accCost}</span>
+                                </div>
+                                {liveCost.acCost > 0 && (
+                                  <div>
+                                    <span className="text-slate-400 block text-[10px] font-semibold">
+                                      {camp.accommodation_pricing?.facility_charge_label || 'Other Charges'}
+                                      {camp.accommodation_pricing?.ac_charge_billing_type !== 'fixed' && ` (${Math.max(1, liveCost.daysOfStay)}d)`}
+                                    </span>
+                                    <span className="font-bold text-slate-900">₹{liveCost.acCost}</span>
+                                  </div>
+                                )}
+                                {liveCost.baseCost > 0 && (
+                                  <div>
+                                    <span className="text-slate-400 block text-[10px] font-semibold">
+                                      {liveCost.baseCostLabel || 'Material / Kit Fee'}
+                                    </span>
+                                    <span className="font-bold text-amber-800">₹{liveCost.baseCost}</span>
+                                  </div>
+                                )}
+                                {liveCost.lateFee > 0 && (
+                                  <div>
+                                    <span className="text-slate-400 block text-[10px] font-semibold">Late Fee</span>
+                                    <span className="font-bold text-rose-600">₹{liveCost.lateFee}</span>
+                                  </div>
+                                )}
+                              </div>
 
-                      <div className="flex justify-end pt-2">
-                        <button
-                          type="submit"
-                          disabled={isCurrentTrackAlreadyRegistered}
-                          className={`inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs font-bold transition-all shadow-md ${
-                            isCurrentTrackAlreadyRegistered
-                              ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
-                              : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
-                          }`}
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>
-                            {isCurrentTrackAlreadyRegistered
-                              ? 'Already Registered for This Camp/Track'
-                              : editIndex !== null
-                              ? 'Update Attendee'
-                              : isManager
-                              ? 'Add Devotee to Batch'
-                              : 'Confirm My Registration Entry'}
-                          </span>
-                        </button>
-                      </div>
-                    </form>
-                  </>
-                )}
-              </div>
+                              <div className="text-right">
+                                <span className="text-slate-500 block text-[10px] font-semibold uppercase tracking-wider">
+                                  Entry Fee
+                                </span>
+                                <span className="text-xl font-black text-amber-700">
+                                  ₹{liveCost.totalCost}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex justify-end pt-2">
+                            <button
+                              type="submit"
+                              disabled={isCurrentTrackAlreadyRegistered}
+                              className={`inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs font-bold transition-all shadow-md ${isCurrentTrackAlreadyRegistered
+                                ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                                : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                                }`}
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>
+                                {isCurrentTrackAlreadyRegistered
+                                  ? 'Already Registered for This Camp/Track'
+                                  : editIndex !== null
+                                    ? 'Update Attendee'
+                                    : isManager
+                                      ? 'Add Devotee to Batch'
+                                      : 'Confirm My Registration Entry'}
+                              </span>
+                            </button>
+                          </div>
+                        </form>
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {/* STEP 3: BATCH DEVOTEES TABLE */}
@@ -3124,9 +3106,8 @@ export default function PublicCampRegistrationPage() {
                                 {getMealDateDisplay(entry.firstMealDate, camp)} ({entry.firstMealType}) &rarr; {getMealDateDisplay(entry.lastMealDate, camp)} ({entry.lastMealType})
                               </td>
                               <td className="py-3 px-3 text-center">
-                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                  entry.accommodation === 'Yes' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${entry.accommodation === 'Yes' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+                                  }`}>
                                   {entry.accommodation}
                                 </span>
                               </td>
@@ -3462,7 +3443,7 @@ export default function PublicCampRegistrationPage() {
                   ''
                 ).trim().toLowerCase();
 
-                const matchedCodeObj = centerIdtList.find((c: any) => 
+                const matchedCodeObj = centerIdtList.find((c: any) =>
                   c.code && (
                     c.center_name.trim().toLowerCase() === userCenterCandidate ||
                     userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
@@ -3471,71 +3452,71 @@ export default function PublicCampRegistrationPage() {
                 ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
 
                 return (
-                /* IDT FORM */
-                <div className="space-y-4">
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
-                  </div>
+                  /* IDT FORM */
+                  <div className="space-y-4">
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Project Name (as per SERP) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={idtSource}
-                      onChange={(e) => setIdtSource(e.target.value)}
-                      placeholder="e.g. Enter Project Name / SERP Activity..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
-                    />
-                    <span className="text-[10.5px] text-slate-400 mt-1 block">
-                      Manually type the SERP project name for IDT deduction accounting.
-                    </span>
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Project Name (as per SERP) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={idtSource}
+                        onChange={(e) => setIdtSource(e.target.value)}
+                        placeholder="e.g. Enter Project Name / SERP Activity..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
+                      />
+                      <span className="text-[10.5px] text-slate-400 mt-1 block">
+                        Manually type the SERP project name for IDT deduction accounting.
+                      </span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      <span>IDT Authorization Passcode *</span>
-                      {matchedCodeObj && (
-                        <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
-                          (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
-                        </span>
-                      )}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={idtPasscode}
-                      onChange={(e) => setIdtPasscode(e.target.value)}
-                      placeholder="Enter your center's secret authorization key"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">
-                      Dedicated IDT authorization code for your assigned center.
-                    </span>
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        <span>IDT Authorization Passcode *</span>
+                        {matchedCodeObj && (
+                          <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
+                            (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={idtPasscode}
+                        onChange={(e) => setIdtPasscode(e.target.value)}
+                        placeholder="Enter your center's secret authorization key"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">
+                        Dedicated IDT authorization code for your assigned center.
+                      </span>
+                    </div>
 
-                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMethod(null)}
-                      className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
-                    >
-                      &larr; Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={submitIdtPayment}
-                      className="flex-1 py-2 sm:py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg sm:rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                      Confirm IDT (₹{baseTotalAmount})
-                    </button>
+                    <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod(null)}
+                        className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
+                      >
+                        &larr; Back
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={submitIdtPayment}
+                        className="flex-1 py-2 sm:py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg sm:rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                        Confirm IDT (₹{baseTotalAmount})
+                      </button>
+                    </div>
                   </div>
-                </div>
                 );
               })() : (
                 /* INTER-TEMPLE TRANSFER FORM */
@@ -3859,13 +3840,13 @@ export default function PublicCampRegistrationPage() {
                     </div>
                   )}
                   {Number(cancelSuccessResult.breakdown?.base_fee_refund || 0) === 0 &&
-                   Number(cancelSuccessResult.breakdown?.meal_refund || 0) === 0 &&
-                   Number(cancelSuccessResult.breakdown?.acc_refund || 0) === 0 && (
-                    <div className="flex justify-between py-1 border-b border-amber-200/60 text-[11px]">
-                      <span className="text-slate-500">Refund Breakdown:</span>
-                      <span className="font-semibold text-slate-800">₹0</span>
-                    </div>
-                  )}
+                    Number(cancelSuccessResult.breakdown?.meal_refund || 0) === 0 &&
+                    Number(cancelSuccessResult.breakdown?.acc_refund || 0) === 0 && (
+                      <div className="flex justify-between py-1 border-b border-amber-200/60 text-[11px]">
+                        <span className="text-slate-500">Refund Breakdown:</span>
+                        <span className="font-semibold text-slate-800">₹0</span>
+                      </div>
+                    )}
                   <div className="pt-1 text-[11px] text-slate-500 flex items-center justify-between">
                     <span>Refund Payout Target:</span>
                     <span className="font-mono font-bold text-slate-800">
@@ -4041,13 +4022,12 @@ export default function PublicCampRegistrationPage() {
                       return (
                         <div
                           key={reg.id}
-                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 text-xs ${
-                            isLocked
-                              ? 'bg-slate-100 border-slate-200 opacity-60'
-                              : isChecked
+                          className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 text-xs ${isLocked
+                            ? 'bg-slate-100 border-slate-200 opacity-60'
+                            : isChecked
                               ? 'bg-amber-50/70 border-amber-300 shadow-2xs'
                               : 'bg-white border-slate-200'
-                          }`}
+                            }`}
                         >
                           <label className={`flex items-center gap-3 flex-1 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                             <input
@@ -4067,11 +4047,10 @@ export default function PublicCampRegistrationPage() {
                               <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
                                 <span>{reg.participant_name}</span>
                                 {isPendingApproval && (
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    isPendingIdt
-                                      ? 'bg-sky-100 text-sky-900 border-sky-300'
-                                      : 'bg-amber-100 text-amber-900 border-amber-300'
-                                  }`}>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isPendingIdt
+                                    ? 'bg-sky-100 text-sky-900 border-sky-300'
+                                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                                    }`}>
                                     {isPendingIdt
                                       ? '⚡ Pending IDT (Direct Cancel)'
                                       : '⏳ Awaiting Payment Approval (ITT) • Cannot Cancel Until Confirmed'}
@@ -4216,11 +4195,10 @@ export default function PublicCampRegistrationPage() {
                     <button
                       type="button"
                       onClick={() => setCancelPayoutType('UPI')}
-                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
-                        cancelPayoutType === 'UPI'
-                          ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                      }`}
+                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${cancelPayoutType === 'UPI'
+                        ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                        }`}
                     >
                       <span className="text-lg shrink-0">⚡</span>
                       <div className="min-w-0">
@@ -4232,11 +4210,10 @@ export default function PublicCampRegistrationPage() {
                     <button
                       type="button"
                       onClick={() => setCancelPayoutType('BANK')}
-                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
-                        cancelPayoutType === 'BANK'
-                          ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                      }`}
+                      className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${cancelPayoutType === 'BANK'
+                        ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                        }`}
                     >
                       <span className="text-lg shrink-0">🏛️</span>
                       <div className="min-w-0">

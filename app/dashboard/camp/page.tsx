@@ -1634,7 +1634,7 @@ function CampDashboardContent() {
     const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
     const attendeeRoyal = isManager && selectedDevotee
       ? selectedDevotee.royalMember
-      : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+      : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
 
     const trackFees = selectedCamp?.special_waivers?.track_fees || [];
 
@@ -1873,7 +1873,7 @@ function CampDashboardContent() {
       const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
       const attendeeRoyal = isManager && selectedDevotee
         ? selectedDevotee.royalMember
-        : (userData?.hierarchy?.royalMember || (userData as any)?.royalMember || (userData as any)?.royal_member);
+        : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
       const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
       if (!isRoleEligible) {
         alert(`The "${formData.campTrack}" sub-camp is restricted to specific roles (${selectedTrackFeeObj.applicable_roles.join(', ')}). This devotee does not have an eligible role.`);
@@ -2365,8 +2365,8 @@ function CampDashboardContent() {
 
       const finalPaymentStatus = json.paymentStatus || (
         paymentDetails.paymentMethod === 'IDT' ||
-        paymentDetails.paymentMethod === 'INTER_TEMPLE_TRANSFER' ||
-        paymentDetails.paymentMethod === 'ITT'
+          paymentDetails.paymentMethod === 'INTER_TEMPLE_TRANSFER' ||
+          paymentDetails.paymentMethod === 'ITT'
           ? 'processing'
           : 'completed'
       );
@@ -2390,10 +2390,10 @@ function CampDashboardContent() {
       try {
         const callerId = userData?.id || user?.id || '';
         if (selectedCamp?.id) {
-          fetch(`/api/camps/draft?campId=${selectedCamp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => {});
+          fetch(`/api/camps/draft?campId=${selectedCamp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => { });
         }
         setActiveDraft(null);
-      } catch (e) {}
+      } catch (e) { }
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to submit registration');
     } finally {
@@ -2500,7 +2500,7 @@ function CampDashboardContent() {
     if (e) e.preventDefault();
     const phoneDigits = userData?.phone ? userData.phone.replace(/[^0-9]/g, '').slice(-10) : '';
     const userEmail = (user?.email || userData?.email || '').trim().toLowerCase();
-    
+
     let queryToUse = '';
     if (overrideQuery) {
       queryToUse = overrideQuery.trim();
@@ -2640,7 +2640,7 @@ function CampDashboardContent() {
       }
     }
 
-    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r => 
+    const isAllTransferOrFree = selectedRegs.length > 0 && selectedRegs.every(r =>
       ['INTER_TEMPLE_TRANSFER', 'ITT', 'IDT', 'COUPON', 'ROLE_WAIVER', 'FREE'].includes((r.payment_method || '').toUpperCase())
     );
 
@@ -2925,17 +2925,15 @@ function CampDashboardContent() {
               setActiveTab('camps');
               setSelectedCamp(null);
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
-              activeTab === 'camps'
-                ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
-                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${activeTab === 'camps'
+              ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
+              : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+              }`}
           >
             <Tent className="w-3.5 h-3.5 shrink-0" />
             <span>Active Camps</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeTab === 'camps' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-100 text-slate-600'
-            }`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'camps' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-100 text-slate-600'
+              }`}>
               {visibleActiveCamps.length}
             </span>
           </button>
@@ -2945,18 +2943,16 @@ function CampDashboardContent() {
               setActiveTab('registrations');
               setSelectedCamp(null);
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
-              activeTab === 'registrations'
-                ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
-                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${activeTab === 'registrations'
+              ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
+              : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+              }`}
           >
             <Ticket className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">My Bookings &amp; Passes</span>
             <span className="sm:hidden">My Passes</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeTab === 'registrations' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-100 text-slate-600'
-            }`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'registrations' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-100 text-slate-600'
+              }`}>
               {userRegistrations.length}
             </span>
           </button>
@@ -2967,18 +2963,16 @@ function CampDashboardContent() {
                 setActiveTab('staff');
                 setSelectedCamp(null);
               }}
-              className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'staff'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 ring-1 ring-emerald-400/50'
-                  : 'bg-purple-50 text-purple-950 hover:bg-purple-100 border border-purple-200'
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${activeTab === 'staff'
+                ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 ring-1 ring-emerald-400/50'
+                : 'bg-purple-50 text-purple-950 hover:bg-purple-100 border border-purple-200'
+                }`}
             >
               <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               <span className="hidden sm:inline">Staff &amp; Coordinator Duty</span>
               <span className="sm:hidden">Staff Duty</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                activeTab === 'staff' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950' : 'bg-emerald-100 text-emerald-950'
-              }`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeTab === 'staff' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950' : 'bg-emerald-100 text-emerald-950'
+                }`}>
                 {allocatedCamps.length}
               </span>
             </button>
@@ -2987,11 +2981,10 @@ function CampDashboardContent() {
           {selectedCamp && (
             <button
               onClick={() => setActiveTab('register')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'register'
-                  ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
-                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${activeTab === 'register'
+                ? 'bg-gradient-to-r from-purple-700 via-violet-800 to-purple-900 text-white shadow-md border border-purple-600/60'
+                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+                }`}
             >
               <Plus className="w-4 h-4 shrink-0" />
               <span>Registering: {selectedCamp.title.slice(0, 18)}...</span>
@@ -3031,6 +3024,7 @@ function CampDashboardContent() {
                 {visibleActiveCamps.map((camp) => {
                   const deadlinePassed = camp.registration_deadline && new Date() > new Date(camp.registration_deadline);
                   const notStarted = camp.registration_start_date && new Date() < new Date(camp.registration_start_date);
+                  const isLateFeeActive = Boolean(camp.late_fee_start_date && Number(camp.late_fee) > 0 && new Date() >= new Date(camp.late_fee_start_date));
                   const posterUrl = getThumbnailUrl(camp.poster_url) || camp.poster_url;
 
                   return (
@@ -3131,24 +3125,40 @@ function CampDashboardContent() {
                             </div>
                           )}
 
-                          {/* Base Fee & Registration Deadline Side-by-Side */}
-                          <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-gray-400 block text-[9.5px] uppercase font-bold tracking-wider">Base Fee</span>
-                              <span className="text-xs sm:text-sm font-black text-purple-800">
+                          {/* Base Fee & Late Fee Starts Side-by-Side */}
+                          <div className="pt-2.5 pb-0.5 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
+                            <div className="min-w-0">
+                              <span className="text-indigo-600 block text-[9.5px] uppercase font-black tracking-wider">
+                                Base Fee
+                              </span>
+                              <span className="text-xs sm:text-sm font-black text-indigo-950 truncate block">
                                 {Number(camp.special_waivers?.base_registration_fee) > 0 ? `₹${Number(camp.special_waivers?.base_registration_fee).toLocaleString('en-IN')}` : 'Included in meals'}
                               </span>
                             </div>
 
-                            {camp.registration_deadline && (
-                              <div className="text-right">
-                                <span className="text-gray-400 block text-[9.5px] uppercase font-bold tracking-wider">Deadline</span>
-                                <span className={`text-xs font-bold ${deadlinePassed ? 'text-red-600' : 'text-gray-800'}`}>
-                                  {new Date(camp.registration_deadline).toLocaleDateString('en-IN', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                  })}
+                            {camp.late_fee_start_date && (
+                              <div className="text-right shrink-0">
+                                <span className="text-amber-700 block text-[9.5px] uppercase font-black tracking-wider">
+                                  Late Fee Starts
                                 </span>
+                                <div className="flex items-center justify-end gap-1 flex-wrap">
+                                  <span className={`text-xs font-black ${isLateFeeActive ? 'text-rose-700' : 'text-slate-800'}`}>
+                                    {new Date(camp.late_fee_start_date).toLocaleDateString('en-IN', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                    })}
+                                  </span>
+                                  {Number(camp.late_fee) > 0 && (
+                                    <span className="text-[11px] font-extrabold text-amber-700">
+                                      (+₹{Number(camp.late_fee).toLocaleString('en-IN')})
+                                    </span>
+                                  )}
+                                  {isLateFeeActive && (
+                                    <span className="text-[9.5px] text-rose-700 font-black bg-rose-50 px-1 py-0.2 rounded border border-rose-200 tracking-wide uppercase">
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -3248,7 +3258,7 @@ function CampDashboardContent() {
                   {isManager ? 'Camp Bookings & Devotee Passes' : 'My Registered Camp Passes'}
                 </h2>
                 <p className="text-[10px] sm:text-xs text-gray-500 line-clamp-1">
-                  {isManager 
+                  {isManager
                     ? `Showing personal and center devotee passes.`
                     : `Passes registered under ${userData?.phone || user?.email}`
                   }
@@ -3287,33 +3297,30 @@ function CampDashboardContent() {
                       <button
                         type="button"
                         onClick={() => setPassViewFilter('all')}
-                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                          passViewFilter === 'all'
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${passViewFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
                       >
                         All Passes ({userRegistrations.length})
                       </button>
                       <button
                         type="button"
                         onClick={() => setPassViewFilter('mine')}
-                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                          passViewFilter === 'mine'
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${passViewFilter === 'mine'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
                       >
                         My Passes ({myPassesCount})
                       </button>
                       <button
                         type="button"
                         onClick={() => setPassViewFilter('assigned')}
-                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                          passViewFilter === 'assigned'
-                            ? 'bg-teal-600 text-white shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all shrink-0 cursor-pointer ${passViewFilter === 'assigned'
+                          ? 'bg-teal-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
                       >
                         <span className="sm:hidden">Assigned ({assignedPassesCount})</span>
                         <span className="hidden sm:inline">Assigned Center Passes ({assignedPassesCount})</span>
@@ -3542,8 +3549,8 @@ function CampDashboardContent() {
                 {displayedRegistrations.map((reg) => {
                   const refund = userRefunds.find(
                     (ref) => ref.registration_id === reg.id ||
-                             ref.group_id === reg.group_id ||
-                             (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === reg.id))
+                      ref.group_id === reg.group_id ||
+                      (Array.isArray(ref.cancelled_registrations) && ref.cancelled_registrations.some((cr: any) => cr.reg_id === reg.id))
                   );
                   const paymentStatus = String(reg.payment_status || '').toLowerCase();
                   const isWaitingList = Boolean(reg.is_waiting_list || paymentStatus === 'waiting_list');
@@ -3957,11 +3964,10 @@ function CampDashboardContent() {
             {/* Success View */}
             {registrationSuccess ? (
               <div className="bg-white rounded-3xl p-8 sm:p-10 border border-emerald-200 shadow-xl text-center space-y-6">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-inner ${
-                  registrationSuccess.paymentStatus === 'processing'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-600'
-                }`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-inner ${registrationSuccess.paymentStatus === 'processing'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-emerald-100 text-emerald-600'
+                  }`}>
                   {registrationSuccess.paymentStatus === 'processing' ? (
                     <Clock className="w-10 h-10 animate-pulse" />
                   ) : (
@@ -4078,11 +4084,10 @@ function CampDashboardContent() {
 
                   {/* Toast/Alert for Save Draft Feedback */}
                   {draftToast && (
-                    <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${
-                      draftToast.type === 'success'
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
-                        : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
-                    }`}>
+                    <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-in fade-in ${draftToast.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                      : 'bg-rose-50 border-rose-300 text-rose-900 font-semibold'
+                      }`}>
                       <div className="flex items-center gap-2">
                         {draftToast.type === 'success' ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -4121,14 +4126,12 @@ function CampDashboardContent() {
 
                   {/* Step 1: Point of Contact (POC) / Devotee Profile */}
                   {selectedCamp.require_poc ? (
-                    <div className={`bg-white rounded-xl sm:rounded-2xl border-2 p-3.5 sm:p-5 shadow-xs space-y-3 transition-colors ${
-                      pocConfirmed ? 'border-emerald-300 bg-emerald-50/20' : 'border-amber-400 bg-amber-50/30'
-                    }`}>
+                    <div className={`bg-white rounded-xl sm:rounded-2xl border-2 p-3.5 sm:p-5 shadow-xs space-y-3 transition-colors ${pocConfirmed ? 'border-emerald-300 bg-emerald-50/20' : 'border-amber-400 bg-amber-50/30'
+                      }`}>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="flex items-start sm:items-center gap-2">
-                          <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
-                            pocConfirmed ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
-                          }`}>
+                          <span className={`w-6 h-6 rounded-full font-black text-xs flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${pocConfirmed ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+                            }`}>
                             1
                           </span>
                           <div>
@@ -4296,8 +4299,8 @@ function CampDashboardContent() {
                           {editIndex !== null
                             ? 'Edit Attendee Details'
                             : isManager
-                            ? 'Add Devotees to Batch (Center Manager)'
-                            : 'Attendee Details (Self-Registration)'}
+                              ? 'Add Devotees to Batch (Center Manager)'
+                              : 'Attendee Details (Self-Registration)'}
                         </h3>
                         {!isManager ? (
                           <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[10px] sm:text-xs border border-blue-200">
@@ -4383,11 +4386,10 @@ function CampDashboardContent() {
                                 <button
                                   type="button"
                                   onClick={() => setEntryMode('select')}
-                                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                    entryMode === 'select'
-                                      ? 'bg-teal-600 text-white shadow-xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
+                                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${entryMode === 'select'
+                                    ? 'bg-teal-600 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                                 >
                                   Select from Center
                                 </button>
@@ -4411,11 +4413,10 @@ function CampDashboardContent() {
                                       parentTemple: managerAssignedTemple || prev.parentTemple,
                                     }));
                                   }}
-                                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                    entryMode === 'manual'
-                                      ? 'bg-teal-600 text-white shadow-xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
+                                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${entryMode === 'manual'
+                                    ? 'bg-teal-600 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                    }`}
                                 >
                                   Manual Entry
                                 </button>
@@ -4763,11 +4764,10 @@ function CampDashboardContent() {
                                     onChange={handleFormChange}
                                     required
                                     readOnly={!isManager}
-                                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-2xs outline-none transition-all ${
-                                      !isManager
-                                        ? 'bg-slate-100 text-slate-700 border-slate-200 cursor-not-allowed'
-                                        : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
-                                    }`}
+                                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-2xs outline-none transition-all ${!isManager
+                                      ? 'bg-slate-100 text-slate-700 border-slate-200 cursor-not-allowed'
+                                      : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                                      }`}
                                     placeholder="Full Name"
                                   />
                                 </div>
@@ -4825,11 +4825,10 @@ function CampDashboardContent() {
                                     name="campTrack"
                                     value={formData.campTrack}
                                     onChange={handleFormChange}
-                                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-2xs outline-none transition-all cursor-pointer ${
-                                      isCurrentTrackAlreadyRegistered
-                                        ? 'border-amber-400 ring-4 ring-amber-300/30 text-amber-900 bg-amber-50/50'
-                                        : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
-                                    }`}
+                                    className={`w-full px-3.5 py-2.5 rounded-xl border-2 text-xs font-semibold shadow-2xs outline-none transition-all cursor-pointer ${isCurrentTrackAlreadyRegistered
+                                      ? 'border-amber-400 ring-4 ring-amber-300/30 text-amber-900 bg-amber-50/50'
+                                      : 'border-slate-300 bg-white hover:border-amber-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15'
+                                      }`}
                                   >
                                     {availableTracksForDevotee.length === 0 ? (
                                       <option value="" disabled>No eligible camps for {formData.rounds || 0} rounds</option>
@@ -5075,11 +5074,10 @@ function CampDashboardContent() {
                                     name="accommodation"
                                     value={formData.accommodation}
                                     onChange={handleFormChange}
-                                    className={`w-full px-2.5 py-1.5 rounded-lg border text-slate-900 text-xs font-semibold outline-none transition-all cursor-pointer shadow-2xs ${
-                                      isCvFullForSelectedDates && !isBrahmachari
-                                        ? 'border-amber-400 bg-amber-50/50 text-amber-900'
-                                        : 'border-slate-300 bg-white focus:border-amber-500'
-                                    }`}
+                                    className={`w-full px-2.5 py-1.5 rounded-lg border text-slate-900 text-xs font-semibold outline-none transition-all cursor-pointer shadow-2xs ${isCvFullForSelectedDates && !isBrahmachari
+                                      ? 'border-amber-400 bg-amber-50/50 text-amber-900'
+                                      : 'border-slate-300 bg-white focus:border-amber-500'
+                                      }`}
                                   >
                                     <option value="Yes" disabled={isCvFullForSelectedDates && !isBrahmachari}>
                                       {isCvFullForSelectedDates && !isBrahmachari ? 'CV Accommodation (FULL - Unavailable)' : 'Yes, need CV accommodation'}
@@ -5249,23 +5247,22 @@ function CampDashboardContent() {
                             <button
                               type="submit"
                               disabled={isCurrentTrackAlreadyRegistered || !isDevoteeEligibleForCamp}
-                              className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full text-xs font-bold transition-all shadow-md ${
-                                isCurrentTrackAlreadyRegistered || !isDevoteeEligibleForCamp
-                                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
-                                  : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
-                              }`}
+                              className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full text-xs font-bold transition-all shadow-md ${isCurrentTrackAlreadyRegistered || !isDevoteeEligibleForCamp
+                                ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                                : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
+                                }`}
                             >
                               <Plus className="w-4 h-4" />
                               <span>
                                 {!isDevoteeEligibleForCamp
                                   ? 'Center Ineligible for Camp'
                                   : isCurrentTrackAlreadyRegistered
-                                  ? 'Already Registered for This Camp'
-                                  : editIndex !== null
-                                  ? 'Update Attendee'
-                                  : isManager
-                                  ? 'Add Devotee to Batch'
-                                  : 'Confirm My Registration Entry'}
+                                    ? 'Already Registered for This Camp'
+                                    : editIndex !== null
+                                      ? 'Update Attendee'
+                                      : isManager
+                                        ? 'Add Devotee to Batch'
+                                        : 'Confirm My Registration Entry'}
                               </span>
                             </button>
                           </div>
@@ -5290,43 +5287,43 @@ function CampDashboardContent() {
                         {entries.map((entry, idx) => {
                           const entryPalette = getTrackColorPalette(entry.campTrack);
                           return (
-                          <div
-                            key={idx}
-                            className="p-2.5 sm:p-3 flex items-center justify-between text-xs hover:bg-gray-50 transition-colors gap-2"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-gray-800 truncate">{entry.participantName}</span>
-                                <span className={`px-1.5 py-0.2 rounded ${entryPalette.badgeBg} text-[9px] sm:text-[10px] font-bold inline-flex items-center gap-1`}>
-                                  <span className={`w-1 h-1 rounded-full ${entryPalette.dotColor}`} />
-                                  <span>{entry.campTrack}</span>
-                                </span>
+                            <div
+                              key={idx}
+                              className="p-2.5 sm:p-3 flex items-center justify-between text-xs hover:bg-gray-50 transition-colors gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-gray-800 truncate">{entry.participantName}</span>
+                                  <span className={`px-1.5 py-0.2 rounded ${entryPalette.badgeBg} text-[9px] sm:text-[10px] font-bold inline-flex items-center gap-1`}>
+                                    <span className={`w-1 h-1 rounded-full ${entryPalette.dotColor}`} />
+                                    <span>{entry.campTrack}</span>
+                                  </span>
+                                </div>
+                                <p className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 truncate">
+                                  WhatsApp: {entry.whatsapp} • Acc: {entry.accommodation} • Age: {entry.age}
+                                </p>
                               </div>
-                              <p className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 truncate">
-                                WhatsApp: {entry.whatsapp} • Acc: {entry.accommodation} • Age: {entry.age}
-                              </p>
-                            </div>
 
-                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                              <span className="font-bold text-gray-900 text-xs sm:text-sm">₹{entry.totalCost}</span>
-                              <button
-                                onClick={() => handleEditEntry(idx)}
-                                className="p-1 text-gray-400 hover:text-amber-600 cursor-pointer"
-                                title="Edit"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEntry(idx)}
-                                className="p-1 text-gray-400 hover:text-rose-600 cursor-pointer"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                <span className="font-bold text-gray-900 text-xs sm:text-sm">₹{entry.totalCost}</span>
+                                <button
+                                  onClick={() => handleEditEntry(idx)}
+                                  className="p-1 text-gray-400 hover:text-amber-600 cursor-pointer"
+                                  title="Edit"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEntry(idx)}
+                                  className="p-1 text-gray-400 hover:text-rose-600 cursor-pointer"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -5416,11 +5413,10 @@ function CampDashboardContent() {
                         type="button"
                         onClick={submitFreeRegistration}
                         disabled={entries.length === 0 || isSubmitting || !isDevoteeEligibleForCamp}
-                        className={`w-full py-2.5 sm:py-3.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          entries.length > 0 && !isSubmitting && isDevoteeEligibleForCamp
-                            ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-emerald-600/30 active:scale-[0.99]'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                        }`}
+                        className={`w-full py-2.5 sm:py-3.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${entries.length > 0 && !isSubmitting && isDevoteeEligibleForCamp
+                          ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-emerald-600/30 active:scale-[0.99]'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                          }`}
                       >
                         {isSubmitting ? (
                           <>
@@ -5441,11 +5437,10 @@ function CampDashboardContent() {
                           type="button"
                           onClick={handleProceedToPayment}
                           disabled={entries.length === 0 || !isDevoteeEligibleForCamp}
-                          className={`w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                            entries.length > 0 && isDevoteeEligibleForCamp
-                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30 active:scale-[0.99]'
-                              : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                          }`}
+                          className={`w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${entries.length > 0 && isDevoteeEligibleForCamp
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-amber-600/30 active:scale-[0.99]'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                            }`}
                         >
                           <CreditCard className="w-4 h-4 shrink-0" />
                           <span className="truncate">Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')})</span>
@@ -5538,117 +5533,117 @@ function CampDashboardContent() {
                 );
 
                 return (
-                <div className="space-y-3">
-                  {selectedCamp.payment_config?.enable_razorpay !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMethod('RAZORPAY')}
-                      className="w-full p-4 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
-                    >
-                      <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm shrink-0 border border-indigo-100">
-                        ₹
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors">
-                            UPI / Online Payment
+                  <div className="space-y-3">
+                    {selectedCamp.payment_config?.enable_razorpay !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod('RAZORPAY')}
+                        className="w-full p-4 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
+                      >
+                        <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm shrink-0 border border-indigo-100">
+                          ₹
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors">
+                              UPI / Online Payment
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            {surchargePercent > 0
+                              ? `GPay, PhonePe, Cards, NetBanking (${surchargePercent}% processing fee)`
+                              : 'GPay, PhonePe, Cards, NetBanking (No extra fee)'}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                          <span className="text-sm font-black text-slate-900 block">
+                            ₹{onlineTotalWithSurcharge.toLocaleString('en-IN')}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">
-                          {surchargePercent > 0
-                            ? `GPay, PhonePe, Cards, NetBanking (${surchargePercent}% processing fee)`
-                            : 'GPay, PhonePe, Cards, NetBanking (No extra fee)'}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0 pl-2">
-                        <span className="text-sm font-black text-slate-900 block">
-                          ₹{onlineTotalWithSurcharge.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </button>
-                  )}
+                      </button>
+                    )}
 
-                  {showIdtOption && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMethod('IDT');
-                        const centerIdtList = (selectedCamp?.payment_config?.center_idt_codes || []) as any[];
-                        const userCenterCandidate = (
-                          managerAssignedCenter ||
-                          formData.voiceName ||
-                          userData?.hierarchy?.currentCenter ||
-                          userData?.hierarchy?.center ||
-                          (userData as any)?.center ||
-                          ''
-                        ).trim().toLowerCase();
-                        const matchedCodeObj = centerIdtList.find((c: any) => 
-                          c.code && (
-                            c.center_name.trim().toLowerCase() === userCenterCandidate ||
-                            userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
-                            c.center_name.trim().toLowerCase().includes(userCenterCandidate)
-                          )
-                        ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
-                        if (matchedCodeObj?.code && !idtPasscode) {
-                          setIdtPasscode(matchedCodeObj.code);
-                        }
-                      }}
-                      className="w-full p-4 rounded-2xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
-                    >
-                      <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
-                          <span className="font-bold text-sm text-slate-900 group-hover:text-amber-600 transition-colors">
-                            IDT (Inter-Department Transfer)
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
-                            ISKCON NVCC Only
+                    {showIdtOption && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMethod('IDT');
+                          const centerIdtList = (selectedCamp?.payment_config?.center_idt_codes || []) as any[];
+                          const userCenterCandidate = (
+                            managerAssignedCenter ||
+                            formData.voiceName ||
+                            userData?.hierarchy?.currentCenter ||
+                            userData?.hierarchy?.center ||
+                            (userData as any)?.center ||
+                            ''
+                          ).trim().toLowerCase();
+                          const matchedCodeObj = centerIdtList.find((c: any) =>
+                            c.code && (
+                              c.center_name.trim().toLowerCase() === userCenterCandidate ||
+                              userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
+                              c.center_name.trim().toLowerCase().includes(userCenterCandidate)
+                            )
+                          ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
+                          if (matchedCodeObj?.code && !idtPasscode) {
+                            setIdtPasscode(matchedCodeObj.code);
+                          }
+                        }}
+                        className="w-full p-4 rounded-2xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
+                      >
+                        <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                            <span className="font-bold text-sm text-slate-900 group-hover:text-amber-600 transition-colors">
+                              IDT (Inter-Department Transfer)
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+                              ISKCON NVCC Only
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Deduct from VOICE Department account with authorization key.
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                          <span className="text-sm font-black text-amber-600 block">
+                            ₹{grandTotal.toLocaleString('en-IN')}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">
-                          Deduct from VOICE Department account with authorization key.
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0 pl-2">
-                        <span className="text-sm font-black text-amber-600 block">
-                          ₹{grandTotal.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </button>
-                  )}
+                      </button>
+                    )}
 
-                  {showIttOption && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMethod('INTER_TEMPLE_TRANSFER')}
-                      className="w-full p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
-                    >
-                      <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
-                        <Landmark className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
-                          <span className="font-bold text-sm text-slate-900 group-hover:text-emerald-600 transition-colors">
-                            Inter-Temple Transfer (ITT)
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                            Bank Transfer
+                    {showIttOption && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod('INTER_TEMPLE_TRANSFER')}
+                        className="w-full p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20 bg-white flex items-center gap-3.5 text-left transition-all hover:shadow-md group"
+                      >
+                        <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                          <Landmark className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                            <span className="font-bold text-sm text-slate-900 group-hover:text-emerald-600 transition-colors">
+                              Inter-Temple Transfer (ITT)
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                              Bank Transfer
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Direct bank transfer from other temple accounts with payment receipt upload.
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                          <span className="text-sm font-black text-emerald-600 block">
+                            ₹{grandTotal.toLocaleString('en-IN')}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">
-                          Direct bank transfer from other temple accounts with payment receipt upload.
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0 pl-2">
-                        <span className="text-sm font-black text-emerald-600 block">
-                          ₹{grandTotal.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </button>
-                  )}
-                </div>
+                      </button>
+                    )}
+                  </div>
                 );
               })() : selectedMethod === 'RAZORPAY' ? (
                 <div className="space-y-4">
@@ -5714,7 +5709,7 @@ function CampDashboardContent() {
                   ''
                 ).trim().toLowerCase();
 
-                const matchedCodeObj = centerIdtList.find((c: any) => 
+                const matchedCodeObj = centerIdtList.find((c: any) =>
                   c.code && (
                     c.center_name.trim().toLowerCase() === userCenterCandidate ||
                     userCenterCandidate.includes(c.center_name.trim().toLowerCase()) ||
@@ -5723,80 +5718,80 @@ function CampDashboardContent() {
                 ) || (centerIdtList.length === 1 ? centerIdtList[0] : null);
 
                 return (
-                /* IDT FORM */
-                <div className="space-y-4">
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
-                  </div>
+                  /* IDT FORM */
+                  <div className="space-y-4">
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Available to authorized ISKCON &amp; VOICE connected centers.</span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Project Name (as per SERP) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={idtSource}
-                      onChange={(e) => setIdtSource(e.target.value)}
-                      placeholder="e.g. Enter Project Name / SERP Activity..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
-                    />
-                    <span className="text-[10.5px] text-slate-400 mt-1 block">
-                      Manually type the SERP project name for IDT deduction accounting.
-                    </span>
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Project Name (as per SERP) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={idtSource}
+                        onChange={(e) => setIdtSource(e.target.value)}
+                        placeholder="e.g. Enter Project Name / SERP Activity..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-semibold"
+                      />
+                      <span className="text-[10.5px] text-slate-400 mt-1 block">
+                        Manually type the SERP project name for IDT deduction accounting.
+                      </span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      <span>IDT Authorization Passcode *</span>
-                      {matchedCodeObj && (
-                        <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
-                          (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
-                        </span>
-                      )}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={idtPasscode}
-                      onChange={(e) => setIdtPasscode(e.target.value)}
-                      placeholder="Enter your center's secret authorization key"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">
-                      Dedicated IDT authorization code for your assigned center.
-                    </span>
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        <span>IDT Authorization Passcode *</span>
+                        {matchedCodeObj && (
+                          <span className="ml-1.5 text-amber-900 font-semibold text-[11px]">
+                            (Enter the secret authorization code issued to {matchedCodeObj.center_name || 'your center'})
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={idtPasscode}
+                        onChange={(e) => setIdtPasscode(e.target.value)}
+                        placeholder="Enter your center's secret authorization key"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs outline-none focus:border-amber-500 font-mono tracking-wider font-bold"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">
+                        Dedicated IDT authorization code for your assigned center.
+                      </span>
+                    </div>
 
-                  <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMethod(null)}
-                      className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
-                    >
-                      &larr; Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={submitIdtPayment}
-                      className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Authorizing IDT...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="w-4 h-4" />
-                          <span>Confirm IDT (₹{grandTotal.toLocaleString('en-IN')})</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex gap-2 pt-2.5 pb-1 sticky bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-100 mt-2 z-10">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod(null)}
+                        className="px-4 py-2.5 border border-slate-200 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-50"
+                      >
+                        &larr; Back
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={submitIdtPayment}
+                        className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Authorizing IDT...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Confirm IDT (₹{grandTotal.toLocaleString('en-IN')})</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
                 );
               })() : (
                 /* INTER-TEMPLE TRANSFER FORM */
@@ -6272,13 +6267,12 @@ function CampDashboardContent() {
                           return (
                             <div
                               key={reg.id}
-                              className={`py-1.5 px-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 text-xs ${
-                                isLocked
-                                  ? 'bg-slate-100/90 border-slate-200 opacity-60'
-                                  : isChecked
+                              className={`py-1.5 px-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 text-xs ${isLocked
+                                ? 'bg-slate-100/90 border-slate-200 opacity-60'
+                                : isChecked
                                   ? 'bg-sky-50/90 border-sky-400 shadow-2xs ring-1 ring-sky-300/50'
                                   : 'bg-white border-slate-200 hover:border-slate-300'
-                              }`}
+                                }`}
                             >
                               <label className={`flex items-start sm:items-center gap-2 flex-1 min-w-0 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                 <input
@@ -6299,11 +6293,10 @@ function CampDashboardContent() {
                                     <span className="truncate">{reg.participant_name}</span>
                                     {isPendingApproval && (
                                       <span
-                                        className={`px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-bold shrink-0 ${
-                                          isPendingIdt
-                                            ? 'bg-sky-100 text-sky-900 border border-sky-300'
-                                            : 'bg-amber-100 text-amber-900 border border-amber-300'
-                                        }`}
+                                        className={`px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-bold shrink-0 ${isPendingIdt
+                                          ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                                          : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                          }`}
                                       >
                                         {isPendingIdt ? '⚡ Pending IDT' : '⏳ Awaiting ITT'}
                                       </span>
@@ -6519,11 +6512,10 @@ function CampDashboardContent() {
                         <button
                           type="button"
                           onClick={() => setCancelPayoutType('UPI')}
-                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
-                            cancelPayoutType === 'UPI'
-                              ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                          }`}
+                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${cancelPayoutType === 'UPI'
+                            ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                            }`}
                         >
                           <span className="text-lg shrink-0">⚡</span>
                           <div className="min-w-0">
@@ -6535,11 +6527,10 @@ function CampDashboardContent() {
                         <button
                           type="button"
                           onClick={() => setCancelPayoutType('BANK')}
-                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${
-                            cancelPayoutType === 'BANK'
-                              ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                          }`}
+                          className={`py-2 px-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-center gap-2 text-left ${cancelPayoutType === 'BANK'
+                            ? 'bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                            }`}
                         >
                           <span className="text-lg shrink-0">🏛️</span>
                           <div className="min-w-0">
@@ -6692,9 +6683,9 @@ function CampDashboardContent() {
                         <span>Submitting...</span>
                       </>
                     ) : selectedRegIdsToCancel.length > 0 && selectedRegIdsToCancel.every(id => {
-                        const found = (cancelRegs || []).find(r => r.id === id);
-                        return found && String(found.payment_method || '').toUpperCase() === 'IDT' && found.payment_status !== 'completed';
-                      }) ? (
+                      const found = (cancelRegs || []).find(r => r.id === id);
+                      return found && String(found.payment_method || '').toUpperCase() === 'IDT' && found.payment_status !== 'completed';
+                    }) ? (
                       <>
                         <Ban className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">
@@ -6962,8 +6953,8 @@ function CampDashboardContent() {
                       {viewingRefundStatus.refund.payout_date
                         ? new Date(viewingRefundStatus.refund.payout_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                         : viewingRefundStatus.refund.created_at
-                        ? new Date(viewingRefundStatus.refund.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                        : 'Under Review'}
+                          ? new Date(viewingRefundStatus.refund.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : 'Under Review'}
                     </span>
                   </div>
                 </div>
@@ -7085,58 +7076,60 @@ function CampDashboardContent() {
       {/* CAMP OVERVIEW & PRESENTATION MODAL */}
       {selectedPreviewCamp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-purple-200 overflow-hidden max-h-[92vh] flex flex-col">
-            {/* Modal Hero / Poster Banner: Fully visible uncropped photo */}
-            <div className="relative h-36 sm:h-44 md:h-48 w-full bg-slate-950 shrink-0 overflow-hidden flex items-center justify-center">
-              {selectedPreviewCamp.poster_url ? (
-                <>
-                  {/* Ambient blurred backdrop so letterboxing looks rich and seamless */}
-                  <img
-                    src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-110 pointer-events-none"
-                  />
-                  {/* Clean uncropped poster photo */}
-                  <img
-                    src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
-                    alt={selectedPreviewCamp.title}
-                    className="relative max-h-60 sm:max-h-80 w-auto max-w-full object-contain z-10 transition-transform duration-300"
-                  />
-                </>
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-purple-800 via-indigo-900 to-purple-950 p-5 sm:p-7 flex flex-col justify-end text-white relative">
-                  <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
-                  <div className="z-10">
-                    <h2 className="text-xl sm:text-3xl font-black text-white leading-tight drop-shadow-md">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-purple-200 overflow-hidden max-h-[92vh] flex flex-col relative">
+            {/* Close Button Top-Right (Pinned so it is always accessible) */}
+            <button
+              type="button"
+              onClick={() => setSelectedPreviewCamp(null)}
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all cursor-pointer z-30 border border-white/20 shadow-lg"
+              title="Close"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+
+            {/* Scrollable Container (Hero Poster + Content scroll together) */}
+            <div className="overflow-y-auto flex-1 overscroll-contain">
+              {/* Modal Hero / Poster Banner: Fully visible uncropped photo that scrolls with content */}
+              <div className="relative h-44 sm:h-52 md:h-60 w-full bg-slate-950 shrink-0 overflow-hidden flex items-center justify-center">
+                {selectedPreviewCamp.poster_url ? (
+                  <>
+                    {/* Ambient blurred backdrop so letterboxing looks rich and seamless */}
+                    <img
+                      src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-110 pointer-events-none"
+                    />
+                    {/* Clean uncropped poster photo */}
+                    <img
+                      src={getThumbnailUrl(selectedPreviewCamp.poster_url) || selectedPreviewCamp.poster_url}
+                      alt={selectedPreviewCamp.title}
+                      className="relative max-h-60 sm:max-h-80 w-auto max-w-full object-contain z-10 transition-transform duration-300"
+                    />
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-purple-800 via-indigo-900 to-purple-950 p-5 sm:p-7 flex flex-col justify-end text-white relative">
+                    <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-purple-400/20 rounded-full blur-2xl pointer-events-none" />
+                    <div className="z-10">
+                      <h2 className="text-xl sm:text-3xl font-black text-white leading-tight drop-shadow-md">
+                        {selectedPreviewCamp.title}
+                      </h2>
+                    </div>
+                  </div>
+                )}
+
+                {/* Title overlay at the bottom if poster exists */}
+                {selectedPreviewCamp.poster_url && (
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 sm:p-6 z-20 pointer-events-none">
+                    <h2 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-md">
                       {selectedPreviewCamp.title}
                     </h2>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Close Button Top-Right */}
-              <button
-                type="button"
-                onClick={() => setSelectedPreviewCamp(null)}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all cursor-pointer z-30 border border-white/20 shadow-lg"
-                title="Close"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-
-              {/* Title overlay at the bottom if poster exists */}
-              {selectedPreviewCamp.poster_url && (
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 sm:p-6 z-20 pointer-events-none">
-                  <h2 className="text-lg sm:text-2xl font-black text-white leading-tight drop-shadow-md">
-                    {selectedPreviewCamp.title}
-                  </h2>
-                </div>
-              )}
-            </div>
-
-            {/* Scrollable Content Body */}
-            <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3 text-xs sm:text-sm">
+              {/* Content Body */}
+              <div className="p-3.5 sm:p-5 space-y-3 text-xs sm:text-sm">
               {/* Colorful Announcement / Welcome Message */}
               {selectedPreviewCamp.banner_message && (
                 <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-purple-50 via-indigo-50/60 to-purple-50 border border-purple-200/80 shadow-xs space-y-1">
@@ -7145,7 +7138,7 @@ function CampDashboardContent() {
                     <span>Special Camp Announcement</span>
                   </div>
                   <p className="text-slate-800 text-xs sm:text-sm font-semibold leading-relaxed">
-                    {selectedPreviewCamp.banner_message}
+                    {renderClickableText(selectedPreviewCamp.banner_message)}
                   </p>
                 </div>
               )}
@@ -7158,7 +7151,7 @@ function CampDashboardContent() {
                     <span>About this Camp & Retreat</span>
                   </div>
                   <p className="text-slate-800 text-xs sm:text-sm font-normal leading-relaxed whitespace-pre-line">
-                    {selectedPreviewCamp.description}
+                    {renderClickableText(selectedPreviewCamp.description)}
                   </p>
                 </div>
               )}
@@ -7210,17 +7203,24 @@ function CampDashboardContent() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2.5">
-                  <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Registration Deadline</span>
-                    <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                      {selectedPreviewCamp.registration_deadline
-                        ? new Date(selectedPreviewCamp.registration_deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                        : 'Open till slots fill'}
-                    </span>
+                {selectedPreviewCamp.late_fee_start_date && (
+                  <div className="flex items-start gap-2.5">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Late Fee Starts</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                        {new Date(selectedPreviewCamp.late_fee_start_date).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                        {Number(selectedPreviewCamp.late_fee) > 0 && (
+                          <span className="ml-1 text-xs text-amber-700 font-bold">(+₹{selectedPreviewCamp.late_fee})</span>
+                        )}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Camps / Categories */}
@@ -7291,8 +7291,9 @@ function CampDashboardContent() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Modal Bottom Actions */}
+          {/* Modal Bottom Actions */}
             <div className="p-3.5 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
@@ -7352,7 +7353,7 @@ function FormattedCriteriaMessage({ text }: { text: string }) {
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-black shrink-0 mt-0.5 shadow-2xs">
                 {numMatch[1].replace(/[\.\)]/, '')}
               </span>
-              <span className="flex-1">{numMatch[2]}</span>
+              <span className="flex-1">{formatBoldKeywords(numMatch[2])}</span>
             </div>
           );
         }
@@ -7406,19 +7407,110 @@ function FormattedCriteriaMessage({ text }: { text: string }) {
   );
 }
 
+// Detects URLs (http, https, www), emails, and markdown links and converts them into clickable links
+function renderClickableText(text: string): React.ReactNode {
+  if (!text) return null;
+
+  const linkRegex = /(\[[^\]]+\]\([^\)]+\)|https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+  const parts = text.split(linkRegex);
+
+  return parts.map((part, index) => {
+    if (!part) return null;
+
+    // Check if it's a markdown link [Label](URL)
+    const mdMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (mdMatch) {
+      const label = mdMatch[1];
+      let href = mdMatch[2].trim();
+      if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('mailto:')) {
+        href = 'https://' + href;
+      }
+      return (
+        <a
+          key={index}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 underline hover:text-blue-800 font-bold inline-flex items-center gap-0.5 break-all transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span>{label}</span>
+          <ExternalLink className="w-3 h-3 inline shrink-0" />
+        </a>
+      );
+    }
+
+    // Check if it's an email address
+    if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(part)) {
+      return (
+        <a
+          key={index}
+          href={`mailto:${part}`}
+          className="text-blue-600 underline hover:text-blue-800 font-bold break-all transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    // Check if it's a URL (http, https, www)
+    if (/^(https?:\/\/|www\.)[^\s]+$/i.test(part)) {
+      let cleanUrl = part;
+      let trailingPunct = '';
+      const punctMatch = cleanUrl.match(/[.,;:!?)]+$/);
+      if (punctMatch) {
+        trailingPunct = punctMatch[0];
+        cleanUrl = cleanUrl.slice(0, -trailingPunct.length);
+      }
+
+      let href = cleanUrl;
+      if (cleanUrl.toLowerCase().startsWith('www.')) {
+        href = 'https://' + cleanUrl;
+      }
+
+      return (
+        <React.Fragment key={index}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline hover:text-blue-800 font-bold inline-flex items-center gap-0.5 break-all transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>{cleanUrl}</span>
+            <ExternalLink className="w-3 h-3 inline shrink-0" />
+          </a>
+          {trailingPunct}
+        </React.Fragment>
+      );
+    }
+
+    // Normal text
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+}
+
 function formatBoldKeywords(text: string) {
+  const trimmed = text.trim();
+  // If the line starts with a URL, do not treat any part of it as a colon keyword label
+  if (/^(https?:\/\/|www\.)/i.test(trimmed)) {
+    return renderClickableText(text);
+  }
+
   const colonIndex = text.indexOf(':');
-  if (colonIndex > 0 && colonIndex < 40) {
+  // Make sure the colon is not part of a URL protocol (e.g. "http://" or "https://")
+  if (colonIndex > 0 && colonIndex < 40 && text.slice(colonIndex, colonIndex + 3) !== '://') {
     const label = text.slice(0, colonIndex + 1);
     const rest = text.slice(colonIndex + 1);
     return (
       <>
         <strong className="text-slate-900 font-bold">{label}</strong>
-        {rest}
+        {renderClickableText(rest)}
       </>
     );
   }
-  return text;
+  return renderClickableText(text);
 }
 
 export default function UserCampDashboardPage() {
