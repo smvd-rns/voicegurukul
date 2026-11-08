@@ -34,14 +34,19 @@ jobs:
       - name: Build Next.js Application (Cloud Runner)
         run: npm run build
 
+      - name: Compress Build Artifacts
+        run: tar -czf next-build.tar.gz --exclude='.next/cache' .next
+
       - name: Copy Build Artifacts to Droplet via SCP
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           password: ${{ secrets.DROPLET_PASSWORD }}
-          source: ".next"
+          source: "next-build.tar.gz"
           target: "/var/www/voicegurukul"
+          overwrite: true
+          timeout: 120s
 
       - name: Copy .env file to Droplet
         if: env.ENV_FILE != ''
@@ -52,6 +57,8 @@ jobs:
           password: ${{ secrets.DROPLET_PASSWORD }}
           source: ".env"
           target: "/var/www/voicegurukul"
+          overwrite: true
+          timeout: 60s
 
       - name: Restart Server via SSH
         uses: appleboy/ssh-action@master
@@ -59,12 +66,22 @@ jobs:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           password: ${{ secrets.DROPLET_PASSWORD }}
+          timeout: 180s
           script: |
             cd /var/www/voicegurukul
             # Ensure branch is clean and strictly matches origin/main without merge conflicts
             git fetch origin main
             git checkout -f main || git checkout -f -B main origin/main
             git reset --hard origin/main
+
+            # Extract new build artifacts safely
+            if [ -f "next-build.tar.gz" ]; then
+              echo "Extracting new Next.js build artifacts..."
+              rm -rf .next
+              tar -xzf next-build.tar.gz
+              rm -f next-build.tar.gz
+              echo "Build artifacts unpacked successfully."
+            fi
 
             # Auto-upgrade Node.js on droplet if version is older than 22.23.4 (Fixes Brotli CVE)
             NODE_CURRENT=$(node -v 2>/dev/null || echo "v0")
