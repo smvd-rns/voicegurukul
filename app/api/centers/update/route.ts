@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import {  createClient  } from '@/lib/supabase/server-db';
+import { createClient } from '@/lib/supabase/server-db';
 import { sanitizeInput } from '@/lib/utils/validation';
 import { getAuthUserFromRequest } from '@/lib/supabase/admin';
+import { getCenterAliases } from '@/lib/center-utils';
 
 export async function POST(request: Request) {
     try {
@@ -146,20 +147,27 @@ export async function POST(request: Request) {
             throw updateError;
         }
 
-        // 2b. Automatic Cascade: If center name changed, update all user profiles & registrations referencing old name
+        // 2b. Automatic Cascade: If center name changed, update all user profiles & registrations referencing old name or its aliases
         const oldCenterName = existingCenter?.name?.trim();
         const newCenterName = name?.trim();
         if (oldCenterName && newCenterName && oldCenterName !== newCenterName) {
             try {
                 const { query: rawQuery } = await import('@/lib/db');
+                const oldAliases = getCenterAliases(oldCenterName);
+                if (!oldAliases.includes(oldCenterName)) oldAliases.push(oldCenterName);
+
                 // A. Update users flat columns
                 await rawQuery(
-                    `UPDATE users SET current_center = $1, updated_at = NOW() WHERE current_center = $2`,
-                    [newCenterName, oldCenterName]
+                        `UPDATE users SET current_center = $1, updated_at = NOW() WHERE current_center = ANY($2::text[])`,
+                    [newCenterName, oldAliases]
                 );
                 await rawQuery(
-                    `UPDATE users SET parent_center = $1, updated_at = NOW() WHERE parent_center = $2`,
-                    [newCenterName, oldCenterName]
+                        `UPDATE users SET parent_center = $1, updated_at = NOW() WHERE parent_center = ANY($2::text[])`,
+                    [newCenterName, oldAliases]
+                );
+                await rawQuery(
+                    `UPDATE users SET center = $1, updated_at = NOW() WHERE center = ANY($2::text[])`,
+                    [newCenterName, oldAliases]
                 );
 
                 // B. Update users hierarchy JSONB fields (currentCenter, parentCenter, center)
@@ -170,35 +178,35 @@ export async function POST(request: Request) {
                             jsonb_set(
                                 COALESCE(hierarchy, '{}'::jsonb),
                                 '{currentCenter}',
-                                CASE WHEN hierarchy->>'currentCenter' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'currentCenter', 'null'::jsonb) END
+                                CASE WHEN hierarchy->>'currentCenter' = ANY($2::text[]) THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'currentCenter', 'null'::jsonb) END
                             ),
                             '{parentCenter}',
-                            CASE WHEN hierarchy->>'parentCenter' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'parentCenter', 'null'::jsonb) END
+                            CASE WHEN hierarchy->>'parentCenter' = ANY($2::text[]) THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'parentCenter', 'null'::jsonb) END
                         ),
                         '{center}',
-                        CASE WHEN hierarchy->>'center' = $2 THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'center', 'null'::jsonb) END
+                        CASE WHEN hierarchy->>'center' = ANY($2::text[]) THEN to_jsonb($1::text) ELSE COALESCE(hierarchy->'center', 'null'::jsonb) END
                     ),
                     updated_at = NOW()
-                    WHERE hierarchy->>'currentCenter' = $2 
-                       OR hierarchy->>'parentCenter' = $2 
-                       OR hierarchy->>'center' = $2
-                `, [newCenterName, oldCenterName]);
+                    WHERE hierarchy ->> 'currentCenter' = ANY($2:: text[])
+                       OR hierarchy ->> 'parentCenter' = ANY($2:: text[])
+                       OR hierarchy ->> 'center' = ANY($2:: text[])
+                `, [newCenterName, oldAliases]);
 
-                // C. Update camp_registrations referencing the old center name
+                // C. Update camp_registrations referencing the old center name or aliases
                 try {
                     await rawQuery(
-                        `UPDATE camp_registrations SET current_center = $1 WHERE current_center = $2`,
-                        [newCenterName, oldCenterName]
+                        `UPDATE camp_registrations SET current_center = $1 WHERE current_center = ANY($2:: text[])`,
+                        [newCenterName, oldAliases]
                     );
                     await rawQuery(
-                        `UPDATE camp_registrations SET voice_name = $1 WHERE voice_name = $2`,
-                        [newCenterName, oldCenterName]
+                        `UPDATE camp_registrations SET voice_name = $1 WHERE voice_name = ANY($2:: text[])`,
+                        [newCenterName, oldAliases]
                     );
                 } catch (campErr) {
                     console.warn('[Center Rename Cascade] camp_registrations update notice:', campErr);
                 }
 
-                console.log(`[Center Rename Cascade] Successfully updated users and registrations from "${oldCenterName}" to "${newCenterName}"`);
+                console.log(`[Center Rename Cascade] Successfully updated users and registrations from "${oldCenterName}"(${ oldAliases.join(', ') }) to "${newCenterName}"`);
             } catch (cascadeErr) {
                 console.error('[Center Rename Cascade] Error cascading center rename:', cascadeErr);
             }
@@ -216,7 +224,7 @@ export async function POST(request: Request) {
                 .single();
 
             if (fetchError || !user) {
-                console.error(`Failed to fetch user ${userId} for role update`, fetchError);
+                console.error(`Failed to fetch user ${ userId } for role update`, fetchError);
                 return;
             }
 
@@ -251,9 +259,9 @@ export async function POST(request: Request) {
                     .eq('id', userId);
 
                 if (roleUpdateError) {
-                    console.error(`Failed to update role for user ${userId}`, roleUpdateError);
+                    console.error(`Failed to update role for user ${ userId }`, roleUpdateError);
                 } else {
-                    console.log(`Updated user ${userId} with role ${roleId}`);
+                    console.log(`Updated user ${ userId } with role ${ roleId } `);
                 }
             }
         };
@@ -292,9 +300,9 @@ export async function POST(request: Request) {
                     .eq('id', userId);
 
                 if (revokeError) {
-                    console.error(`Failed to revoke role ${roleId} from user ${userId}`, revokeError);
+                    console.error(`Failed to revoke role ${ roleId } from user ${ userId } `, revokeError);
                 } else {
-                    console.log(`Revoked role ${roleId} from user ${userId}`);
+                    console.log(`Revoked role ${ roleId } from user ${ userId } `);
                 }
             }
         };

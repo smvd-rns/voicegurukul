@@ -1,5 +1,7 @@
 'use client';
 
+import { buildCenterMatchQuery, isCenterMatch, getUserCurrentCenter, getUserParentCenter } from '@/lib/center-utils';
+
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
@@ -137,10 +139,15 @@ export default function SadhanaReportPage() {
                 const { data, error } = await supabase
                     .from('users')
                     .select('*')
-                    .eq('current_center', selectedCenter);
+                    .or(buildCenterMatchQuery(selectedCenter));
 
                 if (error) throw error;
-                const mappedUsers: User[] = (data || []).map((user: any) => {
+                const matchedData = (data || []).filter((u: any) => {
+                    const cur = getUserCurrentCenter(u);
+                    const par = getUserParentCenter(u);
+                    return isCenterMatch(cur, selectedCenter) || isCenterMatch(par, selectedCenter);
+                });
+                const mappedUsers: User[] = matchedData.map((user: any) => {
                     return {
                         ...user,
                         // Relative contact fields

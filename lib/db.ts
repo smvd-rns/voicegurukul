@@ -9,7 +9,7 @@ if (process.env.NODE_ENV === 'production') {
     connectionString,
     max: 20, // Max clients in pool
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
   });
 } else {
   // Prevent hot-reloading from creating duplicate pools in development
@@ -18,7 +18,7 @@ if (process.env.NODE_ENV === 'production') {
       connectionString,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000,
     });
   }
   pool = (global as any)._pgPool;

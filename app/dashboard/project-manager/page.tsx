@@ -14,6 +14,7 @@ import {
 import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { User, UserRole } from '@/types';
+import { buildCenterMatchQuery, isCenterMatch, getUserCurrentCenter, getUserParentCenter } from '@/lib/center-utils';
 // Import UserDetailModal from MD dashboard (assuming it's generic enough)
 import UserDetailModal from '@/components/dashboard/UserDetailModal';
 
@@ -606,8 +607,7 @@ export default function ProjectManagerDashboard() {
     };
 
     const buildCenterMatch = useCallback((centerName: string) => {
-        const normalized = centerName.trim();
-        return `current_center.eq.${normalized},center.eq.${normalized},parent_center.eq.${normalized},other_parent_center.eq.${normalized},hierarchy->>currentCenter.eq.${normalized},hierarchy->>center.eq.${normalized},hierarchy->>parentCenter.eq.${normalized},hierarchy->>otherParentCenter.eq.${normalized},hierarchy->currentCenter->>name.eq.${normalized},hierarchy->parentCenter->>name.eq.${normalized}`;
+        return buildCenterMatchQuery(centerName);
     }, []);
 
     const refreshCounts = useCallback(async (centersToMap: any[]) => {
@@ -625,7 +625,7 @@ export default function ProjectManagerDashboard() {
                 const allPending = json.data;
                 console.log(`PM Dashboard: Fetched ${allPending.length} pending requests for count context.`);
 
-                const pendingMap = new Map<string, number>();
+                const pendingList: { centerName: string }[] = [];
 
                 // --- NEW: Pending Registration Counts ---
                 // Group users by current_center where verification_status is 'pending'
@@ -634,47 +634,33 @@ export default function ProjectManagerDashboard() {
                     .select('current_center, center, hierarchy')
                     .eq('verification_status', 'pending');
 
-                const centersWithRegCounts: { name: string, _count: number }[] = [];
+                const pendingRegList: string[] = [];
                 if (!regError && regStats) {
-                    const counts: Record<string, number> = {};
                     (regStats as any[]).forEach((u: any) => {
-                        const uH = u.hierarchy as any;
-                        const cName = u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '';
-                        if (cName) {
-                            counts[cName] = (counts[cName] || 0) + 1;
-                        }
-                    });
-                    Object.entries(counts).forEach(([name, count]) => {
-                        centersWithRegCounts.push({ name, _count: count });
+                        const cName = getUserCurrentCenter(u);
+                        if (cName) pendingRegList.push(cName);
                     });
                 }
 
                 (allPending || []).forEach((req: any) => {
-                    // Determine center for this request
                     let cName = req.center_name;
                     if (!cName) {
                         const h = req.user?.hierarchy;
                         cName = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
                     }
                     if (cName) {
-                        // Normalize keys for map (trimmed, lowercase)
-                        const norm = cName.trim().toLowerCase();
-                        pendingMap.set(norm, (pendingMap.get(norm) || 0) + 1);
+                        pendingList.push({ centerName: cName });
                     }
                 });
 
                 const centersWithCounts = centersToMap.map(center => {
-                    // Normalize lookup key
-                    const lookup = center.name.trim().toLowerCase();
-
-                    // Calculate registration count for this center
-                    const regCount = centersWithRegCounts.find(dg =>
-                        dg.name.trim().toLowerCase() === lookup
-                    )?._count || 0;
+                    // Match with alias resolution
+                    const pendingCount = pendingList.filter(req => isCenterMatch(req.centerName, center.name)).length;
+                    const regCount = pendingRegList.filter(cName => isCenterMatch(cName, center.name)).length;
 
                     return {
                         ...center,
-                        pendingCount: pendingMap.get(lookup) || 0,
+                        pendingCount,
                         pendingRegCount: regCount
                     };
                 });
@@ -844,29 +830,11 @@ export default function ProjectManagerDashboard() {
 
             if (approvedUsersRes.data) {
                 approvedUsersRes.data.forEach((u: any) => {
-                    const uH = u.hierarchy as any;
-                    const uCurCenter = (
-                        u.current_center ||
-                        u.center ||
-                        uH?.currentCenter?.name ||
-                        (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') ||
-                        uH?.center ||
-                        ''
-                    ).trim().toLowerCase();
+                    const uCurCenter = getUserCurrentCenter(u);
+                    const uParCenter = getUserParentCenter(u);
 
-                    const uParCenter = (
-                        u.parent_center ||
-                        u.parentCenter ||
-                        uH?.parentCenter?.name ||
-                        (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') ||
-                        uH?.parent_center ||
-                        u.other_parent_center ||
-                        uH?.otherParentCenter ||
-                        ''
-                    ).trim().toLowerCase();
-
-                    const isCurrent = uCurCenter === targetCenterNorm;
-                    const isParent = uParCenter === targetCenterNorm;
+                    const isCurrent = isCenterMatch(uCurCenter, cName);
+                    const isParent = isCenterMatch(uParCenter, cName);
 
                     if (isCurrent) {
                         currentCount++;
@@ -921,17 +889,16 @@ export default function ProjectManagerDashboard() {
 
             if (error) throw error;
 
-            // Strict center and temple isolation filter
-            const targetCenter = currentCenter.trim().toLowerCase();
+            // Strict center and temple isolation filter with alias matching
             const targetTemple = (currentTemple || '').trim().toLowerCase();
 
             const filtered = (data || []).filter((u: any) => {
-                const uH = u.hierarchy as any;
-                const uCenter = (u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || uH?.center || '').trim().toLowerCase();
-                if (!uCenter || uCenter === 'none' || uCenter !== targetCenter) {
+                const uCenter = getUserCurrentCenter(u);
+                if (!uCenter || uCenter.toLowerCase() === 'none' || !isCenterMatch(uCenter, currentCenter)) {
                     return false;
                 }
                 if (targetTemple) {
+                    const uH = u.hierarchy as any;
                     const uTemple = (u.current_temple || u.parent_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || uH?.parentTemple || '').trim().toLowerCase();
                     if (uTemple && uTemple !== targetTemple) {
                         return false;
@@ -1072,32 +1039,13 @@ export default function ProjectManagerDashboard() {
 
             if (error) throw error;
 
-            const targetCenterNorm = currentCenter.trim().toLowerCase();
-
             const mappedUsers = (data || []).map((u: any) => {
                 const uH = u.hierarchy as any;
-                const uCurCenter = (
-                    u.current_center ||
-                    u.center ||
-                    uH?.currentCenter?.name ||
-                    (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') ||
-                    uH?.center ||
-                    ''
-                ).trim().toLowerCase();
+                const uCurCenter = getUserCurrentCenter(u);
+                const uParCenter = getUserParentCenter(u);
 
-                const uParCenter = (
-                    u.parent_center ||
-                    u.parentCenter ||
-                    uH?.parentCenter?.name ||
-                    (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') ||
-                    uH?.parent_center ||
-                    u.other_parent_center ||
-                    uH?.otherParentCenter ||
-                    ''
-                ).trim().toLowerCase();
-
-                const isCurrent = uCurCenter === targetCenterNorm;
-                const isParent = uParCenter === targetCenterNorm;
+                const isCurrent = isCenterMatch(uCurCenter, currentCenter);
+                const isParent = isCenterMatch(uParCenter, currentCenter);
 
                 // User must be connected to this center either as current member or as alumni (parent/origin center)
                 if (!isCurrent && !isParent) return null;
@@ -1107,8 +1055,8 @@ export default function ProjectManagerDashboard() {
                 return {
                     ...u,
                     _centerConnection: centerConnection,
-                    _currentCenterDisplay: u.current_center || u.center || uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '') || 'None',
-                    _parentCenterDisplay: u.parent_center || u.parentCenter || uH?.parentCenter?.name || (typeof uH?.parentCenter === 'string' ? uH?.parentCenter : '') || 'None',
+                    _currentCenterDisplay: uCurCenter || 'None',
+                    _parentCenterDisplay: uParCenter || 'None',
                     _currentTempleDisplay: u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None',
                     hierarchy: {
                         ...(u.hierarchy || {}),

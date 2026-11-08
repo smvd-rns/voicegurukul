@@ -1,3 +1,4 @@
+import { isCenterMatch } from '@/lib/center-utils';
 import {  createClient  } from '@/lib/supabase/server-db';
 import { NextResponse } from 'next/server';
 import { getAuthUserFromRequest } from '@/lib/supabase/admin';
@@ -304,20 +305,20 @@ export async function GET(request: Request) {
                 // But we want to support the case where PM logs in and sees ALL their centers.
 
                 // Check new column
-                if (req.center_name && allowedCenterNames.includes(req.center_name.trim().toLowerCase())) {
+                if (req.center_name && allowedCenterNames.some((ac: string) => isCenterMatch(ac, req.center_name))) {
                     return true;
                 }
                 // Fallback 1: Check requested changes (e.g. for older pending records)
                 const rH = req.requested_changes;
                 const reqC = rH?.currentCenter;
                 const reqCName = reqC?.name || (typeof reqC === 'string' ? reqC : '');
-                if (reqCName && allowedCenterNames.includes(reqCName.trim().toLowerCase())) {
+                if (reqCName && allowedCenterNames.some((ac: string) => isCenterMatch(ac, reqCName))) {
                     return true;
                 }
                 // Fallback 2
                 const uH = req.user?.hierarchy;
                 const uCenter = (uH?.currentCenter?.name || (typeof uH?.currentCenter === 'string' ? uH?.currentCenter : '')) || '';
-                return allowedCenterNames.includes(uCenter.trim().toLowerCase());
+                return allowedCenterNames.some((ac: string) => isCenterMatch(ac, uCenter));
             });
         }
 
