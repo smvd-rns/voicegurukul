@@ -703,15 +703,20 @@ export default function CompleteRegistrationPage() {
 
                             {/* Parent Location Group */}
                             <div className="bg-purple-100/40 border border-purple-200 rounded-xl p-4 space-y-4">
-                                <h3 className="text-sm font-bold text-purple-800 flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                                    Parent Location
-                                </h3>
+                                <div>
+                                    <h3 className="text-sm font-bold text-purple-800 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                        Parent Location
+                                    </h3>
+                                    <p className="text-xs text-purple-700/90 mt-0.5">
+                                        Where you connected with Krishna consciousness / VOICE for the very first time.
+                                    </p>
+                                </div>
 
                                 {/* Parent Temple Selection */}
                                 <div className="group">
                                     <label htmlFor="parentTemple" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
-                                        Parent Temple <span className="text-red-500">*</span>
+                                        Parent Temple <span className="text-xs font-normal text-purple-700">(Temple where you connected for the 1st time)</span> <span className="text-red-500">*</span>
                                     </label>
                                     <SearchableSelect
                                         options={[
@@ -721,7 +726,7 @@ export default function CompleteRegistrationPage() {
                                         value={formData.parentTemple}
                                         valueProperty="name"
                                         disabled={loadingTemples || !!(userData?.hierarchy?.parentTemple || (userData as any)?.parentTemple)}
-                                        placeholder={loadingTemples ? "Loading parent temples..." : "Search & Select Parent Temple"}
+                                        placeholder={loadingTemples ? "Loading parent temples..." : "Search & Select Parent Temple (1st connected temple)"}
                                         onChange={(value) => {
                                             const selectedTemple = temples.find(t => t.name === value || t.id === value);
                                             setFormData({
@@ -739,7 +744,7 @@ export default function CompleteRegistrationPage() {
                                 {formData.parentTemple === 'Other' && (
                                     <div className="animate-in slide-in-from-top-2 fade-in duration-200">
                                         <label htmlFor="otherParentTemple" className="block text-sm font-medium leading-6 text-gray-900 mb-1">
-                                            Other Parent Temple Name
+                                            Other Parent Temple Name <span className="text-xs font-normal text-purple-700">(1st connected temple)</span>
                                         </label>
                                         <input
                                             type="text"
@@ -757,7 +762,7 @@ export default function CompleteRegistrationPage() {
                                 {formData.parentTemple && (
                                     <div className="group animate-in slide-in-from-top-2 fade-in duration-200">
                                         <label htmlFor="parentCenter" className="block text-sm font-medium leading-6 text-gray-900 mb-1 group-focus-within:text-purple-600 transition-colors">
-                                            Parent Center <span className="text-red-500">*</span>
+                                            Parent Center <span className="text-xs font-normal text-purple-700">(Center / VOICE where you connected for the 1st time)</span> <span className="text-red-500">*</span>
                                         </label>
                                         <SearchableSelect
                                             options={[
@@ -768,7 +773,7 @@ export default function CompleteRegistrationPage() {
                                             value={formData.parentCenter}
                                             valueProperty="name"
                                             disabled={loadingParentCenters || !!(userData?.hierarchy?.parentCenter || (userData as any)?.parentCenter)}
-                                            placeholder={loadingParentCenters ? "Loading parent centers..." : "Search & Select Parent Center"}
+                                            placeholder={loadingParentCenters ? "Loading parent centers..." : "Search & Select Parent Center (1st connected center)"}
                                             onChange={(value) => {
                                                 setFormData({
                                                     ...formData,
@@ -784,7 +789,7 @@ export default function CompleteRegistrationPage() {
                                 {formData.parentTemple && formData.parentCenter === 'Other' && (
                                     <div className="animate-in slide-in-from-top-2 fade-in duration-200">
                                         <label htmlFor="otherParentCenter" className="block text-sm font-medium leading-6 text-gray-900 mb-1">
-                                            Other Parent Center Name
+                                            Other Parent Center Name <span className="text-xs font-normal text-purple-700">(1st connected center)</span>
                                         </label>
                                         <input
                                             type="text"

@@ -2555,7 +2555,7 @@ export default function PublicCampRegistrationPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Parent Temple *
+                                  Parent Temple <span className="text-[10px] font-normal text-slate-500">(Temple where you connected for the 1st time)</span> *
                                 </label>
                                 <input
                                   type="text"

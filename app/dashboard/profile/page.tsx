@@ -2659,7 +2659,7 @@ export default function ProfilePage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label htmlFor="parentTemple" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Parent Temple
+                        Parent Temple <span className="text-xs font-normal text-purple-700">(Temple where you connected for the 1st time)</span>
                       </label>
                       {renderPendingBadge('parentTemple')}
                     </div>
@@ -2670,7 +2670,7 @@ export default function ProfilePage() {
                       ]}
                       value={formData.parentTemple}
                       onChange={(value) => setFormData({ ...formData, parentTemple: value })}
-                      placeholder="Select Parent Temple"
+                      placeholder="Select Parent Temple (1st connected temple)"
                       disabled={loadingTemples || !!userData?.hierarchy?.parentTemple || isFieldPending('parentTemple')}
                     />
                     {userData?.hierarchy?.parentTemple && (
@@ -2710,7 +2710,7 @@ export default function ProfilePage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label htmlFor="parentCenter" className="block text-xs sm:text-sm font-semibold text-gray-700">
-                        Parent Center
+                        Parent Center <span className="text-xs font-normal text-purple-700">(Center / VOICE where you connected for the 1st time)</span>
                       </label>
                       {renderPendingBadge('parentCenter')}
                     </div>
@@ -2731,7 +2731,7 @@ export default function ProfilePage() {
                           setFormData({ ...formData, parentCenter: value, otherParentCenter: '' });
                         }
                       }}
-                      placeholder="Select Parent Center"
+                      placeholder="Select Parent Center (1st connected center)"
                       disabled={loadingParentCenters || !formData.parentTemple || !!userData?.hierarchy?.parentCenter || isFieldPending('parentCenter')}
                     />
                     {userData?.hierarchy?.parentCenter && (

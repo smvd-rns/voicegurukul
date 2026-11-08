@@ -336,7 +336,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
             {/* Parent Temple */}
             <div>
               <label htmlFor="parentTemple" className="block text-sm font-medium text-gray-700 mb-1">
-                Parent Temple <span className="text-red-500">*</span>
+                Parent Temple <span className="text-xs font-normal text-purple-700">(Temple where you connected for the 1st time)</span> <span className="text-red-500">*</span>
               </label>
               <select
                 id="parentTemple"
@@ -346,7 +346,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
                 required
                 disabled={loadingTemples}
               >
-                <option value="">{loadingTemples ? 'Loading temples...' : 'Select Parent Temple'}</option>
+                <option value="">{loadingTemples ? 'Loading temples...' : 'Select Parent Temple (1st connected temple)'}</option>
                 {temples.map((temple) => (
                   <option key={temple.id} value={temple.name}>
                     {temple.name} ({temple.city}, {temple.state})
@@ -358,7 +358,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
             {/* Parent Center */}
             <div>
               <label htmlFor="parentCenter" className="block text-sm font-medium text-gray-700 mb-1">
-                Parent Center <span className="text-red-500">*</span>
+                Parent Center <span className="text-xs font-normal text-purple-700">(Center / VOICE where you connected for the 1st time)</span> <span className="text-red-500">*</span>
               </label>
               <select
                 id="parentCenter"
@@ -368,7 +368,7 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
                 required
                 disabled={loadingCenters}
               >
-                <option value="">{loadingCenters ? 'Loading centers...' : 'Select Parent Center'}</option>
+                <option value="">{loadingCenters ? 'Loading centers...' : 'Select Parent Center (1st connected center)'}</option>
                 {centers.map((center) => (
                   <option key={center.id} value={center.name}>
                     {center.name} ({center.city}, {center.state})
