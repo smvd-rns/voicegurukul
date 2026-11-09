@@ -18,21 +18,24 @@ export async function POST(req: Request) {
     }
 
     const txnid = `EBD_${Date.now()}_${targetUserId.substring(0, 5)}`;
-    const productInfo = `Donation via ${body.collectorName || slug}`;
+    const paymentForTitle = body.paymentFor || body.payment_for || "Donation";
+    const isCampPayment = typeof paymentForTitle === 'string' && paymentForTitle.toLowerCase().includes('camp');
+    const collectorDisplayName = body.collectorName || slug || 'Voice Gurukul';
+    const productInfo = (isCampPayment ? `${paymentForTitle} via ${collectorDisplayName}` : `donation via ${collectorDisplayName}`).substring(0, 100);
     const surl = `${baseUrl}/api/donations/easebuzz/verify?status=success&slug=${slug}`;
     const furl = `${baseUrl}/api/donations/easebuzz/verify?status=failed&slug=${slug}`;
 
     const hostHeader = req.headers.get('host') || '';
-    const detectedWebsite = body.website || hostHeader || 'voicegurukul.com';
+    const detectedWebsite = isCampPayment ? (body.website || hostHeader || 'voicegurukul.com') : 'voicegurukul.com';
     const detectedUrl = body.websiteUrl || '';
 
     // Easebuzz strict hash format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt
     const formatAmount = parseFloat(amount).toFixed(2); // strictly requires 2 decimals
     const udf1 = donorAddress || "";
     const udf2 = donorPan || "";
-    const udf3 = slug || "";
+    const udf3 = isCampPayment ? (slug || "") : "Gurukul VOICE";
     const udf4 = targetUserId || "";
-    const udf5 = body.paymentFor || "Donation";
+    const udf5 = isCampPayment ? paymentForTitle : "Donation";
     const hashString = `${easebuzzKey}|${txnid}|${formatAmount}|${productInfo}|${donorName}|${donorEmail}|${udf1}|${udf2}|${udf3}|${udf4}|${udf5}||||||${easebuzzSalt}`;
     const hash = crypto.createHash('sha512').update(hashString).digest('hex');
 
@@ -119,10 +122,12 @@ export async function POST(req: Request) {
       on_behalf_of_id: onBehalfOfId || null,
       on_behalf_of_name: onBehalfOfName || null,
       metadata: {
-        payment_for: body.paymentFor || body.payment_for || 'Donation',
+        payment_for: isCampPayment ? paymentForTitle : 'Donation',
+        cost_center: isCampPayment ? (slug || "") : 'Gurukul VOICE',
         on_behalf_of: (onBehalfOfId || onBehalfOfName) ? { id: onBehalfOfId, name: onBehalfOfName } : null,
-        category: (body.paymentFor || body.payment_for || 'Donation').toLowerCase().includes('camp') ? 'Camp' : 'Donation',
-        website: detectedWebsite,
+        category: isCampPayment ? 'Camp' : 'Donation',
+        website: isCampPayment ? detectedWebsite : 'voicegurukul.com',
+        description: productInfo,
         website_url: detectedUrl,
         donor_name: donorName,
         donor_phone: donorMobile,

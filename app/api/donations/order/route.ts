@@ -114,21 +114,44 @@ export async function POST(req: Request) {
 
     // 1. Create Razorpay Order with strictly required notes payload
     const paymentForTitle = paymentFor || body.payment_for || "Donation";
-    
-    const notesPayload: Record<string, string> = {
+    const isCampPayment = typeof paymentForTitle === 'string' && paymentForTitle.toLowerCase().includes('camp');
+    const collectorDisplayName = collectorName || 'Voice Gurukul';
+    const donationDescription = isCampPayment ? `${paymentForTitle} via ${collectorDisplayName}` : `donation via ${collectorDisplayName}`;
+
+    const safeDonorPan = (donorPan && typeof donorPan === 'string' && donorPan.trim() && donorPan.trim().toUpperCase() !== 'N/A')
+      ? String(donorPan.trim()).substring(0, 20)
+      : '';
+    const safeDonorAddress = (donorAddress && typeof donorAddress === 'string' && donorAddress.trim() && donorAddress.trim().toUpperCase() !== 'N/A')
+      ? String(donorAddress.trim()).substring(0, 100)
+      : '';
+
+    const notesPayload: Record<string, string> = isCampPayment ? {
       payment_for: String(paymentForTitle).substring(0, 50),
       website: String(detectedWebsite).substring(0, 40),
       donor_name: String(donorName || "").substring(0, 50),
-      collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50)
+      collector_parent_center: String(resolvedParentCenter || "None").substring(0, 50),
+      ...(donorAddress && typeof donorAddress === 'string' && donorAddress.trim() && donorAddress.trim().toUpperCase() !== 'N/A'
+        ? { donor_address: String(donorAddress.trim()).substring(0, 100) }
+        : {}),
+      ...(donorPan && typeof donorPan === 'string' && donorPan.trim() && donorPan.trim().toUpperCase() !== 'N/A'
+        ? { donor_pan: String(donorPan.trim()).substring(0, 20) }
+        : {})
+    } : {
+      "Payment for": "Donation",
+      "website": "voicegurukul.com",
+      "Cost center": "Gurukul VOICE",
+      "donar name": String(donorName || "").substring(0, 50),
+      "donar pan": safeDonorPan,
+      "donar address": safeDonorAddress,
+      "description": donationDescription.substring(0, 100),
+      // Standard aliases
+      "payment_for": "Donation",
+      "cost_center": "Gurukul VOICE",
+      "donor_name": String(donorName || "").substring(0, 50),
+      "donor_pan": safeDonorPan,
+      "donor_address": safeDonorAddress,
+      "discription": donationDescription.substring(0, 100)
     };
-
-    if (donorAddress && typeof donorAddress === 'string' && donorAddress.trim() && donorAddress.trim().toUpperCase() !== 'N/A') {
-      notesPayload.donor_address = String(donorAddress.trim()).substring(0, 100);
-    }
-
-    if (donorPan && typeof donorPan === 'string' && donorPan.trim() && donorPan.trim().toUpperCase() !== 'N/A') {
-      notesPayload.donor_pan = String(donorPan.trim()).substring(0, 20);
-    }
 
     const options = {
       amount: Math.round(parseFloat(amount) * 100), // convert to paise
@@ -162,11 +185,13 @@ export async function POST(req: Request) {
       on_behalf_of_id: onBehalfOfId || null,
       on_behalf_of_name: onBehalfOfName || null,
       metadata: {
-        payment_for: paymentForTitle,
+        payment_for: isCampPayment ? paymentForTitle : 'Donation',
+        cost_center: isCampPayment ? (resolvedParentCenter || 'None') : 'Gurukul VOICE',
         on_behalf_of: (onBehalfOfId || onBehalfOfName) ? { id: onBehalfOfId, name: onBehalfOfName } : null,
-        category: paymentForTitle.toLowerCase().includes('camp') ? 'Camp' : 'Donation',
-        website: detectedWebsite,
+        category: isCampPayment ? 'Camp' : 'Donation',
+        website: isCampPayment ? detectedWebsite : 'voicegurukul.com',
         website_url: detectedUrl,
+        description: donationDescription,
         donor_name: donorName,
         donor_phone: donorMobile,
         donor_email: donorEmail,

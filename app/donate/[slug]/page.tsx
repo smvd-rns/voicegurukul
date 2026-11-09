@@ -781,9 +781,9 @@ export default function DonationPage() {
             center: targetUser.resolvedCenter,
             temple: targetUser.resolvedTemple,
             ashram: targetUser.ashram,
-            website: websiteHost,
+            website: 'voicegurukul.com',
             websiteUrl: websiteUrl,
-            paymentFor: paymentForParam,
+            paymentFor: (paymentForParam && paymentForParam.toLowerCase().includes('camp')) ? paymentForParam : 'Donation',
             onBehalfOfId,
             onBehalfOfName
           })
@@ -799,12 +799,16 @@ export default function DonationPage() {
           throw new Error('Payment configuration missing (Key ID). Please contact admin.');
         }
 
+        const isCampParam = Boolean(paymentForParam && paymentForParam.toLowerCase().includes('camp'));
+        const collectorDisplayName = targetUser.name || 'Voice Gurukul';
+        const donationDescription = isCampParam ? `${paymentForParam} via ${collectorDisplayName}` : `donation via ${collectorDisplayName}`;
+
         const options = {
           key: keyToUse,
           amount: orderData.amount,
           currency: "INR",
           name: "Voice Gurukul",
-          description: `${paymentForParam} via ${targetUser.name || 'Voice Gurukul'}`,
+          description: donationDescription,
           image: targetUser.profile_image || "",
           order_id: orderData.orderId,
           handler: async function (response: any) {
@@ -838,18 +842,45 @@ export default function DonationPage() {
             contact: formData.donorMobile,
           },
           notes: (() => {
+            if (isCampParam) {
+              const campNotes: Record<string, string> = {
+                payment_for: String(paymentForParam).substring(0, 50),
+                website: 'voicegurukul.com',
+                donor_name: String(formData.donorName || "").substring(0, 50),
+                collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
+              };
+              if (formData.donorAddress && formData.donorAddress.trim() && formData.donorAddress.trim().toUpperCase() !== 'N/A') {
+                campNotes.donor_address = String(formData.donorAddress.trim()).substring(0, 100);
+              }
+              if (formData.donorPan && formData.donorPan.trim() && formData.donorPan.trim().toUpperCase() !== 'N/A') {
+                campNotes.donor_pan = String(formData.donorPan.trim()).substring(0, 20);
+              }
+              return campNotes;
+            }
+
+            const safePan = formData.donorPan && formData.donorPan.trim() && formData.donorPan.trim().toUpperCase() !== 'N/A'
+              ? formData.donorPan.trim().substring(0, 20)
+              : '';
+            const safeAddress = formData.donorAddress && formData.donorAddress.trim() && formData.donorAddress.trim().toUpperCase() !== 'N/A'
+              ? formData.donorAddress.trim().substring(0, 100)
+              : '';
+
             const notesMap: Record<string, string> = {
-              payment_for: String(paymentForParam).substring(0, 50),
-              website: websiteHost.substring(0, 40),
-              donor_name: String(formData.donorName || "").substring(0, 50),
-              collector_parent_center: String(targetUser.resolvedParentCenter || "None").substring(0, 50),
+              "Payment for": "Donation",
+              "website": "voicegurukul.com",
+              "Cost center": "Gurukul VOICE",
+              "donar name": String(formData.donorName || "").substring(0, 50),
+              "donar pan": safePan,
+              "donar address": safeAddress,
+              "description": donationDescription.substring(0, 100),
+              // Compatibility aliases
+              "payment_for": "Donation",
+              "cost_center": "Gurukul VOICE",
+              "donor_name": String(formData.donorName || "").substring(0, 50),
+              "donor_pan": safePan,
+              "donor_address": safeAddress,
+              "discription": donationDescription.substring(0, 100)
             };
-            if (formData.donorAddress && formData.donorAddress.trim() && formData.donorAddress.trim().toUpperCase() !== 'N/A') {
-              notesMap.donor_address = String(formData.donorAddress.trim()).substring(0, 100);
-            }
-            if (formData.donorPan && formData.donorPan.trim() && formData.donorPan.trim().toUpperCase() !== 'N/A') {
-              notesMap.donor_pan = String(formData.donorPan.trim()).substring(0, 20);
-            }
             return notesMap;
           })(),
           theme: {
@@ -883,9 +914,9 @@ export default function DonationPage() {
             center: targetUser.resolvedCenter,
             temple: targetUser.resolvedTemple,
             ashram: targetUser.ashram,
-            website: websiteHost,
+            website: 'voicegurukul.com',
             websiteUrl: websiteUrl,
-            paymentFor: paymentForParam,
+            paymentFor: (paymentForParam && paymentForParam.toLowerCase().includes('camp')) ? paymentForParam : 'Donation',
             onBehalfOfId,
             onBehalfOfName
           })
