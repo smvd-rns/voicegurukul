@@ -1156,6 +1156,7 @@ export default function CampRegistrationsAdminPage() {
         email: r.email,
         isCancelled: isCancelled,
         cancellationReason: r.cancellation_reason,
+        payment_screenshot_url: r.payment_screenshot_url,
       });
 
       if (!batch.screenshotUrl && r.payment_screenshot_url) batch.screenshotUrl = r.payment_screenshot_url;
@@ -1342,6 +1343,20 @@ export default function CampRegistrationsAdminPage() {
   };
 
   const handleOpenBatchVerifyModal = (batch: any) => {
+    // Ensure screenshotUrl is populated with fallback if missing
+    if (!batch.screenshotUrl) {
+      const fallbackUrl =
+        batch.payment_screenshot_url ||
+        batch.attendees?.find((a: any) => a.payment_screenshot_url)?.payment_screenshot_url ||
+        registrations.find(
+          (r: any) =>
+            (batch.batchId && (r.group_id === batch.batchId || r.id === batch.batchId)) ||
+            (batch.transactionRef && (r.transaction_ref === batch.transactionRef || r.payment_id === batch.transactionRef))
+        )?.payment_screenshot_url;
+      if (fallbackUrl) {
+        batch.screenshotUrl = fallbackUrl;
+      }
+    }
     setVerifyingBatch(batch);
     setBatchVerifyTxnId(batch.transactionRef || (batch.isIdt ? `IDT-${batch.deductionSource || batch.centerName}` : ''));
     setBatchVerifyDate(new Date().toISOString().split('T')[0]);
@@ -3769,6 +3784,57 @@ export default function CampRegistrationsAdminPage() {
           </div>
         </div>
 
+        {/* Devotee Uploaded Receipt Proof */}
+        {verifyingBatch.screenshotUrl ? (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
+                <span>Devotee Uploaded Receipt Proof</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewScreenshotUrl(verifyingBatch.screenshotUrl)}
+                  className="text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 font-bold text-[11px] cursor-pointer"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>View Full Size</span>
+                </button>
+                <span className="text-slate-300">|</span>
+                <a
+                  href={verifyingBatch.screenshotUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 font-semibold text-[11px]"
+                >
+                  <span>Open Original</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+            <div
+              onClick={() => setPreviewScreenshotUrl(verifyingBatch.screenshotUrl)}
+              className="border border-slate-200 hover:border-teal-400 rounded-2xl p-2 bg-slate-50 text-center cursor-pointer transition-colors group relative"
+              title="Click to view full size"
+            >
+              <img
+                src={verifyingBatch.screenshotUrl}
+                alt="Receipt Screenshot Proof"
+                referrerPolicy="no-referrer"
+                className="max-h-48 mx-auto rounded-xl object-contain shadow-xs border border-slate-200 group-hover:opacity-95"
+              />
+              <div className="mt-1 text-[10px] text-slate-400 group-hover:text-teal-700 font-medium flex items-center justify-center gap-1">
+                <Eye className="w-2.5 h-2.5" /> Click image to enlarge
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-2.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-xs text-slate-500">
+            No payment receipt proof image uploaded for this batch.
+          </div>
+        )}
+
         {/* Form Inputs */}
         <form onSubmit={handleApproveBatch} className="space-y-3">
           {batchVerifyError && (
@@ -5018,7 +5084,7 @@ export default function CampRegistrationsAdminPage() {
       {previewScreenshotUrl && (
         <div
           onClick={() => setPreviewScreenshotUrl(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
         >
           <div
             onClick={(e) => e.stopPropagation()}

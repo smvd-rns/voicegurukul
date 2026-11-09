@@ -372,9 +372,24 @@ export default function ManagingDirectorDashboard() {
     // --- Counselor Assignment States ---
     const [showCounselorModal, setShowCounselorModal] = useState(false);
     const [counselorActionUser, setCounselorActionUser] = useState<any>(null);
-    const [counselorActionType, setCounselorActionType] = useState<'assign' | 'revoke'>('assign');
-    const [selectedCounselorRole, setSelectedCounselorRole] = useState<'counselor' | 'care_giver'>('counselor');
+    const [selectedCounselorOption, setSelectedCounselorOption] = useState<'counselor' | 'care_giver' | 'revoke'>('counselor');
     const [isProcessingCounselor, setIsProcessingCounselor] = useState(false);
+
+    const openAuthorityModal = (user: any) => {
+        const userRoles = Array.isArray(user.role) ? user.role : [user.role];
+        const isCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
+        const isCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
+
+        setCounselorActionUser(user);
+        if (isCounselor) {
+            setSelectedCounselorOption('counselor');
+        } else if (isCareGiver) {
+            setSelectedCounselorOption('care_giver');
+        } else {
+            setSelectedCounselorOption('counselor');
+        }
+        setShowCounselorModal(true);
+    };
     const [pendingCenters, setPendingCenters] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -1256,6 +1271,10 @@ export default function ManagingDirectorDashboard() {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
 
+            const isRevoke = selectedCounselorOption === 'revoke';
+            const action = isRevoke ? 'revoke' : 'assign';
+            const roleType = isRevoke ? undefined : selectedCounselorOption;
+
             const response = await fetch('/api/admin/counselor-assignment', {
                 method: 'POST',
                 headers: {
@@ -1264,8 +1283,8 @@ export default function ManagingDirectorDashboard() {
                 },
                 body: JSON.stringify({
                     userId: counselorActionUser.id,
-                    action: counselorActionType,
-                    roleType: counselorActionType === 'assign' ? selectedCounselorRole : undefined
+                    action,
+                    roleType
                 })
             });
 
@@ -2061,20 +2080,20 @@ export default function ManagingDirectorDashboard() {
                 </div>
 
                 {/* Stats Section - Compact & Colorful */}
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2.5 sm:mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
                     {/* Active Centers */}
                     <div
                         onClick={() => handleTabChange('centers')}
-                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-blue-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-blue-300 cursor-pointer"
                     >
-                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-blue-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-blue-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
+                                <Building2 className="h-4 w-4 stroke-[2.2px]" />
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Active Centers</div>
-                                <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-blue-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Active Centers">Centers</div>
+                                <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-blue-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
                                     {stats.loading ? '' : stats.centers}
                                 </div>
                             </div>
@@ -2084,18 +2103,18 @@ export default function ManagingDirectorDashboard() {
                     {/* Total Devotees */}
                     <div
                         onClick={() => handleTabChange('user-management')}
-                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-emerald-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-emerald-300 cursor-pointer"
                     >
-                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-emerald-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                                <Users className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-emerald-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
+                                <Users className="h-4 w-4 stroke-[2.2px]" />
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">
-                                    {activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered Devotees' : 'Total Devotees'}
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title={activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered Devotees' : 'Total Devotees'}>
+                                    {activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered' : 'Devotees'}
                                 </div>
-                                <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
                                     {stats.loading ? '' : (activeTab === 'user-management' ? dynamicDevoteeStats.filteredCount : stats.devotees)}
                                 </div>
                             </div>
@@ -2105,28 +2124,28 @@ export default function ManagingDirectorDashboard() {
                     {/* Pending Profiles */}
                     <div
                         onClick={() => handleTabChange('approvals')}
-                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-amber-300 cursor-pointer flex flex-col justify-between"
+                        className="group relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-amber-300 cursor-pointer flex flex-col justify-between"
                     >
-                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-amber-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                                    <History className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-amber-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
+                                    <History className="h-4 w-4 stroke-[2.2px]" />
                                 </div>
                                 <div className="min-w-0">
-                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Pending Profiles</div>
-                                    <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-amber-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Pending Profiles">Pending</div>
+                                    <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-amber-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
                                         {stats.loading ? '' : stats.pendingProfiles}
                                     </div>
                                 </div>
                             </div>
                             {stats.pendingBreakdown.length > 1 && (
-                                <span className="text-[8px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full flex-shrink-0">Multi</span>
+                                <span className="text-[8px] font-black uppercase tracking-tight px-1 py-0.2 bg-amber-100 text-amber-700 rounded-full flex-shrink-0">Multi</span>
                             )}
                         </div>
 
                         {!stats.loading && stats.pendingBreakdown.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-amber-100/60 space-y-1 relative z-10">
+                            <div className="mt-1.5 pt-1.5 border-t border-amber-100/60 space-y-0.5 relative z-10">
                                 {stats.pendingBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
@@ -2138,7 +2157,7 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('approvals');
                                             }}
-                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded-lg text-[9px] transition-all ${isCurrent
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all ${isCurrent
                                                 ? 'bg-amber-100/60 font-black text-amber-800'
                                                 : 'hover:bg-amber-100/40 font-semibold text-gray-600'
                                                 }`}
@@ -2155,28 +2174,28 @@ export default function ManagingDirectorDashboard() {
                     {/* New Requests */}
                     <div
                         onClick={() => handleTabChange('registrations')}
-                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-rose-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-rose-300 cursor-pointer flex flex-col justify-between"
+                        className="group relative overflow-hidden rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-rose-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-rose-300 cursor-pointer flex flex-col justify-between"
                     >
-                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-rose-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                                    <UserCheck className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-rose-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
+                                    <UserCheck className="h-4 w-4 stroke-[2.2px]" />
                                 </div>
                                 <div className="min-w-0">
-                                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">New Requests</div>
-                                    <div className={`text-lg sm:text-2xl font-black text-gray-900 leading-tight group-hover:text-rose-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-6 w-12 rounded mt-0.5' : ''}`}>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="New Devotee Requests">New Req</div>
+                                    <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-rose-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
                                         {stats.loading ? '' : stats.newRequests}
                                     </div>
                                 </div>
                             </div>
                             {stats.pendingRegBreakdown.length > 1 && (
-                                <span className="text-[8px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-full flex-shrink-0">Multi</span>
+                                <span className="text-[8px] font-black uppercase tracking-tight px-1 py-0.2 bg-rose-100 text-rose-700 rounded-full flex-shrink-0">Multi</span>
                             )}
                         </div>
 
                         {!stats.loading && stats.pendingRegBreakdown.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-rose-100/60 space-y-1 relative z-10">
+                            <div className="mt-1.5 pt-1.5 border-t border-rose-100/60 space-y-0.5 relative z-10">
                                 {stats.pendingRegBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
@@ -2188,7 +2207,7 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('registrations');
                                             }}
-                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded-lg text-[9px] transition-all ${isCurrent
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all ${isCurrent
                                                 ? 'bg-rose-100/60 font-black text-rose-800'
                                                 : 'hover:bg-rose-100/40 font-semibold text-gray-600'
                                                 }`}
@@ -2205,16 +2224,16 @@ export default function ManagingDirectorDashboard() {
                     {/* Temple Sadhana Reports */}
                     <div
                         onClick={() => router.push('/dashboard/managing-director/sadhana-report')}
-                        className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/20 p-3 sm:p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-purple-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl border border-purple-100 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-purple-300 cursor-pointer"
                     >
-                        <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-purple-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                                <Activity className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.2px]" />
+                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-purple-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
+                                <Activity className="h-4 w-4 stroke-[2.2px]" />
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500 truncate">Temple Sadhana</div>
-                                <div className="text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-purple-700 transition-colors">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Temple Sadhana Reports">Sadhana</div>
+                                <div className="text-sm sm:text-base font-black text-gray-900 leading-tight group-hover:text-purple-700 transition-colors">
                                     Reports
                                 </div>
                             </div>
@@ -2227,41 +2246,41 @@ export default function ManagingDirectorDashboard() {
 
                 {/* Centers Tab */}
                 {activeTab === 'centers' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 bg-white/70 backdrop-blur-md p-3 sm:p-3.5 rounded-xl border border-gray-100 shadow-2xs">
                             <div>
-                                <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Temple Centers</h2>
-                                <p className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Manage physical locations</p>
+                                <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">Temple Centers</h2>
+                                <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">Manage physical locations</p>
                             </div>
                             <button
                                 onClick={() => setShowAddCenterModal(true)}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-primary-600 to-blue-700 text-white rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:shadow-xl hover:shadow-primary-200 transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-primary-600 to-blue-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:shadow-md hover:brightness-105 transition-all cursor-pointer shadow-xs active:scale-95"
                             >
-                                <Plus className="h-4 w-4 stroke-[3px]" /> Add Center
+                                <Plus className="h-3.5 w-3.5 stroke-[3px]" /> Add Center
                             </button>
                         </div>
 
                         {loadingCenters ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-white">
-                                <div className="animate-spin h-10 w-10 border-4 border-primary-200 border-t-primary-600 rounded-full mb-4"></div>
-                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Syncing centers...</p>
+                            <div className="flex flex-col items-center justify-center py-12 bg-white/40 backdrop-blur-md rounded-2xl border border-white">
+                                <div className="animate-spin h-8 w-8 border-3 border-primary-200 border-t-primary-600 rounded-full mb-3"></div>
+                                <p className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Syncing centers...</p>
                             </div>
                         ) : centers.length === 0 ? (
-                            <div className="text-center py-20 bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-white border-dashed">
-                                <div className="bg-gray-100 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <Building2 className="h-10 w-10 text-gray-300" />
+                            <div className="text-center py-12 bg-white/40 backdrop-blur-md rounded-2xl border border-white border-dashed">
+                                <div className="bg-gray-100 h-14 w-14 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Building2 className="h-7 w-7 text-gray-300" />
                                 </div>
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight">No Centers Registered</h3>
-                                <p className="text-gray-500 font-medium mt-2 max-w-sm mx-auto">Build your local network by adding your first center for {selectedTemple?.name || 'your temple'}.</p>
+                                <h3 className="text-base font-black text-gray-900 tracking-tight">No Centers Registered</h3>
+                                <p className="text-gray-500 text-xs font-medium mt-1 max-w-sm mx-auto">Build your local network by adding your first center for {selectedTemple?.name || 'your temple'}.</p>
                                 <button
                                     onClick={() => setShowAddCenterModal(true)}
-                                    className="mt-6 px-6 py-3 bg-white text-primary-600 border-2 border-primary-100 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-primary-50 transition-all"
+                                    className="mt-4 px-4 py-2 bg-white text-primary-600 border border-primary-200 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-primary-50 transition-all cursor-pointer"
                                 >
                                     Get Started
                                 </button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5">
                                 {centers.map((center, index) => {
                                     // Spiritual Color Palette Cycling
                                     const palettes = [
@@ -2275,49 +2294,49 @@ export default function ManagingDirectorDashboard() {
                                     const theme = palettes[index % palettes.length];
 
                                     return (
-                                        <div key={center.id} className={`group relative bg-[#fffdfa] rounded-3xl p-5 sm:p-6 shadow-xl ${theme.shadow} border ${theme.border} hover:shadow-2xl transition-all duration-500 overflow-hidden`}>
+                                        <div key={center.id} className={`group relative bg-[#fffdfa] rounded-2xl p-3.5 sm:p-4 shadow-sm ${theme.shadow} border ${theme.border} hover:shadow-md transition-all duration-300 overflow-hidden`}>
                                             {/* Vibrant Accent Bar */}
-                                            <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${theme.accent} opacity-80 group-hover:h-2 transition-all`} />
+                                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${theme.accent} opacity-80 group-hover:h-1.5 transition-all`} />
 
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className={`h-12 w-12 ${theme.iconBg} ${theme.iconText} rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 group-hover:brightness-110 transition-all duration-500`}>
-                                                    <Building2 className="h-6 w-6 stroke-[2px]" />
+                                            <div className="flex justify-between items-start mb-2.5">
+                                                <div className={`h-8 w-8 ${theme.iconBg} ${theme.iconText} rounded-xl flex items-center justify-center shadow-2xs group-hover:scale-105 transition-all`}>
+                                                    <Building2 className="h-4 w-4 stroke-[2px]" />
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <span className={`px-2.5 py-0.5 ${theme.bg} ${theme.text} text-[9px] font-black uppercase tracking-widest rounded-full border border-white/50 shadow-sm`}>Active</span>
+                                                <div className="flex gap-1.5">
+                                                    <span className={`px-2 py-0.5 ${theme.bg} ${theme.text} text-[8.5px] font-black uppercase tracking-wider rounded-full border border-white/60 shadow-2xs`}>Active</span>
                                                 </div>
                                             </div>
 
-                                            <h3 className="text-lg font-black text-gray-900 mb-1.5 group-hover:text-gray-700 transition-colors uppercase tracking-tight">{center.name}</h3>
+                                            <h3 className="text-sm font-black text-gray-900 mb-1 group-hover:text-gray-700 transition-colors uppercase tracking-tight truncate" title={center.name}>{center.name}</h3>
 
-                                            <div className="space-y-3">
-                                                <div className="flex items-center gap-2.5 text-gray-500">
-                                                    <div className={`h-7 w-7 rounded-lg ${theme.bg} flex items-center justify-center ${theme.text}`}>
-                                                        <MapPin className="h-3.5 w-3.5" />
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2 text-gray-500">
+                                                    <div className={`h-6 w-6 rounded-md ${theme.bg} flex items-center justify-center ${theme.text} shrink-0`}>
+                                                        <MapPin className="h-3 w-3" />
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
-                                                        <p className="text-xs font-bold text-gray-700">{center.city}, {center.state}</p>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
+                                                        <p className="text-xs font-bold text-gray-700 truncate">{center.city}, {center.state}</p>
                                                     </div>
                                                 </div>
 
                                                 {center.address && (
-                                                    <div className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 hover:bg-white hover:shadow-sm transition-all">
-                                                        <p className="text-[10px] font-medium text-gray-500 leading-relaxed italic line-clamp-2">&quot;{center.address}&quot;</p>
+                                                    <div className="bg-gray-50/70 rounded-lg p-2 border border-gray-100 text-[9.5px] font-medium text-gray-500 italic line-clamp-1" title={center.address}>
+                                                        &quot;{center.address}&quot;
                                                     </div>
                                                 )}
 
-                                                <div className="space-y-2 pt-2">
+                                                <div className="space-y-1 pt-1">
                                                     {center.project_manager_name && (
-                                                        <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Manager</span>
-                                                            <span className="text-[10px] font-bold text-gray-700 truncate max-w-[120px]">{center.project_manager_name}</span>
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
+                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Manager</span>
+                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">{center.project_manager_name}</span>
                                                         </div>
                                                     )}
                                                     {((center.mentor_names && center.mentor_names.length > 0) || center.mentor_name) && (
-                                                        <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mentors</span>
-                                                            <span className="text-[10px] font-bold text-gray-700 truncate max-w-[120px]">
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
+                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Mentors</span>
+                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">
                                                                 {Array.isArray(center.mentor_names) && center.mentor_names.length > 0
                                                                     ? center.mentor_names.join(', ')
                                                                     : center.mentor_name}
@@ -2325,9 +2344,9 @@ export default function ManagingDirectorDashboard() {
                                                         </div>
                                                     )}
                                                     {((center.frontliner_names && center.frontliner_names.length > 0) || center.frontliner_name) && (
-                                                        <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Frontliners</span>
-                                                            <span className="text-[10px] font-bold text-gray-700 truncate max-w-[120px]">
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
+                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Frontliners</span>
+                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">
                                                                 {Array.isArray(center.frontliner_names) && center.frontliner_names.length > 0
                                                                     ? center.frontliner_names.join(', ')
                                                                     : center.frontliner_name}
@@ -2335,38 +2354,36 @@ export default function ManagingDirectorDashboard() {
                                                         </div>
                                                     )}
                                                     {(center.project_advisor_name || center.acting_manager_name) && (
-                                                        <div className="flex gap-2">
+                                                        <div className="flex gap-1.5">
                                                             {center.project_advisor_name && (
-                                                                <div className="flex-1 p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                                                    <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Advisor</div>
-                                                                    <div className="text-[9px] font-bold text-gray-700 truncate">{center.project_advisor_name}</div>
+                                                                <div className="flex-1 p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
+                                                                    <div className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Advisor</div>
+                                                                    <div className="font-bold text-gray-800 truncate">{center.project_advisor_name}</div>
                                                                 </div>
                                                             )}
                                                             {center.acting_manager_name && (
-                                                                <div className="flex-1 p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                                                    <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Acting</div>
-                                                                    <div className="text-[9px] font-bold text-gray-700 truncate">{center.acting_manager_name}</div>
+                                                                <div className="flex-1 p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
+                                                                    <div className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Acting</div>
+                                                                    <div className="font-bold text-gray-800 truncate">{center.acting_manager_name}</div>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                <div className="flex gap-2 pt-2 mt-2 border-t border-gray-100/50">
+                                                <div className="pt-1.5 border-t border-gray-100">
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openEditCenterModal(center);
                                                         }}
-                                                        className={`flex-1 py-2 ${theme.bg} ${theme.text} hover:bg-white border border-transparent hover:${theme.border} rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2`}
+                                                        className={`w-full py-1.5 ${theme.bg} ${theme.text} hover:bg-white border border-transparent hover:${theme.border} rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs`}
                                                     >
-                                                        <Edit className="h-3.5 w-3.5" /> Edit
+                                                        <Edit className="h-3 w-3" /> Edit Center
                                                     </button>
                                                 </div>
                                             </div>
-
-                                            {/* Decorative Background Elements */}
-                                            <div className={`absolute -right-10 -bottom-10 w-24 h-24 ${theme.bg.replace('-50', '-500')}/5 rounded-full blur-2xl group-hover:${theme.bg.replace('-50', '-500')}/10 transition-colors`} />
                                         </div>
                                     );
                                 })}
@@ -2378,27 +2395,27 @@ export default function ManagingDirectorDashboard() {
                 {/* Staff / User Management Tab */}
                 {activeTab === 'user-management' && (
                     <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Dynamic Live Metric Cards for Temple Admin */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                        {/* Dynamic Live Metric Cards for Temple Admin - Compact */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
                             {/* 1. Filtered Devotees */}
-                            <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/30 p-3 sm:p-3.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-indigo-700">
+                            <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/30 p-2 sm:p-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">
                                         Filtered Devotees
                                     </span>
-                                    <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
-                                        <Users className="w-3.5 h-3.5" />
+                                    <div className="p-1 rounded-md bg-indigo-100 text-indigo-700">
+                                        <Users className="w-3 h-3" />
                                     </div>
                                 </div>
-                                <div className="flex items-baseline gap-1.5">
-                                    <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                                         {dynamicDevoteeStats.filteredCount}
                                     </span>
-                                    <span className="text-[11px] font-bold text-slate-400">
+                                    <span className="text-[10px] font-bold text-slate-400">
                                         of {dynamicDevoteeStats.totalInTemple}
                                     </span>
                                 </div>
-                                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[9.5px] font-bold text-slate-500">
                                     <span className="text-emerald-700">🟢 {dynamicDevoteeStats.currentCount} Current</span>
                                     <span>•</span>
                                     <span className="text-purple-700">🟣 {dynamicDevoteeStats.parentOnlyCount} Past</span>
@@ -2406,78 +2423,78 @@ export default function ManagingDirectorDashboard() {
                             </div>
 
                             {/* 2. Temple Affiliation Scope */}
-                            <div className="relative overflow-hidden rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/70 via-white to-violet-50/30 p-3 sm:p-3.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-purple-700">
+                            <div className="relative overflow-hidden rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/70 via-white to-violet-50/30 p-2 sm:p-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-700">
                                         Temple Scope
                                     </span>
-                                    <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
-                                        <Compass className="w-3.5 h-3.5" />
+                                    <div className="p-1 rounded-md bg-purple-100 text-purple-700">
+                                        <Compass className="w-3 h-3" />
                                     </div>
                                 </div>
-                                <div className="text-base sm:text-lg font-black text-slate-900 truncate">
+                                <div className="text-sm sm:text-base font-black text-slate-900 truncate">
                                     {templeScope === 'all' ? 'All Connected' : templeScope === 'current' ? 'Current Only' : 'Past (Parent)'}
                                 </div>
-                                <div className="mt-1 text-[10px] font-bold text-purple-600 truncate">
-                                    {dynamicDevoteeStats.parentOnlyCount} devotees linked in past
+                                <div className="mt-0.5 text-[9.5px] font-bold text-purple-600 truncate">
+                                    {dynamicDevoteeStats.parentOnlyCount} linked in past
                                 </div>
                             </div>
 
                             {/* 3. Active KC Devotees */}
-                            <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 p-3 sm:p-3.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                            <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 p-2 sm:p-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
                                         Active KC Status
                                     </span>
-                                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
-                                        <Activity className="w-3.5 h-3.5" />
+                                    <div className="p-1 rounded-md bg-emerald-100 text-emerald-700">
+                                        <Activity className="w-3 h-3" />
                                     </div>
                                 </div>
-                                <div className="flex items-baseline gap-1.5">
-                                    <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                                         {dynamicDevoteeStats.activeKcCount}
                                     </span>
-                                    <span className="text-[11px] font-bold text-emerald-600">
+                                    <span className="text-[10px] font-bold text-emerald-600">
                                         ({dynamicDevoteeStats.activePercentage}%)
                                     </span>
                                 </div>
-                                <div className="mt-1 text-[10px] font-bold text-slate-500">
-                                    Active spiritual engagement
+                                <div className="mt-0.5 text-[9.5px] font-bold text-slate-500">
+                                    Spiritual engagement
                                 </div>
                             </div>
 
                             {/* 4. Leaders & Counselors */}
-                            <div className="relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/30 p-3 sm:p-3.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-amber-700">
-                                        Leaders & Mentors
+                            <div className="relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/30 p-2 sm:p-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between mb-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
+                                        Leaders &amp; Mentors
                                     </span>
-                                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
-                                        <Award className="w-3.5 h-3.5" />
+                                    <div className="p-1 rounded-md bg-amber-100 text-amber-700">
+                                        <Award className="w-3 h-3" />
                                     </div>
                                 </div>
-                                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                                <div className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                                     {dynamicDevoteeStats.leadersCount}
                                 </div>
-                                <div className="mt-1 text-[10px] font-bold text-slate-500">
-                                    Counselors, Care Givers & Staff
+                                <div className="mt-0.5 text-[9.5px] font-bold text-slate-500 truncate">
+                                    Counselors, Care Givers &amp; Staff
                                 </div>
                             </div>
                         </div>
 
                         {/* Compact & Colorful Filter Toolbar */}
-                        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-300 shadow-xs flex flex-col gap-2.5">
+                        <div className="bg-white rounded-xl p-2.5 sm:p-3 border border-slate-200 shadow-2xs flex flex-col gap-2">
                             {/* Primary Row: Search + Temple Scope + Quick Actions */}
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-2.5 items-center">
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 sm:gap-2 items-center">
                                 {/* Search */}
-                                <div className="relative group sm:col-span-6 lg:col-span-5">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                                <div className="relative group sm:col-span-6 lg:col-span-6">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                     <input
                                         type="text"
                                         placeholder="Search legal/initiated name, email, phone, city, center..."
                                         value={userSearch}
                                         onChange={(e) => setUserSearch(e.target.value)}
-                                        className="w-full pl-9 pr-3 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400 text-xs font-medium transition-all shadow-2xs"
+                                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg focus:ring-1 focus:ring-indigo-100 placeholder:text-slate-400 text-xs font-medium transition-all shadow-2xs"
                                     />
                                 </div>
 
@@ -2486,35 +2503,35 @@ export default function ManagingDirectorDashboard() {
                                     <select
                                         value={templeScope}
                                         onChange={(e) => setTempleScope(e.target.value as any)}
-                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                        className="w-full pl-7 pr-6 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
                                     >
-                                        <option value="all">🏛️ All Connected (Current & Past)</option>
+                                        <option value="all">🏛️ All Connected (Current &amp; Past)</option>
                                         <option value="current">🟢 Current Temple Members Only</option>
-                                        <option value="parent">🟣 Past / Parent Temple Devotees Only</option>
+                                        <option value="parent">🟣 Past / Parent Devotees Only</option>
                                     </select>
-                                    <Compass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-purple-600 pointer-events-none" />
-                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    <Compass className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-purple-600 pointer-events-none" />
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                                 </div>
 
                                 {/* Reset Button */}
-                                <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
+                                <div className="sm:col-span-2 lg:col-span-2 flex justify-end">
                                     {isDevoteeFiltered && (
                                         <button
                                             type="button"
                                             onClick={resetAllDevoteeFilters}
-                                            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                                            className="w-full sm:w-auto flex items-center justify-center gap-1 px-2.5 py-1.5 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
                                         >
-                                            <RotateCcw className="w-3.5 h-3.5" />
-                                            <span>Reset Filters</span>
+                                            <RotateCcw className="w-3 h-3" />
+                                            <span>Reset</span>
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Secondary Row: Multi-Select Filters & Dropdowns */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-2.5 pt-2 border-t border-slate-200">
+                            {/* Secondary Row: Multi-Select Filters & Dropdowns - Single Balanced Row */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 pt-1.5 border-t border-slate-200">
                                 {/* Multi-Select Center Filter */}
-                                <div className="sm:col-span-1 lg:col-span-2">
+                                <div className="col-span-1">
                                     <MultiSelectDropdown
                                         label="Center"
                                         icon={Building2}
@@ -2526,7 +2543,7 @@ export default function ManagingDirectorDashboard() {
                                 </div>
 
                                 {/* Multi-Select Ashram Filter */}
-                                <div className="sm:col-span-1 lg:col-span-2">
+                                <div className="col-span-1">
                                     <MultiSelectDropdown
                                         label="Ashram"
                                         icon={Home}
@@ -2538,7 +2555,7 @@ export default function ManagingDirectorDashboard() {
                                 </div>
 
                                 {/* Multi-Select Role Filter */}
-                                <div className="sm:col-span-1 lg:col-span-2">
+                                <div className="col-span-1">
                                     <MultiSelectDropdown
                                         label="Role"
                                         icon={UserCheck}
@@ -2550,47 +2567,47 @@ export default function ManagingDirectorDashboard() {
                                 </div>
 
                                 {/* Spiritual Group (BV Group) */}
-                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                <div className="relative col-span-1">
                                     <select
                                         value={selectedGroup}
                                         onChange={(e) => setSelectedGroup(e.target.value)}
-                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
                                     >
                                         <option value="">All Groups</option>
                                         {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
                                     </select>
-                                    <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    <Users className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                                 </div>
 
                                 {/* KC Activity Status */}
-                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                <div className="relative col-span-1">
                                     <select
                                         value={selectedKCStatus}
                                         onChange={(e) => setSelectedKCStatus(e.target.value)}
-                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
                                     >
                                         <option value="">All KC Status</option>
                                         {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                                     </select>
-                                    <Activity className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    <Activity className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                                 </div>
 
                                 {/* Camp Filter */}
-                                <div className="relative sm:col-span-1 lg:col-span-2">
+                                <div className="relative col-span-1">
                                     <select
                                         value={selectedCamp}
                                         onChange={(e) => setSelectedCamp(e.target.value)}
-                                        className="w-full pl-8 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
+                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
                                     >
                                         <option value="">All Camps</option>
                                         {CAMP_OPTIONS.map(camp => (
                                             <option key={camp.value} value={camp.value}>{camp.label}</option>
                                         ))}
                                     </select>
-                                    <Shield className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-blue-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    <Shield className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-blue-500 pointer-events-none" />
+                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                                 </div>
                             </div>
 
@@ -2811,53 +2828,45 @@ export default function ManagingDirectorDashboard() {
                                                     }
 
                                                     return (
-                                                        <div className="flex flex-col gap-2">
+                                                        <div className="flex items-center gap-2">
                                                             <button
                                                                 onClick={() => {
                                                                     setUserForView(user);
                                                                     openUserView(user);
                                                                 }}
-                                                                className="w-full py-3 bg-white text-emerald-600 border-2 border-emerald-50 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                                                                className="flex-1 py-2 px-3 bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                                                             >
                                                                 <Eye className="h-3.5 w-3.5" /> View Profile
                                                             </button>
 
                                                             {(() => {
                                                                 const userRoles = Array.isArray(user.role) ? user.role : [user.role];
-                                                                const isSpiritualAuthority = userRoles.some((r: any) => Number(r) === 2 || Number(r) === 20);
+                                                                const isCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
+                                                                const isCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
+                                                                const isSpiritualAuthority = isCounselor || isCareGiver;
                                                                 const devoteeTemple = uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || user.current_temple || uH?.currentTemple;
                                                                 const isManagedTemple = assignedTemples.some(t => t.name.trim().toLowerCase() === (devoteeTemple || '').trim().toLowerCase());
 
-                                                                if (isSpiritualAuthority) {
+                                                                if (isManagedTemple || isSpiritualAuthority) {
                                                                     return (
                                                                         <button
-                                                                            onClick={() => {
-                                                                                setCounselorActionUser(user);
-                                                                                setCounselorActionType('revoke');
-                                                                                setShowCounselorModal(true);
-                                                                            }}
-                                                                            className="w-full py-3 bg-rose-50 text-rose-600 border-2 border-rose-100 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                                                                            onClick={() => openAuthorityModal(user)}
+                                                                            className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs border ${
+                                                                                isSpiritualAuthority
+                                                                                    ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                                                                    : 'bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-100'
+                                                                            }`}
                                                                         >
-                                                                            <ShieldAlert className="h-3.5 w-3.5" /> Revoke Role
-                                                                        </button>
-                                                                    );
-                                                                } else if (isManagedTemple) {
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setCounselorActionUser(user);
-                                                                                setCounselorActionType('assign');
-                                                                                setShowCounselorModal(true);
-                                                                            }}
-                                                                            className="w-full py-3 bg-primary-50 text-primary-600 border-2 border-primary-100 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-600 hover:text-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
-                                                                        >
-                                                                            <ShieldCheck className="h-3.5 w-3.5" /> Assign Roles
+                                                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                                                            <span>
+                                                                                {isCounselor ? 'Role: Counselor' : isCareGiver ? 'Role: Care Giver' : '+ Assign Role'}
+                                                                            </span>
                                                                         </button>
                                                                     );
                                                                 } else {
                                                                     return (
-                                                                        <div className="w-full py-3 bg-gray-50 text-gray-400 border-2 border-transparent rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-not-allowed shadow-sm" title="Devotee must belong to one of your managed Temples">
-                                                                            <Shield className="h-3.5 w-3.5" /> No Access
+                                                                        <div className="flex-1 py-2 bg-gray-50 text-gray-400 border border-gray-200 rounded-xl font-semibold text-xs flex items-center justify-center gap-1 cursor-not-allowed" title="Devotee must belong to one of your managed Temples">
+                                                                            <Shield className="h-3.5 w-3.5" /> Locked
                                                                         </div>
                                                                     );
                                                                 }
@@ -2870,206 +2879,196 @@ export default function ManagingDirectorDashboard() {
                                     })}
                                 </div>
 
-                                {/* Desktop/Laptop View (Table) */}
-                                <div className="hidden lg:block bg-[#fffdfa]/95 backdrop-blur-xl rounded-[2.5rem] shadow-2xl shadow-orange-100/50 border border-amber-200 overflow-hidden group">
+                                {/* Desktop/Laptop View (Table) - Compact & Clear */}
+                                <div className="hidden lg:block bg-[#fffdfa]/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-xl shadow-orange-100/40 border border-amber-200 overflow-hidden">
                                     <div className="overflow-x-auto">
-                                        <table className="min-w-full">
-                                            <thead>
-                                                <tr className="bg-gray-50/50">
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Profile</th>
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Temple & Center</th>
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Spiritual Identity</th>
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Privileges</th>
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-40">VOICE group level</th>
-                                                    <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-40">KC Status</th>
-                                                    <th className="px-6 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Quick Actions</th>
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="bg-slate-50/80 border-b border-slate-200">
+                                                <tr>
+                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[170px]">Devotee Profile</th>
+                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[160px]">Temple &amp; Center</th>
+                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[150px]">Ashram &amp; Mentor</th>
+                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[110px]">Role / Status</th>
+                                                    <th className="px-2.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">VOICE Group</th>
+                                                    <th className="px-2.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">KC Status</th>
+                                                    <th className="px-3.5 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[160px]">Actions</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100/50">
+                                            <tbody className="divide-y divide-slate-100">
                                                 {pagedUsers.map(user => {
                                                     const uH = user.hierarchy as any;
                                                     const uCenterLabel = uH?.currentCenter || uH?.center || user.center || 'No Center';
 
                                                     return (
-                                                        <tr key={user.id} className="hover:bg-primary-50/30 transition-colors group/row">
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-lg shadow-lg group-hover/row:scale-110 transition-transform">
+                                                        <tr key={user.id} className="hover:bg-amber-50/20 transition-colors group/row">
+                                                            <td className="px-3.5 py-2.5">
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-xs">
                                                                         {user.name.charAt(0).toUpperCase()}
                                                                     </div>
-                                                                    <div>
-                                                                        <p className="font-black text-gray-900 group-hover/row:text-primary-600 transition-colors tracking-tight">{user.name}</p>
-                                                                        <p className="text-xs font-bold text-gray-400 lowercase italic">{user.email}</p>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-bold text-xs text-gray-900 group-hover/row:text-primary-700 transition-colors truncate max-w-[160px] leading-tight" title={user.name}>{user.name}</p>
+                                                                        <p className="text-[10px] text-gray-500 truncate max-w-[160px] lowercase" title={user.email}>{user.email}</p>
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex flex-col gap-1.5">
-                                                                    {/* Temple Connection Badge */}
+                                                            <td className="px-3.5 py-2.5">
+                                                                <div className="flex flex-col gap-1 min-w-0 max-w-[170px]">
                                                                     {(user as any)._templeConnection === 'parent' ? (
                                                                         <div className="flex flex-col gap-0.5">
-                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 w-fit">
-                                                                                🟣 Past Devotee (Parent Temple)
+                                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold bg-purple-100 text-purple-900 border border-purple-200 w-fit">
+                                                                                🟣 Past Devotee
                                                                             </span>
-                                                                            <span className="text-[9.5px] font-bold text-purple-700">
-                                                                                Now at: {(user as any)._currentTempleDisplay || 'Other Temple'}
+                                                                            <span className="text-[9px] font-bold text-purple-700 truncate" title={`Now at: ${(user as any)._currentTempleDisplay || 'Other Temple'}`}>
+                                                                                Now: {(user as any)._currentTempleDisplay || 'Other Temple'}
                                                                             </span>
                                                                         </div>
                                                                     ) : (user as any)._templeConnection === 'both' ? (
-                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-100 text-teal-900 border border-teal-300 w-fit">
-                                                                            🔷 Current & Parent Member
+                                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold bg-teal-100 text-teal-900 border border-teal-200 w-fit">
+                                                                            🔷 Current &amp; Parent
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 w-fit">
-                                                                            🟢 Current Temple Member
+                                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-200 w-fit">
+                                                                            🟢 Current Member
                                                                         </span>
                                                                     )}
 
-                                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-slate-800 truncate" title={uCenterLabel}>
                                                                         <Building2 className="h-3 w-3 text-blue-600 shrink-0" />
-                                                                        <span className="truncate max-w-[170px]">{uCenterLabel}</span>
+                                                                        <span className="truncate">{uCenterLabel}</span>
                                                                     </div>
-                                                                    <div className="flex gap-1.5">
-                                                                        {user.is_smvd_volunteer && <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[8px] font-black uppercase rounded border border-blue-200">SMVD</span>}
-                                                                        {user.is_rns_volunteer && <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase rounded border border-emerald-200">RNS</span>}
+                                                                    {(user.is_smvd_volunteer || user.is_rns_volunteer) && (
+                                                                        <div className="flex gap-1">
+                                                                            {user.is_smvd_volunteer && <span className="px-1 py-0.2 bg-blue-50 text-blue-700 text-[8px] font-black rounded border border-blue-200">SMVD</span>}
+                                                                            {user.is_rns_volunteer && <span className="px-1 py-0.2 bg-emerald-50 text-emerald-700 text-[8px] font-black rounded border border-emerald-200">RNS</span>}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-3.5 py-2.5">
+                                                                <div className="flex flex-col gap-1 min-w-0 max-w-[160px]">
+                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-200/60 truncate w-fit" title={uH?.ashram || 'No Ashram'}>
+                                                                        <Home className="h-2.5 w-2.5 shrink-0" />
+                                                                        <span className="truncate">{uH?.ashram || 'No Ashram'}</span>
+                                                                    </span>
+                                                                    <div className="text-[10.5px] text-slate-600 truncate" title={uH?.counselor || 'None'}>
+                                                                        <span className="text-[9.5px] text-slate-400 font-bold uppercase mr-1">Counselor:</span>
+                                                                        <strong className="text-slate-800 font-semibold">{uH?.counselor || 'None'}</strong>
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex flex-col gap-1.5">
-                                                                    <p className="flex items-center gap-2 text-[10px] font-black text-primary-600 uppercase tracking-widest bg-primary-50/50 px-2.5 py-1 rounded-lg border border-primary-100/50 self-start">
-                                                                        <Home className="h-3 w-3" />
-                                                                        {uH?.ashram || 'None'}
-                                                                    </p>
-                                                                    <p className="flex items-center gap-2 text-xs font-bold text-gray-700">
-                                                                        <UserCheck className="h-3 w-3 text-emerald-500" />
-                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-1">Counselor:</span>
-                                                                        {uH?.counselor || 'None'}
-                                                                    </p>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex flex-wrap gap-1.5 max-w-[250px]">
+                                                            <td className="px-3.5 py-2.5">
+                                                                <div className="flex flex-wrap gap-1 max-w-[130px]">
                                                                     {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
-                                                                        <span key={i} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${getRoleHierarchyNumber(r) >= 12
-                                                                            ? 'bg-primary-50 text-primary-700 border-primary-200'
-                                                                            : 'bg-gray-100 text-gray-600 border-gray-200 group-hover/row:border-primary-200 group-hover/row:bg-white'
-                                                                            }`}>
+                                                                        <span key={i} className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
+                                                                            getRoleHierarchyNumber(r) >= 12
+                                                                                ? 'bg-primary-50 text-primary-700 border-primary-200'
+                                                                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                                        }`}>
                                                                             {getRoleDisplayName(r)}
                                                                         </span>
                                                                     ))}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="relative w-full">
+                                                            <td className="px-2.5 py-2.5">
+                                                                <div className="relative w-36">
                                                                     <select
                                                                         value={user.bv_group || ''}
                                                                         onChange={(e) => handleAssignGroup(user.id, e.target.value)}
                                                                         disabled={updatingGroupUserId === user.id}
-                                                                        className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-teal-300"
+                                                                        className="w-full appearance-none bg-white border border-slate-200 hover:border-teal-400 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
                                                                     >
                                                                         <option value="">- No Group -</option>
                                                                         {BV_GROUPS.map(g => (
                                                                             <option key={g} value={g}>{g}</option>
                                                                         ))}
                                                                     </select>
-                                                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                                                                         {updatingGroupUserId === user.id ? (
-                                                                            <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
+                                                                            <div className="animate-spin h-3 w-3 border-2 border-teal-500 border-t-transparent rounded-full" />
                                                                         ) : (
-                                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                                            <ChevronDown className="h-3 w-3" />
                                                                         )}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="relative w-full">
+                                                            <td className="px-2.5 py-2.5">
+                                                                <div className="relative w-36">
                                                                     <select
                                                                         value={user.hierarchy?.kcStatus || ''}
                                                                         onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
                                                                         disabled={updatingKCStatusUserId === user.id}
-                                                                        className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer hover:border-orange-300"
+                                                                        className="w-full appearance-none bg-white border border-slate-200 hover:border-orange-400 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
                                                                     >
                                                                         <option value="">- No Status -</option>
                                                                         {KC_STATUS_OPTIONS.map(status => (
                                                                             <option key={status} value={status}>{status}</option>
                                                                         ))}
                                                                     </select>
-                                                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                                                                         {updatingKCStatusUserId === user.id ? (
-                                                                            <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                                            <div className="animate-spin h-3 w-3 border-2 border-orange-500 border-t-transparent rounded-full" />
                                                                         ) : (
-                                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                                            <ChevronDown className="h-3 w-3" />
                                                                         )}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3 text-right">
+                                                            <td className="px-3.5 py-2.5 text-right">
                                                                 {(() => {
                                                                     const canManage = canAdminManageTarget(userData?.role || [], user.role || [], userData?.id, user.id);
 
                                                                     if (!canManage) {
                                                                         return (
-                                                                            <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-50 text-gray-400 border-2 border-transparent rounded-xl font-black text-[10px] uppercase tracking-widest cursor-not-allowed">
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-400 border border-gray-200 rounded-lg text-[10px] font-bold">
                                                                                 <Lock className="h-3 w-3" /> Locked
-                                                                            </div>
+                                                                            </span>
                                                                         );
                                                                     }
 
+                                                                    const userRoles = Array.isArray(user.role) ? user.role : [user.role];
+                                                                    const isCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
+                                                                    const isCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
+                                                                    const isSpiritualAuthority = isCounselor || isCareGiver;
+                                                                    const devoteeTemple = uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || user.current_temple || uH?.currentTemple;
+                                                                    const isManagedTemple = assignedTemples.some(t => t.name.trim().toLowerCase() === (devoteeTemple || '').trim().toLowerCase());
+
                                                                     return (
-                                                                        <div className="flex justify-end gap-2">
+                                                                        <div className="flex justify-end items-center gap-1.5">
                                                                             <button
-                                                                                onClick={() => {
-                                                                                    openUserView(user);
-                                                                                }}
-                                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-white text-emerald-600 border-2 border-emerald-50 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white hover:shadow-lg hover:shadow-emerald-100 transition-all active:scale-95"
-                                                                                title="View Profile"
+                                                                                type="button"
+                                                                                onClick={() => openUserView(user)}
+                                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-300 rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                                title="View Devotee Profile"
                                                                             >
-                                                                                <Eye className="h-4 w-4" />
+                                                                                <Eye className="h-3.5 w-3.5" />
+                                                                                <span>View</span>
                                                                             </button>
 
-                                                                            {(() => {
-                                                                                const userRoles = Array.isArray(user.role) ? user.role : [user.role];
-                                                                                const isSpiritualAuthority = userRoles.some((r: any) => Number(r) === 2 || Number(r) === 20);
-                                                                                const devoteeTemple = uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || user.current_temple || uH?.currentTemple;
-                                                                                const isManagedTemple = assignedTemples.some(t => t.name.trim().toLowerCase() === (devoteeTemple || '').trim().toLowerCase());
-
-                                                                                if (isSpiritualAuthority) {
-                                                                                    return (
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                setCounselorActionUser(user);
-                                                                                                setCounselorActionType('revoke');
-                                                                                                setShowCounselorModal(true);
-                                                                                            }}
-                                                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 border-2 border-rose-100 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                                                                                            title="Revoke Counselor Role"
-                                                                                        >
-                                                                                            <ShieldAlert className="h-4 w-4" />
-                                                                                        </button>
-                                                                                    );
-                                                                                } else if (isManagedTemple) {
-                                                                                    return (
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                setCounselorActionUser(user);
-                                                                                                setCounselorActionType('assign');
-                                                                                                setShowCounselorModal(true);
-                                                                                            }}
-                                                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-600 border-2 border-primary-100 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                                                                                            title="Assign Counselor/Care Giver Role"
-                                                                                        >
-                                                                                            <ShieldCheck className="h-4 w-4" />
-                                                                                        </button>
-                                                                                    );
-                                                                                } else {
-                                                                                    return (
-                                                                                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-400 border border-gray-200 rounded-xl font-black text-[10px] uppercase tracking-widest cursor-not-allowed" title="Devotee must belong to one of your managed Temples">
-                                                                                            <Shield className="h-4 w-4 text-gray-300" />
-                                                                                        </div>
-                                                                                    );
-                                                                                }
-                                                                            })()}
+                                                                            {isManagedTemple || isSpiritualAuthority ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => openAuthorityModal(user)}
+                                                                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-2xs active:scale-95 cursor-pointer border ${
+                                                                                        isCounselor
+                                                                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-600 hover:text-white'
+                                                                                            : isCareGiver
+                                                                                            ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-600 hover:text-white'
+                                                                                            : 'bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-600 hover:text-white'
+                                                                                    }`}
+                                                                                    title="Manage, Assign, or Remove Authority Role"
+                                                                                >
+                                                                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                                                                    <span>
+                                                                                        {isCounselor ? 'Counselor' : isCareGiver ? 'Care Giver' : '+ Role'}
+                                                                                    </span>
+                                                                                </button>
+                                                                            ) : (
+                                                                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 text-gray-400 border border-gray-200 rounded-lg text-[10px] font-semibold" title="Devotee belongs to another temple">
+                                                                                    <Shield className="h-3 w-3 text-gray-400" />
+                                                                                    <span>Locked</span>
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                     );
                                                                 })()}
@@ -3623,82 +3622,213 @@ export default function ManagingDirectorDashboard() {
 
             {/* Modals Section */}
 
-            {/* Counselor Action Modal */}
+            {/* Counselor / Authority Action Modal */}
             {showCounselorModal && counselorActionUser && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all scale-100 animate-in zoom-in-95 duration-200 overflow-hidden border border-amber-100">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md transform transition-all scale-100 animate-in zoom-in-95 duration-200 overflow-hidden border border-slate-200">
                         {/* Header */}
-                        <div className={`p-6 flex flex-col items-center text-center gap-3 bg-gradient-to-br ${counselorActionType === 'assign' ? 'from-primary-500 to-orange-600' : 'from-rose-500 to-red-600'}`}>
-                            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl">
-                                {counselorActionType === 'assign' ? <ShieldCheck className="h-8 w-8" /> : <ShieldAlert className="h-8 w-8" />}
+                        <div className={`p-4 sm:p-5 flex items-center justify-between text-white ${
+                            selectedCounselorOption === 'revoke'
+                                ? 'bg-gradient-to-r from-rose-600 to-red-700'
+                                : 'bg-gradient-to-r from-primary-600 via-orange-600 to-amber-600'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-md shrink-0">
+                                    {selectedCounselorOption === 'revoke' ? (
+                                        <Trash2 className="h-5 w-5" />
+                                    ) : (
+                                        <ShieldCheck className="h-5 w-5" />
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <h2 className="text-base font-black tracking-tight leading-snug">
+                                        Manage Devotee Authority
+                                    </h2>
+                                    <p className="text-white/90 text-xs font-bold truncate">
+                                        {counselorActionUser.name}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <h2 className="text-xl font-black text-white uppercase tracking-tight">
-                                    {counselorActionType === 'assign' ? 'Appoint Authority' : 'Revoke Authority'}
-                                </h2>
-                                <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-1">
-                                    {counselorActionUser.name}
-                                </p>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowCounselorModal(false)}
+                                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
 
-                        <div className="p-8 space-y-6">
-                            {counselorActionType === 'assign' ? (
-                                <>
-                                    <div className="space-y-3">
-                                        <p className="text-sm font-bold text-gray-600 text-center">Select the spiritual role for this devotee:</p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                onClick={() => setSelectedCounselorRole('counselor')}
-                                                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${selectedCounselorRole === 'counselor' ? 'border-primary-500 bg-primary-50 ring-4 ring-primary-500/10' : 'border-gray-100 bg-gray-50 hover:border-primary-200'}`}
-                                            >
-                                                <UserCheck className={`h-6 w-6 ${selectedCounselorRole === 'counselor' ? 'text-primary-600' : 'text-gray-400'}`} />
-                                                <span className={`text-[10px] font-black uppercase tracking-widest ${selectedCounselorRole === 'counselor' ? 'text-primary-700' : 'text-gray-500'}`}>Counselor</span>
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedCounselorRole('care_giver')}
-                                                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${selectedCounselorRole === 'care_giver' ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-500/10' : 'border-gray-100 bg-gray-50 hover:border-blue-200'}`}
-                                            >
-                                                <Heart className={`h-6 w-6 ${selectedCounselorRole === 'care_giver' ? 'text-blue-600' : 'text-gray-400'}`} />
-                                                <span className={`text-[10px] font-black uppercase tracking-widest ${selectedCounselorRole === 'care_giver' ? 'text-blue-700' : 'text-gray-500'}`}>Care Giver</span>
-                                            </button>
+                        <div className="p-4 sm:p-5 space-y-4">
+                            {/* Current Role Status */}
+                            {(() => {
+                                const userRoles = Array.isArray(counselorActionUser.role) ? counselorActionUser.role : [counselorActionUser.role];
+                                const isCurrentCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
+                                const isCurrentCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
+
+                                return (
+                                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                                        <span className="text-slate-500 font-bold">Current Assigned Role:</span>
+                                        <span className={`px-2 py-0.5 rounded-full font-black text-[10px] uppercase tracking-wide ${
+                                            isCurrentCounselor
+                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                : isCurrentCareGiver
+                                                ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                                                : 'bg-slate-200 text-slate-700'
+                                        }`}>
+                                            {isCurrentCounselor ? 'Counselor' : isCurrentCareGiver ? 'Care Giver' : 'Standard Devotee (Student)'}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Role Selection Options */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-700 block">
+                                    Select Action / Role for this Devotee:
+                                </label>
+
+                                <div className="grid grid-cols-1 gap-2">
+                                    {/* Option 1: Counselor */}
+                                    <div
+                                        onClick={() => setSelectedCounselorOption('counselor')}
+                                        className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3 ${
+                                            selectedCounselorOption === 'counselor'
+                                                ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20'
+                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            selectedCounselorOption === 'counselor' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                            <UserCheck className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-black text-slate-900 uppercase">Counselor</span>
+                                                <span className="text-[10px] text-emerald-700 font-bold">Role 2</span>
+                                            </div>
+                                            <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
+                                                Appoint as Spiritual Counselor (syncs with counselors directory)
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 border-dashed">
-                                        <p className="text-[10px] font-bold text-amber-700 leading-relaxed text-center italic">
+
+                                    {/* Option 2: Care Giver */}
+                                    <div
+                                        onClick={() => setSelectedCounselorOption('care_giver')}
+                                        className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3 ${
+                                            selectedCounselorOption === 'care_giver'
+                                                ? 'border-sky-500 bg-sky-50/80 ring-2 ring-sky-500/20'
+                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            selectedCounselorOption === 'care_giver' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                            <Heart className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-black text-slate-900 uppercase">Care Giver</span>
+                                                <span className="text-[10px] text-sky-700 font-bold">Role 20</span>
+                                            </div>
+                                            <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
+                                                Appoint as Devotee Care Giver (syncs with care givers directory)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Option 3: Remove Role / Revert to Student */}
+                                    <div
+                                        onClick={() => setSelectedCounselorOption('revoke')}
+                                        className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3 ${
+                                            selectedCounselorOption === 'revoke'
+                                                ? 'border-rose-500 bg-rose-50/80 ring-2 ring-rose-500/20'
+                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            selectedCounselorOption === 'revoke' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                            <Trash2 className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-black text-rose-800 uppercase">Remove Assigned Role</span>
+                                                <span className="text-[10px] text-rose-600 font-bold">Revert</span>
+                                            </div>
+                                            <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
+                                                Revoke authority, remove from counselor directory &amp; reset to standard devotee
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Informational Callout */}
+                            {selectedCounselorOption === 'revoke' ? (
+                                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5">
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <span className="font-bold block">Revocation Action:</span>
+                                        <span className="text-[11px] leading-relaxed">
+                                            This will remove Counselor / Care Giver privileges and restore standard devotee (student) role.
+                                        </span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {!(counselorActionUser.ashram || counselorActionUser.hierarchy?.ashram) && (
+                                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <span className="text-[11px] leading-relaxed">
+                                                <strong>Note:</strong> Devotee has no Ashram in their profile. Setting an ashram is recommended before appointing.
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200/60 text-center">
+                                        <p className="text-[10.5px] font-semibold text-amber-800 italic">
                                             &quot;Appointing a devotee as an authority will synchronize their role and identity in the database.&quot;
                                         </p>
                                     </div>
                                 </>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="bg-rose-50 p-5 rounded-2xl border border-rose-100 flex items-start gap-4">
-                                        <AlertTriangle className="h-6 w-6 text-rose-500 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm font-black text-rose-900 uppercase tracking-tight">Revocation Warning</p>
-                                            <p className="text-xs font-bold text-rose-700/80 mt-1 leading-relaxed">
-                                                This will remove all spiritual authority roles from this user and delete their record from the counselors directory.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs font-bold text-gray-500 text-center uppercase tracking-widest">Are you sure you want to proceed?</p>
-                                </div>
                             )}
 
-                            <div className="flex gap-3">
+                            {/* Buttons */}
+                            <div className="flex gap-2.5 pt-2 border-t border-slate-100">
                                 <button
+                                    type="button"
                                     onClick={() => setShowCounselorModal(false)}
-                                    className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95"
+                                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleCounselorAction}
                                     disabled={isProcessingCounselor}
-                                    className={`flex-[2] py-3.5 ${counselorActionType === 'assign' ? 'bg-primary-600 shadow-primary-200' : 'bg-rose-600 shadow-rose-200'} text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:brightness-110 transition-all active:scale-95 flex items-center justify-center gap-2`}
+                                    className={`flex-[2] py-2.5 rounded-xl font-bold text-xs text-white shadow-md hover:brightness-105 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                                        selectedCounselorOption === 'revoke'
+                                            ? 'bg-rose-600 hover:bg-rose-700'
+                                            : 'bg-primary-600 hover:bg-primary-700'
+                                    }`}
                                 >
-                                    {isProcessingCounselor ? <Activity className="h-4 w-4 animate-spin" /> : (counselorActionType === 'assign' ? <Check className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />)}
-                                    {isProcessingCounselor ? 'Processing...' : (counselorActionType === 'assign' ? 'Confirm Role' : 'Confirm Revocation')}
+                                    {isProcessingCounselor ? (
+                                        <>
+                                            <Activity className="h-4 w-4 animate-spin" />
+                                            <span>Processing...</span>
+                                        </>
+                                    ) : selectedCounselorOption === 'revoke' ? (
+                                        <>
+                                            <Trash2 className="h-4 w-4" />
+                                            <span>Confirm Remove Role</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Check className="h-4 w-4" />
+                                            <span>Confirm Role Assignment</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

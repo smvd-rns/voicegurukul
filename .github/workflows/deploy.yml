@@ -39,38 +39,28 @@ jobs:
       - name: Compress Build Artifacts
         run: tar -czf next-build.tar.gz --exclude='.next/cache' .next
 
-      - name: Copy Build Artifacts to Droplet via SCP
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          password: ${{ secrets.DROPLET_PASSWORD }}
-          source: "next-build.tar.gz"
-          target: "/var/www/voicegurukul"
-          overwrite: true
-          timeout: 120s
+      - name: Deploy Build Artifacts to Droplet
+        env:
+          SSHPASS: ${{ secrets.DROPLET_PASSWORD }}
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+        run: |
+          echo "Installing OpenSSH tools..."
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
 
-      - name: Copy .env file to Droplet
-        if: env.ENV_FILE != ''
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          password: ${{ secrets.DROPLET_PASSWORD }}
-          source: ".env"
-          target: "/var/www/voicegurukul"
-          overwrite: true
-          timeout: 60s
+          echo "Uploading Next.js build artifacts to droplet..."
+          sshpass -e scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 next-build.tar.gz ${DROPLET_USER}@${DROPLET_HOST}:/var/www/voicegurukul/
 
-      - name: Restart Server via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          password: ${{ secrets.DROPLET_PASSWORD }}
-          timeout: 180s
-          script: |
+          if [ -f ".env" ]; then
+            echo "Uploading .env to droplet..."
+            sshpass -e scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 .env ${DROPLET_USER}@${DROPLET_HOST}:/var/www/voicegurukul/
+          fi
+
+          echo "Connecting to droplet to extract build and restart server..."
+          sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 ${DROPLET_USER}@${DROPLET_HOST} << 'EOF'
+            set -e
             cd /var/www/voicegurukul
+
             # Ensure branch is clean and strictly matches origin/main without merge conflicts
             git fetch origin main
             git checkout -f main || git checkout -f -B main origin/main
@@ -85,7 +75,7 @@ jobs:
               echo "Build artifacts unpacked successfully."
             fi
 
-            # Install production dependencies safely without wiping node_modules (prevents OOM & next not found)
+            # Install production dependencies safely without wiping node_modules
             npm install --omit=dev --prefer-offline --no-audit --no-fund
 
             # Restart PM2 Next.js application
@@ -99,4 +89,6 @@ jobs:
             fi
 
             pm2 save
+            echo "Droplet deployment completed successfully!"
+          EOF
 
