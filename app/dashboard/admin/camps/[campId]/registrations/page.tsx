@@ -1890,7 +1890,7 @@ export default function CampRegistrationsAdminPage() {
               )}
               <option value="PROCESSING">⏳ Pending ({processingCount})</option>
               <option value="REFUNDED">💸 Refunded ({cancelledDevoteesCount})</option>
-              <option value="INTER_TEMPLE_TRANSFER">🏛️ ITT Transfer</option>
+              <option value="INTER_TEMPLE_TRANSFER">🏛️ ISKCON to ISKCON Transfer</option>
               <option value="RAZORPAY">Razorpay / UPI</option>
               <option value="IDT">IDT Transfer (NVCC)</option>
               <option value="COUPON">Promo / Coupon</option>
@@ -5558,7 +5558,7 @@ export default function CampRegistrationsAdminPage() {
                     >
                       <option value="RAZORPAY">Razorpay (Online)</option>
                       <option value="IDT">Internal Dept Transfer (IDT)</option>
-                      <option value="INTER_TEMPLE_TRANSFER">Inter-Temple Transfer (ITT)</option>
+                      <option value="INTER_TEMPLE_TRANSFER">ISKCON to ISKCON Transfer</option>
                       <option value="FREE">Free Pass (Role Waiver)</option>
                       <option value="CASH">Cash / Manual</option>
                       <option value="COUPON">Coupon Pass</option>

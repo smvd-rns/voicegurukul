@@ -486,13 +486,18 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT') {
+      if (serverFinalTotal < 10000) {
+        return NextResponse.json({
+          error: 'ISKCON to ISKCON Transfer is only available for payments of ₹10,000 and above.'
+        }, { status: 400 });
+      }
       const screenshot = body.payment_screenshot_url || body.paymentScreenshotUrl;
       const ref = body.transaction_ref || body.transactionRef;
       if (!screenshot) {
-        return NextResponse.json({ error: 'Payment screenshot proof is required for Inter-Temple Transfer' }, { status: 400 });
+        return NextResponse.json({ error: 'Payment screenshot proof is required for ISKCON to ISKCON Transfer' }, { status: 400 });
       }
       if (!ref) {
-        return NextResponse.json({ error: 'Transaction Reference / UTR number is required for Inter-Temple Transfer' }, { status: 400 });
+        return NextResponse.json({ error: 'Transaction Reference / UTR number is required for ISKCON to ISKCON Transfer' }, { status: 400 });
       }
     } else if (paymentMethod === 'COUPON' || paymentMethod === 'ROLE_WAIVER' || paymentMethod === 'FREE') {
       if (paymentMethod === 'COUPON' && !matchedCoupon) {
@@ -1101,7 +1106,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: isPendingVerification
-        ? `Registration recorded! Your ${paymentMethod} transfer details have been submitted and are pending verification.`
+        ? `Registration recorded! Your ${paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT' ? 'ISKCON to ISKCON Transfer' : paymentMethod} transfer details have been submitted and are pending verification.`
         : 'Camp registrations submitted successfully!',
       groupId,
       count: insertedRecords.length,

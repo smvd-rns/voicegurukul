@@ -6325,13 +6325,13 @@ export default function AdminCampsPage() {
                           })}
                           className="w-4 h-4 text-emerald-600 rounded border-2 border-slate-300 focus:ring-emerald-500"
                         />
-                        Enable Inter-Temple Transfer
+                        Enable ISKCON to ISKCON Transfer (Inter-Temple)
                       </label>
                       <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                        Allows other ISKCON / VOICE centers to transfer camp registration fees directly to your bank account with receipt proof.
+                        Allows other ISKCON / VOICE centers to transfer camp registration fees directly to your bank account with receipt proof (available for payments of ₹10,000+).
                       </p>
                       <span className="inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                        Admin Receipt Verification
+                        Admin Receipt Verification • ₹10K+ Orders
                       </span>
 
                       {/* Access restriction toggle */}
@@ -6347,7 +6347,7 @@ export default function AdminCampsPage() {
                               })}
                               className="w-4 h-4 text-emerald-600 rounded border-2 border-slate-300 focus:ring-emerald-500"
                             />
-                            <span>Allow Regular Students to access ITT</span>
+                            <span>Allow Regular Devotees / Students to access ISKCON to ISKCON Transfer (₹10K+)</span>
                           </label>
                           <div className="text-[11px]">
                             {formData.payment_config.allow_student_itt ? (
@@ -6690,7 +6690,7 @@ export default function AdminCampsPage() {
                         </div>
                         <div>
                           <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                            Inter-Temple Bank Account Details
+                            ISKCON to ISKCON Transfer Bank Account Details
                           </h4>
                           <p className="text-[11px] text-slate-600">
                             These details will be displayed to devotee centers to transfer registration funds directly.

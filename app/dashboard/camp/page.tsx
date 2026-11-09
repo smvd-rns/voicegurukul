@@ -2268,6 +2268,10 @@ function CampDashboardContent() {
 
   // ITT Payment Handler
   const submitIttPayment = async () => {
+    if (grandTotal < 10000) {
+      setPaymentError('ISKCON to ISKCON Transfer is only available for payments of ₹10,000 and above.');
+      return;
+    }
     if (!ittTempleName.trim()) {
       setPaymentError('Please enter your Temple / Center Name.');
       return;
@@ -2318,7 +2322,7 @@ function CampDashboardContent() {
         deductionSource: ittTempleName.trim(),
       });
     } catch (err: any) {
-      setPaymentError(err.message || 'Failed to submit Inter-Temple Transfer');
+      setPaymentError(err.message || 'Failed to submit ISKCON to ISKCON Transfer');
       setIsSubmitting(false);
       setIttUploading(false);
     }
@@ -5540,7 +5544,8 @@ function CampDashboardContent() {
                 );
                 const showIttOption = Boolean(
                   selectedCamp.payment_config?.enable_itt &&
-                  (selectedCamp.payment_config?.allow_student_itt === true || isManager)
+                  (selectedCamp.payment_config?.allow_student_itt === true || isManager) &&
+                  grandTotal >= 10000
                 );
 
                 return (
@@ -5637,14 +5642,14 @@ function CampDashboardContent() {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
                             <span className="font-bold text-sm text-slate-900 group-hover:text-emerald-600 transition-colors">
-                              Inter-Temple Transfer (ITT)
+                              ISKCON to ISKCON Transfer
                             </span>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                              Bank Transfer
+                              ₹10K+ Orders
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 leading-relaxed">
-                            Direct bank transfer from other temple accounts with payment receipt upload.
+                            Direct bank transfer between ISKCON accounts with payment receipt upload (for bulk payments ₹10,000+).
                           </p>
                         </div>
                         <div className="text-right shrink-0 pl-2">
@@ -5813,7 +5818,7 @@ function CampDashboardContent() {
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <Landmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
                         <span className="text-[11px] sm:text-xs font-black text-emerald-950 uppercase tracking-wider">
-                          Temple Bank Details
+                          ISKCON to ISKCON Transfer Bank Details
                         </span>
                       </div>
                       <span className="text-[11px] sm:text-xs font-black text-emerald-700 shrink-0">
@@ -6309,7 +6314,7 @@ function CampDashboardContent() {
                                           : 'bg-amber-100 text-amber-900 border border-amber-300'
                                           }`}
                                       >
-                                        {isPendingIdt ? '⚡ Pending IDT' : '⏳ Awaiting ITT'}
+                                        {isPendingIdt ? '⚡ Pending IDT' : '⏳ Awaiting Transfer (ISKCON to ISKCON)'}
                                       </span>
                                     )}
                                   </div>
