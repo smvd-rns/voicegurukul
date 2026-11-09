@@ -32,11 +32,17 @@ export async function POST(request: Request) {
     }
 
     const updatedRoles = Array.isArray(userData.role) ? userData.role : [userData.role];
-    const hasPermission = updatedRoles.some((r: any) => [8, 11, 12, 13].includes(Number(r)) || ['super_admin', 'managing_director', 'director', 'central_voice_manager'].includes(String(r)));
+    const hasPermission = updatedRoles.some((r: any) => [8, 11, 12, 13].includes(Number(r)) || ['super_admin', 'managing_director', 'director', 'central_voice_manager'].includes(String(r).toLowerCase()));
 
     if (!hasPermission) {
-      return NextResponse.json({ error: 'Permission denied. Only Admins can delete centers.' }, { status: 403 });
+      return NextResponse.json({ error: 'Permission denied. Only Managing Directors (Role 11, 12, 13) and Admins can delete centers.' }, { status: 403 });
     }
+
+    // Clean up junction rows first
+    await adminSupabase
+      .from('user_centers')
+      .delete()
+      .eq('center_id', centerId);
 
     // Proceed with deletion using admin client
     const { error: deleteError } = await adminSupabase

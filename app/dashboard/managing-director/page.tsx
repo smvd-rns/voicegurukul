@@ -456,6 +456,8 @@ export default function ManagingDirectorDashboard() {
     const isSuperAdmin = userRoleList.some(r =>
         Number(r) === 8 || String(r) === 'super_admin'
     );
+    // Managing Director posts (Role 11, 12, 13) and Super Admin (Role 8) can delete centers and users
+    const canDeleteEntities = userRoleList.some(r => r ? [8, 11, 12, 13].includes(getRoleHierarchyNumber(r as UserRole)) : false);
 
     // Dynamic Title for Temple Roles (MD, Director, Central VOICE Manager, Youth Preacher)
     const currentRoleTitle = useMemo(() => {
@@ -1078,18 +1080,59 @@ export default function ManagingDirectorDashboard() {
             loadUsers();
         }
     };
-    const handleDeleteCenter = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this center?')) return;
+    const handleDeleteCenter = async (id: string, name?: string) => {
+        if (!canDeleteEntities) {
+            toast.error('Permission denied: Only Managing Directors (Role 11, 12, 13) can delete centers');
+            return;
+        }
+        if (!confirm(`Are you sure you want to permanently delete center "${name || 'this center'}"? This action cannot be undone.`)) return;
         try {
-            const success = await deleteCenterFromLocal(id);
-            if (success) {
-                toast.success('Center deleted');
+            const res = await fetch('/api/centers/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ centerId: id })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                toast.success(`Center "${name || 'deleted'}" removed successfully`);
+                setShowEditCenterModal(false);
                 loadCenters();
             } else {
-                toast.error('Failed to delete center');
+                toast.error(data.error || 'Failed to delete center');
             }
-        } catch (e) {
-            toast.error('Error deleting center');
+        } catch (e: any) {
+            toast.error(e.message || 'Error deleting center');
+        }
+    };
+
+    const handleDeleteUser = async (userToDelete: any) => {
+        if (!canDeleteEntities) {
+            toast.error('Permission denied: Only Managing Directors (Role 11, 12, 13) can delete devotees');
+            return;
+        }
+        if (!userToDelete) return;
+        const name = userToDelete.initiated_name || userToDelete.legal_name || userToDelete.name || 'this devotee';
+        if (!window.confirm(`Are you sure you want to permanently delete devotee "${name}"?\n\nThis will remove their profile and database records completely. This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/users/${userToDelete.id}`, {
+                method: 'DELETE',
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                toast.success(`Devotee ${name} deleted successfully`);
+                setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+                if (showViewModal && userForView?.id === userToDelete.id) {
+                    closeUserView();
+                }
+            } else {
+                toast.error(data.error || 'Failed to delete devotee');
+            }
+        } catch (err: any) {
+            console.error('Error deleting user:', err);
+            toast.error(err.message || 'Network error deleting devotee');
         }
     };
 
@@ -2371,17 +2414,30 @@ export default function ManagingDirectorDashboard() {
                                                     )}
                                                 </div>
 
-                                                <div className="pt-1.5 border-t border-gray-100">
+                                                <div className="pt-1.5 border-t border-gray-100 flex items-center gap-1.5">
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openEditCenterModal(center);
                                                         }}
-                                                        className={`w-full py-1.5 ${theme.bg} ${theme.text} hover:bg-white border border-transparent hover:${theme.border} rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs`}
+                                                        className={`flex-1 py-1.5 ${theme.bg} ${theme.text} hover:bg-white border border-transparent hover:${theme.border} rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs`}
                                                     >
                                                         <Edit className="h-3 w-3" /> Edit Center
                                                     </button>
+                                                    {canDeleteEntities && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteCenter(center.id, center.name);
+                                                            }}
+                                                            className="px-2 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200 rounded-lg transition-all flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
+                                                            title={`Delete Center "${center.name}"`}
+                                                        >
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -2871,6 +2927,17 @@ export default function ManagingDirectorDashboard() {
                                                                     );
                                                                 }
                                                             })()}
+
+                                                            {canDeleteEntities && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteUser(user)}
+                                                                    className="p-2 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                    title="Delete Devotee Permanently"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     );
                                                 })()}
@@ -3068,6 +3135,17 @@ export default function ManagingDirectorDashboard() {
                                                                                     <Shield className="h-3 w-3 text-gray-400" />
                                                                                     <span>Locked</span>
                                                                                 </span>
+                                                                            )}
+
+                                                                            {canDeleteEntities && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDeleteUser(user)}
+                                                                                    className="inline-flex items-center justify-center p-1.5 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                                    title={`Delete Devotee "${user.initiated_name || user.legal_name || user.name}" Permanently`}
+                                                                                >
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                </button>
                                                                             )}
                                                                         </div>
                                                                     );
@@ -4284,18 +4362,29 @@ export default function ManagingDirectorDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 flex gap-3">
+                                <div className="pt-4 flex items-center gap-2.5">
+                                    {canDeleteEntities && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteCenter(editingCenter.id, editingCenter.name)}
+                                            className="py-3 px-3.5 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-600 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
+                                            title="Delete Center Permanently"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Delete</span>
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => setShowEditCenterModal(false)}
-                                        className="flex-1 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
+                                        className="flex-1 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all cursor-pointer"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
-                                        className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        className="flex-[2] py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                                     >
                                         {isSubmitting ? (
                                             <>

@@ -35,9 +35,12 @@ export async function DELETE(
         const roles = Array.isArray(adminProfile.role) ? adminProfile.role : [adminProfile.role];
         const roleNums = roles.map((r: any) => Number(r));
         const isSuperAdmin = roleNums.includes(8) || roles.includes('super_admin');
+        const isAuthorizedToDelete = isSuperAdmin ||
+            roleNums.some((r: any) => [11, 12, 13].includes(Number(r))) ||
+            roles.some((r: any) => ['managing_director', 'director', 'central_voice_manager'].includes(String(r).toLowerCase()));
 
-        if (!isSuperAdmin) {
-            return NextResponse.json({ error: 'Forbidden. Only Super Admins can delete users.' }, { status: 403 });
+        if (!isAuthorizedToDelete) {
+            return NextResponse.json({ error: 'Forbidden. Only Managing Directors (Role 11, 12, 13) and Admins can delete users.' }, { status: 403 });
         }
 
         const userIdToDelete = params.id;
@@ -45,8 +48,42 @@ export async function DELETE(
              return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
 
-        // 1. Delete associated profile details first (if any)
-        await dbQuery('DELETE FROM user_profile_details WHERE user_id = $1', [userIdToDelete]);
+        // Check target user to protect super admins from being deleted by non-super-admins
+        const targetRes = await dbQuery('SELECT id, role FROM users WHERE id = $1', [userIdToDelete]);
+        if (targetRes.rowCount === 0) {
+            return NextResponse.json({ error: 'User not found or already deleted' }, { status: 404 });
+        }
+        const targetUser = targetRes.rows[0];
+        const targetRoles = Array.isArray(targetUser.role) ? targetUser.role : [targetUser.role];
+        const targetRoleNums = targetRoles.map((r: any) => Number(r));
+        const targetIsSuperAdmin = targetRoleNums.includes(8) || targetRoles.includes('super_admin');
+
+        if (targetIsSuperAdmin && !isSuperAdmin) {
+            return NextResponse.json({ error: 'Forbidden. Super Admins cannot be deleted.' }, { status: 403 });
+        }
+
+        // Nullify foreign key references in centers and temples to avoid constraint violations
+        await dbQuery(`
+            UPDATE centers SET
+                project_manager_id = CASE WHEN project_manager_id = $1 THEN NULL ELSE project_manager_id END,
+                project_advisor_id = CASE WHEN project_advisor_id = $1 THEN NULL ELSE project_advisor_id END,
+                acting_manager_id = CASE WHEN acting_manager_id = $1 THEN NULL ELSE acting_manager_id END
+            WHERE project_manager_id = $1 OR project_advisor_id = $1 OR acting_manager_id = $1
+        `, [userIdToDelete]).catch(() => {});
+
+        await dbQuery(`
+            UPDATE temples SET
+                managing_director_id = CASE WHEN managing_director_id = $1 THEN NULL ELSE managing_director_id END,
+                director_id = CASE WHEN director_id = $1 THEN NULL ELSE director_id END,
+                central_voice_manager_id = CASE WHEN central_voice_manager_id = $1 THEN NULL ELSE central_voice_manager_id END
+            WHERE managing_director_id = $1 OR director_id = $1 OR central_voice_manager_id = $1
+        `, [userIdToDelete]).catch(() => {});
+
+        // 1. Delete associated profile details & junction records first (if any)
+        await dbQuery('DELETE FROM user_profile_details WHERE user_id = $1', [userIdToDelete]).catch(() => {});
+        await dbQuery('DELETE FROM user_centers WHERE user_id = $1', [userIdToDelete]).catch(() => {});
+        await dbQuery('DELETE FROM counselors WHERE user_id = $1', [userIdToDelete]).catch(() => {});
+        await dbQuery('DELETE FROM profile_update_requests WHERE user_id = $1', [userIdToDelete]).catch(() => {});
 
         // 2. Delete user row from Droplet DB
         const delRes = await dbQuery('DELETE FROM users WHERE id = $1', [userIdToDelete]);
