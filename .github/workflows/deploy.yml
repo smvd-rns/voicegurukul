@@ -85,16 +85,6 @@ jobs:
               echo "Build artifacts unpacked successfully."
             fi
 
-            # Auto-upgrade Node.js on droplet if version is older than 22.23.4 (Fixes Brotli CVE)
-            NODE_CURRENT=$(node -v 2>/dev/null || echo "v0")
-            echo "Current droplet Node.js version: $NODE_CURRENT"
-            if [[ "$NODE_CURRENT" =~ ^v(1[0-9]|20|21|22\.([0-9]|1[0-9]|2[0-2])\.) ]]; then
-              echo "Upgrading Node.js to Node 22 LTS on droplet..."
-              curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-              echo "Upgraded Node.js to: $(node -v)"
-            fi
-
             # Install production dependencies safely without wiping node_modules (prevents OOM & next not found)
             npm install --omit=dev --prefer-offline --no-audit --no-fund
 
