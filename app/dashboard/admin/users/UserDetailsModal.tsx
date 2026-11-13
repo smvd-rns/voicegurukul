@@ -31,22 +31,45 @@ export default function UserDetailsModal({
 }: UserDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'spiritual' | 'education' | 'camps'>('profile');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [detailedUser, setDetailedUser] = useState<User | null>(user);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  React.useEffect(() => {
+    setDetailedUser(user);
+  }, [user]);
+
+  // Fetch full user details on-demand if education or career data isn't loaded yet
+  React.useEffect(() => {
+    if (isOpen && activeTab === 'education' && user?.id && (!detailedUser?.education || detailedUser.education.length === 0)) {
+      setLoadingDetails(true);
+      fetch(`/api/admin/users/${user.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.user) {
+            setDetailedUser(data.user);
+          }
+        })
+        .catch(err => console.error('Error fetching on-demand user details:', err))
+        .finally(() => setLoadingDetails(false));
+    }
+  }, [isOpen, activeTab, user?.id, detailedUser?.education]);
 
   if (!isOpen || !user) return null;
 
-  const hierarchy = user.hierarchy || {};
-  const highestRole = getHighestRole(user.role || 'student');
+  const activeUser = detailedUser || user;
+  const hierarchy = activeUser.hierarchy || {};
+  const highestRole = getHighestRole(activeUser.role || 'student');
   const roleName = getRoleDisplayName(highestRole);
-  const isPending = user.verificationStatus === 'pending';
-  const isApproved = user.verificationStatus === 'approved';
-  const isRejected = user.verificationStatus === 'rejected';
+  const isPending = activeUser.verificationStatus === 'pending';
+  const isApproved = activeUser.verificationStatus === 'approved';
+  const isRejected = activeUser.verificationStatus === 'rejected';
 
-  const userAshram = hierarchy.ashram || (user as any).ashram || '';
+  const userAshram = hierarchy.ashram || (activeUser as any).ashram || '';
   const isBrahmachariOrGrihastha = userAshram === 'Brahmachari' || userAshram === 'Grihastha';
 
   // Resolved Center / Temple / Counselor with "Other" recognition
-  const otherCenterText = user.otherCenter || hierarchy.otherCenter || (user as any).other_center;
-  const rawCenter = hierarchy.currentCenter || hierarchy.center || user.currentCenter || user.parentCenter;
+  const otherCenterText = activeUser.otherCenter || hierarchy.otherCenter || (activeUser as any).other_center;
+  const rawCenter = hierarchy.currentCenter || hierarchy.center || activeUser.currentCenter || activeUser.parentCenter;
   const isOtherCenter = rawCenter === 'Other';
   const displayCenter = rawCenter === 'None'
     ? 'None'
@@ -54,8 +77,8 @@ export default function UserDetailsModal({
       ? (otherCenterText ? `Other: ${otherCenterText}` : 'Other (Unspecified)')
       : (rawCenter || 'None / Not Assigned');
 
-  const otherTempleText = user.otherTemple || hierarchy.otherTemple || (user as any).other_temple;
-  const rawTemple = hierarchy.currentTemple || user.currentTemple || user.parentTemple;
+  const otherTempleText = activeUser.otherTemple || hierarchy.otherTemple || (activeUser as any).other_temple;
+  const rawTemple = hierarchy.currentTemple || activeUser.currentTemple || activeUser.parentTemple;
   const isOtherTemple = rawTemple === 'Other';
   const displayTemple = rawTemple === 'None'
     ? 'None'
@@ -63,7 +86,7 @@ export default function UserDetailsModal({
       ? (otherTempleText ? `Other: ${otherTempleText}` : 'Other (Unspecified)')
       : (rawTemple || 'None / Not Assigned');
 
-  const otherCounselorText = user.otherCounselor || hierarchy.otherCounselor || (user as any).other_counselor;
+  const otherCounselorText = activeUser.otherCounselor || hierarchy.otherCounselor || (activeUser as any).other_counselor;
   const rawCounselor = hierarchy.counselor || hierarchy.brahmachariCounselor || hierarchy.grihasthaCounselor;
   const isOtherCounselor = rawCounselor === 'Other';
   const displayCounselor = rawCounselor === 'None'
@@ -505,6 +528,12 @@ export default function UserDetailsModal({
           {/* TAB 3: Education & Career */}
           {activeTab === 'education' && (
             <div className="space-y-4">
+              {loadingDetails && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                  Loading education and career history...
+                </div>
+              )}
               {/* Education */}
               <div className="bg-white p-4 rounded-2xl border border-slate-300 shadow-xs space-y-3">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
@@ -512,9 +541,9 @@ export default function UserDetailsModal({
                   Education Details
                 </h3>
 
-                {user.education && user.education.length > 0 ? (
+                {activeUser.education && activeUser.education.length > 0 ? (
                   <div className="space-y-2">
-                    {user.education.map((edu, idx) => (
+                    {activeUser.education.map((edu, idx) => (
                       <div key={idx} className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 text-xs">
                         <div className="font-bold text-gray-900">{edu.degreeBranch || 'Degree'}</div>
                         <div className="text-gray-600 mt-0.5">{edu.institution}</div>
@@ -538,9 +567,9 @@ export default function UserDetailsModal({
                   Work Experience
                 </h3>
 
-                {user.workExperience && user.workExperience.length > 0 ? (
+                {activeUser.workExperience && activeUser.workExperience.length > 0 ? (
                   <div className="space-y-2">
-                    {user.workExperience.map((work, idx) => (
+                    {activeUser.workExperience.map((work, idx) => (
                       <div key={idx} className="p-3 bg-slate-50/90 rounded-xl border border-slate-300 text-xs">
                         <div className="font-bold text-gray-900">{work.position}</div>
                         <div className="text-gray-600 mt-0.5">{work.company} • {work.location}</div>

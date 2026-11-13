@@ -179,59 +179,49 @@ export default function CounselorPage() {
     return roleStr === 'counselor' || roleStr === 'senior_counselor' || roleStr === 'care_giver';
   });
 
-  const loadStudents = useCallback(async () => {
-    if (!userData?.email) {
+  const loadDashboardData = useCallback(async (customRange?: { from: string; to: string }) => {
+    if (!userData?.email || !hasCounselorRole) {
       setLoading(false);
+      setStats(prev => ({ ...prev, loading: false }));
       return;
     }
-    if (!supabase) return;
 
+    const activeRange = customRange || dateRange;
     setLoading(true);
     setIsAnalyzing(true);
+    setStats(prev => ({ ...prev, loading: true }));
+
     try {
-      const adminEmail = userData.email.trim().toLowerCase();
+      const session = await supabase?.auth.getSession();
+      const token = session?.data.session?.access_token;
 
-      // 1. Resolve counselor ID
-      const { data: counselorData } = await supabase
-        .from('counselors')
-        .select('id, name, user_id, current_temple, parent_temple')
-        .ilike('email', adminEmail)
-        .maybeSingle();
-
-      const counselorId = counselorData?.id;
-      const counselorName = counselorData?.name?.trim().toLowerCase();
-      const counselorUserId = counselorData?.user_id;
-
-      // 2. Fetch all users for this counselor (Dual Lookup)
-      // Mirroring the robust registration logic
-      const { data: rawUsers, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('verification_status', 'approved'); // Only approved students in progress tab
-
-      if (usersError) throw usersError;
-
-      const assignedStudents = (rawUsers || []).filter((u: any) => {
-        const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
-        const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
-        const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
-
-        // Match by stable counselor_id (most reliable)
-        const matchesId = (counselorId && (u.counselor_id === counselorId || uH.counselorId === counselorId)) || 
-                          (counselorUserId && (u.counselor_id === counselorUserId || uH.counselorId === counselorUserId));
-        // Match by email or name (legacy/fallback)
-        const matchesLegacy = bE === adminEmail || gE === adminEmail ||
-          (counselorName && (bN === counselorName || gN === counselorName ||
-          (u.counselor || '').trim().toLowerCase() === counselorName ||
-          (uH.counselor || '').trim().toLowerCase() === counselorName ||
-          (u.other_counselor || '').trim().toLowerCase() === counselorName ||
-          (uH.otherCounselor || '').trim().toLowerCase() === counselorName));
-
-        // Only show users who explicitly selected this counselor
-        return matchesId || matchesLegacy;
+      const res = await fetch(`/api/counselor/dashboard?from=${activeRange.from}&to=${activeRange.to}&_t=${Date.now()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error || 'Failed to load counselor dashboard');
+      }
+
+      // 1. Update stats
+      if (json.stats) {
+        setStats({
+          devotees: json.stats.devotees || 0,
+          pendingRegistrations: json.stats.pendingRegistrations || 0,
+          pendingSpiritual: json.stats.pendingSpiritual || 0,
+          loading: false,
+        });
+      }
+
+      // 2. Update pending devotees list
+      if (json.pendingStudents) {
+        setPendingUsers(json.pendingStudents.map(mapUserData));
+      }
+
+      // 3. Process approved devotees and sadhana reports
+      const assignedStudents = json.approvedStudents || [];
+      const allReports = json.reports || [];
 
       if (assignedStudents.length === 0) {
         setStudents([]);
@@ -239,28 +229,28 @@ export default function CounselorPage() {
         return;
       }
 
-      // 3. Bulk Fetch Reports
-      const userIds = (assignedStudents as any[]).map((s: any) => s.id);
-      const allReports = await fetchBulkSadhanaReports(userIds, dateRange.from, dateRange.to);
-
-      // 4. Map reports to students & calculate aggregate stats
-      const totalDaysToDivide = Math.max(1, differenceInCalendarDays(parseISO(dateRange.to), parseISO(dateRange.from)) + 1);
+      const totalDaysToDivide = Math.max(1, differenceInCalendarDays(parseISO(activeRange.to), parseISO(activeRange.from)) + 1);
 
       // Group reports by userId
-      const reportsByUser = allReports.reduce((acc, report) => {
-        if (!acc[report.userId]) acc[report.userId] = [];
-        acc[report.userId].push(report);
+      const reportsByUser = allReports.reduce((acc: any, report: any) => {
+        const uId = report.user_id || report.userId;
+        if (!acc[uId]) acc[uId] = [];
+        acc[uId].push({
+          ...report,
+          userId: uId,
+          soulPercent: Number(report.soul_percent ?? report.soulPercent ?? 0),
+          bodyPercent: Number(report.body_percent ?? report.bodyPercent ?? 0),
+        });
         return acc;
-      }, {} as Record<string, SadhanaReport[]>);
+      }, {} as Record<string, any[]>);
 
-      const studentsWithProgress = (assignedStudents as any[]).map((student: any) => {
+      const studentsWithProgress: StudentWithProgress[] = assignedStudents.map((student: any) => {
         const reports = reportsByUser[student.id] || [];
 
-        // Manual aggregation for this specific student
-        const totalSoulPoints = reports.reduce((sum, r) => sum + (r.soulPercent || 0), 0);
+        const totalSoulPoints = reports.reduce((sum: number, r: any) => sum + (r.soulPercent || 0), 0);
         const avgSoulPercentNum = reports.length > 0 ? parseFloat((totalSoulPoints / reports.length).toFixed(1)) : 0;
 
-        const totalBodyPoints = reports.reduce((sum, r) => sum + (r.bodyPercent || 0), 0);
+        const totalBodyPoints = reports.reduce((sum: number, r: any) => sum + (r.bodyPercent || 0), 0);
         const avgBodyPercentNum = reports.length > 0 ? parseFloat((totalBodyPoints / reports.length).toFixed(1)) : 0;
 
         let progressRating = 'No Reports';
@@ -290,7 +280,7 @@ export default function CounselorPage() {
         return {
           ...mapUserData(student),
           avgSoulPercent: avgSoulPercentNum,
-          avgBodyPercent: avgBodyPercentNum, // Added
+          avgBodyPercent: avgBodyPercentNum,
           progressRating,
           progressColor,
           progressBgColor,
@@ -300,13 +290,13 @@ export default function CounselorPage() {
 
       setStudents(studentsWithProgress);
 
-      // 5. Aggregate Data for Chart (Daily average of group)
-      const dataByDate = allReports.reduce((acc, report) => {
+      // 4. Aggregate Data for Chart (Daily average of group)
+      const dataByDate = allReports.reduce((acc: any, report: any) => {
         const reportDate = typeof report.date === 'string' ? parseISO(report.date) : report.date;
         const dateKey = format(reportDate, 'MM/dd');
         if (!acc[dateKey]) acc[dateKey] = { date: dateKey, soul: 0, body: 0, count: 0 };
-        acc[dateKey].soul += (report.soulPercent || 0);
-        acc[dateKey].body += (report.bodyPercent || 0);
+        acc[dateKey].soul += Number(report.soul_percent ?? report.soulPercent ?? 0);
+        acc[dateKey].body += Number(report.body_percent ?? report.bodyPercent ?? 0);
         acc[dateKey].count += 1;
         return acc;
       }, {} as Record<string, any>);
@@ -317,18 +307,31 @@ export default function CounselorPage() {
           'Avg Soul %': Math.round(d.soul / d.count),
           'Avg Body %': Math.round(d.body / d.count),
         }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
       setAggregatedStats(chartData);
 
     } catch (error) {
-      console.error('Error loading students and reports:', error);
+      console.error('Error loading counselor dashboard:', error);
       toast.error('Failed to load group progress');
     } finally {
       setLoading(false);
       setIsAnalyzing(false);
+      setStats(prev => ({ ...prev, loading: false }));
     }
-  }, [userData, dateRange]);
+  }, [userData, hasCounselorRole, dateRange]);
+
+  const loadStudents = useCallback(async () => {
+    await loadDashboardData();
+  }, [loadDashboardData]);
+
+  const loadPendingUsers = useCallback(async () => {
+    await loadDashboardData();
+  }, [loadDashboardData]);
+
+  const loadStats = useCallback(async () => {
+    await loadDashboardData();
+  }, [loadDashboardData]);
 
   const loadProfileRequests = useCallback(async () => {
     if (!userData?.email || !hasCounselorRole) return;
@@ -336,7 +339,6 @@ export default function CounselorPage() {
     try {
       const session = await supabase?.auth.getSession();
       const token = session?.data.session?.access_token;
-      
 
       const response = await fetch(`/api/profile-requests?status=${approvalStatus}&_t=${Date.now()}`, {
         headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined,
@@ -354,201 +356,22 @@ export default function CounselorPage() {
     }
   }, [userData?.email, hasCounselorRole, approvalStatus]);
 
-  const loadPendingUsers = useCallback(async () => {
-    if (!userData?.email || !hasCounselorRole) {
-      setLoadingPending(false);
-      return;
-    }
-    if (!supabase) return;
-    setLoadingPending(true);
-    try {
-      const adminEmail = userData.email.trim().toLowerCase();
-
-      // Mirror MD logic: Fetch ALL pending users, filter in-memory
-      const { data: users, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('verification_status', 'pending');
-
-      if (fetchError) throw fetchError;
-
-      // 1. Identification
-      const { data: adminCounselor } = await supabase
-        .from('counselors')
-        .select('id, name, user_id, current_temple, parent_temple')
-        .ilike('email', adminEmail)
-        .maybeSingle();
-
-      const adminCounselorId = adminCounselor?.id;
-      const adminCounselorName = adminCounselor?.name?.trim().toLowerCase();
-      const adminCounselorUserId = adminCounselor?.user_id;
-
-      // 2. Filter: Only users who explicitly selected this counselor
-      const filtered = (users || []).filter((u: any) => {
-        const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
-        const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
-        const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
-
-        // Authority via Stable ID
-        const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
-                          (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
-
-        // Authority via Legacy Match or Unified Name Match
-        const matchesEmail = bE === adminEmail || gE === adminEmail;
-        const matchesName = adminCounselorName && (
-          bN === adminCounselorName ||
-          gN === adminCounselorName ||
-          (u.counselor || '').trim().toLowerCase() === adminCounselorName ||
-          (uH.counselor || '').trim().toLowerCase() === adminCounselorName ||
-          (u.other_counselor || '').trim().toLowerCase() === adminCounselorName ||
-          (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
-        );
-
-        // Only show users who explicitly selected this counselor — no location fallback
-        return matchesId || matchesEmail || matchesName;
-      });
-
-      setPendingUsers(filtered.map(mapUserData));
-    } catch (error) {
-      console.error('Error loading pending users:', error);
-      toast.error('Failed to load pending devotees');
-    } finally {
-      setLoadingPending(false);
-    }
-  }, [userData, hasCounselorRole]);
-
-  const loadStats = useCallback(async () => {
-    if (!userData?.email || !hasCounselorRole || !supabase) {
-      setStats(prev => ({ ...prev, loading: false }));
-      return;
-    }
-    setStats(prev => ({ ...prev, loading: true }));
-    try {
-      const adminEmail = userData.email.trim().toLowerCase();
-
-      // 1. Resolve counselor ID and Name
-      const { data: counselorData } = await supabase
-        .from('counselors')
-        .select('id, name, user_id, current_temple, parent_temple')
-        .ilike('email', adminEmail)
-        .maybeSingle();
-
-      const adminCounselorId = counselorData?.id;
-      const adminCounselorName = counselorData?.name?.trim().toLowerCase();
-      const adminCounselorUserId = counselorData?.user_id;
-
-      // 2. Fetch ALL approved users to count devotees (Dual Lookup consistency)
-      const { data: allUsers } = await supabase
-        .from('users')
-        .select('counselor_id, hierarchy, current_center, current_temple')
-        .eq('verification_status', 'approved');
-
-      const studentsCount = (allUsers || []).filter((u: any) => {
-        const uH = u.hierarchy || {};
-        const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
-        const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-        const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
-        const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
-
-        const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
-                          (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
-        const matchesLegacy = bE === adminEmail || gE === adminEmail ||
-          (adminCounselorName && (
-            bN === adminCounselorName ||
-            gN === adminCounselorName ||
-            (u.counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (uH.counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (u.other_counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
-          ));
-
-        // Only count users who explicitly selected this counselor
-        return matchesId || matchesLegacy;
-      }).length;
-
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      // 2. Fetch pending profile requests count via API for perfect parity
-      let spiritualCount = 0;
-      try {
-        const profileReqsResponse = await fetch(`/api/profile-requests?status=pending&_t=${Date.now()}`, {
-          headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined,
-          cache: 'no-store'
-        });
-        const profileReqsJson = await profileReqsResponse.json();
-        if (profileReqsJson.success) {
-          spiritualCount = profileReqsJson.data.length;
-        }
-      } catch (err) {
-        console.error('Error fetching profile requests stats:', err);
-      }
-
-      // 3. Get pending users count (Mirror loadPendingUsers logic)
-      let regCount = 0;
-      const { data: pendingUsersData } = await supabase
-        .from('users')
-        .select('id, counselor_id, hierarchy, current_center, current_temple')
-        .eq('verification_status', 'pending');
-
-      if (pendingUsersData) {
-        regCount = pendingUsersData.filter((u: any) => {
-          const uH = u.hierarchy || {};
-          const bE = (uH.brahmachariCounselorEmail || uH.counselorEmail || u.counselor_email || '').trim().toLowerCase();
-          const gE = (uH.grihasthaCounselorEmail || '').trim().toLowerCase();
-          const bN = (uH.brahmachariCounselor || uH.counselor || u.counselor || '').trim().toLowerCase();
-          const gN = (uH.grihasthaCounselor || '').trim().toLowerCase();
-
-          const matchesId = (adminCounselorId && (u.counselor_id === adminCounselorId || uH.counselorId === adminCounselorId)) ||
-                            (adminCounselorUserId && (u.counselor_id === adminCounselorUserId || uH.counselorId === adminCounselorUserId));
-          const matchesEmail = bE === adminEmail || gE === adminEmail;
-          const matchesName = adminCounselorName && (
-            bN === adminCounselorName ||
-            gN === adminCounselorName ||
-            (u.counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (uH.counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (u.other_counselor || '').trim().toLowerCase() === adminCounselorName ||
-            (uH.otherCounselor || '').trim().toLowerCase() === adminCounselorName
-          );
-
-          // Only count users who explicitly selected this counselor
-          return matchesId || matchesEmail || matchesName;
-        }).length;
-      }
-
-      setStats({
-        devotees: studentsCount,
-        pendingSpiritual: spiritualCount,
-        pendingRegistrations: regCount,
-        loading: false
-      });
-    } catch (err) {
-      console.error('Error loading stats:', err);
-      setStats(prev => ({ ...prev, loading: false }));
-    }
-  }, [userData, hasCounselorRole]);
-
-  // LOAD BASE DATA (Stats) ONCE
+  // LOAD BASE DATA ONCE
   useEffect(() => {
-    if (authLoading) return; // Wait for auth to finish loading before deciding
+    if (authLoading) return;
     if (userData && hasCounselorRole) {
-      loadStats();
+      loadDashboardData();
     } else if (!authLoading && userData && !hasCounselorRole) {
-      // Only redirect if user is logged in but definitively has no counselor role
       router.replace('/dashboard');
     }
-  }, [userData, hasCounselorRole, authLoading, router, loadStats]);
+  }, [userData, hasCounselorRole, authLoading, router, loadDashboardData]);
 
   // LOAD TAB-SPECIFIC DATA
   useEffect(() => {
     if (userData && hasCounselorRole) {
-      if (activeTab === 'sadhana-reports') loadStudents();
       if (activeTab === 'spiritual-approvals') loadProfileRequests();
-      if (activeTab === 'new-dev-approvals') loadPendingUsers();
     }
-  }, [activeTab, loadStudents, loadProfileRequests, loadPendingUsers, userData, hasCounselorRole]);
+  }, [activeTab, loadProfileRequests, userData, hasCounselorRole]);
 
   // Approval Handlers
   const handleProfileApproval = async (requestId: string, action: 'approved' | 'rejected') => {
@@ -1482,9 +1305,9 @@ export default function CounselorPage() {
                             <p className="text-[10px] text-slate-500 font-medium">
                               Sorted by: <span className="font-extrabold text-orange-700">{
                                 sortOrder === 'name-asc' ? 'Name (A to Z)' :
-                                sortOrder === 'name-desc' ? 'Name (Z to A)' :
-                                sortOrder === 'soul-desc' ? 'Highest Soul %' :
-                                sortOrder === 'soul-asc' ? 'Lowest Soul %' : 'Most Reports'
+                                  sortOrder === 'name-desc' ? 'Name (Z to A)' :
+                                    sortOrder === 'soul-desc' ? 'Highest Soul %' :
+                                      sortOrder === 'soul-asc' ? 'Lowest Soul %' : 'Most Reports'
                               }</span>
                               {selectedLetter !== 'all' && (
                                 <span className="ml-1.5 px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-extrabold">
@@ -1526,15 +1349,14 @@ export default function CounselorPage() {
                                     <div className="text-[10px] font-medium text-slate-400 truncate">{student.email}</div>
                                   </div>
                                 </div>
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${
-                                  (student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' :
-                                  (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-50 text-blue-800 border border-blue-300' :
-                                  (student.avgSoulPercent || 0) > 0 ? 'bg-amber-50 text-amber-800 border border-amber-300' :
-                                  'bg-slate-100 text-slate-600 border border-slate-200'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 ${(student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' :
+                                    (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-50 text-blue-800 border border-blue-300' :
+                                      (student.avgSoulPercent || 0) > 0 ? 'bg-amber-50 text-amber-800 border border-amber-300' :
+                                        'bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}>
                                   {(student.avgSoulPercent || 0) >= 80 ? '⭐ Excellent' :
-                                   (student.avgSoulPercent || 0) >= 50 ? '👍 Good' :
-                                   (student.avgSoulPercent || 0) > 0 ? '⚠️ In Progress' : 'No Reports'}
+                                    (student.avgSoulPercent || 0) >= 50 ? '👍 Good' :
+                                      (student.avgSoulPercent || 0) > 0 ? '⚠️ In Progress' : 'No Reports'}
                                 </span>
                               </div>
 
@@ -1636,13 +1458,12 @@ export default function CounselorPage() {
 
                                   {/* Consistency */}
                                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${
-                                      (student.totalReports || 0) === 0
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${(student.totalReports || 0) === 0
                                         ? 'bg-rose-50 text-rose-700 border-rose-200'
                                         : (student.totalReports || 0) >= totalDays * 0.75
                                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                           : 'bg-amber-50 text-amber-800 border-amber-200'
-                                    }`}>
+                                      }`}>
                                       {(student.totalReports || 0)}/{totalDays} Days
                                     </span>
                                   </td>
@@ -1681,21 +1502,19 @@ export default function CounselorPage() {
 
                                   {/* Performance Rating */}
                                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-black border ${
-                                      (student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
-                                      (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-50 text-blue-800 border-blue-300' :
-                                      (student.avgSoulPercent || 0) > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' :
-                                      'bg-slate-100 text-slate-600 border border-slate-200'
-                                    }`}>
-                                      <span className={`w-1.5 h-1.5 rounded-full ${
-                                        (student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-500' :
-                                        (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-500' :
-                                        (student.avgSoulPercent || 0) > 0 ? 'bg-amber-500' :
-                                        'bg-slate-400'
-                                      }`} />
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-black border ${(student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                                        (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-50 text-blue-800 border-blue-300' :
+                                          (student.avgSoulPercent || 0) > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' :
+                                            'bg-slate-100 text-slate-600 border border-slate-200'
+                                      }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${(student.avgSoulPercent || 0) >= 80 ? 'bg-emerald-500' :
+                                          (student.avgSoulPercent || 0) >= 50 ? 'bg-blue-500' :
+                                            (student.avgSoulPercent || 0) > 0 ? 'bg-amber-500' :
+                                              'bg-slate-400'
+                                        }`} />
                                       {(student.avgSoulPercent || 0) >= 80 ? 'Excellent' :
-                                       (student.avgSoulPercent || 0) >= 50 ? 'Good Progress' :
-                                       (student.avgSoulPercent || 0) > 0 ? 'Needs Imp.' : 'No Reports'}
+                                        (student.avgSoulPercent || 0) >= 50 ? 'Good Progress' :
+                                          (student.avgSoulPercent || 0) > 0 ? 'Needs Imp.' : 'No Reports'}
                                     </span>
                                   </td>
 

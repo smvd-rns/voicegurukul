@@ -634,8 +634,15 @@ export async function POST(req: NextRequest) {
 
     // Attach user_profile_details when fetching from users table
     // SECURITY: NEVER attach user_profile_details for anonymous visitors (e.g. donation page lookups)!
-    // For authenticated users, non-admins/non-counselors only receive their own profile details.
-    if (table === 'users' && resultData.length > 0 && (isInternalServer || session)) {
+    // PERFORMANCE: Only attach when singleRow is true (single user profile lookup) or when explicitly requested
+    const shouldAttachProfileDetails = Boolean(
+      table === 'users' &&
+      resultData.length > 0 &&
+      (isInternalServer || session) &&
+      (singleRow || (typeof effectiveSelectCols === 'string' && effectiveSelectCols.includes('user_profile_details')))
+    );
+
+    if (shouldAttachProfileDetails) {
       let authorizedUserIds = resultData.map((row: any) => String(row.id)).filter(Boolean);
       if (!isInternalServer && !isSuperAdmin && !isHigherAdmin && !isCounselor) {
         authorizedUserIds = authorizedUserIds.filter(id => id === session.userId);

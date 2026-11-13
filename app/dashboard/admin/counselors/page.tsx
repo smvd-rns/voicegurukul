@@ -137,12 +137,32 @@ export default function CounselorAssignmentPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Load users function
+    // Load users function (Optimized for fast loading on self-hosted PostgreSQL)
     const loadUsers = async () => {
         setLoading(true);
-        const fetchedUsers = await getUsersByHierarchy({});
-        setUsers(fetchedUsers);
-        setLoading(false);
+        try {
+            const { supabase } = await import('@/lib/supabase/config');
+            const session = await supabase?.auth.getSession();
+            const token = session?.data.session?.access_token;
+
+            const res = await fetch(`/api/admin/users?_t=${Date.now()}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            });
+            const json = await res.json();
+            if (json.success && Array.isArray(json.users)) {
+                const { transformUserProfile } = await import('@/lib/supabase/user-transform');
+                setUsers(json.users.map((u: any) => transformUserProfile(u)));
+            } else {
+                const fetchedUsers = await getUsersByHierarchy({});
+                setUsers(fetchedUsers);
+            }
+        } catch (e) {
+            console.error('Error loading users for counselor assignment:', e);
+            const fetchedUsers = await getUsersByHierarchy({});
+            setUsers(fetchedUsers);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleRevokeClick = () => {

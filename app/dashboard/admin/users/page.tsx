@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase/config';
 import { updateUser, getUsersByHierarchy } from '@/lib/supabase/users';
+import { transformUserProfile } from '@/lib/supabase/user-transform';
 import { getTemplesFromSupabase } from '@/lib/supabase/temples';
 import { getCentersFromSupabase, CenterData } from '@/lib/supabase/centers';
 import { getCounselorsFromSupabase, CounselorData } from '@/lib/supabase/counselors';
@@ -114,7 +115,75 @@ export default function UsersPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Load Data
+  // Load Data with server optimization and instant session caching
+  const loadData = async (forceRefresh = false) => {
+    if (!userData) return;
+    setLoading(true);
+    try {
+      const cacheKey = 'admin_users_data_cache_v2';
+      if (!forceRefresh && typeof window !== 'undefined') {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Date.now() - parsed.timestamp < 120000 && Array.isArray(parsed.users) && parsed.users.length > 0) {
+              setUsers(parsed.users);
+              setTemplesList(parsed.temples || []);
+              setCentersList(parsed.centers || []);
+              setCounselorsList(parsed.counselors || []);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {}
+        }
+      }
+
+      const session = await supabase?.auth.getSession();
+      const token = session?.data.session?.access_token;
+
+      const res = await fetch(`/api/admin/users?_t=${Date.now()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      const json = await res.json();
+      if (json.success && Array.isArray(json.users)) {
+        const transformedUsers = json.users.map((u: any) => transformUserProfile(u));
+        setUsers(transformedUsers);
+        setTemplesList(json.temples || []);
+        setCentersList(json.centers || []);
+        setCounselorsList(json.counselors || []);
+
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            timestamp: Date.now(),
+            users: transformedUsers,
+            temples: json.temples || [],
+            centers: json.centers || [],
+            counselors: json.counselors || []
+          }));
+        } catch (e) {}
+      } else {
+        // Fallback to legacy loader if API error
+        console.warn('Falling back to legacy user loader:', json.error);
+        const [fetchedUsers, temples, centers, counselors] = await Promise.all([
+          getUsersByHierarchy({}),
+          getTemplesFromSupabase(),
+          getCentersFromSupabase(),
+          getCounselorsFromSupabase()
+        ]);
+        setUsers(fetchedUsers);
+        setTemplesList(temples);
+        setCentersList(centers);
+        setCounselorsList(counselors);
+      }
+    } catch (error) {
+      console.error('Error loading admin users data:', error);
+      toast.error('Failed to load users list');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Check access
     if (userData) {
@@ -125,36 +194,8 @@ export default function UsersPage() {
         router.push('/dashboard');
         return;
       }
+      loadData();
     }
-
-    const loadData = async () => {
-      if (userData) {
-        setLoading(true);
-        try {
-          const currentUserRoles = Array.isArray(userData.role) ? userData.role : [userData.role];
-          const isSuperAdmin = currentUserRoles.includes('super_admin') || currentUserRoles.includes(8);
-
-          // Parallelize fetching users, temples, centers, and counselors
-          const [fetchedUsers, temples, centers, counselors] = await Promise.all([
-            isSuperAdmin ? getUsersByHierarchy({}) : Promise.resolve([]),
-            getTemplesFromSupabase(),
-            getCentersFromSupabase(),
-            getCounselorsFromSupabase()
-          ]);
-
-          setUsers(fetchedUsers);
-          setTemplesList(temples);
-          setCentersList(centers);
-          setCounselorsList(counselors);
-
-        } catch (error) {
-          console.error('Error loading data:', error);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    loadData();
   }, [userData, router]);
 
   // Dynamic Cities from user records
@@ -449,6 +490,7 @@ export default function UsersPage() {
       if (error) throw error;
 
       setUsers(users.filter(u => u.id !== userId));
+      if (typeof window !== 'undefined') sessionStorage.removeItem('admin_users_data_cache_v2');
       toast.success('User deleted successfully');
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -475,6 +517,7 @@ export default function UsersPage() {
     try {
       await updateUser(userId, { verificationStatus: newStatus });
       setUsers(users.map(u => u.id === userId ? { ...u, verificationStatus: newStatus } : u));
+      if (typeof window !== 'undefined') sessionStorage.removeItem('admin_users_data_cache_v2');
       if (selectedUserDetails && selectedUserDetails.id === userId) {
         setSelectedUserDetails({ ...selectedUserDetails, verificationStatus: newStatus });
       }
@@ -492,6 +535,7 @@ export default function UsersPage() {
     try {
       await updateUser(targetUserId, updatedData);
       setUsers(users.map(u => u.id === targetUserId ? { ...u, ...updatedData } : u));
+      if (typeof window !== 'undefined') sessionStorage.removeItem('admin_users_data_cache_v2');
       if (selectedUserDetails && selectedUserDetails.id === targetUserId) {
         setSelectedUserDetails({ ...selectedUserDetails, ...updatedData });
       }
@@ -597,6 +641,7 @@ export default function UsersPage() {
         role: newRoles,
         ...(canViewAllDonations !== undefined ? { canViewAllDonations, can_view_all_donations: canViewAllDonations } : {})
       } : u));
+      if (typeof window !== 'undefined') sessionStorage.removeItem('admin_users_data_cache_v2');
 
       if (selectedUserDetails && selectedUserDetails.id === userId) {
         setSelectedUserDetails({

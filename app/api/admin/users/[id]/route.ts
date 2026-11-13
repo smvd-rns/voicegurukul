@@ -1,8 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as dbQuery } from '@/lib/db';
 import { verifyToken } from '@/lib/auth-server';
+import { transformUserProfile } from '@/lib/supabase/user-transform';
 
 export const dynamic = 'force-dynamic';
+
+export async function GET(
+    request: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const cookieToken = (request as any).cookies?.get('session_token')?.value;
+        const authHeader = request.headers.get('authorization');
+        const token = cookieToken || (authHeader ? authHeader.replace('Bearer ', '') : null);
+
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized: Missing token' }, { status: 401 });
+        }
+
+        const decoded = verifyToken(token);
+        if (!decoded || !decoded.userId) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+        }
+
+        const targetUserId = params.id;
+        if (!targetUserId) {
+            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+        }
+
+        // Fetch user from users table
+        const userRes = await dbQuery('SELECT * FROM users WHERE id = $1', [targetUserId]);
+        if (userRes.rowCount === 0) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const rawUser = userRes.rows[0];
+
+        // Fetch profile details for this specific user
+        const detailsRes = await dbQuery('SELECT * FROM user_profile_details WHERE user_id = $1', [targetUserId]);
+        if (detailsRes.rows.length > 0) {
+            rawUser.user_profile_details = detailsRes.rows;
+        }
+
+        const transformed = transformUserProfile(rawUser);
+        return NextResponse.json({ success: true, user: transformed });
+    } catch (error: any) {
+        console.error('Error in GET admin user details:', error);
+        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    }
+}
 
 export async function DELETE(
     request: NextRequest,
