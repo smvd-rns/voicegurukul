@@ -1,5 +1,7 @@
 'use server';
 
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import Razorpay from 'razorpay';
 import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
 
@@ -2457,18 +2459,31 @@ export async function reconcileAndCreateCampBookingAction(params: {
 
     const groupId = `camp_group_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+    // Format camp dates safely as YYYY-MM-DD for meals
+    const campStartIso = camp.start_date
+      ? new Date(camp.start_date).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+    const campEndIso = camp.end_date
+      ? new Date(camp.end_date).toISOString().split('T')[0]
+      : campStartIso;
+
     // Resolve entries list
     const participantEntries = (Array.isArray(entries) && entries.length > 0) ? entries : [{
       participant_name: payerName || 'Devotee',
       whatsapp: payerContact || '',
       email: email || '',
-      camp_track: 'GS Camp - 1st Timer',
+      camp_track: (camp.tracks && camp.tracks[0]?.name) || 'GS Camp - 1st Timer',
       participant_type: 'Camp Participant',
       gender: 'Male - Bachelor',
+      first_meal_date: campStartIso,
+      first_meal_type: 'Breakfast',
+      last_meal_date: campEndIso,
+      last_meal_type: 'Dinner',
+      dinner_type: 'Dinner Meal',
+      accommodation: 'No',
       total_cost: amount,
       meal_cost: 0,
       acc_cost: 0,
-      accommodation: 'No',
     }];
 
     const insertedRegistrations: any[] = [];
@@ -2478,28 +2493,40 @@ export async function reconcileAndCreateCampBookingAction(params: {
       const pName = entry.participant_name || entry.participantName || payerName || 'Devotee';
       const pPhone = entry.whatsapp || entry.phone || payerContact || '';
       const pEmail = (entry.email || email || '').trim().toLowerCase();
-      const pTrack = entry.camp_track || entry.campTrack || 'GS Camp - 1st Timer';
+      const pTrack = entry.camp_track || entry.campTrack || (camp.tracks && camp.tracks[0]?.name) || 'GS Camp - 1st Timer';
       const pType = entry.participant_type || entry.participantType || 'Camp Participant';
       const pGender = entry.gender || 'Male - Bachelor';
       const pAcc = entry.accommodation || 'No';
+      const pFirstMealDate = String(entry.first_meal_date || entry.firstMealDate || campStartIso);
+      const pFirstMealType = String(entry.first_meal_type || entry.firstMealType || 'Breakfast');
+      const pLastMealDate = String(entry.last_meal_date || entry.lastMealDate || campEndIso);
+      const pLastMealType = String(entry.last_meal_type || entry.lastMealType || 'Dinner');
+      const pDinnerType = String(entry.dinner_type || entry.dinnerType || 'Dinner Meal');
+      const pCenter = entry.current_center || entry.currentCenter || entry.voice_name || entry.voiceName || 'Central VOICE';
+      const pTemple = entry.current_temple || entry.currentTemple || entry.parent_temple || entry.parentTemple || 'ISKCON NVCC • PUNE';
+      const pCounselor = entry.counselor_name || entry.counselorName || null;
+      const pAge = entry.age ? Number(entry.age) : null;
+      const pMarriedYear = entry.married_since_year ? Number(entry.married_since_year) : null;
 
       const insertSql = `
         INSERT INTO camp_registrations (
           camp_id, group_id, poc_name, poc_contact, email,
           parent_temple, voice_name, current_temple, current_center,
-          participant_name, whatsapp,
-          gender, camp_track, participant_type,
-          accommodation, total_cost,
+          participant_name, whatsapp, counselor_name,
+          gender, age, married_since_year, camp_track, participant_type,
+          first_meal_date, first_meal_type, last_meal_date, last_meal_type,
+          dinner_type, accommodation, total_cost,
           payment_method, payment_status, payment_id, order_id,
           verified_at, verified_by
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9,
-          $10, $11,
-          $12, $13, $14,
-          $15, $16,
-          'RAZORPAY', 'completed', $17, $18,
-          NOW(), $19
+          $10, $11, $12,
+          $13, $14, $15, $16, $17,
+          $18, $19, $20, $21,
+          $22, $23, $24,
+          'RAZORPAY', 'completed', $25, $26,
+          NOW(), $27
         ) RETURNING *
       `;
 
@@ -2509,15 +2536,23 @@ export async function reconcileAndCreateCampBookingAction(params: {
         payerName,
         payerContact,
         pEmail,
-        entry.parent_temple || entry.parentTemple || 'ISKCON NVCC • PUNE',
-        entry.voice_name || entry.voiceName || 'Central VOICE',
-        entry.current_temple || entry.currentTemple || 'ISKCON NVCC • PUNE',
-        entry.current_center || entry.currentCenter || 'Central VOICE',
+        pTemple,
+        pCenter,
+        pTemple,
+        pCenter,
         pName,
         pPhone,
+        pCounselor,
         pGender,
+        pAge,
+        pMarriedYear,
         pTrack,
         pType,
+        pFirstMealDate,
+        pFirstMealType,
+        pLastMealDate,
+        pLastMealType,
+        pDinnerType,
         pAcc,
         Number(entry.total_cost || unitCost || 0),
         paymentId,
@@ -2527,6 +2562,62 @@ export async function reconcileAndCreateCampBookingAction(params: {
 
       const res = await query(insertSql, values);
       insertedRegistrations.push(res.rows[0]);
+
+      // Create / link student account if email provided
+      if (pEmail) {
+        try {
+          const userCheck = await query(
+            `SELECT id, name, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+            [pEmail]
+          );
+
+          if (userCheck.rows.length === 0) {
+            const newUserId = crypto.randomUUID();
+            const first4Digits = (pPhone || '1234').replace(/\D/g, '').slice(0, 4) || '1234';
+            const plainPassword = `${first4Digits}HareKrishna@108`;
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(plainPassword, salt);
+
+            await query(
+              `INSERT INTO users (
+                id, email, name, phone,
+                role, verification_status, ashram,
+                current_temple, parent_temple, current_center, parent_center, center,
+                password_hash,
+                created_at, updated_at
+              ) VALUES (
+                $1, $2, $3, $4,
+                2, 'approved', 'Student and Not decided',
+                $5, $5, $6, $6, $6,
+                $7,
+                NOW(), NOW()
+              )`,
+              [newUserId, pEmail, pName, pPhone, pTemple, pCenter, passwordHash]
+            );
+
+            sendCampDevoteeWelcomeAccountEmail({
+              userEmail: pEmail,
+              userName: pName,
+              tempPassword: plainPassword,
+              campTitle: camp.title,
+              trackName: pTrack,
+              centerName: pCenter,
+              templeName: pTemple
+            }).catch(e => console.warn('[Reconcile Camp Booking] Email notice error:', e));
+          } else {
+            sendCampDevoteeWelcomeAccountEmail({
+              userEmail: pEmail,
+              userName: userCheck.rows[0].name || pName,
+              campTitle: camp.title,
+              trackName: pTrack,
+              centerName: pCenter,
+              templeName: pTemple
+            }).catch(e => console.warn('[Reconcile Camp Booking] Email notice error:', e));
+          }
+        } catch (accErr) {
+          console.warn('[Reconcile Camp Booking] Account creation notice:', accErr);
+        }
+      }
     }
 
     // Update camp_payment_orders

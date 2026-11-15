@@ -247,6 +247,28 @@ export default function AdminCampsPage() {
   const [reconcileError, setReconcileError] = useState<string | null>(null);
   const [reconcileSuccess, setReconcileSuccess] = useState<string | null>(null);
 
+  // Nice Box Reconcile Modal State
+  const [reconcileModalOpen, setReconcileModalOpen] = useState(false);
+  const [settlementModalOpen, setSettlementModalOpen] = useState(false);
+  const [settlementNotes, setSettlementNotes] = useState('Settled offline / refunded via gateway');
+  const [reconcileForm, setReconcileForm] = useState({
+    campId: '',
+    participantName: '',
+    whatsapp: '',
+    email: '',
+    campTrack: '',
+    gender: 'Male - Bachelor',
+    participantType: 'Camp Participant',
+    firstMealDate: '',
+    firstMealType: 'Breakfast',
+    lastMealDate: '',
+    lastMealType: 'Dinner',
+    accommodation: 'No',
+    currentCenter: 'Central VOICE',
+    currentTemple: 'ISKCON NVCC • PUNE',
+    notes: '',
+  });
+
   // Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCamp, setEditingCamp] = useState<Camp | null>(null);
@@ -811,9 +833,57 @@ export default function AdminCampsPage() {
     }
   };
 
-  const handleReconcileMissingBooking = async () => {
+  const openReconcileModal = (txn?: CampAuditTransaction) => {
+    const target = txn || selectedTxn;
+    if (!target) return;
+    if (txn) setSelectedTxn(txn);
+
+    // Find matching camp from camps list
+    const targetCamp = camps.find(c => c.id === target.camp_id) || camps[0];
+    const campStart = targetCamp?.start_date ? new Date(targetCamp.start_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const campEnd = targetCamp?.end_date ? new Date(targetCamp.end_date).toISOString().split('T')[0] : campStart;
+    const tracks = (targetCamp?.tracks && Array.isArray(targetCamp.tracks) && targetCamp.tracks.length > 0)
+      ? targetCamp.tracks.map((t: any) => typeof t === 'string' ? t : t.name)
+      : ['GS Camp - 1st Timer', 'Senior Boys', 'Graduates', 'General Track'];
+
+    const firstEntry = (target as any).entries_payload?.[0] || target.participants?.[0] || null;
+
+    setReconcileForm({
+      campId: targetCamp?.id || target.camp_id || '',
+      participantName: firstEntry?.participant_name || firstEntry?.participantName || target.poc_name || 'Devotee',
+      whatsapp: firstEntry?.whatsapp || firstEntry?.phone || target.poc_contact || '',
+      email: firstEntry?.email || target.email || '',
+      campTrack: firstEntry?.camp_track || firstEntry?.campTrack || tracks[0] || 'GS Camp - 1st Timer',
+      gender: firstEntry?.gender || 'Male - Bachelor',
+      participantType: firstEntry?.participant_type || firstEntry?.participantType || 'Camp Participant',
+      firstMealDate: firstEntry?.first_meal_date || firstEntry?.firstMealDate || campStart,
+      firstMealType: firstEntry?.first_meal_type || firstEntry?.firstMealType || 'Breakfast',
+      lastMealDate: firstEntry?.last_meal_date || firstEntry?.lastMealDate || campEnd,
+      lastMealType: firstEntry?.last_meal_type || firstEntry?.lastMealType || 'Dinner',
+      accommodation: firstEntry?.accommodation || 'No',
+      currentCenter: firstEntry?.current_center || firstEntry?.currentCenter || firstEntry?.voice_name || 'Central VOICE',
+      currentTemple: firstEntry?.current_temple || firstEntry?.currentTemple || firstEntry?.parent_temple || 'ISKCON NVCC • PUNE',
+      notes: `Reconciled from gateway payment ${target.payment_id || target.txn_id}`,
+    });
+    setReconcileError(null);
+    setReconcileSuccess(null);
+    setReconcileModalOpen(true);
+  };
+
+  const submitReconcileForm = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedTxn) return;
-    if (!window.confirm(`Create and confirm Gurukul camp registration for ${selectedTxn.poc_name || 'this devotee'} (Payment ID: ${selectedTxn.payment_id || selectedTxn.txn_id}, ₹${selectedTxn.total_amount})?`)) {
+
+    if (!reconcileForm.campId) {
+      setReconcileError('Please select a Camp');
+      return;
+    }
+    if (!reconcileForm.participantName.trim()) {
+      setReconcileError('Participant name is required');
+      return;
+    }
+    if (!reconcileForm.firstMealDate || !reconcileForm.lastMealDate) {
+      setReconcileError('Both first meal date and last meal date are required');
       return;
     }
 
@@ -823,27 +893,47 @@ export default function AdminCampsPage() {
 
     try {
       const res = await reconcileAndCreateCampBookingAction({
-        campId: selectedTxn.camp_id,
+        campId: reconcileForm.campId,
         paymentId: selectedTxn.payment_id || selectedTxn.txn_id,
         orderId: selectedTxn.order_id,
-        payerName: selectedTxn.poc_name || 'Devotee',
-        payerContact: selectedTxn.poc_contact || '',
-        email: selectedTxn.email || '',
+        payerName: reconcileForm.participantName,
+        payerContact: reconcileForm.whatsapp,
+        email: reconcileForm.email,
         amount: Number(selectedTxn.total_amount),
-        entries: (selectedTxn as any).entries_payload || (selectedTxn.participants?.length > 0 ? selectedTxn.participants : undefined),
+        entries: [{
+          participant_name: reconcileForm.participantName,
+          whatsapp: reconcileForm.whatsapp,
+          email: reconcileForm.email,
+          camp_track: reconcileForm.campTrack,
+          gender: reconcileForm.gender,
+          participant_type: reconcileForm.participantType,
+          first_meal_date: reconcileForm.firstMealDate,
+          first_meal_type: reconcileForm.firstMealType,
+          last_meal_date: reconcileForm.lastMealDate,
+          last_meal_type: reconcileForm.lastMealType,
+          accommodation: reconcileForm.accommodation,
+          current_center: reconcileForm.currentCenter,
+          current_temple: reconcileForm.currentTemple,
+          total_cost: Number(selectedTxn.total_amount),
+        }],
+        notes: reconcileForm.notes,
       });
 
       if (!res.success) {
         setReconcileError(res.error || 'Failed to reconcile booking');
       } else {
-        setReconcileSuccess(res.message || 'Booking created successfully!');
+        setReconcileSuccess(res.message || 'Camp booking confirmed and devotee account registered!');
         setSelectedTxn(prev => prev ? {
           ...prev,
+          camp_id: reconcileForm.campId,
           booking_status: 'confirmed',
           payment_status: 'completed',
-          participant_count: res.count || prev.participant_count || 1
+          participant_count: res.count || 1,
         } : null);
         loadAuditData();
+        setTimeout(() => {
+          setReconcileModalOpen(false);
+        }, 1500);
       }
     } catch (err: any) {
       setReconcileError(err.message || 'Error creating booking');
@@ -852,10 +942,19 @@ export default function AdminCampsPage() {
     }
   };
 
-  const handleMarkExternalReconciled = async () => {
+  const openSettlementModal = (txn?: CampAuditTransaction) => {
+    const target = txn || selectedTxn;
+    if (!target) return;
+    if (txn) setSelectedTxn(txn);
+    setSettlementNotes(`Refunded or settled offline for payment ${target.payment_id || target.txn_id}`);
+    setReconcileError(null);
+    setReconcileSuccess(null);
+    setSettlementModalOpen(true);
+  };
+
+  const submitSettlementModal = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedTxn) return;
-    const notes = window.prompt('Enter reconciliation / settlement notes (e.g. Refunded in Razorpay dashboard or devotee attended):', 'Settled externally');
-    if (notes === null) return;
 
     setReconcileLoading(true);
     setReconcileError(null);
@@ -864,7 +963,7 @@ export default function AdminCampsPage() {
       const res = await markCampPaymentReconciledAction({
         paymentId: selectedTxn.payment_id || selectedTxn.txn_id,
         orderId: selectedTxn.order_id,
-        notes: notes.trim(),
+        notes: settlementNotes.trim() || 'Settled externally',
       });
 
       if (!res.success) {
@@ -877,6 +976,9 @@ export default function AdminCampsPage() {
           payment_status: 'completed',
         } : null);
         loadAuditData();
+        setTimeout(() => {
+          setSettlementModalOpen(false);
+        }, 1200);
       }
     } catch (err: any) {
       setReconcileError(err.message || 'Error updating status');
@@ -3330,7 +3432,13 @@ export default function AdminCampsPage() {
                                     {/* Inspect Action */}
                                     <td className="py-2 px-2.5 text-right whitespace-nowrap">
                                       <button
-                                        onClick={() => setSelectedTxn(t)}
+                                        onClick={() => {
+                                          if (isMissingBooking) {
+                                            openReconcileModal(t);
+                                          } else {
+                                            setSelectedTxn(t);
+                                          }
+                                        }}
                                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer ${
                                           isMissingBooking
                                             ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
@@ -3770,7 +3878,7 @@ export default function AdminCampsPage() {
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200">
                     <button
                       type="button"
-                      onClick={handleReconcileMissingBooking}
+                      onClick={() => openReconcileModal()}
                       disabled={reconcileLoading}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl inline-flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                     >
@@ -3779,7 +3887,7 @@ export default function AdminCampsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={handleMarkExternalReconciled}
+                      onClick={() => openSettlementModal()}
                       disabled={reconcileLoading}
                       className="px-3.5 py-2 bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                     >
@@ -4218,6 +4326,381 @@ export default function AdminCampsPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECONCILE MODAL / NICE BOX */}
+      {reconcileModalOpen && selectedTxn && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/15 via-orange-500/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>Reconcile Camp Booking</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-emerald-100 text-emerald-800">
+                      ₹{Number(selectedTxn.total_amount).toLocaleString('en-IN')} Received
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Payment ID: <code className="font-mono text-slate-700 bg-slate-100 px-1 rounded">{selectedTxn.payment_id || selectedTxn.txn_id}</code>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReconcileModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={submitReconcileForm} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs">
+              {reconcileError && (
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="font-semibold text-xs leading-relaxed">{reconcileError}</div>
+                </div>
+              )}
+
+              {reconcileSuccess && (
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="font-bold text-xs">{reconcileSuccess}</div>
+                </div>
+              )}
+
+              {/* Camp Selection */}
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                  Camp Retreat Event *
+                </label>
+                <select
+                  value={reconcileForm.campId}
+                  onChange={(e) => {
+                    const newCampId = e.target.value;
+                    const c = camps.find(campItem => campItem.id === newCampId);
+                    const cStart = c?.start_date ? new Date(c.start_date).toISOString().split('T')[0] : '';
+                    const cEnd = c?.end_date ? new Date(c.end_date).toISOString().split('T')[0] : cStart;
+                    const tracks = (c?.tracks && Array.isArray(c.tracks) && c.tracks.length > 0)
+                      ? c.tracks.map((t: any) => typeof t === 'string' ? t : t.name)
+                      : ['GS Camp - 1st Timer', 'Senior Boys', 'General Track'];
+
+                    setReconcileForm(prev => ({
+                      ...prev,
+                      campId: newCampId,
+                      firstMealDate: cStart || prev.firstMealDate,
+                      lastMealDate: cEnd || prev.lastMealDate,
+                      campTrack: tracks[0] || prev.campTrack
+                    }));
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {camps.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} ({c.status ? c.status.toUpperCase() : 'ACTIVE'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Devotee Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Participant Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reconcileForm.participantName}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, participantName: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Devotee name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    WhatsApp / Phone *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reconcileForm.whatsapp}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="+91..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={reconcileForm.email}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="devotee@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Camp Track *
+                  </label>
+                  <select
+                    value={reconcileForm.campTrack}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, campTrack: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {(() => {
+                      const curCamp = camps.find(c => c.id === reconcileForm.campId);
+                      const tracks = (curCamp?.tracks && Array.isArray(curCamp.tracks) && curCamp.tracks.length > 0)
+                        ? curCamp.tracks.map((t: any) => typeof t === 'string' ? t : t.name)
+                        : ['GS Camp - 1st Timer', 'Senior Boys', 'Graduates', 'General Track'];
+                      return tracks.map((tr: string) => (
+                        <option key={tr} value={tr}>{tr}</option>
+                      ));
+                    })()}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Gender
+                  </label>
+                  <select
+                    value={reconcileForm.gender}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, gender: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="Male - Bachelor">Male - Bachelor</option>
+                    <option value="Male - Married">Male - Married</option>
+                    <option value="Female - Student">Female - Student</option>
+                    <option value="Female - Married">Female - Married</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Accommodation
+                  </label>
+                  <select
+                    value={reconcileForm.accommodation}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, accommodation: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Meal Dates and Types */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="font-extrabold text-[11px] uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Utensils className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Prasadam &amp; Meal Schedule (Required)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      First Meal Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={reconcileForm.firstMealDate}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, firstMealDate: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      First Meal Type
+                    </label>
+                    <select
+                      value={reconcileForm.firstMealType}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, firstMealType: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
+                    >
+                      <option value="Breakfast">Breakfast</option>
+                      <option value="Lunch">Lunch</option>
+                      <option value="Dinner">Dinner</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      Last Meal Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={reconcileForm.lastMealDate}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, lastMealDate: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      Last Meal Type
+                    </label>
+                    <select
+                      value={reconcileForm.lastMealType}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, lastMealType: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
+                    >
+                      <option value="Breakfast">Breakfast</option>
+                      <option value="Lunch">Lunch</option>
+                      <option value="Dinner">Dinner</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Center / Temple */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Center
+                  </label>
+                  <input
+                    type="text"
+                    value={reconcileForm.currentCenter}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, currentCenter: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800"
+                    placeholder="Central VOICE"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                    Temple
+                  </label>
+                  <input
+                    type="text"
+                    value={reconcileForm.currentTemple}
+                    onChange={e => setReconcileForm(prev => ({ ...prev, currentTemple: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800"
+                    placeholder="ISKCON NVCC • PUNE"
+                  />
+                </div>
+              </div>
+
+              {/* Notice */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 leading-relaxed">
+                ✨ <strong>What happens when you confirm:</strong> This creates the verified camp registration in Gurukul database, links the Razorpay payment, creates the devotee&apos;s student account (if needed), and generates their digital pass.
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReconcileModalOpen(false)}
+                  disabled={reconcileLoading}
+                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reconcileLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs shadow-md shadow-emerald-500/20 inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {reconcileLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  <span>Confirm &amp; Create Camp Booking</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SETTLEMENT MODAL / NICE BOX */}
+      {settlementModalOpen && selectedTxn && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-sm">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Mark Settled Externally</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">{selectedTxn.payment_id || selectedTxn.txn_id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettlementModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <form onSubmit={submitSettlementModal} className="p-5 space-y-4 text-xs">
+              {reconcileError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-semibold text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{reconcileError}</span>
+                </div>
+              )}
+              {reconcileSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{reconcileSuccess}</span>
+                </div>
+              )}
+
+              <p className="text-slate-600 leading-relaxed">
+                Use this if this transaction was already refunded directly in the Razorpay dashboard or resolved through offline channels without needing a Gurukul registration pass.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                  Settlement / Refund Reason &amp; Reference
+                </label>
+                <textarea
+                  rows={3}
+                  value={settlementNotes}
+                  onChange={e => setSettlementNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  placeholder="e.g. Refunded to devotee card on 15-Nov or resolved offline"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSettlementModalOpen(false)}
+                  disabled={reconcileLoading}
+                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reconcileLoading}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {reconcileLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>Confirm Settlement</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
