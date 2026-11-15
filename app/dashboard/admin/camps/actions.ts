@@ -95,8 +95,8 @@ export async function getCampsAction() {
       const primary = perms.includes('both')
         ? 'both'
         : (perms.includes('attendance') && perms.includes('refunds'))
-        ? 'both'
-        : perms[0] || 'attendance';
+          ? 'both'
+          : perms[0] || 'attendance';
 
       return {
         ...camp,
@@ -1752,7 +1752,7 @@ export async function submitCampRefundRequestAction(
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const rules = refundConfig.refund_policy_rules || [];
-    
+
     // Sort rules by cutoff_date ascending, with empty cutoff (fallback) last
     const sortedRules = [...rules].sort((a, b) => {
       if (!a.cutoff_date) return 1;
@@ -1801,12 +1801,12 @@ export async function submitCampRefundRequestAction(
       totalBaseFeeRefund += thisBaseRefund;
 
       const thisMealRefund = (!isFree && refundConfig.refund_meals !== false)
-        ? Math.round(mealCost * (baseRefundPercent / 100)) 
+        ? Math.round(mealCost * (baseRefundPercent / 100))
         : 0;
       totalMealRefund += thisMealRefund;
 
       const thisAccRefund = (!isFree && refundConfig.refund_accommodation !== false)
-        ? Math.round(accCost * (baseRefundPercent / 100)) 
+        ? Math.round(accCost * (baseRefundPercent / 100))
         : 0;
       totalAccRefund += thisAccRefund;
 
@@ -2515,7 +2515,8 @@ export async function reconcileAndCreateCampBookingAction(params: {
           participant_name, whatsapp, counselor_name,
           gender, age, married_since_year, camp_track, participant_type,
           first_meal_date, first_meal_type, last_meal_date, last_meal_type,
-          dinner_type, accommodation, total_cost,
+          dinner_type, accommodation,
+          meal_cost, acc_cost, ac_cost, entry_cost, total_cost,
           payment_method, payment_status, payment_id, order_id,
           verified_at, verified_by
         ) VALUES (
@@ -2524,9 +2525,10 @@ export async function reconcileAndCreateCampBookingAction(params: {
           $10, $11, $12,
           $13, $14, $15, $16, $17,
           $18, $19, $20, $21,
-          $22, $23, $24,
-          'RAZORPAY', 'completed', $25, $26,
-          NOW(), $27
+          $22, $23,
+          $24, $25, $26, $27, $28,
+          'RAZORPAY', 'completed', $29, $30,
+          NOW(), $31
         ) RETURNING *
       `;
 
@@ -2554,6 +2556,10 @@ export async function reconcileAndCreateCampBookingAction(params: {
         pLastMealType,
         pDinnerType,
         pAcc,
+        Number(entry.meal_cost || 0),
+        Number(entry.acc_cost || 0),
+        Number(entry.ac_cost || 0),
+        Number(entry.entry_cost || 0),
         Number(entry.total_cost || unitCost || 0),
         paymentId,
         orderId || null,
@@ -3046,8 +3052,8 @@ export async function getUserCampRegistrationsAction(identifier?: { email?: stri
       refundRequests = refundRes.rows;
     }
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       registrations,
       refundRequests,
       isManager: managerLoc.isManager,
@@ -3284,8 +3290,8 @@ export async function assignCampStaffAction(data: {
       data.permissionTypes && data.permissionTypes.length > 0
         ? data.permissionTypes
         : data.permissionType
-        ? [data.permissionType]
-        : ['attendance'];
+          ? [data.permissionType]
+          : ['attendance'];
 
     // Sync permissions: Delete any previous roles for this user & camp that were not selected
     await query(
@@ -3667,11 +3673,11 @@ export async function verifyAndPunchMealPassAction(data: {
       return dateKey;
     };
 
-    const dayCol = matrix.find(col => 
-      col.date === inputDate || 
+    const dayCol = matrix.find(col =>
+      col.date === inputDate ||
       (col.full_date && col.full_date === inputDate) ||
       (inputDate.includes('-') && (
-        col.date === inputDate.split('-')[2] || 
+        col.date === inputDate.split('-')[2] ||
         col.date === String(parseInt(inputDate.split('-')[2], 10))
       )) ||
       (col.date.includes('-') && (
@@ -4444,7 +4450,7 @@ export async function recordExtraGuestMealPunchAction(data: {
         if (uRes.rows[0]?.name) {
           adminName = uRes.rows[0].name;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const increment = Number(data.increment) || 0;
@@ -4508,7 +4514,7 @@ export async function recordExtraGuestMealPunchAction(data: {
         const [y, m, d] = data.mealDate.split('-').map(Number);
         const dt = new Date(y, m - 1, d);
         altMealKey = `${dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}_${data.mealName}`;
-      } catch {}
+      } catch { }
     }
     const rawMealKey = `${data.mealDate.split('-').slice(1).join('-')}_${data.mealName}`;
 
@@ -4535,11 +4541,11 @@ export async function recordExtraGuestMealPunchAction(data: {
       extraCount,
       devoteeServedCount,
       totalServedCount: devoteeServedCount + extraServedCount,
-      message: increment > 0 
-        ? `Added +${increment} Extra Guest Plate(s) without QR.` 
-        : increment < 0 
-        ? `Reverted 1 Extra Guest Plate.` 
-        : `Updated Extra Guest count to ${extraServedCount}.`
+      message: increment > 0
+        ? `Added +${increment} Extra Guest Plate(s) without QR.`
+        : increment < 0
+          ? `Reverted 1 Extra Guest Plate.`
+          : `Updated Extra Guest count to ${extraServedCount}.`
     };
   } catch (err: any) {
     console.error('recordExtraGuestMealPunchAction error:', err);
@@ -4584,7 +4590,7 @@ export async function getSessionMealStatsAction(data: {
         const [y, m, d] = data.mealDate.split('-').map(Number);
         const dt = new Date(y, m - 1, d);
         altMealKey = `${dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}_${data.mealName}`;
-      } catch {}
+      } catch { }
     }
     const rawMealKey = `${data.mealDate.split('-').slice(1).join('-')}_${data.mealName}`;
 
@@ -5460,7 +5466,7 @@ export async function getCampAccommodationCapacityStatusAction(campIdOrSlug: str
     const campSql = isUuid
       ? 'SELECT id, title, slug, start_date, end_date, accommodation_pricing FROM camps WHERE id = $1'
       : 'SELECT id, title, slug, start_date, end_date, accommodation_pricing FROM camps WHERE slug = $1';
-    
+
     const campRes = await query(campSql, [campIdOrSlug.trim()]);
     if (campRes.rows.length === 0) {
       return { success: false, error: 'Camp retreat not found.' };
