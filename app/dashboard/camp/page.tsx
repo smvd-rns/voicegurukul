@@ -2186,6 +2186,13 @@ function CampDashboardContent() {
           amount: grandTotalWithSurcharge,
           campTitle: selectedCamp?.title,
           payerName: payerName,
+          payerEmail: payerEmail,
+          payerContact: payerContact,
+          entries: entries,
+          formData: {
+            couponCode: appliedCoupon?.code || undefined,
+            discountAmount: discountAmount || undefined,
+          },
           website: currentWebsite,
         }),
       });
@@ -2234,8 +2241,22 @@ function CampDashboardContent() {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (resp: any) {
-        setPaymentError(resp.error.description || 'Payment failed');
+        const errorMsg = resp.error?.description || 'Payment failed';
+        setPaymentError(errorMsg);
         setIsSubmitting(false);
+        try {
+          fetch('/api/camps/record-payment-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: orderData.id,
+              paymentId: resp.error?.metadata?.payment_id,
+              status: 'failed',
+              errorCode: resp.error?.code,
+              errorMessage: errorMsg,
+            }),
+          }).catch(() => {});
+        } catch (e) {}
       });
       rzp.open();
     } catch (err: any) {

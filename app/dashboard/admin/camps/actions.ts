@@ -1,5 +1,6 @@
 'use server';
 
+import Razorpay from 'razorpay';
 import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
 
 import { query } from '@/lib/db';
@@ -1998,6 +1999,256 @@ export async function getAllCampTransactionsAction() {
     const txRes = await query(txSql);
     const transactions = txRes.rows as CampAuditTransaction[];
 
+    // Fetch tracked online payment orders from camp_payment_orders
+    let campOrders: any[] = [];
+    try {
+      const ordersRes = await query('SELECT * FROM camp_payment_orders ORDER BY created_at DESC LIMIT 200');
+      campOrders = ordersRes.rows;
+    } catch (orderErr) {
+      console.warn('camp_payment_orders query warning:', orderErr);
+    }
+
+    // Fetch active/known camps to resolve camp titles
+    const campsRes = await query('SELECT id, title, slug FROM camps');
+    const allCamps = campsRes.rows;
+
+    // Fetch recent live payments from Razorpay API
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    let rzpPayments: any[] = [];
+    if (keyId && keySecret) {
+      try {
+        const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+        const rzpRes = await razorpay.payments.all({ count: 100 });
+        rzpPayments = rzpRes.items || [];
+      } catch (rzpErr) {
+        console.warn('Warning fetching Razorpay payments:', rzpErr);
+      }
+    }
+
+    const handledPaymentIds = new Set<string>();
+    const handledOrderIds = new Set<string>();
+
+    // Index existing registrations & enrich with live gateway status if available
+    for (const t of transactions) {
+      t.booking_status = 'confirmed';
+      if (t.payment_id) handledPaymentIds.add(t.payment_id);
+      if (t.order_id) handledOrderIds.add(t.order_id);
+
+      const matchedRzp = rzpPayments.find(p => p.id === t.payment_id || (t.order_id && p.order_id === t.order_id));
+      if (matchedRzp) {
+        t.gateway_status = matchedRzp.status;
+        t.gateway_fee = matchedRzp.fee ? matchedRzp.fee / 100 : undefined;
+        t.gateway_tax = matchedRzp.tax ? matchedRzp.tax / 100 : undefined;
+        t.gateway_method = matchedRzp.method;
+      }
+    }
+
+    const ordersByOrderId = new Map<string, any>();
+    const ordersByPaymentId = new Map<string, any>();
+    for (const o of campOrders) {
+      if (o.order_id) ordersByOrderId.set(o.order_id, o);
+      if (o.payment_id) ordersByPaymentId.set(o.payment_id, o);
+    }
+
+    // Process Razorpay payments not yet in camp_registrations
+    for (const p of rzpPayments) {
+      if (handledPaymentIds.has(p.id) || (p.order_id && handledOrderIds.has(p.order_id))) {
+        continue;
+      }
+
+      const orderDoc = (p.order_id && ordersByOrderId.get(p.order_id)) || ordersByPaymentId.get(p.id);
+      const isCampDescription = (p.description || '').toLowerCase().includes('camp');
+      const isCampNotes = (p.notes?.payment_for || '').toLowerCase().includes('camp') || (p.notes?.website || '').includes('camp');
+      const isCampOrder = !!orderDoc || isCampDescription || isCampNotes;
+
+      // Only include camp-related transactions
+      if (!isCampOrder) {
+        continue;
+      }
+
+      handledPaymentIds.add(p.id);
+      if (p.order_id) handledOrderIds.add(p.order_id);
+
+      let matchedCamp = allCamps.find((c: any) =>
+        c.id === orderDoc?.camp_id ||
+        (p.notes?.camp_id && c.id === p.notes.camp_id) ||
+        (p.notes?.payment_for && c.title.toLowerCase() === p.notes.payment_for.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(c.title.toLowerCase()))
+      );
+      if (!matchedCamp && allCamps.length > 0) {
+        matchedCamp = allCamps[0];
+      }
+
+      const campTitle = matchedCamp?.title || p.notes?.payment_for || 'Camp Retreat';
+      const campSlug = matchedCamp?.slug || '';
+      const campId = matchedCamp?.id || '';
+
+      const payerName = orderDoc?.payer_name || p.notes?.payer_name || (p.email ? p.email.split('@')[0] : 'Devotee');
+      const payerContact = orderDoc?.payer_contact || p.contact || '';
+      const payerEmail = orderDoc?.payer_email || p.email || '';
+      const paidAmount = Number(p.amount || 0) / 100;
+      const paymentCreatedAt = new Date((p.created_at || Date.now() / 1000) * 1000).toISOString();
+
+      let bookingStatus: 'confirmed' | 'missing_booking' | 'failed' | 'abandoned' = 'missing_booking';
+      let paymentStatus = 'missing_booking';
+      let errorMsg: string | undefined = undefined;
+
+      if (p.status === 'captured') {
+        bookingStatus = 'missing_booking';
+        paymentStatus = 'missing_booking';
+        errorMsg = '⚠️ Razorpay payment was successful, but NO camp booking exists in Gurukul! Reconcile or refund required.';
+      } else if (p.status === 'failed') {
+        bookingStatus = 'failed';
+        paymentStatus = 'failed';
+        errorMsg = p.error_description || p.error_reason || 'Payment failed on gateway';
+      } else {
+        bookingStatus = 'abandoned';
+        paymentStatus = 'abandoned';
+        errorMsg = `Gateway status: ${p.status}`;
+      }
+
+      const entriesPayload = orderDoc?.entries_payload
+        ? (typeof orderDoc.entries_payload === 'string' ? JSON.parse(orderDoc.entries_payload) : orderDoc.entries_payload)
+        : [];
+
+      transactions.push({
+        txn_id: p.id,
+        camp_id: campId,
+        camp_title: campTitle,
+        camp_slug: campSlug,
+        poc_name: payerName,
+        poc_contact: payerContact,
+        email: payerEmail,
+        payment_method: 'RAZORPAY',
+        payment_status: paymentStatus,
+        booking_status: bookingStatus,
+        gateway_status: p.status,
+        gateway_fee: p.fee ? p.fee / 100 : undefined,
+        gateway_tax: p.tax ? p.tax / 100 : undefined,
+        gateway_method: p.method,
+        error_code: p.error_code,
+        error_message: errorMsg,
+        entries_payload: entriesPayload,
+        payment_id: p.id,
+        order_id: p.order_id,
+        created_at: paymentCreatedAt,
+        participant_count: Array.isArray(entriesPayload) ? entriesPayload.length : 0,
+        gross_amount: paidAmount,
+        total_amount: paidAmount,
+        total_meal_cost: 0,
+        total_acc_cost: 0,
+        total_late_fee: 0,
+        total_entry_cost: 0,
+        total_discount: 0,
+        participants: Array.isArray(entriesPayload) ? entriesPayload.map((ep: any, idx: number) => ({
+          id: `payload_${idx}`,
+          participant_name: ep.participant_name || ep.participantName || payerName,
+          whatsapp: ep.whatsapp || ep.phone || payerContact,
+          camp_track: ep.camp_track || ep.campTrack || 'Standard',
+          participant_type: ep.participant_type || ep.participantType || 'Camp Participant',
+          gender: ep.gender || 'Male',
+          voice_name: ep.voice_name || ep.voiceName,
+          parent_temple: ep.parent_temple || ep.parentTemple,
+          counselor_name: ep.counselor_name || ep.counselorName,
+          accommodation: ep.accommodation || 'No',
+          first_meal_date: ep.first_meal_date || ep.firstMealDate,
+          first_meal_type: ep.first_meal_type || ep.firstMealType,
+          last_meal_date: ep.last_meal_date || ep.lastMealDate,
+          last_meal_type: ep.last_meal_type || ep.lastMealType,
+          total_cost: Number(ep.total_cost || 0),
+          meal_cost: Number(ep.meal_cost || 0),
+          acc_cost: Number(ep.acc_cost || 0),
+          payment_status: paymentStatus,
+        })) : [],
+        refund: null,
+      });
+    }
+
+    // Process remaining records in camp_payment_orders
+    for (const o of campOrders) {
+      if (handledOrderIds.has(o.order_id) || (o.payment_id && handledPaymentIds.has(o.payment_id))) {
+        continue;
+      }
+
+      handledOrderIds.add(o.order_id);
+      if (o.payment_id) handledPaymentIds.add(o.payment_id);
+
+      let matchedCamp = allCamps.find((c: any) => c.id === o.camp_id);
+      if (!matchedCamp && allCamps.length > 0) matchedCamp = allCamps[0];
+
+      const campTitle = matchedCamp?.title || 'Camp Retreat';
+      const campSlug = matchedCamp?.slug || '';
+      const campId = matchedCamp?.id || o.camp_id || '';
+      const amount = Number(o.amount || 0);
+
+      const entriesPayload = o.entries_payload
+        ? (typeof o.entries_payload === 'string' ? JSON.parse(o.entries_payload) : o.entries_payload)
+        : [];
+
+      let bookingStatus: 'confirmed' | 'missing_booking' | 'failed' | 'abandoned' = 'abandoned';
+      let paymentStatus = 'abandoned';
+      if (o.status === 'captured' || o.status === 'registration_failed') {
+        bookingStatus = 'missing_booking';
+        paymentStatus = 'missing_booking';
+      } else if (o.status === 'failed') {
+        bookingStatus = 'failed';
+        paymentStatus = 'failed';
+      }
+
+      transactions.push({
+        txn_id: o.order_id,
+        camp_id: campId,
+        camp_title: campTitle,
+        camp_slug: campSlug,
+        poc_name: o.payer_name || 'Devotee',
+        poc_contact: o.payer_contact || '',
+        email: o.payer_email || '',
+        payment_method: 'RAZORPAY',
+        payment_status: paymentStatus,
+        booking_status: bookingStatus,
+        gateway_status: o.status,
+        error_code: o.error_code,
+        error_message: o.error_message || (bookingStatus === 'missing_booking' ? 'Registration failed after payment' : 'Order abandoned'),
+        entries_payload: entriesPayload,
+        payment_id: o.payment_id,
+        order_id: o.order_id,
+        created_at: new Date(o.created_at).toISOString(),
+        participant_count: Array.isArray(entriesPayload) ? entriesPayload.length : 0,
+        gross_amount: amount,
+        total_amount: amount,
+        total_meal_cost: 0,
+        total_acc_cost: 0,
+        total_late_fee: 0,
+        total_entry_cost: 0,
+        total_discount: 0,
+        participants: Array.isArray(entriesPayload) ? entriesPayload.map((ep: any, idx: number) => ({
+          id: `order_payload_${idx}`,
+          participant_name: ep.participant_name || ep.participantName || o.payer_name || 'Devotee',
+          whatsapp: ep.whatsapp || ep.phone || o.payer_contact || '',
+          camp_track: ep.camp_track || ep.campTrack || 'Standard',
+          participant_type: ep.participant_type || ep.participantType || 'Camp Participant',
+          gender: ep.gender || 'Male',
+          voice_name: ep.voice_name || ep.voiceName,
+          parent_temple: ep.parent_temple || ep.parentTemple,
+          counselor_name: ep.counselor_name || ep.counselorName,
+          accommodation: ep.accommodation || 'No',
+          first_meal_date: ep.first_meal_date || ep.firstMealDate,
+          first_meal_type: ep.first_meal_type || ep.firstMealType,
+          last_meal_date: ep.last_meal_date || ep.lastMealDate,
+          last_meal_type: ep.last_meal_type || ep.lastMealType,
+          total_cost: Number(ep.total_cost || 0),
+          meal_cost: Number(ep.meal_cost || 0),
+          acc_cost: Number(ep.acc_cost || 0),
+          payment_status: paymentStatus,
+        })) : [],
+        refund: null,
+      });
+    }
+
+    // Sort all transactions chronologically (latest first)
+    transactions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
     // Fetch all refunds across camps to cross-reference
     const refundsSql = `
       SELECT r.*, 
@@ -2111,7 +2362,7 @@ export async function getAllCampTransactionsAction() {
       t.refund = matchedRefund;
       t.transaction_refund_amount = txRefundAmount > 0 ? txRefundAmount : (matchedRefund ? Number(matchedRefund.refund_amount || 0) : 0);
 
-      if (t.payment_status === 'completed' || t.payment_status === 'refunded') {
+      if (t.booking_status === 'confirmed' && (t.payment_status === 'completed' || t.payment_status === 'refunded')) {
         totalCollected += t.total_amount;
         totalGrossFee += t.gross_amount;
         totalDiscounts += t.total_discount;
@@ -2132,6 +2383,10 @@ export async function getAllCampTransactionsAction() {
       }
     }
 
+    const missingBookingsCount = transactions.filter(t => t.booking_status === 'missing_booking').length;
+    const missingBookingsAmount = transactions.filter(t => t.booking_status === 'missing_booking').reduce((sum, t) => sum + (Number(t.total_amount) || 0), 0);
+    const failedPaymentsCount = transactions.filter(t => t.booking_status === 'failed').length;
+
     return {
       success: true,
       transactions,
@@ -2146,11 +2401,205 @@ export async function getAllCampTransactionsAction() {
         total_transactions: transactions.length,
         total_participants: totalParticipants,
         pending_verifications: pendingVerificationCount,
-        pending_refunds: allRefunds.filter(r => r.status === 'pending').length
+        pending_refunds: allRefunds.filter(r => r.status === 'pending').length,
+        missing_bookings_count: missingBookingsCount,
+        missing_bookings_amount: missingBookingsAmount,
+        failed_payments_count: failedPaymentsCount
       }
     };
   } catch (error: any) {
     console.error('getAllCampTransactionsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Manually reconcile and create camp booking from an orphaned/missing Razorpay payment
+ */
+export async function reconcileAndCreateCampBookingAction(params: {
+  campId: string;
+  paymentId: string;
+  orderId?: string;
+  payerName: string;
+  payerContact: string;
+  email: string;
+  amount: number;
+  entries?: any[];
+  notes?: string;
+}) {
+  try {
+    const { isSuperAdmin, user } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+    }
+
+    const { campId, paymentId, orderId, payerName, payerContact, email, amount, entries, notes } = params;
+
+    if (!campId || !paymentId) {
+      return { success: false, error: 'Camp ID and Payment ID are required' };
+    }
+
+    // Check if registration already exists
+    const existingCheck = await query(
+      'SELECT id FROM camp_registrations WHERE payment_id = $1 LIMIT 1',
+      [paymentId]
+    );
+    if (existingCheck.rows.length > 0) {
+      return { success: false, error: 'A camp booking with this Payment ID already exists.' };
+    }
+
+    // Fetch camp details
+    const campRes = await query('SELECT * FROM camps WHERE id = $1', [campId]);
+    if (campRes.rows.length === 0) {
+      return { success: false, error: 'Camp not found.' };
+    }
+    const camp = campRes.rows[0];
+
+    const groupId = `camp_group_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    // Resolve entries list
+    const participantEntries = (Array.isArray(entries) && entries.length > 0) ? entries : [{
+      participant_name: payerName || 'Devotee',
+      whatsapp: payerContact || '',
+      email: email || '',
+      camp_track: 'GS Camp - 1st Timer',
+      participant_type: 'Camp Participant',
+      gender: 'Male - Bachelor',
+      total_cost: amount,
+      meal_cost: 0,
+      acc_cost: 0,
+      accommodation: 'No',
+    }];
+
+    const insertedRegistrations: any[] = [];
+    const unitCost = Math.round(amount / participantEntries.length);
+
+    for (const entry of participantEntries) {
+      const pName = entry.participant_name || entry.participantName || payerName || 'Devotee';
+      const pPhone = entry.whatsapp || entry.phone || payerContact || '';
+      const pEmail = (entry.email || email || '').trim().toLowerCase();
+      const pTrack = entry.camp_track || entry.campTrack || 'GS Camp - 1st Timer';
+      const pType = entry.participant_type || entry.participantType || 'Camp Participant';
+      const pGender = entry.gender || 'Male - Bachelor';
+      const pAcc = entry.accommodation || 'No';
+
+      const insertSql = `
+        INSERT INTO camp_registrations (
+          camp_id, group_id, poc_name, poc_contact, email,
+          parent_temple, voice_name, current_temple, current_center,
+          participant_name, whatsapp,
+          gender, camp_track, participant_type,
+          accommodation, total_cost,
+          payment_method, payment_status, payment_id, order_id,
+          verified_at, verified_by
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7, $8, $9,
+          $10, $11,
+          $12, $13, $14,
+          $15, $16,
+          'RAZORPAY', 'completed', $17, $18,
+          NOW(), $19
+        ) RETURNING *
+      `;
+
+      const values = [
+        campId,
+        groupId,
+        payerName,
+        payerContact,
+        pEmail,
+        entry.parent_temple || entry.parentTemple || 'ISKCON NVCC • PUNE',
+        entry.voice_name || entry.voiceName || 'Central VOICE',
+        entry.current_temple || entry.currentTemple || 'ISKCON NVCC • PUNE',
+        entry.current_center || entry.currentCenter || 'Central VOICE',
+        pName,
+        pPhone,
+        pGender,
+        pTrack,
+        pType,
+        pAcc,
+        Number(entry.total_cost || unitCost || 0),
+        paymentId,
+        orderId || null,
+        user.email || 'Super Admin'
+      ];
+
+      const res = await query(insertSql, values);
+      insertedRegistrations.push(res.rows[0]);
+    }
+
+    // Update camp_payment_orders
+    try {
+      await query(
+        `UPDATE camp_payment_orders 
+         SET status = 'registration_completed', payment_id = $1, error_message = $2, updated_at = NOW() 
+         WHERE order_id = $3 OR payment_id = $1`,
+        [paymentId, notes ? `Reconciled: ${notes}` : 'Manually reconciled by Super Admin', orderId || paymentId]
+      );
+    } catch (upErr) {
+      console.warn('Failed to update camp_payment_orders on manual reconcile:', upErr);
+    }
+
+    // Send welcome emails
+    for (const reg of insertedRegistrations) {
+      if (reg.email) {
+        sendCampDevoteeWelcomeAccountEmail({
+          userEmail: reg.email,
+          userName: reg.participant_name,
+          campTitle: camp.title,
+          trackName: reg.camp_track || 'General'
+        }).catch(e => {
+          console.warn('[Reconcile Camp Booking] Email notice error:', e);
+        });
+      }
+    }
+
+    revalidatePath('/dashboard/admin/camps');
+    return {
+      success: true,
+      message: `Successfully created ${insertedRegistrations.length} booking(s) for ${payerName}!`,
+      count: insertedRegistrations.length,
+      groupId
+    };
+  } catch (error: any) {
+    console.error('reconcileAndCreateCampBookingAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Mark an orphaned payment as reconciled externally (e.g. refunded or manually settled)
+ */
+export async function markCampPaymentReconciledAction(params: {
+  paymentId: string;
+  orderId?: string;
+  notes?: string;
+}) {
+  try {
+    const { isSuperAdmin, user } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+    }
+
+    const { paymentId, orderId, notes } = params;
+
+    await query(
+      `INSERT INTO camp_payment_orders (
+         order_id, payment_id, amount, status, error_message, updated_at
+       ) VALUES ($1, $2, 0, 'reconciled_externally', $3, NOW())
+       ON CONFLICT (order_id) DO UPDATE SET
+         status = 'reconciled_externally',
+         payment_id = COALESCE(EXCLUDED.payment_id, camp_payment_orders.payment_id),
+         error_message = EXCLUDED.error_message,
+         updated_at = NOW()`,
+      [orderId || paymentId, paymentId, notes ? `Reconciled by ${user.email}: ${notes}` : `Reconciled by ${user.email}`]
+    );
+
+    revalidatePath('/dashboard/admin/camps');
+    return { success: true, message: 'Payment marked as reconciled externally.' };
+  } catch (error: any) {
+    console.error('markCampPaymentReconciledAction error:', error);
     return { success: false, error: error.message };
   }
 }

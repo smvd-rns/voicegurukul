@@ -4,7 +4,17 @@ import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
-    const { campId, amount, payerName, website: clientWebsite } = await req.json();
+    const body = await req.json();
+    const {
+      campId,
+      amount,
+      payerName,
+      payerEmail,
+      payerContact,
+      entries,
+      formData,
+      website: clientWebsite
+    } = body;
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
@@ -63,8 +73,44 @@ export async function POST(req: NextRequest) {
         payment_for: String(camp.title || '').substring(0, 100),
         website: String(resolvedWebsite || '').substring(0, 120),
         payer_name: String(payerName || '').substring(0, 100),
+        payer_email: String(payerEmail || '').substring(0, 100),
+        payer_contact: String(payerContact || '').substring(0, 50),
+        camp_id: String(camp.id || ''),
       },
     });
+
+    // Record order attempt and store devotee entries in camp_payment_orders
+    try {
+      await query(
+        `INSERT INTO camp_payment_orders (
+          order_id, camp_id, amount, currency,
+          payer_name, payer_email, payer_contact,
+          entries_payload, form_data, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (order_id) DO UPDATE SET
+          amount = EXCLUDED.amount,
+          payer_name = EXCLUDED.payer_name,
+          payer_email = EXCLUDED.payer_email,
+          payer_contact = EXCLUDED.payer_contact,
+          entries_payload = EXCLUDED.entries_payload,
+          form_data = EXCLUDED.form_data,
+          updated_at = NOW()`,
+        [
+          order.id,
+          camp.id,
+          Number(amount),
+          'INR',
+          payerName || null,
+          payerEmail || null,
+          payerContact || null,
+          JSON.stringify(Array.isArray(entries) ? entries : []),
+          JSON.stringify(formData || {}),
+          'created'
+        ]
+      );
+    } catch (dbErr) {
+      console.error('Failed to log camp payment order:', dbErr);
+    }
 
     return NextResponse.json({
       id: order.id,

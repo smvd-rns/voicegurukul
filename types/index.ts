@@ -770,6 +770,14 @@ export interface CampAuditTransaction {
   email: string;
   payment_method: string;
   payment_status: string;
+  booking_status?: 'confirmed' | 'missing_booking' | 'failed' | 'abandoned';
+  gateway_status?: string;
+  error_code?: string;
+  error_message?: string;
+  gateway_fee?: number;
+  gateway_tax?: number;
+  gateway_method?: string;
+  entries_payload?: any[];
   payment_id?: string;
   order_id?: string;
   deduction_source?: string;
@@ -827,4 +835,7 @@ export interface CampAuditStats {
   total_participants: number;
   pending_verifications: number;
   pending_refunds: number;
+  missing_bookings_count?: number;
+  missing_bookings_amount?: number;
+  failed_payments_count?: number;
 }

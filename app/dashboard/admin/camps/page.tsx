@@ -34,7 +34,9 @@ import {
   getAllCampRefundsAction,
   verifyAndApproveCampBatchAction,
   rejectCampBatchAction,
-  getAllCentersForCampConfigAction
+  getAllCentersForCampConfigAction,
+  reconcileAndCreateCampBookingAction,
+  markCampPaymentReconciledAction
 } from './actions';
 import { CAMP_ROLE_OPTIONS } from '@/lib/utils/roles';
 
@@ -239,6 +241,11 @@ export default function AdminCampsPage() {
   const [batchVerifyLoading, setBatchVerifyLoading] = useState(false);
   const [batchVerifyError, setBatchVerifyError] = useState<string | null>(null);
   const [batchVerifySuccess, setBatchVerifySuccess] = useState(false);
+
+  // In-Inspector Reconcile / Missing Booking State
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+  const [reconcileSuccess, setReconcileSuccess] = useState<string | null>(null);
 
   // Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -479,8 +486,10 @@ export default function AdminCampsPage() {
       const matchOrderId = (t.order_id || '').toLowerCase().includes(q);
       const matchCamp = (t.camp_title || '').toLowerCase().includes(q);
       const matchCoupon = (t.coupon_code || '').toLowerCase().includes(q);
+      const matchError = (t.error_message || '').toLowerCase().includes(q) || (t.error_code || '').toLowerCase().includes(q);
+      const matchBookingStatus = (t.booking_status || '').toLowerCase().includes(q);
       const matchParticipant = t.participants?.some(p => (p.participant_name || '').toLowerCase().includes(q) || (p.whatsapp || '').includes(q));
-      if (!matchPayer && !matchContact && !matchEmail && !matchTxn && !matchPaymentId && !matchOrderId && !matchCamp && !matchParticipant && !matchCoupon) {
+      if (!matchPayer && !matchContact && !matchEmail && !matchTxn && !matchPaymentId && !matchOrderId && !matchCamp && !matchParticipant && !matchCoupon && !matchError && !matchBookingStatus) {
         return false;
       }
     }
@@ -501,7 +510,10 @@ export default function AdminCampsPage() {
 
     // Status
     if (auditStatusFilter !== 'all') {
-      if (auditStatusFilter === 'completed' && (t.payment_status !== 'completed' || t.refund?.status === 'pending' || t.refund?.status === 'refunded')) return false;
+      if (auditStatusFilter === 'completed' && (t.payment_status !== 'completed' || t.booking_status === 'missing_booking' || t.refund?.status === 'pending' || t.refund?.status === 'refunded')) return false;
+      if (auditStatusFilter === 'missing_booking' && t.booking_status !== 'missing_booking') return false;
+      if (auditStatusFilter === 'failed' && t.booking_status !== 'failed') return false;
+      if (auditStatusFilter === 'abandoned' && t.booking_status !== 'abandoned') return false;
       if (auditStatusFilter === 'pending' && t.payment_status !== 'pending' && !(t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at) && t.refund?.status !== 'pending') return false;
       if (auditStatusFilter === 'refunded' && t.refund?.status !== 'refunded' && t.payment_status !== 'refunded') return false;
     }
@@ -629,6 +641,10 @@ export default function AdminCampsPage() {
       }
     }
 
+    const missingBookingsCount = filteredTransactions.filter(t => t.booking_status === 'missing_booking').length;
+    const missingBookingsAmount = filteredTransactions.filter(t => t.booking_status === 'missing_booking').reduce((sum, t) => sum + (Number(t.total_amount) || 0), 0);
+    const failedPaymentsCount = filteredTransactions.filter(t => t.booking_status === 'failed').length;
+
     return {
       total_gross_fee: totalGrossFee,
       total_discounts: totalDiscounts,
@@ -639,7 +655,10 @@ export default function AdminCampsPage() {
       total_transactions: filteredTransactions.length,
       total_participants: totalParticipants,
       pending_verifications: pendingVerificationCount,
-      pending_refunds: pendingRefundCount
+      pending_refunds: pendingRefundCount,
+      missing_bookings_count: missingBookingsCount,
+      missing_bookings_amount: missingBookingsAmount,
+      failed_payments_count: failedPaymentsCount
     };
   }, [filteredTransactions, filteredRefunds]);
 
@@ -653,11 +672,13 @@ export default function AdminCampsPage() {
       'Payer Name': t.poc_name,
       'Contact Phone': t.poc_contact,
       'Email': t.email,
+      'Booking Status': t.booking_status === 'missing_booking' ? 'MISSING BOOKING (PAID)' : t.booking_status === 'failed' ? 'PAYMENT FAILED' : t.booking_status === 'abandoned' ? 'ABANDONED' : 'CONFIRMED',
       'Participant Count': t.participant_count,
       'Payment Method': t.payment_method,
       'Payment Status': t.payment_status,
       'Payment ID (Gateway / UTR)': t.payment_id || '',
       'Order ID': t.order_id || '',
+      'Gateway Error / Reason': t.error_message || '',
       'IDT Deduction Source': t.deduction_source || '',
       'IDT Passcode': t.passcode || '',
       'Meals Cost (₹)': t.total_meal_cost,
@@ -787,6 +808,80 @@ export default function AdminCampsPage() {
       setBatchVerifyError(err.message || 'Error occurred during rejection.');
     } finally {
       setBatchVerifyLoading(false);
+    }
+  };
+
+  const handleReconcileMissingBooking = async () => {
+    if (!selectedTxn) return;
+    if (!window.confirm(`Create and confirm Gurukul camp registration for ${selectedTxn.poc_name || 'this devotee'} (Payment ID: ${selectedTxn.payment_id || selectedTxn.txn_id}, ₹${selectedTxn.total_amount})?`)) {
+      return;
+    }
+
+    setReconcileLoading(true);
+    setReconcileError(null);
+    setReconcileSuccess(null);
+
+    try {
+      const res = await reconcileAndCreateCampBookingAction({
+        campId: selectedTxn.camp_id,
+        paymentId: selectedTxn.payment_id || selectedTxn.txn_id,
+        orderId: selectedTxn.order_id,
+        payerName: selectedTxn.poc_name || 'Devotee',
+        payerContact: selectedTxn.poc_contact || '',
+        email: selectedTxn.email || '',
+        amount: Number(selectedTxn.total_amount),
+        entries: (selectedTxn as any).entries_payload || (selectedTxn.participants?.length > 0 ? selectedTxn.participants : undefined),
+      });
+
+      if (!res.success) {
+        setReconcileError(res.error || 'Failed to reconcile booking');
+      } else {
+        setReconcileSuccess(res.message || 'Booking created successfully!');
+        setSelectedTxn(prev => prev ? {
+          ...prev,
+          booking_status: 'confirmed',
+          payment_status: 'completed',
+          participant_count: res.count || prev.participant_count || 1
+        } : null);
+        loadAuditData();
+      }
+    } catch (err: any) {
+      setReconcileError(err.message || 'Error creating booking');
+    } finally {
+      setReconcileLoading(false);
+    }
+  };
+
+  const handleMarkExternalReconciled = async () => {
+    if (!selectedTxn) return;
+    const notes = window.prompt('Enter reconciliation / settlement notes (e.g. Refunded in Razorpay dashboard or devotee attended):', 'Settled externally');
+    if (notes === null) return;
+
+    setReconcileLoading(true);
+    setReconcileError(null);
+
+    try {
+      const res = await markCampPaymentReconciledAction({
+        paymentId: selectedTxn.payment_id || selectedTxn.txn_id,
+        orderId: selectedTxn.order_id,
+        notes: notes.trim(),
+      });
+
+      if (!res.success) {
+        setReconcileError(res.error || 'Failed to mark reconciled');
+      } else {
+        setReconcileSuccess('Marked reconciled externally');
+        setSelectedTxn(prev => prev ? {
+          ...prev,
+          booking_status: 'confirmed',
+          payment_status: 'completed',
+        } : null);
+        loadAuditData();
+      }
+    } catch (err: any) {
+      setReconcileError(err.message || 'Error updating status');
+    } finally {
+      setReconcileLoading(false);
     }
   };
 
@@ -2594,7 +2689,7 @@ export default function AdminCampsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-2.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2 sm:gap-2.5">
                       {/* 1. Gross Camp Value (Before Discounts) */}
                       <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs">
                         <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gross Camp Value</span>
@@ -2658,13 +2753,42 @@ export default function AdminCampsPage() {
                       <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/80 shadow-2xs">
                         <span className="text-[9.5px] sm:text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Action Needed</span>
                         <div className="text-sm sm:text-base lg:text-lg font-black text-amber-900 mt-0.5 flex items-center gap-1.5">
-                          <span>{dynamicStats.pending_verifications + dynamicStats.pending_refunds}</span>
-                          {(dynamicStats.pending_verifications + dynamicStats.pending_refunds > 0) && (
+                          <span>{dynamicStats.pending_verifications + dynamicStats.pending_refunds + (dynamicStats.missing_bookings_count || 0)}</span>
+                          {(dynamicStats.pending_verifications + dynamicStats.pending_refunds + (dynamicStats.missing_bookings_count || 0) > 0) && (
                             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                           )}
                         </div>
                         <span className="text-[9px] sm:text-[10px] text-amber-700 block truncate mt-0.5">
-                          {dynamicStats.pending_verifications} ITT | {dynamicStats.pending_refunds} Refunds
+                          {(dynamicStats.missing_bookings_count || 0) > 0 ? `${dynamicStats.missing_bookings_count} Missing | ` : ''}{dynamicStats.pending_verifications} ITT | {dynamicStats.pending_refunds} Refunds
+                        </span>
+                      </div>
+
+                      {/* 8. Missing Bookings Alert Card */}
+                      <div
+                        onClick={() => {
+                          setAuditStatusFilter(auditStatusFilter === 'missing_booking' ? 'all' : 'missing_booking');
+                          setAuditPage(1);
+                        }}
+                        className={`p-2 sm:p-2.5 rounded-xl border shadow-2xs cursor-pointer transition-all ${
+                          (dynamicStats.missing_bookings_count || 0) > 0
+                            ? 'bg-rose-50 border-rose-300 hover:bg-rose-100 ring-2 ring-rose-400/30'
+                            : 'bg-white border-slate-200 opacity-60'
+                        }`}
+                        title="Click to filter by payments with missing camp bookings"
+                      >
+                        <span className="text-[9.5px] sm:text-[10px] font-extrabold text-rose-800 uppercase tracking-wider block flex items-center justify-between">
+                          <span>Missing Bookings</span>
+                          {(dynamicStats.missing_bookings_count || 0) > 0 && (
+                            <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                          )}
+                        </span>
+                        <div className="text-sm sm:text-base lg:text-lg font-black text-rose-950 mt-0.5">
+                          {dynamicStats.missing_bookings_count || 0}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-rose-700 font-bold block truncate mt-0.5">
+                          {(dynamicStats.missing_bookings_count || 0) > 0
+                            ? `₹${(dynamicStats.missing_bookings_amount || 0).toLocaleString('en-IN')} Paid (No Booking)`
+                            : 'All Bookings Reconciled'}
                         </span>
                       </div>
                     </div>
@@ -2675,16 +2799,39 @@ export default function AdminCampsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
-                      onClick={() => setAuditSubView('transactions')}
+                      onClick={() => {
+                        setAuditSubView('transactions');
+                        if (auditStatusFilter === 'missing_booking') setAuditStatusFilter('all');
+                      }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        auditSubView === 'transactions'
+                        auditSubView === 'transactions' && auditStatusFilter !== 'missing_booking'
                           ? 'bg-slate-900 text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                       }`}
                     >
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>All Transactions ({filteredTransactions.length})</span>
+                      <span>All Transactions ({transactions.length})</span>
                     </button>
+
+                    {(dynamicStats.missing_bookings_count || 0) > 0 && (
+                      <button
+                        onClick={() => {
+                          setAuditSubView('transactions');
+                          setAuditStatusFilter(auditStatusFilter === 'missing_booking' ? 'all' : 'missing_booking');
+                          setAuditPage(1);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                          auditStatusFilter === 'missing_booking'
+                            ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
+                            : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                        }`}
+                        title="Filter transactions where payment was received on gateway but camp booking is missing"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Missing Bookings ({dynamicStats.missing_bookings_count})</span>
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => setAuditSubView('refunds')}
@@ -2829,10 +2976,13 @@ export default function AdminCampsPage() {
                         }}
                         className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 cursor-pointer"
                       >
-                        <option value="all">All Statuses</option>
-                        <option value="completed">Completed</option>
+                        <option value="all">All Statuses ({transactions.length})</option>
+                        <option value="completed">Confirmed / Completed Bookings</option>
+                        <option value="missing_booking">⚠️ Missing Bookings (Paid, No Booking!)</option>
+                        <option value="failed">❌ Failed Payments</option>
                         <option value="pending">Pending Verification</option>
                         <option value="refunded">Refunded / Cancelled</option>
+                        <option value="abandoned">Abandoned / Incomplete Attempts</option>
                       </select>
                     </div>
 
@@ -2905,8 +3055,16 @@ export default function AdminCampsPage() {
                             <span>Color Guide:</span>
                           </span>
                           <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 shadow-2xs border border-rose-700 animate-pulse"></span>
+                            <span className="text-rose-950 font-bold">⚠️ Paid (Booking Missing)</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1">
                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-2xs border border-emerald-600"></span>
-                            <span className="text-emerald-950">Money In (Razorpay)</span>
+                            <span className="text-emerald-950">Confirmed Booking (Razorpay)</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shadow-2xs border border-slate-500"></span>
+                            <span className="text-slate-700 font-bold">❌ Payment Failed</span>
                           </span>
                           <span className="inline-flex items-center gap-1">
                             <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-2xs border border-orange-600"></span>
@@ -2923,10 +3081,6 @@ export default function AdminCampsPage() {
                           <span className="inline-flex items-center gap-1">
                             <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-2xs border border-purple-600"></span>
                             <span className="text-purple-950">Refunded</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-2xs border border-rose-600"></span>
-                            <span className="text-rose-950">Refund Pending</span>
                           </span>
                           <span className="inline-flex items-center gap-1">
                             <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-2xs border border-yellow-500"></span>
@@ -2964,6 +3118,9 @@ export default function AdminCampsPage() {
                                   }) : '';
 
                                   // Compute distinct row shading & solid left accent bar
+                                  const isMissingBooking = t.booking_status === 'missing_booking';
+                                  const isFailed = t.booking_status === 'failed';
+                                  const isAbandoned = t.booking_status === 'abandoned';
                                   const isRefunded = t.refund?.status === 'refunded' || t.payment_status === 'refunded';
                                   const isRefundPending = t.refund?.status === 'pending';
                                   const isPendingVerification = t.payment_status === 'pending' || (t.payment_method === 'INTER_TEMPLE_TRANSFER' && !t.verified_at);
@@ -2972,7 +3129,13 @@ export default function AdminCampsPage() {
                                   const isIdt = t.payment_method === 'IDT';
 
                                   let rowShadeClass = '';
-                                  if (isRefunded) {
+                                  if (isMissingBooking) {
+                                    rowShadeClass = 'bg-rose-100/90 hover:bg-rose-200 border-l-4 border-l-rose-600 text-slate-900';
+                                  } else if (isFailed) {
+                                    rowShadeClass = 'bg-slate-100 hover:bg-slate-200 border-l-4 border-l-slate-400 text-slate-700';
+                                  } else if (isAbandoned) {
+                                    rowShadeClass = 'bg-slate-50 hover:bg-slate-100 border-l-4 border-l-slate-300 text-slate-500';
+                                  } else if (isRefunded) {
                                     rowShadeClass = 'bg-purple-100/75 hover:bg-purple-200/85 border-l-4 border-l-purple-600 text-slate-900';
                                   } else if (isRefundPending) {
                                     rowShadeClass = 'bg-rose-100/70 hover:bg-rose-200/80 border-l-4 border-l-rose-600 text-slate-900';
@@ -3018,10 +3181,26 @@ export default function AdminCampsPage() {
 
                                     {/* Devotees Count */}
                                     <td className="py-2 px-2.5 text-center whitespace-nowrap">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                        <Users className="w-3 h-3" />
-                                        {t.participant_count} {t.participant_count === 1 ? 'Devotee' : 'Devotees'}
-                                      </span>
+                                      {isMissingBooking ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-2xs">
+                                          <AlertTriangle className="w-3 h-3" />
+                                          <span>Missing Booking</span>
+                                        </span>
+                                      ) : isFailed ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                                          <XCircle className="w-3 h-3 text-slate-500" />
+                                          <span>Failed Attempt</span>
+                                        </span>
+                                      ) : isAbandoned ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                                          <span>Abandoned</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                          <Users className="w-3 h-3" />
+                                          {t.participant_count} {t.participant_count === 1 ? 'Devotee' : 'Devotees'}
+                                        </span>
+                                      )}
                                       {t.participants && t.participants.length > 0 && (
                                         <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5 max-w-[120px] mx-auto">
                                           {t.participants.map(p => p.participant_name).join(', ')}
@@ -3033,7 +3212,13 @@ export default function AdminCampsPage() {
                                     <td className="py-2 px-2.5">
                                       <div className="flex items-center gap-1.5">
                                         {t.payment_method === 'RAZORPAY' && (
-                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+                                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${
+                                            isMissingBooking
+                                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                              : isFailed
+                                              ? 'bg-slate-100 text-slate-600 border-slate-300'
+                                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                                          }`}>
                                             RAZORPAY
                                           </span>
                                         )}
@@ -3059,12 +3244,17 @@ export default function AdminCampsPage() {
                                         {t.payment_method === 'INTER_TEMPLE_TRANSFER' && (t.payment_id ? `UTR: ${t.payment_id}` : 'Receipt Attached')}
                                         {['FREE', 'COUPON', 'ROLE_WAIVER'].includes(t.payment_method) && (t.coupon_code || '100% Waiver')}
                                       </div>
+                                      {isFailed && t.error_message && (
+                                        <div className="text-[9.5px] text-rose-600 font-sans truncate max-w-[200px]" title={t.error_message}>
+                                          {t.error_message}
+                                        </div>
+                                      )}
                                     </td>
 
                                     {/* Amount Paid & Discount Breakdown */}
                                     <td className="py-2 px-2.5 whitespace-nowrap">
                                       <div className="flex items-baseline gap-1.5">
-                                        <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                                        <span className={`font-extrabold text-xs sm:text-sm ${isMissingBooking ? 'text-rose-700' : 'text-slate-900'}`}>
                                           ₹{t.total_amount.toLocaleString('en-IN')}
                                         </span>
                                         {t.total_discount > 0 && (
@@ -3088,7 +3278,22 @@ export default function AdminCampsPage() {
 
                                     {/* Status */}
                                     <td className="py-2 px-2.5 whitespace-nowrap">
-                                      {t.refund?.status === 'refunded' ? (
+                                      {isMissingBooking ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9.5px] font-extrabold bg-rose-500 text-white shadow-xs animate-pulse">
+                                          <AlertTriangle className="w-3 h-3" />
+                                          Paid (Booking Missing)
+                                        </span>
+                                      ) : isFailed ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">
+                                          <XCircle className="w-3 h-3 text-rose-600" />
+                                          Payment Failed
+                                        </span>
+                                      ) : isAbandoned ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
+                                          <Clock className="w-3 h-3 text-slate-400" />
+                                          Abandoned
+                                        </span>
+                                      ) : t.refund?.status === 'refunded' ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
                                           <Undo2 className="w-3 h-3" />
                                           Refunded (₹{Number(t.transaction_refund_amount != null ? t.transaction_refund_amount : t.refund.refund_amount).toLocaleString('en-IN')})
@@ -3126,11 +3331,15 @@ export default function AdminCampsPage() {
                                     <td className="py-2 px-2.5 text-right whitespace-nowrap">
                                       <button
                                         onClick={() => setSelectedTxn(t)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer"
-                                        title="Inspect full transaction details"
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer ${
+                                          isMissingBooking
+                                            ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                                            : 'bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700'
+                                        }`}
+                                        title={isMissingBooking ? 'Inspect & Reconcile Missing Camp Booking' : 'Inspect full transaction details'}
                                       >
-                                        <Eye className="w-3 h-3" />
-                                        <span>Inspect</span>
+                                        {isMissingBooking ? <Sparkles className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                        <span>{isMissingBooking ? 'Reconcile' : 'Inspect'}</span>
                                       </button>
                                     </td>
                                   </tr>
@@ -3526,6 +3735,78 @@ export default function AdminCampsPage() {
 
             {/* Modal Body: flex-1 min-h-0 prevents vertical overflow */}
             <div className="flex-1 min-h-0 p-5 sm:p-6 overflow-y-auto space-y-5 text-xs">
+              {/* Missing Booking Alert & Reconcile Panel */}
+              {selectedTxn.booking_status === 'missing_booking' && (
+                <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 animate-bounce" />
+                      <h4 className="font-extrabold text-sm text-rose-900">
+                        Gateway Payment Received — Missing Camp Registration!
+                      </h4>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white animate-pulse">
+                      ACTION NEEDED
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-800">
+                    Razorpay confirmed receipt of <strong>₹{selectedTxn.total_amount.toLocaleString('en-IN')}</strong> (Payment ID: <code className="bg-rose-100 px-1 py-0.5 rounded font-mono font-bold">{selectedTxn.payment_id || selectedTxn.txn_id}</code>), but camp registration was not created in Gurukul database (e.g. devotee closed tab before redirection or backend timeout).
+                  </p>
+
+                  {reconcileError && (
+                    <div className="p-2.5 rounded-xl bg-white border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>{reconcileError}</span>
+                    </div>
+                  )}
+
+                  {reconcileSuccess && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{reconcileSuccess}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200">
+                    <button
+                      type="button"
+                      onClick={handleReconcileMissingBooking}
+                      disabled={reconcileLoading}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl inline-flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {reconcileLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      <span>Create &amp; Confirm Booking (Reconcile)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleMarkExternalReconciled}
+                      disabled={reconcileLoading}
+                      className="px-3.5 py-2 bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Mark Settled / Refunded Externally</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Failed Payment Banner */}
+              {selectedTxn.booking_status === 'failed' && (
+                <div className="p-4 rounded-2xl bg-slate-100 border border-slate-300 text-slate-800 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+                    <h4 className="font-bold text-sm text-slate-900">Payment Failed on Gateway</h4>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    The devotee attempted online payment, but the transaction was not completed or was cancelled.
+                  </p>
+                  <div className="text-[11px] font-mono text-rose-700 bg-white p-2 rounded-xl border border-slate-200">
+                    Reason: {selectedTxn.error_message || 'Payment failed or cancelled'}
+                    {selectedTxn.error_code && ` • Code: ${selectedTxn.error_code}`}
+                  </div>
+                </div>
+              )}
+
               {/* Highlight Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Payer */}
@@ -3871,7 +4152,26 @@ export default function AdminCampsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {selectedTxn.participants?.map((p, idx) => (
+                      {(!selectedTxn.participants || selectedTxn.participants.length === 0) ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-500">
+                            {selectedTxn.booking_status === 'missing_booking' ? (
+                              <div className="space-y-1.5 max-w-md mx-auto">
+                                <div className="font-bold text-rose-700 flex items-center justify-center gap-1.5">
+                                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                                  <span>No attendees recorded in database for this gateway payment.</span>
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                  Click &ldquo;Create &amp; Confirm Booking (Reconcile)&rdquo; above to generate their camp registration and welcome pass.
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">No participants registered in this transaction.</span>
+                            )}
+                          </td>
+                        </tr>
+                      ) : (
+                        selectedTxn.participants.map((p, idx) => (
                         <tr key={p.id || idx} className="hover:bg-slate-50/60">
                           <td className="py-2.5 px-3 font-semibold text-slate-900">
                             <div>{p.participant_name}</div>
@@ -3893,7 +4193,7 @@ export default function AdminCampsPage() {
                             ₹{Number(p.total_cost || 0).toLocaleString('en-IN')}
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>

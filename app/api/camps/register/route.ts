@@ -11,8 +11,9 @@ import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
 import { getManagerAssignedLocations } from '@/app/dashboard/admin/camps/actions';
 
 export async function POST(req: NextRequest) {
+  let body: any = null;
   try {
-    const body = await req.json();
+    body = await req.json();
     const {
       campId,
       entries,
@@ -1103,6 +1104,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (paymentMethod === 'RAZORPAY' && razorpay_payment_id) {
+      try {
+        await query(
+          `UPDATE camp_payment_orders 
+           SET 
+             status = 'registration_completed',
+             payment_id = $1,
+             updated_at = NOW()
+           WHERE order_id = $2 OR payment_id = $1`,
+          [razorpay_payment_id, razorpay_order_id]
+        );
+      } catch (orderUpdateErr) {
+        console.error('Failed to update camp_payment_orders on registration success:', orderUpdateErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: isPendingVerification
@@ -1115,6 +1132,23 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Camp registration endpoint error:', error);
+    try {
+      const b = body || {};
+      if (b.paymentMethod === 'RAZORPAY' && (b.razorpay_payment_id || b.razorpay_order_id)) {
+        await query(
+          `UPDATE camp_payment_orders 
+           SET 
+             status = 'registration_failed',
+             payment_id = COALESCE($1, payment_id),
+             error_message = $2,
+             updated_at = NOW()
+           WHERE order_id = $3 OR payment_id = $1`,
+          [b.razorpay_payment_id || null, error.message || 'Registration failed', b.razorpay_order_id || null]
+        );
+      }
+    } catch (orderFailErr) {
+      console.error('Failed to log registration failure into camp_payment_orders:', orderFailErr);
+    }
     return NextResponse.json({ error: error.message || 'Internal server error processing registration' }, { status: 500 });
   }
 }
