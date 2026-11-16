@@ -910,8 +910,25 @@ export default function AdminCampsPage() {
   }, [camps, reconcileForm.campId]);
 
   const reconcileCampDateOptions = useMemo(() => {
-    return getCampDateOptions(selectedReconcileCamp);
-  }, [selectedReconcileCamp]);
+    const base = getCampDateOptions(selectedReconcileCamp);
+    const dates = [...base];
+    // Ensure devotee's early arrival or extended departure dates are included if not present
+    if (reconcileForm.firstMealDate && !dates.some((d: any) => String(d.value) === String(reconcileForm.firstMealDate))) {
+      dates.unshift({
+        value: reconcileForm.firstMealDate,
+        label: `${reconcileForm.firstMealDate} (Devotee Selected Arrival)`,
+        fullDate: reconcileForm.firstMealDate
+      });
+    }
+    if (reconcileForm.lastMealDate && !dates.some((d: any) => String(d.value) === String(reconcileForm.lastMealDate))) {
+      dates.push({
+        value: reconcileForm.lastMealDate,
+        label: `${reconcileForm.lastMealDate} (Devotee Selected Departure)`,
+        fullDate: reconcileForm.lastMealDate
+      });
+    }
+    return dates;
+  }, [selectedReconcileCamp, reconcileForm.firstMealDate, reconcileForm.lastMealDate]);
 
   const calculatedReconcileCost = useMemo(() => {
     if (!reconcileModalOpen || !selectedReconcileCamp) return null;
@@ -959,23 +976,24 @@ export default function AdminCampsPage() {
 
     const { chosenTrack, firstDate, lastDate, firstType, lastType } = resolveCampDatesAndTrack(targetCamp, requestedTrack);
 
+    // If the devotee previously selected custom/early/late dates in their order, preserve them; otherwise use track defaults
+    const initialFirstDate = firstEntry?.first_meal_date || firstEntry?.firstMealDate || firstDate;
+    const initialLastDate = firstEntry?.last_meal_date || firstEntry?.lastMealDate || lastDate;
+    const initialFirstType = firstEntry?.first_meal_type || firstEntry?.firstMealType || firstType;
+    const initialLastType = firstEntry?.last_meal_type || firstEntry?.lastMealType || lastType;
+
     setReconcileForm({
       campId: targetCamp?.id || target.camp_id || '',
       participantName: firstEntry?.participant_name || firstEntry?.participantName || target.poc_name || 'Devotee',
       whatsapp: firstEntry?.whatsapp || firstEntry?.phone || target.poc_contact || '',
       email: firstEntry?.email || target.email || '',
-      campTrack: firstEntry?.camp_track || firstEntry?.campTrack || tracks[0] || 'GS Camp - 1st Timer',
-      campTrack: chosenTrack,
+      campTrack: requestedTrack || chosenTrack,
       gender: firstEntry?.gender || 'Male - Bachelor',
       participantType: firstEntry?.participant_type || firstEntry?.participantType || 'Camp Participant',
-      firstMealDate: firstEntry?.first_meal_date || firstEntry?.firstMealDate || campStart,
-      firstMealType: firstEntry?.first_meal_type || firstEntry?.firstMealType || 'Breakfast',
-      lastMealDate: firstEntry?.last_meal_date || firstEntry?.lastMealDate || campEnd,
-      lastMealType: firstEntry?.last_meal_type || firstEntry?.lastMealType || 'Dinner',
-      firstMealDate: firstEntry?.first_meal_date || firstEntry?.firstMealDate || firstDate,
-      firstMealType: firstEntry?.first_meal_type || firstEntry?.firstMealType || firstType,
-      lastMealDate: firstEntry?.last_meal_date || firstEntry?.lastMealDate || lastDate,
-      lastMealType: firstEntry?.last_meal_type || firstEntry?.lastMealType || lastType,
+      firstMealDate: initialFirstDate,
+      firstMealType: initialFirstType,
+      lastMealDate: initialLastDate,
+      lastMealType: initialLastType,
       accommodation: firstEntry?.accommodation || 'No',
       currentCenter: firstEntry?.current_center || firstEntry?.currentCenter || firstEntry?.voice_name || 'Central VOICE',
       currentTemple: firstEntry?.current_temple || firstEntry?.currentTemple || firstEntry?.parent_temple || 'ISKCON NVCC • PUNE',
@@ -1030,7 +1048,6 @@ export default function AdminCampsPage() {
           accommodation: reconcileForm.accommodation,
           current_center: reconcileForm.currentCenter,
           current_temple: reconcileForm.currentTemple,
-          total_cost: Number(selectedTxn.total_amount),
           total_cost: calculatedReconcileCost?.totalCost || Number(selectedTxn.total_amount),
           meal_cost: calculatedReconcileCost?.mealCost || 0,
           acc_cost: calculatedReconcileCost?.accCost || 0,
@@ -4483,21 +4500,11 @@ export default function AdminCampsPage() {
                   value={reconcileForm.campId}
                   onChange={(e) => {
                     const newCampId = e.target.value;
-                    const c = camps.find(campItem => campItem.id === newCampId);
-                    const cStart = c?.start_date ? new Date(c.start_date).toISOString().split('T')[0] : '';
-                    const cEnd = c?.end_date ? new Date(c.end_date).toISOString().split('T')[0] : cStart;
-                    const tracks = (c?.tracks && Array.isArray(c.tracks) && c.tracks.length > 0)
-                      ? c.tracks.map((t: any) => typeof t === 'string' ? t : t.name)
-                      : ['GS Camp - 1st Timer', 'Senior Boys', 'General Track'];
-
                     const newCamp = camps.find(campItem => campItem.id === newCampId) || camps[0];
                     const { chosenTrack, firstDate, lastDate, firstType, lastType } = resolveCampDatesAndTrack(newCamp);
                     setReconcileForm(prev => ({
                       ...prev,
                       campId: newCampId,
-                      firstMealDate: cStart || prev.firstMealDate,
-                      lastMealDate: cEnd || prev.lastMealDate,
-                      campTrack: tracks[0] || prev.campTrack
                       campTrack: chosenTrack,
                       firstMealDate: firstDate,
                       firstMealType: firstType,
@@ -4564,7 +4571,6 @@ export default function AdminCampsPage() {
                   </label>
                   <select
                     value={reconcileForm.campTrack}
-                    onChange={e => setReconcileForm(prev => ({ ...prev, campTrack: e.target.value }))}
                     onChange={(e) => {
                       const newTrack = e.target.value;
                       const curCamp = selectedReconcileCamp;
@@ -4603,7 +4609,6 @@ export default function AdminCampsPage() {
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     {(() => {
-                      const curCamp = camps.find(c => c.id === reconcileForm.campId);
                       const curCamp = selectedReconcileCamp;
                       const tracks = (curCamp?.tracks && Array.isArray(curCamp.tracks) && curCamp.tracks.length > 0)
                         ? curCamp.tracks.map((t: any) => typeof t === 'string' ? t : t.name)
@@ -4647,34 +4652,27 @@ export default function AdminCampsPage() {
                 </div>
               </div>
 
-              {/* Meal Dates and Types */}
               {/* Meal Dates and Types (Using Camp Specific Valid Dates) */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <div className="font-extrabold text-[11px] uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Utensils className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Prasadam &amp; Meal Schedule (Required)</span>
-                  <div className="font-extrabold text-[11px] uppercase tracking-wider text-slate-700 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Utensils className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Camp Dates &amp; Prasadam Schedule</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold lowercase">
-                      {reconcileCampDateOptions.length} valid camp days
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">
-                        First Meal Date *
-                      </label>
-                      <input
-                        type="date"
+                <div className="font-extrabold text-[11px] uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Utensils className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Camp Dates &amp; Prasadam Schedule</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-semibold lowercase">
+                    {reconcileCampDateOptions.length} valid camp days
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      First Meal Date *
+                    </label>
                     <select
-                        required
-                        value={reconcileForm.firstMealDate}
-                        onChange={e => setReconcileForm(prev => ({ ...prev, firstMealDate: e.target.value }))}
-                        className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
-                      />
+                      required
+                      value={reconcileForm.firstMealDate}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, firstMealDate: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
                     >
                       {reconcileCampDateOptions.length === 0 ? (
                         <option value="">No dates configured for camp</option>
@@ -4705,40 +4703,37 @@ export default function AdminCampsPage() {
                     <label className="block text-[10px] font-bold text-slate-500 mb-1">
                       Last Meal Date *
                     </label>
-                    <input
-                      type="date"
                     <select
                       required
                       value={reconcileForm.lastMealDate}
                       onChange={e => setReconcileForm(prev => ({ ...prev, lastMealDate: e.target.value }))}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
-                    />
                     >
-                    {reconcileCampDateOptions.length === 0 ? (
-                      <option value="">No dates configured for camp</option>
-                    ) : (
-                      reconcileCampDateOptions.map((opt: any) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 mb-1">
-                    Last Meal Type
-                  </label>
-                  <select
-                    value={reconcileForm.lastMealType}
-                    onChange={e => setReconcileForm(prev => ({ ...prev, lastMealType: e.target.value }))}
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
-                  >
-                    <option value="Breakfast">Breakfast</option>
-                    <option value="Lunch">Lunch</option>
-                    <option value="Dinner">Dinner</option>
-                  </select>
+                      {reconcileCampDateOptions.length === 0 ? (
+                        <option value="">No dates configured for camp</option>
+                      ) : (
+                        reconcileCampDateOptions.map((opt: any) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                      Last Meal Type
+                    </label>
+                    <select
+                      value={reconcileForm.lastMealType}
+                      onChange={e => setReconcileForm(prev => ({ ...prev, lastMealType: e.target.value }))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-800"
+                    >
+                      <option value="Breakfast">Breakfast</option>
+                      <option value="Lunch">Lunch</option>
+                      <option value="Dinner">Dinner</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-          </div>
 
           {/* Dynamic Live Cost Calculation vs Payment Received */}
           <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-200/90 space-y-3">
