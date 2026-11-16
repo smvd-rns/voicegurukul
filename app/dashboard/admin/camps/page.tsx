@@ -4094,12 +4094,28 @@ export default function AdminCampsPage() {
                         <strong className="text-orange-800">-₹{selectedTxn.total_discount} {selectedTxn.coupon_code ? `(${selectedTxn.coupon_code})` : ''}</strong>
                       </div>
                     )}
-                    {selectedTxn.payment_method === 'RAZORPAY' && (
-                      <div className="flex items-center justify-between text-blue-700 col-span-2">
-                        <span>Gateway Charge (~2%):</span>
-                        <strong className="text-blue-800">~₹{Math.round(selectedTxn.total_amount * 0.02)}</strong>
-                      </div>
-                    )}
+                    {selectedTxn.payment_method === 'RAZORPAY' && (() => {
+                      const campForTxn = camps.find(c => c.id === selectedTxn.camp_id);
+                      const surchargePct = Number(
+                        campForTxn?.payment_config?.surcharge_percent ??
+                        (campForTxn as any)?.online_payment_surcharge_percent ??
+                        2.0
+                      );
+                      const approxGatewayFee = Math.round(selectedTxn.total_amount - (selectedTxn.total_amount / (1 + surchargePct / 100)));
+                      const netCampValue = selectedTxn.total_amount - approxGatewayFee;
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-blue-700 col-span-2">
+                            <span>Gateway Processing Fee ({surchargePct}%):</span>
+                            <strong className="text-blue-800">₹{approxGatewayFee}</strong>
+                          </div>
+                          <div className="flex items-center justify-between text-slate-700 col-span-2 text-[11px] pt-1 border-t border-slate-200/60 font-semibold">
+                            <span>Net Camp Registration Value:</span>
+                            <strong className="text-emerald-700">₹{netCampValue}</strong>
+                          </div>
+                        </>
+                      );
+                    })()}
                     {selectedTxn.refund && (
                       <div className="flex items-center justify-between text-purple-700 col-span-2 font-bold pt-1 border-t border-emerald-200/40">
                         <span>Refund Disbursed:</span>
@@ -4736,83 +4752,125 @@ export default function AdminCampsPage() {
               </div>
 
           {/* Dynamic Live Cost Calculation vs Payment Received */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-200/90 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                <span>Fee Calculation vs Paid Amount</span>
-              </span>
-              {calculatedReconcileCost && (
-                <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold inline-flex items-center gap-1 ${calculatedReconcileCost.totalCost === Number(selectedTxn.total_amount)
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : 'bg-amber-100 text-amber-800 border border-amber-300'
-                  }`}>
-                  {calculatedReconcileCost.totalCost === Number(selectedTxn.total_amount) ? (
-                    <>
-                      <CheckCircle className="w-3 h-3 text-emerald-600" />
-                      <span>Exact Match: ₹{calculatedReconcileCost.totalCost.toLocaleString('en-IN')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertTriangle className="w-3 h-3 text-amber-600" />
-                      <span>Difference: ₹{Math.abs(calculatedReconcileCost.totalCost - Number(selectedTxn.total_amount)).toLocaleString('en-IN')}</span>
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
+          {(() => {
+            const surchargePercent = Number(
+              selectedReconcileCamp?.payment_config?.surcharge_percent ??
+              (selectedReconcileCamp as any)?.online_payment_surcharge_percent ??
+              0
+            );
+            const campFee = calculatedReconcileCost?.totalCost || 0;
+            const gatewayFee = surchargePercent > 0 && campFee > 0
+              ? Math.round((campFee * surchargePercent) / 100)
+              : 0;
+            const grandTotalWithGateway = campFee + gatewayFee;
+            const paidAmount = Number(selectedTxn.total_amount);
 
-            {/* Side-by-side comparison cards */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gateway Paid Amount</div>
-                <div className="text-xl font-black text-slate-900 mt-0.5">
-                  ₹{Number(selectedTxn.total_amount).toLocaleString('en-IN')}
-                </div>
-                <div className="text-[10.5px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>Razorpay Captured</span>
-                </div>
-              </div>
+            // An exact match can occur if paidAmount equals the grand total (with gateway fee)
+            // or if it directly equals the campFee (in case no gateway fee was charged)
+            const isExactMatchWithGateway = grandTotalWithGateway === paidAmount;
+            const isExactMatchDirect = campFee === paidAmount;
+            const isMatch = isExactMatchWithGateway || isExactMatchDirect;
+            const effectiveDiff = isMatch ? 0 : Math.abs(grandTotalWithGateway - paidAmount);
 
-              <div className="p-3 bg-white rounded-xl border border-amber-300/80 shadow-2xs">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Calculated Camp Fee</div>
-                <div className="text-xl font-black text-amber-800 mt-0.5">
-                  ₹{calculatedReconcileCost ? calculatedReconcileCost.totalCost.toLocaleString('en-IN') : '—'}
-                </div>
-                <div className="text-[10.5px] text-slate-500 font-medium mt-0.5">
-                  {reconcileForm.accommodation === 'Yes' ? 'With Stay' : 'No Stay'} &bull; {calculatedReconcileCost?.mealCount || 0} meals
-                </div>
-              </div>
-            </div>
-
-            {/* Breakdown details */}
-            {calculatedReconcileCost && (
-              <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200/60 flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
-                <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
-                  Base/Track: <strong>₹{calculatedReconcileCost.baseCost || calculatedReconcileCost.entryCost || 0}</strong>
-                </span>
-                <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
-                  Meals ({calculatedReconcileCost.mealCount}): <strong>₹{calculatedReconcileCost.mealCost}</strong>
-                </span>
-                <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
-                  Stay ({calculatedReconcileCost.daysOfStay}d): <strong>₹{calculatedReconcileCost.accCost}</strong>
-                </span>
-                {calculatedReconcileCost.acCost > 0 && (
-                  <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
-                    Facility/AC: <strong>₹{calculatedReconcileCost.acCost}</strong>
+            return (
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-200/90 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Fee Calculation vs Paid Amount</span>
                   </span>
+                  {calculatedReconcileCost && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold inline-flex items-center gap-1 ${isMatch
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}>
+                      {isMatch ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-emerald-600" />
+                          <span>Exact Match: ₹{paidAmount.toLocaleString('en-IN')} {isExactMatchWithGateway && surchargePercent > 0 ? `(Inc. ${surchargePercent}% Gateway)` : ''}</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>Difference: ₹{effectiveDiff.toLocaleString('en-IN')}</span>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {/* Side-by-side comparison cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gateway Paid Amount</div>
+                    <div className="text-xl font-black text-slate-900 mt-0.5">
+                      ₹{paidAmount.toLocaleString('en-IN')}
+                    </div>
+                    <div className="text-[10.5px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span>Razorpay Captured</span>
+                    </div>
+                  </div>
+
+                  <div className={`p-3 bg-white rounded-xl border shadow-2xs ${isMatch ? 'border-emerald-300/80' : 'border-amber-300/80'}`}>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {surchargePercent > 0 ? `Calculated Total (Inc. ${surchargePercent}% Gateway)` : 'Calculated Camp Fee'}
+                    </div>
+                    <div className="text-xl font-black text-amber-800 mt-0.5">
+                      ₹{calculatedReconcileCost ? (surchargePercent > 0 ? grandTotalWithGateway.toLocaleString('en-IN') : campFee.toLocaleString('en-IN')) : '—'}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 font-medium mt-0.5">
+                      Camp ₹{campFee.toLocaleString('en-IN')} {gatewayFee > 0 ? `+ ₹${gatewayFee} Gateway (${surchargePercent}%)` : ''} &bull; {reconcileForm.accommodation === 'Yes' ? 'With Stay' : 'No Stay'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Breakdown details */}
+                {calculatedReconcileCost && (
+                  <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200/60 flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
+                    <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
+                      Base/Track: <strong>₹{calculatedReconcileCost.baseCost || calculatedReconcileCost.entryCost || 0}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
+                      Meals ({calculatedReconcileCost.mealCount}): <strong>₹{calculatedReconcileCost.mealCost}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
+                      Stay ({calculatedReconcileCost.daysOfStay}d): <strong>₹{calculatedReconcileCost.accCost}</strong>
+                    </span>
+                    {calculatedReconcileCost.acCost > 0 && (
+                      <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-semibold">
+                        Facility/AC: <strong>₹{calculatedReconcileCost.acCost}</strong>
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-md font-bold text-amber-900">
+                      Camp Fee: ₹{campFee}
+                    </span>
+                    {gatewayFee > 0 && (
+                      <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md font-bold text-blue-900">
+                        + Gateway Fee ({surchargePercent}%): ₹{gatewayFee}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Match or Difference Advisory */}
+                {calculatedReconcileCost && isMatch ? (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-[11px] leading-relaxed flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      <strong>Perfect Match!</strong> Devotee paid <strong>₹{paidAmount.toLocaleString('en-IN')}</strong>, which corresponds to the Camp Registration Fee (₹{campFee}) {gatewayFee > 0 ? `+ ${surchargePercent}% online gateway fee (₹${gatewayFee})` : ''}.
+                    </span>
+                  </div>
+                ) : (
+                  calculatedReconcileCost && (
+                    <div className="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-900 text-[11px] leading-relaxed">
+                      💡 <strong>Correction Tip:</strong> Devotee paid <strong>₹{paidAmount.toLocaleString('en-IN')}</strong>, but current selection calculates to <strong>₹{grandTotalWithGateway.toLocaleString('en-IN')}</strong> (Camp Fee: ₹{campFee} {gatewayFee > 0 ? `+ ₹${gatewayFee} Gateway` : ''}). Try toggling <em>Accommodation ({reconcileForm.accommodation === 'Yes' ? 'No' : 'Yes'})</em> or adjusting the <em>Camp Track</em> or <em>Meal dates</em> above to align with what the devotee intended to register for.
+                    </div>
+                  )
                 )}
               </div>
-            )}
-
-            {/* Difference Advisory */}
-            {calculatedReconcileCost && calculatedReconcileCost.totalCost !== Number(selectedTxn.total_amount) && (
-              <div className="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-900 text-[11px] leading-relaxed">
-                💡 <strong>Correction Tip:</strong> Devotee paid <strong>₹{Number(selectedTxn.total_amount).toLocaleString('en-IN')}</strong>, but current selection calculates to <strong>₹{calculatedReconcileCost.totalCost.toLocaleString('en-IN')}</strong>. Try toggling <em>Accommodation ({reconcileForm.accommodation === 'Yes' ? 'No' : 'Yes'})</em> or adjusting the <em>Camp Track</em> or <em>Meal dates</em> above to align with what the devotee intended to register for.
-              </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Center / Temple */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
