@@ -21,7 +21,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { Camp, CampMealConfig, CampRegistration, CampCoupon, CampRoleWaiver, CampRefundRequest } from '@/types';
 import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost';
-import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction, getCampAccommodationCapacityStatusAction } from '@/app/dashboard/admin/camps/actions';
+import { lookupCampRegistrationsAction, submitCampRefundRequestAction, cancelPendingIdtRegistrationAction, getCenterDevoteesForCampRegistrationAction, getUserCampRegistrationsAction, validateCampCouponAction, getCampAccommodationCapacityStatusAction, checkDevoteePendingPaymentAction } from '@/app/dashboard/admin/camps/actions';
 import PhoneInputWithCountry from '@/components/ui/PhoneInputWithCountry';
 import { validatePhoneNumber } from '@/lib/utils/phone-validation';
 
@@ -232,6 +232,21 @@ export default function PublicCampRegistrationPage() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
+  // Pending Captured Payment (under finance verification) State
+  const [pendingPaymentInfo, setPendingPaymentInfo] = useState<{
+    paymentId: string;
+    orderId?: string;
+    amount: number;
+    payerName: string;
+    createdAt: string;
+    status: string;
+  } | null>(null);
+  const [showPaymentCheckModal, setShowPaymentCheckModal] = useState(false);
+  const [checkPhoneInput, setCheckPhoneInput] = useState('');
+  const [checkPhoneLoading, setCheckPhoneLoading] = useState(false);
+  const [checkPhoneResult, setCheckPhoneResult] = useState<any>(null);
+  const [checkPhoneError, setCheckPhoneError] = useState<string | null>(null);
+
   // Cancellation & Refund Modal State
   const [showCancelModal, setShowCancelModal] = useState(false);
 
@@ -365,6 +380,105 @@ export default function PublicCampRegistrationPage() {
       checkAndLoadDraft(camp.id);
     }
   }, [camp?.id, userData?.id]);
+
+  // Auto-check for unlinked captured payment awaiting accountant reconciliation
+  useEffect(() => {
+    if (!camp?.id) return;
+    const checkPendingPayment = async () => {
+      let cachedOrderId: string | undefined;
+      if (typeof window !== 'undefined') {
+        try {
+          cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
+                          localStorage.getItem(`pending_camp_order_${camp.id}`) ||
+                          undefined;
+        } catch (e) {}
+      }
+      const devoteePhone = userData?.phone || user?.phone || '';
+      const devoteeEmail = userData?.email || user?.email || '';
+
+      if (!cachedOrderId && !devoteePhone && !devoteeEmail) return;
+
+      try {
+        const res = await checkDevoteePendingPaymentAction({
+          campId: camp.id,
+          phone: devoteePhone || undefined,
+          email: devoteeEmail || undefined,
+          orderId: cachedOrderId,
+        });
+
+        if (res.success && res.hasPendingPayment && res.pendingPayment) {
+          setPendingPaymentInfo({
+            paymentId: res.pendingPayment.paymentId,
+            orderId: res.pendingPayment.orderId,
+            amount: res.pendingPayment.amount,
+            payerName: res.pendingPayment.payerName,
+            createdAt: res.pendingPayment.createdAt,
+            status: res.pendingPayment.status,
+          });
+        } else {
+          if (typeof window !== 'undefined') {
+            try {
+              sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
+              localStorage.removeItem(`pending_camp_order_${camp.id}`);
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.error('Error auto-checking devotee pending payment:', err);
+      }
+    };
+
+    checkPendingPayment();
+  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email]);
+
+  const handleManualPaymentCheck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!camp?.id) return;
+    const q = checkPhoneInput.trim();
+    if (!q) {
+      setCheckPhoneError('Please enter your 10-digit mobile number or payment ID.');
+      return;
+    }
+
+    setCheckPhoneLoading(true);
+    setCheckPhoneError(null);
+    setCheckPhoneResult(null);
+
+    try {
+      const isPayId = q.startsWith('pay_') || q.startsWith('order_');
+      const res = await checkDevoteePendingPaymentAction({
+        campId: camp.id,
+        phone: !isPayId ? q : undefined,
+        orderId: isPayId ? q : undefined,
+      });
+
+      if (!res.success) {
+        setCheckPhoneError(res.error || 'Failed to verify payment status.');
+      } else if (res.hasPendingPayment && res.pendingPayment) {
+        setCheckPhoneResult({
+          found: true,
+          ...res.pendingPayment,
+        });
+        setPendingPaymentInfo({
+          paymentId: res.pendingPayment.paymentId,
+          orderId: res.pendingPayment.orderId,
+          amount: res.pendingPayment.amount,
+          payerName: res.pendingPayment.payerName,
+          createdAt: res.pendingPayment.createdAt,
+          status: res.pendingPayment.status,
+        });
+      } else {
+        setCheckPhoneResult({
+          found: false,
+          message: 'No pending payment under review found for this number or ID. If your payment was completed, please check your registered email or contact the camp coordinators.',
+        });
+      }
+    } catch (err: any) {
+      setCheckPhoneError(err.message || 'Something went wrong while verifying status.');
+    } finally {
+      setCheckPhoneLoading(false);
+    }
+  };
   const [cancelLookupQuery, setCancelLookupQuery] = useState('');
   const [cancelLookupLoading, setCancelLookupLoading] = useState(false);
   const [cancelLookupError, setCancelLookupError] = useState<string | null>(null);
@@ -1309,6 +1423,11 @@ export default function PublicCampRegistrationPage() {
 
   // Trigger Razorpay Payment
   const initiateRazorpayPayment = async () => {
+    if (pendingPaymentInfo) {
+      setPaymentError(`You already have a captured payment of ₹${pendingPaymentInfo.amount} (${pendingPaymentInfo.paymentId}) currently awaiting finance review. Please do not make a second payment.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setPaymentError(null);
 
@@ -1342,6 +1461,13 @@ export default function PublicCampRegistrationPage() {
       }
 
       const orderData = await orderRes.json();
+
+      if (typeof window !== 'undefined' && camp?.id && orderData?.id) {
+        try {
+          sessionStorage.setItem(`pending_camp_order_${camp.id}`, orderData.id);
+          localStorage.setItem(`pending_camp_order_${camp.id}`, orderData.id);
+        } catch (e) {}
+      }
 
       const options = {
         key: orderData.keyId,
@@ -1546,6 +1672,13 @@ export default function PublicCampRegistrationPage() {
       });
 
       setShowPaymentModal(false);
+      setPendingPaymentInfo(null);
+      if (typeof window !== 'undefined' && camp?.id) {
+        try {
+          sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
+          localStorage.removeItem(`pending_camp_order_${camp.id}`);
+        } catch (e) {}
+      }
 
       // Clear any saved draft for this camp upon successful completion
       try {
@@ -1904,6 +2037,33 @@ export default function PublicCampRegistrationPage() {
               </div>
             ) : null}
 
+            {/* Devotee Reassurance Banner: Debited Payment Under Accountant Review */}
+            {pendingPaymentInfo && (
+              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-500 text-amber-950 shadow-md animate-in fade-in space-y-3 mb-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm sm:text-base font-black text-amber-950">
+                        Payment Received &mdash; Under Finance Verification
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[10px] uppercase tracking-wide">
+                        Do Not Repay
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-amber-900 mt-1 leading-relaxed">
+                      Hare Krishna, <strong>{pendingPaymentInfo.payerName || 'Devotee'}</strong>. We have securely recorded your payment of <strong>₹{pendingPaymentInfo.amount}</strong> (Payment ID: <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-[11px] font-semibold">{pendingPaymentInfo.paymentId}</code>).
+                    </p>
+                    <p className="text-xs text-amber-800 mt-1.5 leading-relaxed">
+                      Please do not worry! If money has been debited from your bank account, your funds are completely safe. Our camp finance team is reviewing transactions against the bank ledger. Once verified, your camp registration will be automatically confirmed and your digital pass will be sent to your registered email.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* IF REGISTRATION HAS NOT STARTED YET OR CAMP IS CLOSED / DEADLINE PASSED */}
             {isRegistrationNotStarted ? (
               <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 p-8 shadow-sm text-center space-y-6">
@@ -2131,6 +2291,21 @@ export default function PublicCampRegistrationPage() {
                       })}
                     </div>
                   )}
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPaymentCheckModal(true);
+                        setCheckPhoneResult(null);
+                        setCheckPhoneError(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2 transition-colors cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Payment debited from bank but registration pending? Check status</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -3460,12 +3635,12 @@ export default function PublicCampRegistrationPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || Boolean(pendingPaymentInfo)}
                       onClick={initiateRazorpayPayment}
                       className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                      Pay ₹{grandTotalWithSurcharge} via Razorpay
+                      {pendingPaymentInfo ? 'Payment Already Received (Under Review)' : `Pay ₹${grandTotalWithSurcharge} via Razorpay`}
                     </button>
                   </div>
                 </div>
@@ -4405,6 +4580,99 @@ export default function PublicCampRegistrationPage() {
                   </button>
                 </div>
               </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Self-Service Payment Status Troubleshooter Modal */}
+      {showPaymentCheckModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Check Payment Status</h3>
+                  <p className="text-[11px] text-slate-500">Verify if deducted payment is under review</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentCheckModal(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              If your bank account was debited via Razorpay but your camp registration did not complete, enter your 10-digit mobile number or Razorpay Payment ID (e.g. <code>pay_...</code>).
+            </p>
+
+            <form onSubmit={handleManualPaymentCheck} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  10-Digit Mobile Number or Payment ID
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={checkPhoneInput}
+                  onChange={(e) => setCheckPhoneInput(e.target.value)}
+                  placeholder="e.g. 9876543210 or pay_xxxx"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {checkPhoneError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                  {checkPhoneError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={checkPhoneLoading}
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {checkPhoneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <span>Verify Payment Review Status</span>
+              </button>
+            </form>
+
+            {checkPhoneResult && (
+              <div className="pt-2">
+                {checkPhoneResult.found ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Payment Found &mdash; Under Finance Verification</span>
+                    </div>
+                    <div className="text-[11px] space-y-1 text-slate-700 pt-1 border-t border-amber-200/60">
+                      <div>Devotee Name: <strong>{checkPhoneResult.payerName}</strong></div>
+                      <div>Amount Debited: <strong>₹{checkPhoneResult.amount}</strong></div>
+                      <div>Payment ID: <code className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-amber-200">{checkPhoneResult.paymentId}</code></div>
+                      <div>Time: {new Date(checkPhoneResult.createdAt).toLocaleString('en-IN')}</div>
+                    </div>
+                    <p className="text-[11px] text-amber-800 pt-2 leading-relaxed font-medium">
+                      🙏 Please do not make another payment. The Gurukul finance coordinator for this camp will verify your transaction in the bank ledger. Once verified, your camp registration will be activated and your digital pass will be sent to your email.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 text-xs space-y-1">
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-slate-500" />
+                      <span>No Pending Payment Found</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      {checkPhoneResult.message}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

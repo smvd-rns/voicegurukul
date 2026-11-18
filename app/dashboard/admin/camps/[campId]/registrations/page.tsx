@@ -21,6 +21,7 @@ import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
 import CampPrasadamTab from '@/components/camps/CampPrasadamTab';
 import CampAccommodationTab from '@/components/camps/CampAccommodationTab';
+import CampFinancialAuditTab from '@/components/camps/CampFinancialAuditTab';
 import { calculateDynamicCampCost, formatParticipantMealDate } from '@/lib/camp-cost';
 import {
   approveCampWaitingListRegistrationAction,
@@ -129,8 +130,8 @@ export default function CampRegistrationsAdminPage() {
   // Full Screenshot Modal State
   const [previewScreenshotUrl, setPreviewScreenshotUrl] = useState<string | null>(null);
 
-  // Top View Switcher: 'registrations' vs 'batches' vs 'refunds' vs 'prasadam' vs 'pocs'
-  const [activeView, setActiveView] = useState<'registrations' | 'batches' | 'refunds' | 'prasadam' | 'accommodation' | 'pocs'>('registrations');
+  // Top View Switcher: 'registrations' vs 'batches' vs 'refunds' vs 'prasadam' vs 'accommodation' vs 'pocs' vs 'financial_audit'
+  const [activeView, setActiveView] = useState<'registrations' | 'batches' | 'refunds' | 'prasadam' | 'accommodation' | 'pocs' | 'financial_audit'>('registrations');
   const [refundRequests, setRefundRequests] = useState<CampRefundRequest[]>([]);
   const [loadingRefunds, setLoadingRefunds] = useState(false);
   const [campPocs, setCampPocs] = useState<any[]>([]);
@@ -1645,6 +1646,22 @@ export default function CampRegistrationsAdminPage() {
             </button>
           )}
 
+          {(userAccess.isSuperAdmin || userAccess.canPaymentApprovals) && (
+            <button
+              type="button"
+              onClick={() => setActiveView('financial_audit')}
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1 sm:py-2.5 rounded-full text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeView === 'financial_audit'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5 shrink-0" />
+              <span className="sm:hidden">Financial Audit</span>
+              <span className="hidden sm:inline">Financial Audit &amp; Reconcile</span>
+            </button>
+          )}
+
           {(userAccess.isSuperAdmin || userAccess.canRefunds) && (
             <button
               type="button"
@@ -3051,6 +3068,17 @@ export default function CampRegistrationsAdminPage() {
           )}
         </div>
       </div>
+    )}
+
+    {/* VIEW 6: FINANCIAL AUDIT & RECONCILIATION */}
+    {activeView === 'financial_audit' && (userAccess.isSuperAdmin || userAccess.canPaymentApprovals) && camp && (
+      <CampFinancialAuditTab
+        camp={camp}
+        userAccess={{
+          isSuperAdmin: userAccess.isSuperAdmin,
+          canPaymentApprovals: userAccess.canPaymentApprovals
+        }}
+      />
     )}
 
     {/* VIEW 5: ALL TRANSACTIONS & TRANSFER BATCHES (FINANCIAL AUDIT & BATCH ACTIONS) */}

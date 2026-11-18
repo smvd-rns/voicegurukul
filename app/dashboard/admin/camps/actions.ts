@@ -1917,14 +1917,20 @@ export async function submitCampRefundRequestAction(
 }
 
 /**
- * Super Admin: Get all camp transactions across all camps grouped by payment batch
- * for complete financial accounting, reconciliation, and audit.
+ * Financial Accounting & Audit: Get transactions grouped by payment batch
+ * Super Admins can query all camps or a specific camp.
+ * Camp Finance/Payment Approvals coordinators can query their assigned camp.
  */
-export async function getAllCampTransactionsAction() {
+export async function getAllCampTransactionsAction(targetCampId?: string) {
   try {
-    const { isSuperAdmin } = await verifyAdminAuth();
-    if (!isSuperAdmin) {
-      return { success: false, error: 'Forbidden: Super Admin privileges are required to view organization financial audits.' };
+    const { isSuperAdmin, campAllocations } = await verifyAdminAuth();
+
+    const hasFinanceAccess = isSuperAdmin || (
+      targetCampId && campAllocations.some(a => a.camp_id === targetCampId && (a.permission_type === 'payment_approvals' || a.permission_type === 'both'))
+    );
+
+    if (!hasFinanceAccess) {
+      return { success: false, error: 'Forbidden: Financial audit & payment approval privileges required.' };
     }
 
     const txSql = `
@@ -1994,24 +2000,29 @@ export async function getAllCampTransactionsAction() {
         ) AS participants
       FROM camp_registrations r
       JOIN camps c ON c.id = r.camp_id
+      ${targetCampId ? 'WHERE r.camp_id = $1' : ''}
       GROUP BY COALESCE(r.group_id, r.payment_id, r.id::text), r.camp_id, c.title, c.slug
       ORDER BY MIN(r.created_at) DESC
     `;
 
-    const txRes = await query(txSql);
+    const txRes = targetCampId ? await query(txSql, [targetCampId]) : await query(txSql);
     const transactions = txRes.rows as CampAuditTransaction[];
 
     // Fetch tracked online payment orders from camp_payment_orders
     let campOrders: any[] = [];
     try {
-      const ordersRes = await query('SELECT * FROM camp_payment_orders ORDER BY created_at DESC LIMIT 200');
+      const ordersRes = targetCampId
+        ? await query('SELECT * FROM camp_payment_orders WHERE camp_id = $1 ORDER BY created_at DESC LIMIT 200', [targetCampId])
+        : await query('SELECT * FROM camp_payment_orders ORDER BY created_at DESC LIMIT 200');
       campOrders = ordersRes.rows;
     } catch (orderErr) {
       console.warn('camp_payment_orders query warning:', orderErr);
     }
 
     // Fetch active/known camps to resolve camp titles
-    const campsRes = await query('SELECT id, title, slug FROM camps');
+    const campsRes = targetCampId
+      ? await query('SELECT id, title, slug, tracks, meal_pricing, special_waivers, payment_config FROM camps WHERE id = $1', [targetCampId])
+      : await query('SELECT id, title, slug, tracks, meal_pricing, special_waivers, payment_config FROM camps');
     const allCamps = campsRes.rows;
 
     // Fetch recent live payments from Razorpay API
@@ -2078,8 +2089,12 @@ export async function getAllCampTransactionsAction() {
         (p.notes?.payment_for && c.title.toLowerCase() === p.notes.payment_for.toLowerCase()) ||
         (p.description && p.description.toLowerCase().includes(c.title.toLowerCase()))
       );
-      if (!matchedCamp && allCamps.length > 0) {
+      if (!matchedCamp && allCamps.length > 0 && !targetCampId) {
         matchedCamp = allCamps[0];
+      }
+
+      if (targetCampId && matchedCamp?.id !== targetCampId) {
+        continue;
       }
 
       const campTitle = matchedCamp?.title || p.notes?.payment_for || 'Camp Retreat';
@@ -2177,7 +2192,10 @@ export async function getAllCampTransactionsAction() {
       if (o.payment_id) handledPaymentIds.add(o.payment_id);
 
       let matchedCamp = allCamps.find((c: any) => c.id === o.camp_id);
-      if (!matchedCamp && allCamps.length > 0) matchedCamp = allCamps[0];
+      if (!matchedCamp && allCamps.length > 0 && !targetCampId) matchedCamp = allCamps[0];
+      if (targetCampId && matchedCamp?.id !== targetCampId && o.camp_id !== targetCampId) {
+        continue;
+      }
 
       const campTitle = matchedCamp?.title || 'Camp Retreat';
       const campSlug = matchedCamp?.slug || '';
@@ -2430,9 +2448,12 @@ export async function reconcileAndCreateCampBookingAction(params: {
   notes?: string;
 }) {
   try {
-    const { isSuperAdmin, user } = await verifyAdminAuth();
-    if (!isSuperAdmin) {
-      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+    const { isSuperAdmin, campAllocations, user } = await verifyAdminAuth();
+    const hasFinanceAccess = isSuperAdmin || campAllocations.some(
+      a => a.camp_id === params.campId && (a.permission_type === 'payment_approvals' || a.permission_type === 'both')
+    );
+    if (!hasFinanceAccess) {
+      return { success: false, error: 'Forbidden: Super Admin or Camp Finance approval privileges required.' };
     }
 
     const { campId, paymentId, orderId, payerName, payerContact, email, amount, entries, notes } = params;
@@ -2672,11 +2693,17 @@ export async function markCampPaymentReconciledAction(params: {
   paymentId: string;
   orderId?: string;
   notes?: string;
+  campId?: string;
 }) {
   try {
-    const { isSuperAdmin, user } = await verifyAdminAuth();
-    if (!isSuperAdmin) {
-      return { success: false, error: 'Forbidden: Super Admin privileges required.' };
+    const { isSuperAdmin, campAllocations, user } = await verifyAdminAuth();
+    const hasFinanceAccess = isSuperAdmin || Boolean(
+      params.campId && campAllocations.some(
+        a => a.camp_id === params.campId && (a.permission_type === 'payment_approvals' || a.permission_type === 'both')
+      )
+    );
+    if (!hasFinanceAccess) {
+      return { success: false, error: 'Forbidden: Super Admin or Camp Finance approval privileges required.' };
     }
 
     const { paymentId, orderId, notes } = params;
@@ -2697,6 +2724,117 @@ export async function markCampPaymentReconciledAction(params: {
     return { success: true, message: 'Payment marked as reconciled externally.' };
   } catch (error: any) {
     console.error('markCampPaymentReconciledAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Public & Devotee check: Check if the user has a captured gateway payment that has not yet
+ * been converted into a camp booking. Safe, server-side verified, and prevents panic or double-payment.
+ */
+export async function checkDevoteePendingPaymentAction(params: {
+  campId: string;
+  phone?: string;
+  email?: string;
+  orderId?: string;
+}) {
+  try {
+    const { campId, phone, email, orderId } = params;
+    if (!campId) return { success: false, error: 'campId is required' };
+
+    // Get session user if logged in
+    const sessionUser = await getAuthUserFromCookies();
+    let authPhone = '';
+    let authEmail = '';
+
+    if (sessionUser?.id) {
+      const uRes = await query('SELECT email, phone FROM users WHERE id = $1', [sessionUser.id]);
+      if (uRes.rows.length > 0) {
+        authPhone = (uRes.rows[0].phone || '').replace(/\D/g, '').slice(-10);
+        authEmail = (uRes.rows[0].email || '').trim().toLowerCase();
+      }
+    }
+
+    const cleanInputPhone = phone ? phone.replace(/\D/g, '').slice(-10) : '';
+    const cleanInputEmail = email ? email.trim().toLowerCase() : '';
+
+    const effectivePhone = cleanInputPhone || authPhone;
+    const effectiveEmail = cleanInputEmail || authEmail;
+    const cleanOrderId = orderId ? orderId.trim() : '';
+
+    if (!effectivePhone && !effectiveEmail && !cleanOrderId) {
+      return { success: true, hasPendingPayment: false };
+    }
+
+    // Build query conditions
+    const queryParams: any[] = [campId];
+    const identityConds: string[] = [];
+
+    if (cleanOrderId) {
+      queryParams.push(cleanOrderId);
+      identityConds.push(`order_id = $${queryParams.length}`);
+    }
+    if (effectivePhone && effectivePhone.length === 10) {
+      queryParams.push(effectivePhone);
+      identityConds.push(`RIGHT(payer_contact, 10) = $${queryParams.length}`);
+    }
+    if (effectiveEmail && effectiveEmail.includes('@')) {
+      queryParams.push(effectiveEmail);
+      identityConds.push(`LOWER(payer_email) = $${queryParams.length}`);
+    }
+
+    if (identityConds.length === 0) {
+      return { success: true, hasPendingPayment: false };
+    }
+
+    const sql = `
+      SELECT id, order_id, payment_id, payer_name, payer_contact, amount, created_at, status, booking_status
+      FROM camp_payment_orders
+      WHERE camp_id = $1
+        AND (${identityConds.join(' OR ')})
+        AND (status = 'paid' OR status = 'captured' OR payment_id IS NOT NULL)
+        AND (booking_status IS NULL OR booking_status != 'confirmed')
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    const res = await query(sql, queryParams);
+    if (res.rows.length === 0) {
+      return { success: true, hasPendingPayment: false };
+    }
+
+    const order = res.rows[0];
+
+    // Double check if a camp_registration already exists for this payment_id or order_id
+    if (order.payment_id || order.order_id) {
+      const regCheck = await query(
+        `SELECT id, group_id FROM camp_registrations 
+         WHERE (payment_id IS NOT NULL AND payment_id = $1) 
+            OR (order_id IS NOT NULL AND order_id = $2) 
+         LIMIT 1`,
+        [order.payment_id || '', order.order_id || '']
+      );
+      if (regCheck.rows.length > 0) {
+        // Registration already exists! Update order status to confirmed
+        await query("UPDATE camp_payment_orders SET booking_status = 'confirmed' WHERE id = $1", [order.id]);
+        return { success: true, hasPendingPayment: false, isAlreadyConfirmed: true };
+      }
+    }
+
+    return {
+      success: true,
+      hasPendingPayment: true,
+      pendingPayment: {
+        paymentId: order.payment_id || order.order_id,
+        orderId: order.order_id,
+        amount: Number(order.amount),
+        payerName: order.payer_name || 'Devotee',
+        createdAt: order.created_at,
+        status: 'pending_accountant_review'
+      }
+    };
+  } catch (error: any) {
+    console.error('checkDevoteePendingPaymentAction error:', error);
     return { success: false, error: error.message };
   }
 }
