@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, ShieldAlert, ArrowRightLeft, User, Phone, Mail, Building,
   Building2, Utensils, Home, Calendar, CreditCard, CheckCircle2,
-  AlertCircle, Loader2, Search, Calculator, Sparkles, Check
+  AlertCircle, Loader2, Search, Calculator, Sparkles, Check, RefreshCw
 } from 'lucide-react';
 import { Camp, CampRegistration } from '@/types';
 import {
@@ -34,11 +34,11 @@ export default function SuperAdminPassTransferModal({
   const [loadingCamps, setLoadingCamps] = useState(false);
   const [selectedCampId, setSelectedCampId] = useState<string>(currentCamp?.id || '');
 
-  // Search Devotees
+  // Devotees State (Searchable Dropdown)
+  const [allDevotees, setAllDevotees] = useState<any[]>([]);
+  const [loadingDevotees, setLoadingDevotees] = useState(false);
+  const [selectedDevoteeId, setSelectedDevoteeId] = useState<string>('');
   const [devoteeSearchQuery, setDevoteeSearchQuery] = useState('');
-  const [searchingDevotees, setSearchingDevotees] = useState(false);
-  const [devoteeResults, setDevoteeResults] = useState<any[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
 
   // New Participant Form State
   const [formData, setFormData] = useState({
@@ -74,24 +74,78 @@ export default function SuperAdminPassTransferModal({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Load available camps when modal opens
+  // Load available camps and all devotees when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    const fetchCamps = async () => {
+
+    const fetchInitialData = async () => {
       setLoadingCamps(true);
+      setLoadingDevotees(true);
       try {
-        const res = await superAdminGetAvailableCampsAction();
-        if (res.success && res.camps) {
-          setAvailableCamps(res.camps);
+        const [campsRes, devoteesRes] = await Promise.all([
+          superAdminGetAvailableCampsAction(),
+          superAdminSearchDevoteesAction(),
+        ]);
+
+        if (campsRes.success && campsRes.camps) {
+          setAvailableCamps(campsRes.camps);
+        }
+        if (devoteesRes.success && devoteesRes.devotees) {
+          setAllDevotees(devoteesRes.devotees);
+        } else if (!devoteesRes.success) {
+          console.error('Failed to load devotees list:', devoteesRes.error);
         }
       } catch (e) {
-        console.error('Failed to load available camps:', e);
+        console.error('Failed to load modal initial data:', e);
       } finally {
         setLoadingCamps(false);
+        setLoadingDevotees(false);
       }
     };
-    fetchCamps();
+
+    fetchInitialData();
   }, [isOpen]);
+
+  // Refresh devotees from database manually
+  const reloadDevotees = async () => {
+    setLoadingDevotees(true);
+    try {
+      const res = await superAdminSearchDevoteesAction();
+      if (res.success && res.devotees) {
+        setAllDevotees(res.devotees);
+      } else {
+        console.error('Failed to reload devotees list:', res.error);
+      }
+    } catch (e) {
+      console.error('Failed to reload devotees list:', e);
+    } finally {
+      setLoadingDevotees(false);
+    }
+  };
+
+  // Live debounced server search to guarantee any newly added or queried devotee is always retrieved
+  useEffect(() => {
+    const q = devoteeSearchQuery.trim();
+    if (q.length < 2) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await superAdminSearchDevoteesAction(q);
+        if (res.success && res.devotees && res.devotees.length > 0) {
+          setAllDevotees((prev) => {
+            const existingIds = new Set(prev.map((d) => d.id));
+            const newOnes = res.devotees.filter((d: any) => !existingIds.has(d.id));
+            if (newOnes.length === 0) return prev;
+            return [...prev, ...newOnes];
+          });
+        }
+      } catch (err) {
+        console.warn('Live devotee search error:', err);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [devoteeSearchQuery]);
 
   // Selected Camp object
   const activeCamp = useMemo(() => {
@@ -107,7 +161,7 @@ export default function SuperAdminPassTransferModal({
       setError(null);
       setSuccessMsg(null);
       setDevoteeSearchQuery('');
-      setDevoteeResults([]);
+      setSelectedDevoteeId('');
 
       setFormData({
         participant_name: '',
@@ -156,47 +210,75 @@ export default function SuperAdminPassTransferModal({
     });
   };
 
-  // Search Devotees Live Query
-  useEffect(() => {
-    const q = devoteeSearchQuery.trim();
-    if (q.length < 2) {
-      setDevoteeResults([]);
-      setShowSearchResults(false);
-      return;
+  // Filtered devotees based on search query (instant in-memory search with smart token matching)
+  const filteredDevotees = useMemo(() => {
+    const q = devoteeSearchQuery.trim().toLowerCase();
+    if (!q) return allDevotees;
+    const cleanDigits = q.replace(/\D/g, '');
+
+    return allDevotees.filter((u) => {
+      const name = (u.name || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      const phoneDigits = (u.phone || '').replace(/\D/g, '');
+      const email = (u.email || '').toLowerCase();
+      const center = (u.current_center || u.center || u.other_center || '').toLowerCase();
+      const temple = (u.current_temple || u.parent_temple || '').toLowerCase();
+      const counselor = (u.counselor_name || '').toLowerCase();
+
+      return (
+        name.includes(q) ||
+        (cleanDigits.length >= 3 && phoneDigits.includes(cleanDigits)) ||
+        phone.includes(q) ||
+        email.includes(q) ||
+        center.includes(q) ||
+        temple.includes(q) ||
+        counselor.includes(q)
+      );
+    });
+  }, [allDevotees, devoteeSearchQuery]);
+
+  // Selected devotee object
+  const selectedDevotee = useMemo(() => {
+    if (!selectedDevoteeId) return null;
+    return allDevotees.find((u) => u.id === selectedDevoteeId) || null;
+  }, [selectedDevoteeId, allDevotees]);
+
+  // Select Devotee from dropdown or quick cards
+  const handleSelectDevotee = (user: any) => {
+    setSelectedDevoteeId(user.id || '');
+    let cleanPhone = (user.phone || '').trim();
+    if (cleanPhone.startsWith('+91')) {
+      cleanPhone = cleanPhone.slice(3).trim();
     }
 
-    const timer = setTimeout(async () => {
-      setSearchingDevotees(true);
-      try {
-        const res = await superAdminSearchDevoteesAction(q);
-        if (res.success && res.devotees) {
-          setDevoteeResults(res.devotees);
-          setShowSearchResults(true);
-        }
-      } catch (err) {
-        console.error('Error searching devotees:', err);
-      } finally {
-        setSearchingDevotees(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [devoteeSearchQuery]);
-
-  // Select Devotee from search suggestions
-  const handleSelectDevotee = (user: any) => {
     setFormData((prev) => ({
       ...prev,
       participant_name: user.name || '',
-      whatsapp: user.phone || '',
+      whatsapp: cleanPhone || user.phone || '',
       email: user.email || '',
       gender: user.gender || prev.gender,
+      age: user.age ? String(user.age) : prev.age,
       voice_name: user.current_center || user.center || prev.voice_name,
       parent_temple: user.current_temple || user.parent_temple || prev.parent_temple,
       counselor_name: user.counselor_name || prev.counselor_name,
     }));
-    setShowSearchResults(false);
-    setDevoteeSearchQuery(user.name);
+  };
+
+  // Clear selected devotee
+  const handleClearSelectedDevotee = () => {
+    setSelectedDevoteeId('');
+    setDevoteeSearchQuery('');
+    setFormData((prev) => ({
+      ...prev,
+      participant_name: '',
+      whatsapp: '',
+      email: '',
+      gender: 'Male',
+      age: '',
+      voice_name: '',
+      parent_temple: '',
+      counselor_name: '',
+    }));
   };
 
   // Calculate live dynamic cost for target camp
@@ -401,41 +483,162 @@ export default function SuperAdminPassTransferModal({
               </span>
             </div>
 
-            {/* Devotee Live Search Box */}
-            <div className="relative">
+            {/* Devotee Search and Dropdown Combobox */}
+            <div className="bg-purple-50/60 border border-purple-200/80 rounded-2xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-purple-600" />
+                  Search &amp; Pick Devotee from Database
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-purple-700">
+                    {loadingDevotees
+                      ? 'Loading devotees...'
+                      : devoteeSearchQuery
+                      ? `${filteredDevotees.length} of ${allDevotees.length} matching`
+                      : `${allDevotees.length} devotees loaded`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={reloadDevotees}
+                    disabled={loadingDevotees}
+                    className="p-1 rounded-lg hover:bg-purple-200/60 text-purple-700 disabled:opacity-40 transition-colors cursor-pointer"
+                    title="Reload devotees from database"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingDevotees ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Search / Filter Input */}
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={devoteeSearchQuery}
                   onChange={(e) => setDevoteeSearchQuery(e.target.value)}
-                  placeholder="Quick Search: Type devotee name, mobile number, or email..."
-                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs text-slate-900 focus:border-purple-500 focus:bg-white outline-none"
+                  placeholder="Type name (e.g. SMVD), mobile number, email, or center to search..."
+                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 focus:border-purple-600 focus:ring-1 focus:ring-purple-500 outline-none shadow-sm"
                 />
-                {searchingDevotees && (
-                  <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                {devoteeSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setDevoteeSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                    title="Clear filter"
+                  >
+                    ✕
+                  </button>
                 )}
               </div>
 
-              {/* Suggestions Dropdown */}
-              {showSearchResults && devoteeResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-100">
-                  {devoteeResults.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleSelectDevotee(u)}
-                      className="w-full text-left px-3.5 py-2 hover:bg-purple-50 flex items-center justify-between gap-2 text-xs transition-colors cursor-pointer"
-                    >
-                      <div>
-                        <span className="font-bold text-slate-900 block">{u.name}</span>
-                        <span className="text-[10px] text-slate-500">{u.phone} • {u.email}</span>
-                      </div>
-                      <span className="text-[10px] text-purple-700 font-semibold px-2 py-0.5 rounded-full bg-purple-100 shrink-0">
-                        {u.current_center || u.center || 'Devotee'}
-                      </span>
-                    </button>
+              {/* Dropdown Selector */}
+              <div>
+                <select
+                  value={selectedDevoteeId}
+                  onChange={(e) => {
+                    const uid = e.target.value;
+                    setSelectedDevoteeId(uid);
+                    const found = allDevotees.find((u) => u.id === uid);
+                    if (found) {
+                      handleSelectDevotee(found);
+                    }
+                  }}
+                  disabled={loadingDevotees}
+                  className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-white text-xs font-semibold text-purple-950 focus:border-purple-600 focus:ring-1 focus:ring-purple-500 outline-none shadow-sm cursor-pointer disabled:bg-slate-100"
+                >
+                  <option value="">
+                    {loadingDevotees
+                      ? '⏳ Loading all devotees...'
+                      : devoteeSearchQuery
+                      ? `-- Pick from ${filteredDevotees.length} matching devotee${filteredDevotees.length === 1 ? '' : 's'} --`
+                      : `-- Select Devotee from Dropdown (${allDevotees.length} total) --`}
+                  </option>
+                  {filteredDevotees.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} — {u.phone || 'No phone'} | {u.email || ''} ({u.current_center || u.center || 'Devotee'})
+                    </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Quick-pick cards when filtered */}
+              {devoteeSearchQuery && filteredDevotees.length > 0 && filteredDevotees.length <= 8 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[10px] font-bold text-purple-800 uppercase tracking-wider flex items-center justify-between">
+                    <span>Quick Pick Matching Devotee ({filteredDevotees.length}):</span>
+                    <span className="text-[10px] text-purple-600 font-normal">Click to auto-fill</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    {filteredDevotees.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => handleSelectDevotee(u)}
+                        className={`w-full text-left p-2.5 rounded-xl border text-xs flex items-center justify-between transition-all cursor-pointer ${
+                          selectedDevoteeId === u.id
+                            ? 'bg-purple-100 border-purple-500 shadow-sm ring-1 ring-purple-400'
+                            : 'bg-white border-purple-200 hover:bg-purple-50/80 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 truncate">
+                            {u.name}
+                            {selectedDevoteeId === u.id && (
+                              <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.2 rounded-full shrink-0">
+                                Selected
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate">
+                            {u.phone || 'No phone'} • {u.email || 'No email'}
+                          </div>
+                          {u.counselor_name && (
+                            <div className="text-[10px] text-purple-800 font-medium truncate">
+                              Counselor: {u.counselor_name}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full inline-block">
+                            {u.current_center || u.center || 'Devotee'}
+                          </span>
+                          {u.parent_temple && (
+                            <div className="text-[9px] text-slate-500 truncate max-w-[130px] mt-0.5">
+                              {u.parent_temple}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Selected Devotee Confirmation Badge */}
+              {selectedDevotee && (
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="font-bold">
+                        Selected: {selectedDevotee.name}{' '}
+                        <span className="text-[10px] font-normal text-emerald-700">
+                          ({selectedDevotee.current_center || selectedDevotee.center || 'Devotee'})
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-emerald-700 font-mono">
+                        {selectedDevotee.phone || 'No phone'} • {selectedDevotee.email || 'No email'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearSelectedDevotee}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline ml-2 shrink-0 cursor-pointer"
+                  >
+                    Clear
+                  </button>
                 </div>
               )}
             </div>

@@ -28,6 +28,7 @@ import {
 } from '@/lib/supabase/temples';
 import { TempleData } from '@/types';
 import { indianStates, stateCities } from '@/lib/data/india-states';
+import { getCitiesFromLocal } from '@/lib/data/local-cities';
 import { supabase } from '@/lib/supabase/config';
 import { getUsersForDropdown } from '@/lib/supabase/users';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -48,6 +49,7 @@ export default function TemplesPage() {
         managing_director_id: '', director_id: '', central_voice_manager_id: '', yp_id: ''
     });
     const [availableCities, setAvailableCities] = useState<string[]>([]);
+    const [dbCities, setDbCities] = useState<{ [state: string]: string[] }>({});
     const [showImportSection, setShowImportSection] = useState(false);
     const [editingTempleId, setEditingTempleId] = useState<string | null>(null);
     const [editTempleData, setEditTempleData] = useState<any>(null);
@@ -112,26 +114,57 @@ export default function TemplesPage() {
         }
     }, [isSuperAdmin]);
 
+    // Load cities from database (/dashboard/cities) so newly added cities appear dynamically
+    const fetchDbCities = async () => {
+        try {
+            const data = await getCitiesFromLocal();
+            if (data && typeof data === 'object') {
+                setDbCities(data);
+            }
+        } catch (err) {
+            console.error('Error fetching database cities:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchDbCities();
+    }, []);
+
+    // Refresh cities whenever the Add Temple form is opened
+    useEffect(() => {
+        if (showAddForm) {
+            fetchDbCities();
+        }
+    }, [showAddForm]);
+
     useEffect(() => {
         if (newTemple.state) {
-            const cities = stateCities[newTemple.state] || [];
-            setAvailableCities(cities);
-            if (!cities.includes(newTemple.city)) {
+            const staticList = stateCities[newTemple.state] || [];
+            const dynamicList = dbCities[newTemple.state] || [];
+            const combined = Array.from(new Set([...dynamicList, ...staticList]))
+                .sort((a, b) => a.localeCompare(b));
+
+            setAvailableCities(combined);
+            if (newTemple.city && !combined.includes(newTemple.city)) {
                 setNewTemple(prev => ({ ...prev, city: '' }));
             }
         } else {
             setAvailableCities([]);
         }
-    }, [newTemple.state, newTemple.city]);
+    }, [newTemple.state, newTemple.city, dbCities]);
 
     useEffect(() => {
         if (editTempleData?.state) {
-            const cities = stateCities[editTempleData.state] || [];
-            setEditAvailableCities(cities);
+            const staticList = stateCities[editTempleData.state] || [];
+            const dynamicList = dbCities[editTempleData.state] || [];
+            const combined = Array.from(new Set([...dynamicList, ...staticList]))
+                .sort((a, b) => a.localeCompare(b));
+
+            setEditAvailableCities(combined);
         } else {
             setEditAvailableCities([]);
         }
-    }, [editTempleData?.state]);
+    }, [editTempleData?.state, dbCities]);
 
     const loadTemples = async () => {
         setLoading(true);

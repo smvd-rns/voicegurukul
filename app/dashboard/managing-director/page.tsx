@@ -2012,48 +2012,41 @@ export default function ManagingDirectorDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 pb-20 relative overflow-x-hidden">
-            {/* Premium Mesh Gradient Background */}
-            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-400/20 blur-[120px] rounded-full animate-pulse" />
-                <div className="absolute top-[20%] right-[-5%] w-[35%] h-[35%] bg-amber-400/20 blur-[100px] rounded-full animate-pulse delay-700" />
-                <div className="absolute bottom-[-10%] left-[20%] w-[45%] h-[45%] bg-rose-400/10 blur-[140px] rounded-full animate-pulse delay-1000" />
-            </div>
-
+        <div className="min-h-screen bg-slate-100/70 pb-20 relative overflow-x-hidden text-slate-900">
             {/* Custom Confirmation Modal */}
             {confirmation.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-white/20 animate-in zoom-in-95 duration-300">
-                        <div className={`p-8 ${confirmation.type === 'approved' ? 'bg-gradient-to-br from-emerald-50 to-teal-50' : 'bg-gradient-to-br from-red-50 to-rose-50'}`}>
-                            <div className="flex flex-col items-center text-center gap-4">
-                                <div className={`p-4 rounded-2xl ${confirmation.type === 'approved' ? 'bg-[#fffdfa] text-emerald-600 shadow-emerald-100' : 'bg-[#fffdfa] text-red-600 shadow-red-100'} shadow-xl`}>
-                                    {confirmation.type === 'approved' ? <Check className="h-8 w-8 stroke-[2.5px]" /> : <AlertCircle className="h-8 w-8 stroke-[2.5px]" />}
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-slate-200 animate-in zoom-in-95 duration-300">
+                        <div className={`p-6 ${confirmation.type === 'approved' ? 'bg-emerald-50/70 border-b border-emerald-100' : 'bg-rose-50/70 border-b border-rose-100'}`}>
+                            <div className="flex flex-col items-center text-center gap-3">
+                                <div className={`p-3 rounded-xl ${confirmation.type === 'approved' ? 'bg-white text-emerald-600 border border-emerald-200' : 'bg-white text-rose-600 border border-rose-200'} shadow-sm`}>
+                                    {confirmation.type === 'approved' ? <Check className="h-6 w-6 stroke-[2.5px]" /> : <AlertCircle className="h-6 w-6 stroke-[2.5px]" />}
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
                                         {confirmation.type === 'approved' ? 'Approve Updates?' : 'Reject Updates?'}
                                     </h3>
-                                    <p className="text-gray-500 font-medium mt-1">
-                                        You are about to {confirmation.type} <span className="text-gray-900 font-bold underline decoration-2 decoration-amber-400">{confirmation.count}</span> profiled {confirmation.count === 1 ? 'request' : 'requests'}.
+                                    <p className="text-slate-500 font-medium text-xs mt-1">
+                                        You are about to {confirmation.type} <span className="text-slate-900 font-bold underline decoration-2 decoration-indigo-400">{confirmation.count}</span> profiled {confirmation.count === 1 ? 'request' : 'requests'}.
                                     </p>
                                 </div>
                             </div>
                         </div>
-                        <div className="p-8 bg-[#fffdfa] space-y-4">
-                            <div className="flex flex-col gap-3 pt-2">
+                        <div className="p-5 bg-white space-y-3">
+                            <div className="flex flex-col gap-2">
                                 <button
                                     onClick={confirmAction}
                                     disabled={false}
-                                    className={`w-full py-4 text-sm font-black text-white rounded-2xl shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale ${confirmation.type === 'approved'
-                                        ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 shadow-emerald-200'
-                                        : 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-red-200'
+                                    className={`w-full py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer ${confirmation.type === 'approved'
+                                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                                        : 'bg-rose-600 hover:bg-rose-700'
                                         }`}
                                 >
                                     Confirm Action
                                 </button>
                                 <button
                                     onClick={() => setConfirmation({ isOpen: false, type: null, count: 0 })}
-                                    className="w-full py-4 text-sm font-bold text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-2xl transition-all"
+                                    className="w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
                                 >
                                     Go Back
                                 </button>
@@ -2065,41 +2058,26 @@ export default function ManagingDirectorDashboard() {
 
             {/* Premium Header / Command Center */}
             <div className="relative z-10">
-                <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 sticky top-0 z-40 shadow-sm">
+                <div className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-xs">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl shadow-md text-white flex-shrink-0">
+                                <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-xl shadow-xs text-white flex-shrink-0">
                                     <Shield className="h-5 w-5 stroke-[2.5px]" />
                                 </div>
                                 <div>
-                                    <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-tight flex items-center gap-2"><span>{currentRoleTitle}</span></h1>
+                                    <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight flex items-center gap-2"><span>{currentRoleTitle}</span></h1>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                        {assignedTemples.length > 1 ? (
-                                            <select
-                                                value={selectedTemple?.id || ''}
-                                                onChange={(e) => {
-                                                    const temple = assignedTemples.find(t => t.id === e.target.value);
-                                                    if (temple) setSelectedTemple(temple);
-                                                }}
-                                                className="text-xs font-black text-indigo-600 bg-transparent border-none focus:ring-0 cursor-pointer uppercase tracking-widest p-0 pr-6"
-                                            >
-                                                {assignedTemples.map(t => (
-                                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <p className="text-xs font-bold text-gray-400 flex items-center gap-1 uppercase tracking-widest">
-                                                <Building2 className="h-3 w-3" /> {selectedTemple?.name || 'Loading...'}
-                                            </p>
-                                        )}
+                                        <p className="text-xs font-bold text-slate-600 flex items-center gap-1 uppercase tracking-widest">
+                                            <Building2 className="h-3.5 w-3.5 text-indigo-600" /> {selectedTemple?.name || 'Managing Director Portal'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Tab Switcher - Pill Design */}
-                            <div className="flex bg-gray-100/90 p-1 rounded-xl border border-gray-200/60 backdrop-blur-sm overflow-x-auto no-scrollbar scroll-smooth">
+                            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto no-scrollbar scroll-smooth">
                                 <div className="flex min-w-max sm:min-w-0 p-0.5 gap-1">
                                     {(['centers', 'user-management', 'approvals', 'registrations'] as const).map(tab => {
                                         const isActive = activeTab === tab;
@@ -2107,9 +2085,9 @@ export default function ManagingDirectorDashboard() {
                                             <button
                                                 key={tab}
                                                 onClick={() => handleTabChange(tab)}
-                                                className={`relative px-3 sm:px-3.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 whitespace-nowrap ${isActive
-                                                    ? 'bg-white text-indigo-700 shadow-sm font-black'
-                                                    : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
+                                                className={`relative px-3 sm:px-3.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 whitespace-nowrap cursor-pointer ${isActive
+                                                    ? 'bg-indigo-600 text-white shadow-xs font-black'
+                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
                                                     }`}
                                             >
                                                 {tab === 'user-management' ? 'Devotee Management' : tab === 'registrations' ? 'New Dev Approval' : tab === 'approvals' ? 'Profile Approval' : tab}
@@ -2122,73 +2100,135 @@ export default function ManagingDirectorDashboard() {
                     </div>
                 </div>
 
-                {/* Stats Section - Compact & Colorful */}
+                {/* Active Managed Temple & Switcher Bar - Prominent & Clear (Project Manager Style) */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2.5 sm:mt-3">
+                    <div className="bg-white rounded-2xl p-3 sm:p-4 border-2 border-indigo-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-indigo-50 border-2 border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0 shadow-2xs">
+                                <Building2 className="h-5 w-5 sm:h-6 sm:w-6 stroke-[2.2px]" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Active Managed Temple</span>
+                                    <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300 uppercase tracking-wider">
+                                        {currentRoleTitle}
+                                    </span>
+                                    {assignedTemples.length > 1 && (
+                                        <span className="text-[10px] font-bold text-slate-400">
+                                            • {assignedTemples.length} Temples Assigned
+                                        </span>
+                                    )}
+                                </div>
+                                <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight mt-0.5">
+                                    {selectedTemple?.name || 'No Temple Selected'}
+                                </h2>
+                            </div>
+                        </div>
+
+                        {/* Dropdown to change temple */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                            <label className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1.5">
+                                <MapPin className="h-4 w-4 text-indigo-600" />
+                                <span>Change Temple:</span>
+                            </label>
+                            <div className="relative w-full sm:w-80">
+                                <select
+                                    value={selectedTemple?.id || ''}
+                                    onChange={(e) => {
+                                        const temple = assignedTemples.find(t => t.id === e.target.value);
+                                        if (temple) setSelectedTemple(temple);
+                                    }}
+                                    disabled={assignedTemples.length <= 1}
+                                    className="w-full bg-slate-50 hover:bg-white text-slate-900 font-bold text-xs py-2.5 pl-3.5 pr-8 rounded-xl border-2 border-indigo-500 hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-2xs transition-all disabled:opacity-75 disabled:cursor-not-allowed"
+                                >
+                                    {assignedTemples.map(t => (
+                                        <option key={t.id} value={t.id} className="text-slate-900 bg-white font-bold">
+                                            🏛️ {t.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-700 pointer-events-none" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stats Section - Sophisticated Semantic Hierarchy (Project Manager Style) */}
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2.5 sm:mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
-                    {/* Active Centers */}
+                    {/* 1. Active Centers */}
                     <div
                         onClick={() => handleTabChange('centers')}
-                        className="group relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-blue-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-gradient-to-br from-teal-50/70 via-white to-white border-2 border-teal-200/90 shadow-2xs hover:shadow-md hover:border-teal-400 transition-all duration-200 cursor-pointer hover:-translate-y-0.5"
                     >
-                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-blue-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
-                                <Building2 className="h-4 w-4 stroke-[2.2px]" />
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black text-teal-900 uppercase tracking-wider">Active Centers</span>
+                            <div className="h-7 w-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                <Building2 className="h-3.5 w-3.5" />
                             </div>
-                            <div className="min-w-0">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Active Centers">Centers</div>
-                                <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-blue-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
-                                    {stats.loading ? '' : stats.centers}
-                                </div>
-                            </div>
+                        </div>
+                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                            {stats.loading ? '' : stats.centers}
+                        </div>
+                        <div className="text-[9.5px] text-teal-700 font-semibold mt-1 truncate">
+                            Physical Locations
                         </div>
                     </div>
 
-                    {/* Total Devotees */}
+                    {/* 2. Total Devotees */}
                     <div
                         onClick={() => handleTabChange('user-management')}
-                        className="group relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-emerald-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-gradient-to-br from-indigo-50/70 via-white to-white border-2 border-indigo-200/90 shadow-2xs hover:shadow-md hover:border-indigo-400 transition-all duration-200 cursor-pointer hover:-translate-y-0.5"
                     >
-                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-emerald-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
-                                <Users className="h-4 w-4 stroke-[2.2px]" />
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black text-indigo-900 uppercase tracking-wider">
+                                {activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered Devotees' : 'Total Devotees'}
+                            </span>
+                            <div className="h-7 w-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                <Users className="h-3.5 w-3.5" />
                             </div>
-                            <div className="min-w-0">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title={activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered Devotees' : 'Total Devotees'}>
-                                    {activeTab === 'user-management' && isDevoteeFiltered ? 'Filtered' : 'Devotees'}
-                                </div>
-                                <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
-                                    {stats.loading ? '' : (activeTab === 'user-management' ? dynamicDevoteeStats.filteredCount : stats.devotees)}
-                                </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                                {stats.loading ? '' : (activeTab === 'user-management' ? dynamicDevoteeStats.filteredCount : stats.devotees)}
                             </div>
+                            {dynamicDevoteeStats.parentOnlyCount > 0 && (
+                                <span className="text-[9px] font-black text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.2 rounded-md">
+                                    +{dynamicDevoteeStats.parentOnlyCount} Past
+                                </span>
+                            )}
+                        </div>
+                        <div className="text-[9.5px] text-indigo-700 font-semibold mt-1 truncate">
+                            {dynamicDevoteeStats.currentCount} Current • {dynamicDevoteeStats.parentOnlyCount} Past
                         </div>
                     </div>
 
-                    {/* Pending Profiles */}
+                    {/* 3. Pending Profiles */}
                     <div
                         onClick={() => handleTabChange('approvals')}
-                        className="group relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-amber-300 cursor-pointer flex flex-col justify-between"
+                        className="group relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-gradient-to-br from-amber-50/70 via-white to-white border-2 border-amber-200/90 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 flex flex-col justify-between"
                     >
-                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-amber-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center justify-between gap-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
-                                    <History className="h-4 w-4 stroke-[2.2px]" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Pending Profiles">Pending</div>
-                                    <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-amber-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
-                                        {stats.loading ? '' : stats.pendingProfiles}
-                                    </div>
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Pending Profiles</span>
+                                <div className="h-7 w-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                    <History className="h-3.5 w-3.5" />
                                 </div>
                             </div>
-                            {stats.pendingBreakdown.length > 1 && (
-                                <span className="text-[8px] font-black uppercase tracking-tight px-1 py-0.2 bg-amber-100 text-amber-700 rounded-full flex-shrink-0">Multi</span>
-                            )}
+                            <div className="flex items-baseline justify-between gap-1">
+                                <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                                    {stats.loading ? '' : stats.pendingProfiles}
+                                </div>
+                                {stats.pendingBreakdown.length > 1 && (
+                                    <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded-md">Multi</span>
+                                )}
+                            </div>
+                            <div className="text-[9.5px] text-amber-700 font-semibold mt-1 truncate">
+                                Profile Updates
+                            </div>
                         </div>
 
                         {!stats.loading && stats.pendingBreakdown.length > 0 && (
-                            <div className="mt-1.5 pt-1.5 border-t border-amber-100/60 space-y-0.5 relative z-10">
+                            <div className="mt-1.5 pt-1.5 border-t border-amber-200/60 space-y-0.5">
                                 {stats.pendingBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
@@ -2200,9 +2240,9 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('approvals');
                                             }}
-                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all ${isCurrent
-                                                ? 'bg-amber-100/60 font-black text-amber-800'
-                                                : 'hover:bg-amber-100/40 font-semibold text-gray-600'
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all cursor-pointer ${isCurrent
+                                                ? 'bg-amber-100 font-black text-amber-900'
+                                                : 'hover:bg-amber-50 font-semibold text-slate-600'
                                                 }`}
                                         >
                                             <span className="truncate max-w-[85px]">{item.name}</span>
@@ -2214,31 +2254,33 @@ export default function ManagingDirectorDashboard() {
                         )}
                     </div>
 
-                    {/* New Requests */}
+                    {/* 4. New Requests */}
                     <div
                         onClick={() => handleTabChange('registrations')}
-                        className="group relative overflow-hidden rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-rose-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-rose-300 cursor-pointer flex flex-col justify-between"
+                        className="group relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-gradient-to-br from-rose-50/70 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 flex flex-col justify-between"
                     >
-                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-rose-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center justify-between gap-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
-                                    <UserCheck className="h-4 w-4 stroke-[2.2px]" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="New Devotee Requests">New Req</div>
-                                    <div className={`text-base sm:text-lg font-black text-gray-900 leading-tight group-hover:text-rose-700 transition-colors ${stats.loading ? 'animate-pulse bg-gray-200 h-5 w-8 rounded mt-0.5' : ''}`}>
-                                        {stats.loading ? '' : stats.newRequests}
-                                    </div>
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-black text-rose-900 uppercase tracking-wider">New Registrations</span>
+                                <div className="h-7 w-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                    <UserCheck className="h-3.5 w-3.5" />
                                 </div>
                             </div>
-                            {stats.pendingRegBreakdown.length > 1 && (
-                                <span className="text-[8px] font-black uppercase tracking-tight px-1 py-0.2 bg-rose-100 text-rose-700 rounded-full flex-shrink-0">Multi</span>
-                            )}
+                            <div className="flex items-baseline justify-between gap-1">
+                                <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                                    {stats.loading ? '' : stats.newRequests}
+                                </div>
+                                {stats.pendingRegBreakdown.length > 1 && (
+                                    <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.2 bg-rose-100 text-rose-800 border border-rose-300 rounded-md">Multi</span>
+                                )}
+                            </div>
+                            <div className="text-[9.5px] text-rose-700 font-semibold mt-1 truncate">
+                                Identity Approvals
+                            </div>
                         </div>
 
                         {!stats.loading && stats.pendingRegBreakdown.length > 0 && (
-                            <div className="mt-1.5 pt-1.5 border-t border-rose-100/60 space-y-0.5 relative z-10">
+                            <div className="mt-1.5 pt-1.5 border-t border-rose-200/60 space-y-0.5">
                                 {stats.pendingRegBreakdown.slice(0, 2).map((item) => {
                                     const isCurrent = item.name === currentTemple;
                                     return (
@@ -2250,9 +2292,9 @@ export default function ManagingDirectorDashboard() {
                                                 if (temple) setSelectedTemple(temple);
                                                 handleTabChange('registrations');
                                             }}
-                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all ${isCurrent
-                                                ? 'bg-rose-100/60 font-black text-rose-800'
-                                                : 'hover:bg-rose-100/40 font-semibold text-gray-600'
+                                            className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] transition-all cursor-pointer ${isCurrent
+                                                ? 'bg-rose-100 font-black text-rose-900'
+                                                : 'hover:bg-rose-50 font-semibold text-slate-600'
                                                 }`}
                                         >
                                             <span className="truncate max-w-[85px]">{item.name}</span>
@@ -2264,22 +2306,22 @@ export default function ManagingDirectorDashboard() {
                         )}
                     </div>
 
-                    {/* Temple Sadhana Reports */}
+                    {/* 5. Temple Sadhana Reports */}
                     <div
                         onClick={() => router.push('/dashboard/managing-director/sadhana-report')}
-                        className="group relative overflow-hidden rounded-xl border border-purple-100 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/20 p-2 sm:p-2.5 shadow-2xs transition-all duration-200 hover:shadow-xs hover:-translate-y-0.5 hover:border-purple-300 cursor-pointer"
+                        className="group relative overflow-hidden rounded-xl p-2.5 sm:p-3 bg-gradient-to-br from-purple-50/70 via-white to-white border-2 border-purple-200/90 shadow-2xs hover:shadow-md hover:border-purple-400 transition-all duration-200 cursor-pointer hover:-translate-y-0.5"
                     >
-                        <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-purple-400/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-600 transition-transform duration-200 group-hover:scale-105 flex-shrink-0">
-                                <Activity className="h-4 w-4 stroke-[2.2px]" />
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black text-purple-900 uppercase tracking-wider">Spiritual Progress</span>
+                            <div className="h-7 w-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                <Activity className="h-3.5 w-3.5" />
                             </div>
-                            <div className="min-w-0">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 truncate" title="Temple Sadhana Reports">Sadhana</div>
-                                <div className="text-sm sm:text-base font-black text-gray-900 leading-tight group-hover:text-purple-700 transition-colors">
-                                    Reports
-                                </div>
-                            </div>
+                        </div>
+                        <div className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                            Sadhana Reports
+                        </div>
+                        <div className="text-[9.5px] text-purple-700 font-semibold mt-1">
+                            Temple Analytics &amp; Progress
                         </div>
                     </div>
                 </div>
@@ -2324,62 +2366,46 @@ export default function ManagingDirectorDashboard() {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5">
-                                {centers.map((center, index) => {
-                                    // Spiritual Color Palette Cycling
-                                    const palettes = [
-                                        { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', shadow: 'shadow-blue-100/50', accent: 'from-blue-500 via-indigo-500 to-purple-500', iconBg: 'bg-blue-100', iconText: 'text-blue-600' },
-                                        { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', shadow: 'shadow-emerald-100/50', accent: 'from-emerald-500 via-teal-500 to-cyan-500', iconBg: 'bg-emerald-100', iconText: 'text-emerald-600' },
-                                        { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', shadow: 'shadow-amber-100/50', accent: 'from-amber-500 via-orange-500 to-red-500', iconBg: 'bg-amber-100', iconText: 'text-amber-600' },
-                                        { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200', shadow: 'shadow-rose-100/50', accent: 'from-rose-500 via-pink-500 to-purple-500', iconBg: 'bg-rose-100', iconText: 'text-rose-600' },
-                                        { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200', shadow: 'shadow-purple-100/50', accent: 'from-purple-500 via-violet-500 to-indigo-500', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
-                                        { bg: 'bg-teal-50', text: 'text-teal-600', border: 'border-teal-200', shadow: 'shadow-teal-100/50', accent: 'from-teal-500 via-emerald-500 to-green-500', iconBg: 'bg-teal-100', iconText: 'text-teal-600' },
-                                    ];
-                                    const theme = palettes[index % palettes.length];
-
+                                {centers.map((center) => {
                                     return (
-                                        <div key={center.id} className={`group relative bg-[#fffdfa] rounded-2xl p-3.5 sm:p-4 shadow-sm ${theme.shadow} border ${theme.border} hover:shadow-md transition-all duration-300 overflow-hidden`}>
-                                            {/* Vibrant Accent Bar */}
-                                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${theme.accent} opacity-80 group-hover:h-1.5 transition-all`} />
-
+                                        <div key={center.id} className="group bg-white rounded-xl p-3.5 sm:p-4 shadow-2xs border-2 border-slate-200/90 hover:border-indigo-400 hover:shadow-xs transition-all duration-200">
                                             <div className="flex justify-between items-start mb-2.5">
-                                                <div className={`h-8 w-8 ${theme.iconBg} ${theme.iconText} rounded-xl flex items-center justify-center shadow-2xs group-hover:scale-105 transition-all`}>
+                                                <div className="h-8 w-8 bg-indigo-50 text-indigo-700 rounded-lg flex items-center justify-center shadow-2xs">
                                                     <Building2 className="h-4 w-4 stroke-[2px]" />
                                                 </div>
-                                                <div className="flex gap-1.5">
-                                                    <span className={`px-2 py-0.5 ${theme.bg} ${theme.text} text-[8.5px] font-black uppercase tracking-wider rounded-full border border-white/60 shadow-2xs`}>Active</span>
-                                                </div>
+                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[8.5px] font-black uppercase tracking-wider rounded-md border border-emerald-200 shadow-2xs">Active</span>
                                             </div>
 
-                                            <h3 className="text-sm font-black text-gray-900 mb-1 group-hover:text-gray-700 transition-colors uppercase tracking-tight truncate" title={center.name}>{center.name}</h3>
+                                            <h3 className="text-sm font-black text-slate-900 mb-1.5 uppercase tracking-tight truncate" title={center.name}>{center.name}</h3>
 
                                             <div className="space-y-2">
-                                                <div className="flex items-center gap-2 text-gray-500">
-                                                    <div className={`h-6 w-6 rounded-md ${theme.bg} flex items-center justify-center ${theme.text} shrink-0`}>
+                                                <div className="flex items-center gap-2 text-slate-600">
+                                                    <div className="h-6 w-6 rounded-md bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
                                                         <MapPin className="h-3 w-3" />
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
-                                                        <p className="text-xs font-bold text-gray-700 truncate">{center.city}, {center.state}</p>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
+                                                        <p className="text-xs font-bold text-slate-800 truncate">{center.city}, {center.state}</p>
                                                     </div>
                                                 </div>
 
                                                 {center.address && (
-                                                    <div className="bg-gray-50/70 rounded-lg p-2 border border-gray-100 text-[9.5px] font-medium text-gray-500 italic line-clamp-1" title={center.address}>
+                                                    <div className="bg-slate-50 rounded-lg p-2 border border-slate-100 text-[9.5px] font-medium text-slate-500 italic line-clamp-1" title={center.address}>
                                                         &quot;{center.address}&quot;
                                                     </div>
                                                 )}
 
                                                 <div className="space-y-1 pt-1">
                                                     {center.project_manager_name && (
-                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
-                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Manager</span>
-                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">{center.project_manager_name}</span>
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px]">
+                                                            <span className="font-bold text-slate-400 uppercase tracking-wider text-[8.5px]">Manager</span>
+                                                            <span className="font-bold text-slate-800 truncate max-w-[130px]">{center.project_manager_name}</span>
                                                         </div>
                                                     )}
                                                     {((center.mentor_names && center.mentor_names.length > 0) || center.mentor_name) && (
-                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
-                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Mentors</span>
-                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px]">
+                                                            <span className="font-bold text-slate-400 uppercase tracking-wider text-[8.5px]">Mentors</span>
+                                                            <span className="font-bold text-slate-800 truncate max-w-[130px]">
                                                                 {Array.isArray(center.mentor_names) && center.mentor_names.length > 0
                                                                     ? center.mentor_names.join(', ')
                                                                     : center.mentor_name}
@@ -2387,9 +2413,9 @@ export default function ManagingDirectorDashboard() {
                                                         </div>
                                                     )}
                                                     {((center.frontliner_names && center.frontliner_names.length > 0) || center.frontliner_name) && (
-                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
-                                                            <span className="font-bold text-gray-400 uppercase tracking-wider text-[8.5px]">Frontliners</span>
-                                                            <span className="font-bold text-gray-800 truncate max-w-[130px]">
+                                                        <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px]">
+                                                            <span className="font-bold text-slate-400 uppercase tracking-wider text-[8.5px]">Frontliners</span>
+                                                            <span className="font-bold text-slate-800 truncate max-w-[130px]">
                                                                 {Array.isArray(center.frontliner_names) && center.frontliner_names.length > 0
                                                                     ? center.frontliner_names.join(', ')
                                                                     : center.frontliner_name}
@@ -2399,29 +2425,29 @@ export default function ManagingDirectorDashboard() {
                                                     {(center.project_advisor_name || center.acting_manager_name) && (
                                                         <div className="flex gap-1.5">
                                                             {center.project_advisor_name && (
-                                                                <div className="flex-1 p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
-                                                                    <div className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Advisor</div>
-                                                                    <div className="font-bold text-gray-800 truncate">{center.project_advisor_name}</div>
+                                                                <div className="flex-1 p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px]">
+                                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Advisor</div>
+                                                                    <div className="font-bold text-slate-800 truncate">{center.project_advisor_name}</div>
                                                                 </div>
                                                             )}
                                                             {center.acting_manager_name && (
-                                                                <div className="flex-1 p-1.5 rounded-lg bg-gray-50/80 border border-gray-100 text-[10px]">
-                                                                    <div className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Acting</div>
-                                                                    <div className="font-bold text-gray-800 truncate">{center.acting_manager_name}</div>
+                                                                <div className="flex-1 p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px]">
+                                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Acting</div>
+                                                                    <div className="font-bold text-slate-800 truncate">{center.acting_manager_name}</div>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                <div className="pt-1.5 border-t border-gray-100 flex items-center gap-1.5">
+                                                <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5">
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openEditCenterModal(center);
                                                         }}
-                                                        className={`flex-1 py-1.5 ${theme.bg} ${theme.text} hover:bg-white border border-transparent hover:${theme.border} rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs`}
+                                                        className="flex-1 py-1.5 bg-slate-50 text-slate-800 hover:bg-indigo-600 hover:text-white border border-slate-200 hover:border-indigo-600 rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                                                     >
                                                         <Edit className="h-3 w-3" /> Edit Center
                                                     </button>
@@ -2450,273 +2476,292 @@ export default function ManagingDirectorDashboard() {
 
                 {/* Staff / User Management Tab */}
                 {activeTab === 'user-management' && (
-                    <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Dynamic Live Metric Cards for Temple Admin - Compact */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
-                            {/* 1. Filtered Devotees */}
-                            <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/30 p-2 sm:p-2.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">
-                                        Filtered Devotees
-                                    </span>
-                                    <div className="p-1 rounded-md bg-indigo-100 text-indigo-700">
-                                        <Users className="w-3 h-3" />
+                    <div className="space-y-3 sm:space-y-3.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {/* Search & Scope Header - Matching Project Manager Style */}
+                        <div className="bg-white rounded-2xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm">
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-3 mb-2.5 pb-2.5 border-b border-slate-200">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 w-full lg:w-auto">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">Devotee Directory</h2>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline">•</span>
+                                            <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">Search & Segment</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <button
+                                            type="button"
+                                            onClick={() => setTempleScope('all')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                templeScope === 'all'
+                                                    ? 'bg-slate-900 text-white shadow-xs'
+                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                                            }`}
+                                        >
+                                            All ({dynamicDevoteeStats.totalInTemple})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTempleScope('current')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                templeScope === 'current'
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                            }`}
+                                        >
+                                            🟢 Current ({dynamicDevoteeStats.currentCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTempleScope('parent')}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                templeScope === 'parent'
+                                                    ? 'bg-purple-700 text-white shadow-xs'
+                                                    : 'bg-purple-50 text-purple-800 border border-purple-300 hover:bg-purple-100'
+                                            }`}
+                                        >
+                                            🟣 Past ({dynamicDevoteeStats.parentOnlyCount})
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                                        {dynamicDevoteeStats.filteredCount}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400">
-                                        of {dynamicDevoteeStats.totalInTemple}
-                                    </span>
-                                </div>
-                                <div className="mt-0.5 flex items-center gap-1.5 text-[9.5px] font-bold text-slate-500">
-                                    <span className="text-emerald-700">🟢 {dynamicDevoteeStats.currentCount} Current</span>
-                                    <span>•</span>
-                                    <span className="text-purple-700">🟣 {dynamicDevoteeStats.parentOnlyCount} Past</span>
-                                </div>
-                            </div>
 
-                            {/* 2. Temple Affiliation Scope */}
-                            <div className="relative overflow-hidden rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50/70 via-white to-violet-50/30 p-2 sm:p-2.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-700">
-                                        Temple Scope
-                                    </span>
-                                    <div className="p-1 rounded-md bg-purple-100 text-purple-700">
-                                        <Compass className="w-3 h-3" />
+                                {/* Search Bar & Reset Filter */}
+                                <div className="flex items-center gap-2 w-full lg:w-auto">
+                                    <div className="relative w-full lg:w-[320px] group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search name, phone, email, center..."
+                                            value={userSearch}
+                                            onChange={(e) => setUserSearch(e.target.value)}
+                                            className="w-full pl-9 pr-7 py-1.5 bg-slate-50 hover:bg-white border-2 border-slate-300 focus:border-indigo-500 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all shadow-2xs"
+                                        />
+                                        {userSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setUserSearch('')}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
                                     </div>
-                                </div>
-                                <div className="text-sm sm:text-base font-black text-slate-900 truncate">
-                                    {templeScope === 'all' ? 'All Connected' : templeScope === 'current' ? 'Current Only' : 'Past (Parent)'}
-                                </div>
-                                <div className="mt-0.5 text-[9.5px] font-bold text-purple-600 truncate">
-                                    {dynamicDevoteeStats.parentOnlyCount} linked in past
-                                </div>
-                            </div>
-
-                            {/* 3. Active KC Devotees */}
-                            <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 p-2 sm:p-2.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                                        Active KC Status
-                                    </span>
-                                    <div className="p-1 rounded-md bg-emerald-100 text-emerald-700">
-                                        <Activity className="w-3 h-3" />
-                                    </div>
-                                </div>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                                        {dynamicDevoteeStats.activeKcCount}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-emerald-600">
-                                        ({dynamicDevoteeStats.activePercentage}%)
-                                    </span>
-                                </div>
-                                <div className="mt-0.5 text-[9.5px] font-bold text-slate-500">
-                                    Spiritual engagement
-                                </div>
-                            </div>
-
-                            {/* 4. Leaders & Counselors */}
-                            <div className="relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/30 p-2 sm:p-2.5 shadow-2xs">
-                                <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
-                                        Leaders &amp; Mentors
-                                    </span>
-                                    <div className="p-1 rounded-md bg-amber-100 text-amber-700">
-                                        <Award className="w-3 h-3" />
-                                    </div>
-                                </div>
-                                <div className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                                    {dynamicDevoteeStats.leadersCount}
-                                </div>
-                                <div className="mt-0.5 text-[9.5px] font-bold text-slate-500 truncate">
-                                    Counselors, Care Givers &amp; Staff
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Compact & Colorful Filter Toolbar */}
-                        <div className="bg-white rounded-xl p-2.5 sm:p-3 border border-slate-200 shadow-2xs flex flex-col gap-2">
-                            {/* Primary Row: Search + Temple Scope + Quick Actions */}
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 sm:gap-2 items-center">
-                                {/* Search */}
-                                <div className="relative group sm:col-span-6 lg:col-span-6">
-                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search legal/initiated name, email, phone, city, center..."
-                                        value={userSearch}
-                                        onChange={(e) => setUserSearch(e.target.value)}
-                                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg focus:ring-1 focus:ring-indigo-100 placeholder:text-slate-400 text-xs font-medium transition-all shadow-2xs"
-                                    />
-                                </div>
-
-                                {/* Temple Scope Filter: Current vs Past/Parent Temple */}
-                                <div className="relative sm:col-span-4 lg:col-span-4">
-                                    <select
-                                        value={templeScope}
-                                        onChange={(e) => setTempleScope(e.target.value as any)}
-                                        className="w-full pl-7 pr-6 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors"
-                                    >
-                                        <option value="all">🏛️ All Connected (Current &amp; Past)</option>
-                                        <option value="current">🟢 Current Temple Members Only</option>
-                                        <option value="parent">🟣 Past / Parent Devotees Only</option>
-                                    </select>
-                                    <Compass className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-purple-600 pointer-events-none" />
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                                </div>
-
-                                {/* Reset Button */}
-                                <div className="sm:col-span-2 lg:col-span-2 flex justify-end">
                                     {isDevoteeFiltered && (
                                         <button
                                             type="button"
                                             onClick={resetAllDevoteeFilters}
-                                            className="w-full sm:w-auto flex items-center justify-center gap-1 px-2.5 py-1.5 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
+                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all shadow-2xs shrink-0 cursor-pointer"
+                                            title="Reset all filters"
                                         >
-                                            <RotateCcw className="w-3 h-3" />
-                                            <span>Reset</span>
+                                            <RotateCcw className="h-3 w-3" />
+                                            <span className="hidden sm:inline">Reset</span>
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Secondary Row: Multi-Select Filters & Dropdowns - Single Balanced Row */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 pt-1.5 border-t border-slate-200">
-                                {/* Multi-Select Center Filter */}
-                                <div className="col-span-1">
-                                    <MultiSelectDropdown
-                                        label="Center"
-                                        icon={Building2}
-                                        options={centerOptions}
-                                        selected={selectedCenters}
-                                        onChange={setSelectedCenters}
-                                        color="indigo"
-                                    />
+                            {/* 6 Filter Dropdowns in a single compact responsive row */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                                {/* 1. Center / VOICE */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Center / VOICE
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <Building2 className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedCenter}
+                                            onChange={(e) => {
+                                                setSelectedCenter(e.target.value);
+                                                setSelectedCenters([]);
+                                            }}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">All Centers ({centers.length})</option>
+                                            {centers.map(c => (
+                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                            ))}
+                                            <option value="__other__">Other Center</option>
+                                            <option value="__none__">No Center</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                {/* Multi-Select Ashram Filter */}
-                                <div className="col-span-1">
-                                    <MultiSelectDropdown
-                                        label="Ashram"
-                                        icon={Home}
-                                        options={ashramOptions}
-                                        selected={selectedAshrams}
-                                        onChange={setSelectedAshrams}
-                                        color="purple"
-                                    />
+                                {/* 2. Spiritual Group */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Spiritual Group
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <Users className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedGroup}
+                                            onChange={(e) => setSelectedGroup(e.target.value)}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">All Groups</option>
+                                            {BV_GROUPS.map(g => (
+                                                <option key={g} value={g}>{g}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                {/* Multi-Select Role Filter */}
-                                <div className="col-span-1">
-                                    <MultiSelectDropdown
-                                        label="Role"
-                                        icon={UserCheck}
-                                        options={roleFilterOptions}
-                                        selected={selectedRoles}
-                                        onChange={setSelectedRoles}
-                                        color="amber"
-                                    />
+                                {/* 3. KC Status */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        KC Status
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <Activity className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedKCStatus}
+                                            onChange={(e) => setSelectedKCStatus(e.target.value)}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">All KC Status</option>
+                                            {KC_STATUS_OPTIONS.map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                {/* Spiritual Group (BV Group) */}
-                                <div className="relative col-span-1">
-                                    <select
-                                        value={selectedGroup}
-                                        onChange={(e) => setSelectedGroup(e.target.value)}
-                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
-                                    >
-                                        <option value="">All Groups</option>
-                                        {BV_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
-                                    </select>
-                                    <Users className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                {/* 4. Ashram */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Ashram
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <Home className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedAshram}
+                                            onChange={(e) => {
+                                                setSelectedAshram(e.target.value);
+                                                setSelectedAshrams([]);
+                                            }}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">All Ashrams</option>
+                                            {ashramOptions.map(a => (
+                                                <option key={a.value} value={a.value}>{a.label}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                {/* KC Activity Status */}
-                                <div className="relative col-span-1">
-                                    <select
-                                        value={selectedKCStatus}
-                                        onChange={(e) => setSelectedKCStatus(e.target.value)}
-                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
-                                    >
-                                        <option value="">All KC Status</option>
-                                        {KC_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                                    </select>
-                                    <Activity className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                {/* 5. Admin Role */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Admin Role
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <UserCheck className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedRole}
+                                            onChange={(e) => {
+                                                setSelectedRole(e.target.value);
+                                                setSelectedRoles([]);
+                                            }}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">All Roles</option>
+                                            {roleFilterOptions.map(r => (
+                                                <option key={r.value} value={r.value}>{r.label}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                {/* Camp Filter */}
-                                <div className="relative col-span-1">
-                                    <select
-                                        value={selectedCamp}
-                                        onChange={(e) => setSelectedCamp(e.target.value)}
-                                        className="w-full pl-6 pr-5 py-1.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 rounded-lg appearance-none focus:ring-1 focus:ring-indigo-100 font-bold text-[11px] text-slate-700 shadow-2xs cursor-pointer transition-colors"
-                                    >
-                                        <option value="">All Camps</option>
-                                        {CAMP_OPTIONS.map(camp => (
-                                            <option key={camp.value} value={camp.value}>{camp.label}</option>
-                                        ))}
-                                    </select>
-                                    <Shield className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-blue-500 pointer-events-none" />
-                                    <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                {/* 6. Camp Completed */}
+                                <div className="group">
+                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                        Camp Completed
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-slate-100 text-slate-600 rounded-md pointer-events-none">
+                                            <Shield className="h-3.5 w-3.5" />
+                                        </div>
+                                        <select
+                                            value={selectedCamp}
+                                            onChange={(e) => setSelectedCamp(e.target.value)}
+                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-indigo-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <option value="">Any Status</option>
+                                            {CAMP_OPTIONS.map(c => (
+                                                <option key={c.value} value={c.value}>{c.label}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Active Filter Badges */}
                             {isDevoteeFiltered && (
-                                <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-200 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap pt-2 mt-2 border-t border-slate-200 text-xs">
                                     <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Active:</span>
                                     {templeScope !== 'all' && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
-                                            <span>Scope: {templeScope === 'current' ? 'Current Only' : 'Past (Parent)'}</span>
-                                            <button onClick={() => setTempleScope('all')} className="hover:text-purple-900 cursor-pointer">×</button>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
+                                            <span>Scope: {templeScope === 'current' ? 'Current Only' : 'Past Devotees'}</span>
+                                            <button onClick={() => setTempleScope('all')} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
-                                    {selectedCenters.length > 0 && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold">
-                                            <span>Centers: {selectedCenters.length} selected</span>
-                                            <button onClick={() => setSelectedCenters([])} className="hover:text-indigo-900 cursor-pointer">×</button>
+                                    {(selectedCenter || selectedCenters.length > 0) && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
+                                            <span>Center: {selectedCenter || `${selectedCenters.length} selected`}</span>
+                                            <button onClick={() => { setSelectedCenter(''); setSelectedCenters([]); }} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
-                                    {selectedAshrams.length > 0 && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
-                                            <span>Ashram: {selectedAshrams.length} selected</span>
-                                            <button onClick={() => setSelectedAshrams([])} className="hover:text-purple-900 cursor-pointer">×</button>
+                                    {(selectedAshram || selectedAshrams.length > 0) && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
+                                            <span>Ashram: {selectedAshram || `${selectedAshrams.length} selected`}</span>
+                                            <button onClick={() => { setSelectedAshram(''); setSelectedAshrams([]); }} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
-                                    {selectedRoles.length > 0 && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                            <span>Roles: {selectedRoles.length} selected</span>
-                                            <button onClick={() => setSelectedRoles([])} className="hover:text-amber-900 cursor-pointer">×</button>
+                                    {(selectedRole || selectedRoles.length > 0) && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
+                                            <span>Role: {roleFilterOptions.find(r => r.value === selectedRole)?.label || `${selectedRoles.length} selected`}</span>
+                                            <button onClick={() => { setSelectedRole(''); setSelectedRoles([]); }} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
                                     {selectedGroup && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-bold">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
                                             <span>Group: {selectedGroup}</span>
-                                            <button onClick={() => setSelectedGroup('')} className="hover:text-orange-900 cursor-pointer">×</button>
+                                            <button onClick={() => setSelectedGroup('')} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
                                     {selectedKCStatus && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
                                             <span>KC: {selectedKCStatus}</span>
-                                            <button onClick={() => setSelectedKCStatus('')} className="hover:text-emerald-900 cursor-pointer">×</button>
+                                            <button onClick={() => setSelectedKCStatus('')} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
                                     {selectedCamp && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold">
                                             <span>Camp: {CAMP_OPTIONS.find(c => c.value === selectedCamp)?.label}</span>
-                                            <button onClick={() => setSelectedCamp('')} className="hover:text-blue-900 cursor-pointer">×</button>
+                                            <button onClick={() => setSelectedCamp('')} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
                                     {userSearch && (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold">
                                             <span>Search: &quot;{userSearch}&quot;</span>
-                                            <button onClick={() => setUserSearch('')} className="hover:text-slate-900 cursor-pointer">×</button>
+                                            <button onClick={() => setUserSearch('')} className="hover:text-slate-900 cursor-pointer">✕</button>
                                         </span>
                                     )}
                                 </div>
@@ -2724,215 +2769,236 @@ export default function ManagingDirectorDashboard() {
                         </div>
 
                         {loadingUsers ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-white">
-                                <div className="relative">
-                                    <div className="animate-spin h-14 w-14 border-4 border-primary-100 border-t-primary-600 rounded-full"></div>
-                                    <Users className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-primary-300" />
-                                </div>
-                                <p className="text-gray-500 font-bold uppercase tracking-[0.2em] text-[10px] mt-6">Indexing staff directory...</p>
+                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                                <div className="animate-spin h-10 w-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full mb-4"></div>
+                                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Retrieving temple devotees...</p>
                             </div>
                         ) : users.length === 0 ? (
-                            <div className="text-center py-24 bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-white border-dashed">
-                                <div className="bg-gray-100/50 h-24 w-24 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
-                                    <Users className="h-12 w-12 text-gray-300" />
+                            <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                                <div className="bg-slate-50 h-16 w-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <Users className="h-8 w-8 text-slate-300" />
                                 </div>
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight">No Results Found</h3>
-                                <p className="text-gray-500 font-medium mt-3 max-w-sm mx-auto">We couldn&apos;t find any staff members matching your current filter configuration.</p>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">No Devotees Found</h3>
+                                <p className="text-slate-500 font-medium text-xs mt-1 max-w-sm mx-auto">
+                                    No devotees found matching your current filter configuration.
+                                </p>
                                 <button
-                                    onClick={() => {
-                                        setUserSearch('');
-                                        setSelectedCenter('');
-                                        setSelectedCenters([]);
-                                        setSelectedCamp('');
-                                        setSelectedRole('');
-                                        setSelectedRoles([]);
-                                        setSelectedAshrams([]);
-                                        setSelectedGroup('');
-                                        setSelectedKCStatus('');
-                                        setTempleScope('all');
-                                    }}
-                                    className="mt-8 px-8 py-4 bg-white text-gray-900 font-black text-[10px] uppercase tracking-widest border-2 border-gray-100 rounded-2xl hover:bg-gray-50 hover:border-gray-200 transition-all shadow-md"
+                                    onClick={resetAllDevoteeFilters}
+                                    className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl font-bold text-xs transition-all cursor-pointer"
                                 >
                                     Reset Filters
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-6">
-                                {/* Mobile/Tablet View (Cards) */}
-                                <div className="grid grid-cols-1 lg:hidden gap-4">
+                            <div className="space-y-3">
+                                {/* Mobile/Tablet View (Cards) - Compact & Clean */}
+                                <div className="grid grid-cols-1 lg:hidden gap-3">
                                     {pagedUsers.map(user => {
                                         const uH = user.hierarchy as any;
                                         const uCenterLabel = uH?.currentCenter || uH?.center || user.center || 'No Center';
 
                                         return (
-                                            <div key={user.id} className="bg-[#fffdfa] rounded-3xl p-5 border border-amber-200 shadow-lg shadow-orange-100/30">
-                                                <div className="flex items-center gap-4 mb-3">
-                                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-lg flex-shrink-0 shadow-sm">
-                                                        {user.name.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <p className="font-black text-gray-900 truncate">{user.name}</p>
-                                                            {user._templeConnection === 'parent' ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
-                                                                    Past Devotee
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                                                    Current Member
-                                                                </span>
-                                                            )}
+                                            <div
+                                                key={user.id}
+                                                className={`bg-white rounded-2xl border-2 shadow-sm p-4 space-y-3 transition-all ${
+                                                    user._templeConnection === 'parent'
+                                                        ? 'border-purple-200 bg-purple-50/15'
+                                                        : 'border-slate-300 hover:border-slate-400'
+                                                }`}
+                                            >
+                                                {/* Header: Avatar, Name, Email, Status Badge */}
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-2xs">
+                                                            {user.name.charAt(0).toUpperCase()}
                                                         </div>
-                                                        <p className="text-[10px] font-bold text-gray-400 lowercase truncate">{user.email}</p>
-                                                        {user._templeConnection === 'parent' && (
-                                                            <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
-                                                                Now at: {user._currentTempleDisplay || 'Other Temple'}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1.5 mb-5">
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                        <Building2 className="h-3.5 w-3.5 text-blue-500" />
-                                                        <span className="text-gray-400">Temple:</span> {uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None'}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                        <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                                                        <span className="text-gray-400">Center:</span> {uCenterLabel}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                        <UserCheck className="h-3.5 w-3.5 text-primary-500" />
-                                                        <span className="text-gray-400">Counselor:</span> {uH?.counselor || 'None'}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                        <Home className="h-3.5 w-3.5 text-amber-500" />
-                                                        <span className="text-gray-400">Ashram:</span> {uH?.ashram || 'None'}
-                                                    </div>
-                                                </div>
-
-                                                <div className="mb-5">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">VOICE group level</label>
-                                                    <div className="relative">
-                                                        <select
-                                                            value={user.bv_group || ''}
-                                                            onChange={(e) => handleAssignGroup(user.id, e.target.value)}
-                                                            disabled={updatingGroupUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
-                                                        >
-                                                            <option value="">-- No Group Segment --</option>
-                                                            {BV_GROUPS.map(g => (
-                                                                <option key={g} value={g}>{g}</option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                            {updatingGroupUserId === user.id ? (
-                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
-                                                            ) : (
-                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <h4 className="text-sm font-black text-slate-900 truncate uppercase">
+                                                                    {user.name}
+                                                                </h4>
+                                                                {user._templeConnection === 'parent' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                                        Past Devotee
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                                                        Current Member
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[11px] font-semibold text-slate-500 truncate lowercase">{user.email}</p>
+                                                            {user.phone && <p className="text-[10px] font-bold text-slate-400">{user.phone}</p>}
+                                                            {user._templeConnection === 'parent' && (
+                                                                <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
+                                                                    Now at: {user._currentTempleDisplay || 'Other Temple'}
+                                                                </p>
                                                             )}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="mb-5">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">KC Status</label>
-                                                    <div className="relative">
-                                                        <select
-                                                            value={user.hierarchy?.kcStatus || ''}
-                                                            onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
-                                                            disabled={updatingKCStatusUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
-                                                        >
-                                                            <option value="">-- No KC Status --</option>
-                                                            {KC_STATUS_OPTIONS.map(status => (
-                                                                <option key={status} value={status}>{status}</option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                            {updatingKCStatusUserId === user.id ? (
-                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
-                                                            ) : (
-                                                                <ChevronDown className="h-3.5 w-3.5" />
-                                                            )}
+                                                {/* Details Grid: Center, Counselor, Ashram, Temple */}
+                                                <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                                                    <div className="min-w-0">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Center</span>
+                                                        <div className="flex items-center gap-1 font-bold text-slate-800 truncate mt-0.5" title={uCenterLabel}>
+                                                            <Building2 className="h-3 w-3 text-indigo-600 shrink-0" />
+                                                            <span className="truncate">{uCenterLabel}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Counselor</span>
+                                                        <div className="flex items-center gap-1 font-bold text-slate-800 truncate mt-0.5" title={uH?.counselor || 'None'}>
+                                                            <UserCheck className="h-3 w-3 text-teal-600 shrink-0" />
+                                                            <span className="truncate">{uH?.counselor || 'None'}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Ashram</span>
+                                                        <div className="flex items-center gap-1 font-bold text-slate-800 truncate mt-0.5" title={uH?.ashram || 'None'}>
+                                                            <Home className="h-3 w-3 text-blue-600 shrink-0" />
+                                                            <span className="truncate">{uH?.ashram || 'None'}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Temple</span>
+                                                        <div className="flex items-center gap-1 font-bold text-slate-800 truncate mt-0.5" title={uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None'}>
+                                                            <MapPin className="h-3 w-3 text-amber-600 shrink-0" />
+                                                            <span className="truncate">{uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None'}</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex flex-wrap gap-1.5 mb-5">
+                                                {/* Roles Badges */}
+                                                <div className="flex flex-wrap gap-1">
                                                     {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
-                                                        <span key={i} className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getRoleHierarchyNumber(r) >= 12
-                                                            ? 'bg-primary-50 text-primary-700 border-primary-200'
-                                                            : 'bg-gray-50 text-gray-500 border-gray-100'
-                                                            }`}>
+                                                        <span
+                                                            key={i}
+                                                            className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+                                                                getRoleHierarchyNumber(r) >= 12
+                                                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                            }`}
+                                                        >
                                                             {getRoleDisplayName(r)}
                                                         </span>
                                                     ))}
                                                 </div>
 
+                                                {/* Dropdowns for VOICE Group & KC Status */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-1">VOICE Group</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={user.bv_group || ''}
+                                                                onChange={(e) => handleAssignGroup(user.id, e.target.value)}
+                                                                disabled={updatingGroupUserId === user.id}
+                                                                className="w-full appearance-none bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                                                            >
+                                                                <option value="">-- No Group --</option>
+                                                                {BV_GROUPS.map(g => (
+                                                                    <option key={g} value={g}>{g}</option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                                                {updatingGroupUserId === user.id ? (
+                                                                    <div className="animate-spin h-3.5 w-3.5 border-2 border-indigo-500 border-t-transparent rounded-full" />
+                                                                ) : (
+                                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-1">KC Status</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={user.hierarchy?.kcStatus || ''}
+                                                                onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                                disabled={updatingKCStatusUserId === user.id}
+                                                                className="w-full appearance-none bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                                                            >
+                                                                <option value="">-- No KC Status --</option>
+                                                                {KC_STATUS_OPTIONS.map(status => (
+                                                                    <option key={status} value={status}>{status}</option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                                                {updatingKCStatusUserId === user.id ? (
+                                                                    <div className="animate-spin h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full" />
+                                                                ) : (
+                                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions Footer */}
                                                 {(() => {
                                                     const canManage = canAdminManageTarget(userData?.role || [], user.role || [], userData?.id, user.id);
 
                                                     if (!canManage) {
                                                         return (
-                                                            <div className="w-full py-3 bg-gray-50 text-gray-400 border-2 border-transparent rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-not-allowed shadow-sm">
-                                                                <Lock className="h-3.5 w-3.5" /> Locked profile
+                                                            <div className="w-full py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-not-allowed">
+                                                                <Lock className="h-3.5 w-3.5" /> Locked Profile
                                                             </div>
                                                         );
                                                     }
 
+                                                    const userRoles = Array.isArray(user.role) ? user.role : [user.role];
+                                                    const isCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
+                                                    const isCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
+                                                    const isSpiritualAuthority = isCounselor || isCareGiver;
+                                                    const devoteeTemple = uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || user.current_temple || uH?.currentTemple;
+                                                    const isManagedTemple = assignedTemples.some(t => t.name.trim().toLowerCase() === (devoteeTemple || '').trim().toLowerCase());
+
                                                     return (
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => {
                                                                     setUserForView(user);
                                                                     openUserView(user);
                                                                 }}
-                                                                className="flex-1 py-2 px-3 bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                                                                className="flex-1 py-1.5 px-3 bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                                                             >
                                                                 <Eye className="h-3.5 w-3.5" /> View Profile
                                                             </button>
 
-                                                            {(() => {
-                                                                const userRoles = Array.isArray(user.role) ? user.role : [user.role];
-                                                                const isCounselor = userRoles.some((r: any) => Number(r) === 2 || r === 'counselor');
-                                                                const isCareGiver = userRoles.some((r: any) => Number(r) === 20 || r === 'care_giver');
-                                                                const isSpiritualAuthority = isCounselor || isCareGiver;
-                                                                const devoteeTemple = uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || user.current_temple || uH?.currentTemple;
-                                                                const isManagedTemple = assignedTemples.some(t => t.name.trim().toLowerCase() === (devoteeTemple || '').trim().toLowerCase());
-
-                                                                if (isManagedTemple || isSpiritualAuthority) {
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => openAuthorityModal(user)}
-                                                                            className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs border ${
-                                                                                isSpiritualAuthority
-                                                                                    ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                                                                                    : 'bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-100'
-                                                                            }`}
-                                                                        >
-                                                                            <ShieldCheck className="h-3.5 w-3.5" />
-                                                                            <span>
-                                                                                {isCounselor ? 'Role: Counselor' : isCareGiver ? 'Role: Care Giver' : '+ Assign Role'}
-                                                                            </span>
-                                                                        </button>
-                                                                    );
-                                                                } else {
-                                                                    return (
-                                                                        <div className="flex-1 py-2 bg-gray-50 text-gray-400 border border-gray-200 rounded-xl font-semibold text-xs flex items-center justify-center gap-1 cursor-not-allowed" title="Devotee must belong to one of your managed Temples">
-                                                                            <Shield className="h-3.5 w-3.5" /> Locked
-                                                                        </div>
-                                                                    );
-                                                                }
-                                                            })()}
+                                                            {isManagedTemple || isSpiritualAuthority ? (
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => openAuthorityModal(user)}
+                                                                  className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs border cursor-pointer active:scale-95 ${
+                                                                      isCounselor
+                                                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                                                          : isCareGiver
+                                                                          ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100'
+                                                                          : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                                                  }`}
+                                                                >
+                                                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                                                    <span>
+                                                                        {isCounselor ? 'Role: Counselor' : isCareGiver ? 'Role: Care Giver' : '+ Assign Role'}
+                                                                    </span>
+                                                                </button>
+                                                            ) : (
+                                                                <div className="flex-1 py-1.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-xl font-semibold text-xs flex items-center justify-center gap-1 cursor-not-allowed">
+                                                                    <Shield className="h-3.5 w-3.5" /> Locked
+                                                                </div>
+                                                            )}
 
                                                             {canDeleteEntities && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDeleteUser(user)}
-                                                                    className="p-2 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                    className="p-1.5 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-300 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
                                                                     title="Delete Devotee Permanently"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
@@ -2946,41 +3012,50 @@ export default function ManagingDirectorDashboard() {
                                     })}
                                 </div>
 
-                                {/* Desktop/Laptop View (Table) - Compact & Clear */}
-                                <div className="hidden lg:block bg-[#fffdfa]/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-xl shadow-orange-100/40 border border-amber-200 overflow-hidden">
+                                {/* Desktop/Laptop View (Table) - Crisp, Compact & Professional */}
+                                <div className="hidden lg:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-hidden">
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left border-collapse">
-                                            <thead className="bg-slate-50/80 border-b border-slate-200">
+                                            <thead className="bg-slate-100 border-b-2 border-slate-200">
                                                 <tr>
-                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[170px]">Devotee Profile</th>
-                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[160px]">Temple &amp; Center</th>
-                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[150px]">Ashram &amp; Mentor</th>
-                                                    <th className="px-3.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[110px]">Role / Status</th>
-                                                    <th className="px-2.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">VOICE Group</th>
-                                                    <th className="px-2.5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">KC Status</th>
-                                                    <th className="px-3.5 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[160px]">Actions</th>
+                                                    <th className="px-3.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider min-w-[180px]">Devotee Profile</th>
+                                                    <th className="px-3.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider min-w-[160px]">Temple &amp; Center</th>
+                                                    <th className="px-3.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider min-w-[150px]">Ashram &amp; Mentor</th>
+                                                    <th className="px-3.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider min-w-[120px]">Role / Status</th>
+                                                    <th className="px-2.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">VOICE Group</th>
+                                                    <th className="px-2.5 py-2.5 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">KC Status</th>
+                                                    <th className="px-3.5 py-2.5 text-right text-[11px] font-black text-slate-700 uppercase tracking-wider min-w-[170px]">Actions</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100">
+                                            <tbody className="bg-white divide-y divide-slate-200">
                                                 {pagedUsers.map(user => {
                                                     const uH = user.hierarchy as any;
                                                     const uCenterLabel = uH?.currentCenter || uH?.center || user.center || 'No Center';
 
                                                     return (
-                                                        <tr key={user.id} className="hover:bg-amber-50/20 transition-colors group/row">
-                                                            <td className="px-3.5 py-2.5">
+                                                        <tr key={user.id} className={`hover:bg-slate-50/90 transition-colors group/row ${user._templeConnection === 'parent' ? 'bg-purple-50/20' : ''}`}>
+                                                            <td className="px-3.5 py-2">
                                                                 <div className="flex items-center gap-2.5">
-                                                                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-xs">
+                                                                    <div className="h-8 w-8 rounded-lg bg-slate-800 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-2xs">
                                                                         {user.name.charAt(0).toUpperCase()}
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <p className="font-bold text-xs text-gray-900 group-hover/row:text-primary-700 transition-colors truncate max-w-[160px] leading-tight" title={user.name}>{user.name}</p>
-                                                                        <p className="text-[10px] text-gray-500 truncate max-w-[160px] lowercase" title={user.email}>{user.email}</p>
+                                                                        <p className="font-black text-xs text-slate-900 group-hover/row:text-indigo-700 transition-colors truncate max-w-[170px] leading-tight" title={user.name}>
+                                                                            {user.name}
+                                                                        </p>
+                                                                        <p className="text-[10.5px] text-slate-500 truncate max-w-[170px] lowercase font-semibold" title={user.email}>
+                                                                            {user.email}
+                                                                        </p>
+                                                                        {user.phone && (
+                                                                            <p className="text-[9.5px] text-slate-400 font-bold">
+                                                                                {user.phone}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-3.5 py-2.5">
-                                                                <div className="flex flex-col gap-1 min-w-0 max-w-[170px]">
+                                                            <td className="px-3.5 py-2">
+                                                                <div className="flex flex-col gap-0.5 min-w-0 max-w-[170px]">
                                                                     {(user as any)._templeConnection === 'parent' ? (
                                                                         <div className="flex flex-col gap-0.5">
                                                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold bg-purple-100 text-purple-900 border border-purple-200 w-fit">
@@ -3000,36 +3075,36 @@ export default function ManagingDirectorDashboard() {
                                                                         </span>
                                                                     )}
 
-                                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-slate-800 truncate" title={uCenterLabel}>
-                                                                        <Building2 className="h-3 w-3 text-blue-600 shrink-0" />
+                                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-slate-800 truncate mt-0.5" title={uCenterLabel}>
+                                                                        <Building2 className="h-3 w-3 text-indigo-600 shrink-0" />
                                                                         <span className="truncate">{uCenterLabel}</span>
                                                                     </div>
                                                                     {(user.is_smvd_volunteer || user.is_rns_volunteer) && (
-                                                                        <div className="flex gap-1">
+                                                                        <div className="flex gap-1 mt-0.5">
                                                                             {user.is_smvd_volunteer && <span className="px-1 py-0.2 bg-blue-50 text-blue-700 text-[8px] font-black rounded border border-blue-200">SMVD</span>}
                                                                             {user.is_rns_volunteer && <span className="px-1 py-0.2 bg-emerald-50 text-emerald-700 text-[8px] font-black rounded border border-emerald-200">RNS</span>}
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-3.5 py-2.5">
-                                                                <div className="flex flex-col gap-1 min-w-0 max-w-[160px]">
-                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-200/60 truncate w-fit" title={uH?.ashram || 'No Ashram'}>
+                                                            <td className="px-3.5 py-2">
+                                                                <div className="flex flex-col gap-0.5 min-w-0 max-w-[160px]">
+                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate w-fit" title={uH?.ashram || 'No Ashram'}>
                                                                         <Home className="h-2.5 w-2.5 shrink-0" />
                                                                         <span className="truncate">{uH?.ashram || 'No Ashram'}</span>
                                                                     </span>
-                                                                    <div className="text-[10.5px] text-slate-600 truncate" title={uH?.counselor || 'None'}>
+                                                                    <div className="text-[10.5px] text-slate-600 truncate mt-0.5" title={uH?.counselor || 'None'}>
                                                                         <span className="text-[9.5px] text-slate-400 font-bold uppercase mr-1">Counselor:</span>
                                                                         <strong className="text-slate-800 font-semibold">{uH?.counselor || 'None'}</strong>
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-3.5 py-2.5">
+                                                            <td className="px-3.5 py-2">
                                                                 <div className="flex flex-wrap gap-1 max-w-[130px]">
                                                                     {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
                                                                         <span key={i} className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
                                                                             getRoleHierarchyNumber(r) >= 12
-                                                                                ? 'bg-primary-50 text-primary-700 border-primary-200'
+                                                                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                                                                 : 'bg-slate-100 text-slate-700 border-slate-200'
                                                                         }`}>
                                                                             {getRoleDisplayName(r)}
@@ -3037,13 +3112,13 @@ export default function ManagingDirectorDashboard() {
                                                                     ))}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-2.5 py-2.5">
+                                                            <td className="px-2.5 py-2">
                                                                 <div className="relative w-36">
                                                                     <select
                                                                         value={user.bv_group || ''}
                                                                         onChange={(e) => handleAssignGroup(user.id, e.target.value)}
                                                                         disabled={updatingGroupUserId === user.id}
-                                                                        className="w-full appearance-none bg-white border border-slate-200 hover:border-teal-400 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
+                                                                        className="w-full appearance-none bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
                                                                     >
                                                                         <option value="">- No Group -</option>
                                                                         {BV_GROUPS.map(g => (
@@ -3059,13 +3134,13 @@ export default function ManagingDirectorDashboard() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-2.5 py-2.5">
+                                                            <td className="px-2.5 py-2">
                                                                 <div className="relative w-36">
                                                                     <select
                                                                         value={user.hierarchy?.kcStatus || ''}
                                                                         onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
                                                                         disabled={updatingKCStatusUserId === user.id}
-                                                                        className="w-full appearance-none bg-white border border-slate-200 hover:border-orange-400 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
+                                                                        className="w-full appearance-none bg-white border border-slate-300 hover:border-amber-500 text-slate-800 text-[11px] font-bold py-1.5 pl-2.5 pr-6 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 disabled:bg-gray-50 transition-all cursor-pointer shadow-2xs"
                                                                     >
                                                                         <option value="">- No Status -</option>
                                                                         {KC_STATUS_OPTIONS.map(status => (
@@ -3074,20 +3149,20 @@ export default function ManagingDirectorDashboard() {
                                                                     </select>
                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                                                                         {updatingKCStatusUserId === user.id ? (
-                                                                            <div className="animate-spin h-3 w-3 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                                            <div className="animate-spin h-3 w-3 border-2 border-amber-500 border-t-transparent rounded-full" />
                                                                         ) : (
                                                                             <ChevronDown className="h-3 w-3" />
                                                                         )}
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-3.5 py-2.5 text-right">
+                                                            <td className="px-3.5 py-2 text-right">
                                                                 {(() => {
                                                                     const canManage = canAdminManageTarget(userData?.role || [], user.role || [], userData?.id, user.id);
 
                                                                     if (!canManage) {
                                                                         return (
-                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-400 border border-gray-200 rounded-lg text-[10px] font-bold">
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-bold">
                                                                                 <Lock className="h-3 w-3" /> Locked
                                                                             </span>
                                                                         );
@@ -3105,7 +3180,7 @@ export default function ManagingDirectorDashboard() {
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => openUserView(user)}
-                                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-300 rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-300 rounded-lg font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-2xs active:scale-95 cursor-pointer"
                                                                                 title="View Devotee Profile"
                                                                             >
                                                                                 <Eye className="h-3.5 w-3.5" />
@@ -3121,7 +3196,7 @@ export default function ManagingDirectorDashboard() {
                                                                                             ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-600 hover:text-white'
                                                                                             : isCareGiver
                                                                                             ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-600 hover:text-white'
-                                                                                            : 'bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-600 hover:text-white'
+                                                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-600 hover:text-white'
                                                                                     }`}
                                                                                     title="Manage, Assign, or Remove Authority Role"
                                                                                 >
@@ -3131,8 +3206,8 @@ export default function ManagingDirectorDashboard() {
                                                                                     </span>
                                                                                 </button>
                                                                             ) : (
-                                                                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 text-gray-400 border border-gray-200 rounded-lg text-[10px] font-semibold" title="Devotee belongs to another temple">
-                                                                                    <Shield className="h-3 w-3 text-gray-400" />
+                                                                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-semibold" title="Devotee belongs to another temple">
+                                                                                    <Shield className="h-3 w-3 text-slate-400" />
                                                                                     <span>Locked</span>
                                                                                 </span>
                                                                             )}
@@ -3141,7 +3216,7 @@ export default function ManagingDirectorDashboard() {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => handleDeleteUser(user)}
-                                                                                    className="inline-flex items-center justify-center p-1.5 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                                                                    className="inline-flex items-center justify-center p-1.5 text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-300 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer"
                                                                                     title={`Delete Devotee "${user.initiated_name || user.legal_name || user.name}" Permanently`}
                                                                                 >
                                                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -3159,36 +3234,37 @@ export default function ManagingDirectorDashboard() {
                                     </div>
                                 </div>
 
-                                {/* Pagination Controls */}
+                                {/* Pagination Controls - Clean & Responsive */}
                                 {filteredUsersList.length > 0 && (
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 bg-[#fffdfa]/80 backdrop-blur-md p-5 sm:p-6 rounded-[2rem] border border-amber-200 shadow-xl shadow-orange-100/20">
-                                        <div className="flex items-center gap-4">
-                                            <div className="group">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1 block">Per Page</label>
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 bg-white p-3 sm:p-3.5 rounded-xl border-2 border-slate-300 shadow-xs">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-1.5">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Per Page:</label>
                                                 <select
                                                     value={itemsPerPage}
                                                     onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                                                    className="bg-white border-2 border-amber-100 rounded-xl px-3 py-2 text-xs font-black text-gray-700 outline-none focus:border-primary-400 transition-all cursor-pointer"
+                                                    className="bg-slate-50 border-2 border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
                                                 >
-                                                    {[10, 20, 50].map(val => <option key={val} value={val}>{val}</option>)}
+                                                    {[10, 20, 50, 100].map(val => <option key={val} value={val}>{val}</option>)}
                                                 </select>
                                             </div>
-                                            <div className="h-10 w-[1px] bg-gray-200 hidden sm:block" />
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                                                Showing {Math.min(filteredUsersList.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredUsersList.length, currentPage * itemsPerPage)} of {filteredUsersList.length}
+                                            <div className="h-4 w-[1px] bg-slate-300" />
+                                            <p className="text-xs font-bold text-slate-500">
+                                                Showing <span className="text-slate-900 font-black">{Math.min(filteredUsersList.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredUsersList.length, currentPage * itemsPerPage)}</span> of <span className="text-slate-900 font-black">{filteredUsersList.length}</span>
                                             </p>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1.5">
                                             <button
                                                 disabled={currentPage === 1}
                                                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                                className="p-2 sm:p-3 bg-white text-gray-400 rounded-xl border-2 border-gray-50 hover:border-primary-200 hover:text-primary-600 disabled:opacity-30 disabled:grayscale transition-all active:scale-90"
+                                                className="p-1.5 bg-slate-50 text-slate-600 rounded-lg border-2 border-slate-300 hover:bg-white hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs"
+                                                title="Previous Page"
                                             >
-                                                <ChevronRight className="h-5 w-5 rotate-180" />
+                                                <ChevronRight className="h-4 w-4 rotate-180" />
                                             </button>
 
-                                            <div className="flex items-center gap-1.5 px-4">
+                                            <div className="flex items-center gap-1">
                                                 {(() => {
                                                     const pages = [];
                                                     const maxVisible = 5;
@@ -3201,7 +3277,11 @@ export default function ManagingDirectorDashboard() {
                                                             <button
                                                                 key={i}
                                                                 onClick={() => setCurrentPage(i)}
-                                                                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-xs font-black transition-all ${currentPage === i ? 'bg-primary-600 text-white shadow-lg shadow-primary-200 scale-110' : 'bg-white text-gray-500 border-2 border-gray-50 hover:border-primary-100 hover:text-primary-500'}`}
+                                                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all cursor-pointer ${
+                                                                    currentPage === i
+                                                                        ? 'bg-indigo-600 text-white shadow-xs'
+                                                                        : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-white hover:border-indigo-400'
+                                                                }`}
                                                             >
                                                                 {i}
                                                             </button>
@@ -3214,9 +3294,10 @@ export default function ManagingDirectorDashboard() {
                                             <button
                                                 disabled={currentPage === totalPages}
                                                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                                className="p-2 sm:p-3 bg-white text-gray-400 rounded-xl border-2 border-gray-50 hover:border-primary-200 hover:text-primary-600 disabled:opacity-30 disabled:grayscale transition-all active:scale-90"
+                                                className="p-1.5 bg-slate-50 text-slate-600 rounded-lg border-2 border-slate-300 hover:bg-white hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs"
+                                                title="Next Page"
                                             >
-                                                <ChevronRight className="h-5 w-5" />
+                                                <ChevronRight className="h-4 w-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -3290,7 +3371,7 @@ export default function ManagingDirectorDashboard() {
                         ) : (
                             <div className="space-y-6">
                                 {approvalStatus === 'pending' && requests.length > 0 && (
-                                    <div className="flex items-center gap-4 px-8 py-4 bg-[#fffdfa]/90 backdrop-blur-md rounded-2xl border border-amber-200 shadow-xl shadow-orange-100/40">
+                                    <div className="flex items-center gap-4 px-6 py-3 bg-white rounded-xl border-2 border-slate-200/90 shadow-2xs">
                                         <div
                                             className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${selectedRequestIds.length === requests.length && requests.length > 0 ? 'bg-primary-600 border-primary-600 shadow-lg' : 'border-gray-200 hover:border-primary-400'}`}
                                             onClick={toggleSelectAll}
@@ -3308,9 +3389,9 @@ export default function ManagingDirectorDashboard() {
                                     const changeCount = Object.keys(request.requested_changes).length;
 
                                     return (
-                                        <div key={request.id} className={`group bg-[#fffdfa]/90 backdrop-blur-md rounded-[1.5rem] sm:rounded-[2rem] border transition-all duration-500 overflow-hidden ${isExpanded ? 'border-primary-300 shadow-2xl shadow-primary-100 ring-4 ring-primary-500/10' : 'border-amber-200 shadow-xl shadow-orange-100/30 hover:border-amber-300'}`}>
+                                        <div key={request.id} className={`group bg-white rounded-2xl border-2 transition-all duration-300 overflow-hidden ${isExpanded ? 'border-indigo-500 shadow-sm' : 'border-slate-200/90 shadow-2xs hover:border-indigo-300'}`}>
                                             <div
-                                                className={`p-5 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6 cursor-pointer transition-colors ${isExpanded ? 'bg-primary-50/30' : 'hover:bg-primary-50/20'}`}
+                                                className={`p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/20' : 'hover:bg-slate-50'}`}
                                                 onClick={() => setExpandedRequestId(isExpanded ? null : request.id)}
                                             >
                                                 <div className="flex items-center gap-4 sm:gap-6 w-full md:w-auto">
@@ -3425,8 +3506,8 @@ export default function ManagingDirectorDashboard() {
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className="bg-[#fffdfa]/80 backdrop-blur-md p-8 rounded-[2rem] border border-amber-200 shadow-xl shadow-orange-100/40 group/status">
-                                                                <div className="flex items-center gap-3 mb-6">
+                                                            <div className="bg-white p-6 rounded-2xl border-2 border-slate-200/90 shadow-2xs group/status">
+                                                                <div className="flex items-center gap-3 mb-4">
                                                                     <div className={`p-2 rounded-lg ${request.status === 'approved' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
                                                                         <ShieldCheck className="h-4 w-4" />
                                                                     </div>
@@ -3501,13 +3582,13 @@ export default function ManagingDirectorDashboard() {
                                 <p className="text-gray-500 font-medium mt-3 max-w-sm mx-auto">All new devotee registrations for {currentTemple} have been processed.</p>
                             </div>
                         ) : (
-                            <div className="bg-[#fffdfa]/95 backdrop-blur-xl rounded-[2.5rem] shadow-2xl shadow-orange-100/50 border border-amber-200 overflow-hidden group">
+                            <div className="bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-hidden group">
                                 {/* Desktop/Laptop View */}
                                 <div className="hidden lg:block overflow-x-auto">
                                     <table className="min-w-full">
                                         <thead>
-                                            <tr className="bg-gray-50/50">
-                                                <th className="px-6 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-12">
+                                            <tr className="bg-slate-100 border-b-2 border-slate-200">
+                                                <th className="px-4 py-3 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-12">
                                                     <div
                                                         className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${selectedPendingUserIds.length === pendingUsers.length && pendingUsers.length > 0 ? 'bg-primary-600 border-primary-600 shadow-lg' : 'border-gray-200 hover:border-primary-400'}`}
                                                         onClick={() => {
@@ -4426,7 +4507,7 @@ export default function ManagingDirectorDashboard() {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-5 sm:p-10 space-y-6 sm:y-8 bg-[#fffdfa] scroll-smooth no-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-5 sm:p-10 space-y-6 sm:y-8 bg-white scroll-smooth no-scrollbar">
                                 {/* Administrative Section */}
                                 <div className="space-y-4">
                                     <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1 border-b border-indigo-50 pb-2">
@@ -4544,7 +4625,7 @@ export default function ManagingDirectorDashboard() {
                                 })()}
                             </div>
 
-                            <div className="p-5 sm:p-10 pt-0 bg-[#fffdfa] flex-shrink-0 border-t border-gray-100 sm:border-0">
+                            <div className="p-5 sm:p-10 pt-0 bg-white flex-shrink-0 border-t border-gray-100 sm:border-0">
                                 <div className="flex flex-col gap-2.5 sm:gap-3 pt-4 sm:pt-0">
                                     <button
                                         onClick={handleAssignRole}
@@ -4570,20 +4651,19 @@ export default function ManagingDirectorDashboard() {
                 showRejectionModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
                         <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
-                            <div className="p-8 sm:p-10 bg-gradient-to-br from-rose-600 to-red-700 text-white relative">
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl" />
-                                <div className="flex items-center gap-5 relative z-10">
-                                    <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl shadow-xl">
-                                        <AlertTriangle className="h-8 w-8 text-white" />
+                            <div className="p-6 sm:p-8 bg-rose-600 text-white relative">
+                                <div className="flex items-center gap-4 relative z-10">
+                                    <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl shadow-sm">
+                                        <AlertTriangle className="h-6 w-6 text-white" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-black tracking-tight">Access Denied</h3>
+                                        <h3 className="text-lg font-black tracking-tight">Access Denied</h3>
                                         <p className="text-rose-100 text-[10px] font-bold uppercase tracking-widest mt-0.5">Identity Verification Failed</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="p-8 sm:p-10 space-y-8 bg-[#fffdfa]">
+                            <div className="p-6 sm:p-8 space-y-6 bg-white">
                                 <div className="space-y-4">
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Reason for Rejection (Visible to User)</label>
                                     <textarea

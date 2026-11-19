@@ -5757,7 +5757,7 @@ export async function approveCampWaitingListRegistrationAction(registrationId: s
 /**
  * Super Admin: Search devotees across system to auto-fill details when transferring a pass
  */
-export async function superAdminSearchDevoteesAction(searchTerm: string) {
+export async function superAdminSearchDevoteesAction(searchTerm?: string) {
   try {
     const { isSuperAdmin } = await verifyAdminAuth();
     if (!isSuperAdmin) {
@@ -5765,24 +5765,107 @@ export async function superAdminSearchDevoteesAction(searchTerm: string) {
     }
 
     const clean = (searchTerm || '').trim();
-    if (!clean || clean.length < 2) {
-      return { success: true, devotees: [] };
+    let sql: string;
+    let params: any[] = [];
+
+    if (clean) {
+      sql = `
+        SELECT 
+          id, 
+          name, 
+          email, 
+          phone, 
+          ashram,
+          birth_date,
+          current_center, 
+          center, 
+          other_center, 
+          current_temple, 
+          parent_temple, 
+          COALESCE(counselor, brahmachari_counselor, grihastha_counselor, other_counselor) AS counselor_name,
+          hierarchy
+        FROM users
+        WHERE (
+          name ILIKE $1 
+          OR phone ILIKE $1 
+          OR email ILIKE $1
+          OR current_center ILIKE $1
+          OR center ILIKE $1
+          OR other_center ILIKE $1
+          OR current_temple ILIKE $1
+          OR parent_temple ILIKE $1
+          OR counselor ILIKE $1
+          OR other_counselor ILIKE $1
+        )
+        ORDER BY name ASC
+        LIMIT 500
+      `;
+      params = [`%${clean}%`];
+    } else {
+      sql = `
+        SELECT 
+          id, 
+          name, 
+          email, 
+          phone, 
+          ashram,
+          birth_date,
+          current_center, 
+          center, 
+          other_center, 
+          current_temple, 
+          parent_temple, 
+          COALESCE(counselor, brahmachari_counselor, grihastha_counselor, other_counselor) AS counselor_name,
+          hierarchy
+        FROM users
+        ORDER BY name ASC
+        LIMIT 2000
+      `;
     }
 
-    const sql = `
-      SELECT id, name, email, phone, gender, current_center, center, other_center, current_temple, parent_temple, counselor_name
-      FROM users
-      WHERE (
-        name ILIKE $1 
-        OR phone ILIKE $1 
-        OR email ILIKE $1
-      )
-      ORDER BY name ASC
-      LIMIT 15
-    `;
+    const res = await query(sql, params);
+    const devotees = res.rows.map((u: any) => {
+      let derivedGender = 'Male';
+      const hGender = u.hierarchy?.gender || '';
+      const ashram = (u.ashram || '').toLowerCase();
+      if (hGender) {
+        derivedGender = hGender;
+      } else if (ashram.includes('mataji') || ashram.includes('female')) {
+        derivedGender = 'Female';
+      } else if (ashram.includes('brahmachari')) {
+        derivedGender = 'Male';
+      }
 
-    const res = await query(sql, [`%${clean}%`]);
-    return { success: true, devotees: res.rows };
+      let derivedAge = '';
+      if (u.birth_date) {
+        const b = new Date(u.birth_date);
+        if (!isNaN(b.getTime())) {
+          const ageDiff = new Date().getFullYear() - b.getFullYear();
+          if (ageDiff > 0 && ageDiff < 120) {
+            derivedAge = String(ageDiff);
+          }
+        }
+      } else if (u.hierarchy?.age) {
+        derivedAge = String(u.hierarchy.age);
+      }
+
+      return {
+        id: u.id,
+        name: u.name || '',
+        email: u.email || '',
+        phone: u.phone || '',
+        gender: derivedGender,
+        age: derivedAge,
+        current_center: u.current_center || u.center || u.other_center || '',
+        center: u.center || '',
+        other_center: u.other_center || '',
+        current_temple: u.current_temple || u.parent_temple || '',
+        parent_temple: u.parent_temple || '',
+        counselor_name: u.counselor_name || '',
+      };
+    });
+
+    return { success: true, devotees };
   } catch (error: any) {
     console.error('superAdminSearchDevoteesAction error:', error);
     return { success: false, error: error.message };
@@ -5960,42 +6043,42 @@ export async function superAdminTransferCampPassAction(params: {
     const updateSql = `
       UPDATE camp_registrations
       SET
-        camp_id = $1,
+        camp_id = $1::uuid,
         participant_name = $2,
         whatsapp = $3,
         email = $4,
         gender = $5,
-        age = $6,
-        married_since_year = $7,
+        age = $6::integer,
+        married_since_year = $7::integer,
         voice_name = $8,
-        current_center = $8,
-        parent_temple = $9,
-        current_temple = $9,
-        counselor_name = $10,
-        poc_name = $11,
-        poc_contact = $12,
-        camp_track = $13,
-        participant_type = $14,
-        first_meal_date = $15,
-        first_meal_type = $16,
-        last_meal_date = $17,
-        last_meal_type = $18,
-        dinner_type = $19,
-        accommodation = $20,
-        total_cost = $21,
-        meal_cost = $22,
-        acc_cost = $23,
-        discount_amount = $24,
-        transferred_from_name = $25,
-        transferred_from_contact = $26,
-        transferred_from_camp_id = $27,
+        current_center = $9,
+        parent_temple = $10,
+        current_temple = $11,
+        counselor_name = $12,
+        poc_name = $13,
+        poc_contact = $14,
+        camp_track = $15,
+        participant_type = $16,
+        first_meal_date = $17,
+        first_meal_type = $18,
+        last_meal_date = $19,
+        last_meal_type = $20,
+        dinner_type = $21,
+        accommodation = $22,
+        total_cost = $23::numeric,
+        meal_cost = $24::numeric,
+        acc_cost = $25::numeric,
+        discount_amount = $26::numeric,
+        transferred_from_name = $27,
+        transferred_from_contact = $28,
+        transferred_from_camp_id = $29::uuid,
         transferred_at = NOW(),
-        transferred_by = $28,
-        transfer_reason = $29,
+        transferred_by = $30,
+        transfer_reason = $31,
         checked_in = false,
         checked_in_at = null,
         updated_at = NOW()
-      WHERE id = $30
+      WHERE id = $32::uuid
       RETURNING *
     `;
 
@@ -6008,6 +6091,8 @@ export async function superAdminTransferCampPassAction(params: {
       cleanAge,
       cleanMarriedYear,
       cleanVoiceName,
+      cleanVoiceName,
+      cleanParentTemple,
       cleanParentTemple,
       cleanCounselor,
       cleanPocName,
@@ -6058,10 +6143,10 @@ export async function superAdminTransferCampPassAction(params: {
         await query(
           `INSERT INTO users (
             id, email, name, phone, parent_temple, current_center, password_hash,
-            role, is_active, created_at, updated_at
+            role, verification_status, created_at, updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7,
-            ARRAY[0], true, NOW(), NOW()
+            $8, 'approved', NOW(), NOW()
           )`,
           [
             newUserId,
@@ -6070,7 +6155,8 @@ export async function superAdminTransferCampPassAction(params: {
             cleanWhatsapp,
             cleanParentTemple,
             cleanVoiceName,
-            passwordHash
+            passwordHash,
+            [2]
           ]
         );
       }

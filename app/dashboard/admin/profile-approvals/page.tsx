@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/config';
 import {
@@ -38,6 +38,7 @@ export default function ProfileApprovalsPage() {
     const [selectedStatus, setSelectedStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
     const [selectedFields, setSelectedFields] = useState<Record<string, string[]>>({});
     const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+    const [searchQuery, setSearchQuery] = useState<string>('');
 
     const fetchRequests = useCallback(async () => {
         try {
@@ -145,11 +146,21 @@ export default function ProfileApprovalsPage() {
         }
     };
 
+    const filteredRequests = useMemo(() => {
+        if (!searchQuery.trim()) return requests;
+        const q = searchQuery.toLowerCase().trim();
+        return requests.filter(req => {
+            const name = (req.user?.name || '').toLowerCase();
+            const email = (req.user?.email || '').toLowerCase();
+            return name.includes(q) || email.includes(q);
+        });
+    }, [requests, searchQuery]);
+
     const toggleSelectAll = () => {
-        if (selectedRequestIds.length === requests.length) {
+        if (selectedRequestIds.length === filteredRequests.length && filteredRequests.length > 0) {
             setSelectedRequestIds([]);
         } else {
-            setSelectedRequestIds(requests.map(r => r.id));
+            setSelectedRequestIds(filteredRequests.map(r => r.id));
         }
     };
 
@@ -158,8 +169,6 @@ export default function ProfileApprovalsPage() {
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
-
-    // ... (rest of the component logic)
 
     const handleAction = async (id: string, status: 'approved' | 'rejected') => {
         try {
@@ -231,26 +240,28 @@ export default function ProfileApprovalsPage() {
         return (
             <div
                 key={key}
-                className={`flex items-start gap-4 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors px-2 rounded-lg cursor-pointer ${!isSelected ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                className={`flex items-start gap-2.5 sm:gap-3 py-2 sm:py-2.5 border-b border-gray-100 last:border-0 hover:bg-amber-50/40 transition-colors px-1.5 sm:px-2 rounded-xl cursor-pointer ${!isSelected ? 'opacity-50' : ''}`}
                 onClick={selectedStatus === 'pending' ? toggleField : undefined}
             >
                 {selectedStatus === 'pending' && (
-                    <div className="pt-5">
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500 ring-2 ring-amber-200' : 'border-gray-300 bg-white'}`}>
-                            {isSelected && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
+                    <div className="pt-1 shrink-0">
+                        <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500 ring-2 ring-amber-200' : 'border-gray-300 bg-white'}`}>
+                            {isSelected && <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white stroke-[3px]" />}
                         </div>
                     </div>
                 )}
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{label} (Current)</span>
-                        <span className="text-sm text-gray-600 line-through decoration-red-300 opacity-70 bg-red-50/30 px-2 py-1 rounded w-fit">{displayOld}</span>
+                <div className="flex-1 min-w-0">
+                    <div className="text-[11px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                        {label}
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">{label} (Requested)</span>
-                        <div className="flex items-center gap-2">
-                            <ArrowRight className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                            <span className="text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded shadow-sm">{displayNew}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2.5">
+                        <div className="flex items-center gap-1.5 bg-rose-50/70 border border-rose-100 px-2 py-1 rounded-lg text-xs min-w-0">
+                            <span className="text-[9.5px] font-bold text-rose-500 uppercase tracking-tight shrink-0">Current:</span>
+                            <span className="text-gray-600 line-through decoration-rose-300 truncate" title={displayOld}>{displayOld}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-emerald-50/80 border border-emerald-200 px-2 py-1 rounded-lg text-xs min-w-0">
+                            <span className="text-[9.5px] font-bold text-emerald-600 uppercase tracking-tight shrink-0">Requested:</span>
+                            <span className="font-bold text-emerald-800 truncate" title={displayNew}>{displayNew}</span>
                         </div>
                     </div>
                 </div>
@@ -286,44 +297,47 @@ export default function ProfileApprovalsPage() {
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 animate-fadeIn p-4 sm:p-0 relative">
+        <div className="max-w-5xl mx-auto space-y-3 sm:space-y-4 animate-fadeIn p-2.5 sm:p-4 lg:p-6 relative">
             {/* Custom Confirmation Modal */}
             {confirmation.isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100">
-                        <div className={`p-6 ${confirmation.type === 'approved' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                            <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-full ${confirmation.type === 'approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                                    {confirmation.type === 'approved' ? <Check className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md overflow-hidden transform transition-all border border-gray-100">
+                        <div className={`p-4 sm:p-5 ${confirmation.type === 'approved' ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2.5 rounded-full shrink-0 ${confirmation.type === 'approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                    {confirmation.type === 'approved' ? <Check className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-800">
+                                    <h3 className="text-sm sm:text-base font-bold text-gray-800">
                                         {confirmation.type === 'approved' ? 'Approve Requests' : 'Reject Requests'}
                                     </h3>
-                                    <p className="text-sm text-gray-500 font-medium">
-                                        Are you sure you want to {confirmation.type} <span className="font-bold text-gray-800">{confirmation.count}</span> requests?
+                                    <p className="text-xs sm:text-sm text-gray-500 font-medium mt-0.5">
+                                        Are you sure you want to {confirmation.type} <span className="font-bold text-gray-800">{confirmation.count}</span> {confirmation.count === 1 ? 'request' : 'requests'}?
                                     </p>
                                 </div>
                             </div>
                         </div>
-                        <div className="p-6 bg-white space-y-3">
+                        <div className="p-4 sm:p-5 bg-white space-y-3">
                             <p className="text-xs text-gray-400 italic">
                                 This action will process all selected requests immediately.
-                                {confirmation.type === 'approved' && " All profile changes for these users will be applied."}
+                                {confirmation.type === 'approved' && ' All profile changes for these users will be applied.'}
                             </p>
-                            <div className="flex items-center justify-end gap-3 mt-4">
+                            <div className="flex items-center justify-end gap-2.5 pt-2">
                                 <button
+                                    type="button"
                                     onClick={() => setConfirmation({ isOpen: false, type: null, count: 0 })}
-                                    className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                                    className="px-3.5 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={confirmAction}
-                                    className={`px-6 py-2 text-sm font-bold text-white rounded-xl shadow-md transition-all transform hover:scale-105 ${confirmation.type === 'approved'
-                                        ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:shadow-emerald-200'
-                                        : 'bg-gradient-to-r from-red-500 to-rose-600 hover:shadow-red-200'
-                                        }`}
+                                    className={`px-4 sm:px-5 py-1.5 text-xs font-bold text-white rounded-xl shadow-xs transition-all cursor-pointer ${
+                                        confirmation.type === 'approved'
+                                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                                            : 'bg-rose-600 hover:bg-rose-700'
+                                    }`}
                                 >
                                     Confirm {confirmation.type === 'approved' ? 'Approval' : 'Rejection'}
                                 </button>
@@ -334,50 +348,48 @@ export default function ProfileApprovalsPage() {
             )}
 
             <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
-        .animate-fadeInUp { animation: fadeInUp 0.6s ease-out forwards; }
-      `}</style>
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+            `}</style>
 
             {/* Header */}
-            <div className="bg-white rounded-2xl shadow-xl border border-amber-100 overflow-hidden transform transition-all hover:shadow-2xl">
-                <div className="bg-gradient-to-r from-amber-500 via-orange-400 to-amber-600 px-6 py-5">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-white flex items-center gap-3 drop-shadow-sm font-display tracking-tight">
-                                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md shadow-inner">
-                                    <UserCheck className="h-6 w-6 text-white" />
-                                </div>
-                                Profile Update Approvals
-                            </h1>
-                            <p className="text-amber-50/90 text-sm mt-1 font-medium italic">Review and manage sensitive spiritual information updates by authority</p>
+            <div className="bg-white rounded-2xl shadow-md border border-amber-100 overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-500 via-orange-400 to-amber-600 p-3.5 sm:p-5 text-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3">
+                            <div className="p-2 sm:p-2.5 bg-white/20 rounded-xl backdrop-blur-md shadow-inner shrink-0">
+                                <UserCheck className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-base sm:text-xl font-bold text-white tracking-tight leading-tight flex items-center gap-2">
+                                    Profile Update Approvals
+                                    <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/25">
+                                        {requests.length}
+                                    </span>
+                                </h1>
+                                <p className="text-amber-100 text-[11px] sm:text-xs mt-0.5 font-medium line-clamp-1">
+                                    Review and manage sensitive spiritual information updates
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            {selectedStatus === 'pending' && (
-                                <div className="flex items-center bg-white/20 backdrop-blur-md rounded-xl p-1 shadow-inner overflow-hidden border border-white/30 mr-2">
-                                    <button
-                                        onClick={() => openConfirmation('approved')}
-                                        disabled={selectedRequestIds.length === 0 || processingId !== null}
-                                        className={`px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all duration-300 flex items-center gap-2 ${selectedRequestIds.length > 0 && processingId === null
-                                            ? 'bg-white text-emerald-600 shadow-md hover:bg-emerald-50 cursor-pointer'
-                                            : 'bg-white/10 text-white/50 cursor-not-allowed'
-                                            }`}
-                                    >
-                                        <Check className="h-3 w-3" />
-                                        Approve ({selectedRequestIds.length})
-                                    </button>
-                                </div>
+                        {/* Controls & Status Tabs */}
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+                            {selectedStatus === 'pending' && selectedRequestIds.length > 0 && (
+                                <button
+                                    onClick={() => openConfirmation('approved')}
+                                    disabled={processingId !== null}
+                                    className="px-3 py-1.5 bg-white text-emerald-700 hover:bg-emerald-50 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                                >
+                                    <Check className="h-3.5 w-3.5" />
+                                    <span>Approve ({selectedRequestIds.length})</span>
+                                </button>
                             )}
 
-                            <div className="flex items-center bg-white/20 backdrop-blur-md rounded-xl p-1 shadow-inner overflow-hidden border border-white/30">
+                            <div className="flex items-center bg-black/15 backdrop-blur-md rounded-xl p-1 border border-white/20 shrink-0">
                                 {(['pending', 'approved', 'rejected'] as const).map((status) => (
                                     <button
                                         key={status}
@@ -385,10 +397,11 @@ export default function ProfileApprovalsPage() {
                                             setSelectedStatus(status);
                                             setSelectedRequestIds([]);
                                         }}
-                                        className={`px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all duration-300 ${selectedStatus === status
-                                            ? 'bg-white text-orange-600 shadow-md transform scale-[1.02]'
-                                            : 'text-white hover:bg-white/10'
-                                            }`}
+                                        className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                            selectedStatus === status
+                                                ? 'bg-white text-amber-700 shadow-xs'
+                                                : 'text-amber-100 hover:text-white hover:bg-white/10'
+                                        }`}
                                     >
                                         {status}
                                     </button>
@@ -399,25 +412,81 @@ export default function ProfileApprovalsPage() {
                 </div>
             </div>
 
-            {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-200 border-t-amber-600 shadow-sm mb-4"></div>
-                    <p className="text-gray-500 font-medium animate-pulse">Fetching requests...</p>
-                </div>
-            ) : requests.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-lg border border-dashed border-gray-200 p-16 text-center animate-fadeInUp">
-                    <div className="inline-flex items-center justify-center p-4 bg-gray-50 rounded-full mb-4">
-                        <Shield className="h-12 w-12 text-gray-300" />
+            {/* Search & Bulk Selection Toolbar */}
+            {requests.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-2xs">
+                    <div className="relative flex-1">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Filter by devotee name or email..."
+                            className="w-full pl-8 pr-7 py-1.5 text-xs text-gray-800 bg-gray-50/70 border border-gray-200 rounded-xl focus:border-amber-500 focus:bg-white outline-none"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold"
+                            >
+                                ✕
+                            </button>
+                        )}
                     </div>
-                    <p className="text-gray-500 text-lg font-medium">No {selectedStatus} requests found.</p>
-                    <p className="text-gray-400 text-sm mt-1">Excellent! All caught up with current profile updates.</p>
+
+                    {selectedStatus === 'pending' && filteredRequests.length > 0 && (
+                        <div className="flex items-center justify-between sm:justify-end gap-3 px-1">
+                            <button
+                                type="button"
+                                onClick={toggleSelectAll}
+                                className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-amber-700 cursor-pointer"
+                            >
+                                <div
+                                    className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                                        selectedRequestIds.length === filteredRequests.length && filteredRequests.length > 0
+                                            ? 'bg-amber-500 border-amber-500'
+                                            : 'border-gray-300'
+                                    }`}
+                                >
+                                    {selectedRequestIds.length === filteredRequests.length && filteredRequests.length > 0 && (
+                                        <Check className="h-3 w-3 text-white stroke-[3px]" />
+                                    )}
+                                </div>
+                                <span className="text-[11px] sm:text-xs">
+                                    {selectedRequestIds.length === 0
+                                        ? 'Select All'
+                                        : `${selectedRequestIds.length} of ${filteredRequests.length} Selected`}
+                                </span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-xs border border-gray-100">
+                    <div className="animate-spin rounded-full h-10 w-10 border-3 border-amber-200 border-t-amber-600 shadow-xs mb-3"></div>
+                    <p className="text-xs sm:text-sm text-gray-500 font-medium animate-pulse">Fetching requests...</p>
+                </div>
+            ) : filteredRequests.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-xs border border-dashed border-gray-200 p-8 sm:p-12 text-center animate-fadeIn">
+                    <div className="inline-flex items-center justify-center p-3 bg-gray-50 rounded-full mb-3">
+                        <Shield className="h-8 w-8 text-gray-300" />
+                    </div>
+                    <p className="text-gray-700 text-sm sm:text-base font-bold">
+                        {searchQuery ? 'No matching requests found.' : `No ${selectedStatus} requests found.`}
+                    </p>
+                    <p className="text-gray-400 text-xs mt-1">
+                        {searchQuery ? 'Try clearing your search term.' : 'All caught up with current profile updates.'}
+                    </p>
                     {debugError && (
-                        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-xs font-mono max-w-md mx-auto">
+                        <div className="mt-3 p-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-mono max-w-md mx-auto">
                             Error: {debugError}
                         </div>
                     )}
                     {apiDebug.length > 0 && (
-                        <div className="mt-3 p-3 bg-gray-50 text-gray-600 rounded-xl text-xs font-mono max-w-md mx-auto text-left space-y-1">
+                        <div className="mt-2.5 p-2.5 bg-gray-50 text-gray-600 rounded-xl text-xs font-mono max-w-md mx-auto text-left space-y-1">
                             <span className="font-bold text-gray-700">API Debug Log:</span>
                             {apiDebug.map((line, idx) => (
                                 <div key={idx}>- {line}</div>
@@ -426,199 +495,249 @@ export default function ProfileApprovalsPage() {
                     )}
                     <button
                         onClick={() => fetchRequests()}
-                        className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow hover:bg-amber-600 transition-colors"
+                        className="mt-3 px-3.5 py-1.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-amber-600 transition-colors cursor-pointer"
                     >
-                        Refresh Requests
+                        Refresh
                     </button>
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {selectedStatus === 'pending' && requests.length > 0 && (
-                        <div className="flex items-center gap-3 px-6 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
-                            <div
-                                className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${selectedRequestIds.length === requests.length && requests.length > 0 ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}
-                                onClick={toggleSelectAll}
-                            >
-                                {selectedRequestIds.length === requests.length && requests.length > 0 && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
-                            </div>
-                            <span className="text-sm font-semibold text-gray-600">
-                                {selectedRequestIds.length === 0 ? 'Select All' : `${selectedRequestIds.length} Selected`}
-                            </span>
-                        </div>
-                    )}
+                <div className="space-y-2.5 sm:space-y-3">
+                    {filteredRequests.map((request) => {
+                        const isExpanded = expandedId === request.id;
+                        const isSelected = selectedRequestIds.includes(request.id);
+                        const changesCount = Object.keys(request.requested_changes || {}).length;
 
-                    {requests.map((request) => (
-                        <div
-                            key={request.id}
-                            className={`bg-white rounded-2xl shadow-md border transition-all duration-300 overflow-hidden ${expandedId === request.id
-                                ? 'ring-2 ring-amber-400 border-transparent shadow-2xl scale-[1.01]'
-                                : selectedRequestIds.includes(request.id) ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100 hover:border-amber-200 hover:shadow-lg'
+                        return (
+                            <div
+                                key={request.id}
+                                className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden ${
+                                    isExpanded
+                                        ? 'ring-2 ring-amber-400 border-amber-400 shadow-md'
+                                        : isSelected
+                                        ? 'border-amber-300 bg-amber-50/20 shadow-xs'
+                                        : 'border-gray-200/80 hover:border-amber-200 shadow-2xs hover:shadow-xs'
                                 }`}
-                        >
-                            {/* Request Row */}
-                            <div
-                                className="px-6 py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer"
-                                onClick={() => setExpandedId(expandedId === request.id ? null : request.id)}
                             >
-                                <div className="flex items-center gap-4">
-                                    {selectedStatus === 'pending' && (
-                                        <div
-                                            className="mr-2"
-                                            onClick={(e) => { e.stopPropagation(); toggleSelection(request.id); }}
-                                        >
-                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${selectedRequestIds.includes(request.id) ? 'bg-amber-500 border-amber-500 shadow-sm' : 'border-gray-300 hover:border-amber-400 bg-white'}`}>
-                                                {selectedRequestIds.includes(request.id) && <Check className="h-4 w-4 text-white stroke-[3px]" />}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center border border-blue-100 shadow-sm relative group overflow-hidden">
-                                        <div className="absolute inset-0 bg-blue-400/10 scale-0 group-hover:scale-100 transition-transform rounded-full"></div>
-                                        <User className="h-6 w-6 text-blue-600 relative z-10" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                            {request.user?.name || 'Unknown User'}
-                                            {request.status === 'pending' && <span className="p-1.5 bg-amber-100 text-amber-600 rounded-full animate-pulse transition-all hover:scale-110" title="Pending Review"><Clock className="h-3 w-3" /></span>}
-                                        </h3>
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1">
-                                            <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                                                <Mail className="h-3.5 w-3.5 text-gray-400" />
-                                                {request.user?.email || 'No email provided'}
-                                            </span>
-                                            <span className="text-sm text-gray-400 flex items-center gap-1.5">
-                                                <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                                                {new Date(request.created_at).toLocaleString()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        className={`p-2.5 rounded-xl transition-all duration-300 ${expandedId === request.id
-                                            ? 'bg-amber-100 text-amber-600'
-                                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        {expandedId === request.id ? <ChevronUp className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                                    </button>
-                                    {request.status === 'pending' && (
-                                        <div className="hidden sm:flex items-center gap-2">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); openConfirmation('approved', request.id); }}
-                                                disabled={processingId === request.id}
-                                                className="px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-xl text-sm font-bold transition-all shadow-sm border border-emerald-100 hover:shadow-md disabled:opacity-50"
+                                {/* Request Summary Row */}
+                                <div
+                                    className="p-3 sm:p-4 flex items-center justify-between gap-2.5 sm:gap-4 cursor-pointer select-none"
+                                    onClick={() => setExpandedId(isExpanded ? null : request.id)}
+                                >
+                                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                                        {selectedStatus === 'pending' && (
+                                            <div
+                                                className="shrink-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleSelection(request.id);
+                                                }}
                                             >
-                                                {processingId === request.id ? '...' : <div className="flex items-center gap-2"><Check className="h-4 w-4" /> Approve</div>}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Expanded Comparison View */}
-                            {expandedId === request.id && (
-                                <div className="px-6 pb-6 pt-2 border-t border-gray-50 animate-fadeIn bg-slate-50/50">
-                                    <div className="bg-white rounded-2xl shadow-inner border border-gray-100 p-6 mt-2">
-                                        <div className="flex items-center justify-between gap-2 mb-6 border-b border-gray-100 pb-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 bg-blue-50 rounded-lg">
-                                                    <History className="h-5 w-5 text-blue-500" />
+                                                <div
+                                                    className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${
+                                                        isSelected
+                                                            ? 'bg-amber-500 border-amber-500 shadow-xs'
+                                                            : 'border-gray-300 hover:border-amber-400 bg-white'
+                                                    }`}
+                                                >
+                                                    {isSelected && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
                                                 </div>
-                                                <h4 className="font-bold text-gray-800 tracking-tight">Changes Comparison</h4>
-                                            </div>
-                                            {selectedStatus === 'pending' && (
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedFields(prev => ({ ...prev, [request.id]: [] }));
-                                                        }}
-                                                        className="text-[10px] font-bold uppercase text-gray-400 hover:text-red-500 transition-colors"
-                                                    >
-                                                        Deselect All
-                                                    </button>
-                                                    <span className="text-gray-200">|</span>
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedFields(prev => ({ ...prev, [request.id]: Object.keys(request.requested_changes) }));
-                                                        }}
-                                                        className="text-[10px] font-bold uppercase text-gray-400 hover:text-emerald-500 transition-colors"
-                                                    >
-                                                        Select All
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            {Object.keys(request.requested_changes).map(key =>
-                                                renderFieldChange(request.id, key, request.requested_changes[key], request.current_values[key])
-                                            )}
-                                        </div>
-
-                                        {request.status === 'pending' ? (
-                                            <div className="mt-8 pt-6 border-t border-gray-100">
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <MessageCircle className="h-5 w-5 text-gray-400" />
-                                                    <label className="text-sm font-bold text-gray-700">Authority Feedback / Rejection Reason</label>
-                                                </div>
-                                                <textarea
-                                                    className="w-full px-4 py-3 text-sm bg-gray-50 border-2 border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 focus:bg-white transition-all outline-none"
-                                                    rows={3}
-                                                    placeholder="Provide feedback or reason for rejection if necessary..."
-                                                    value={feedback}
-                                                    onChange={(e) => setFeedback(e.target.value)}
-                                                />
-                                                <div className="flex justify-end gap-3 mt-4">
-                                                    <button
-                                                        onClick={() => openConfirmation('rejected', request.id)}
-                                                        disabled={processingId === request.id}
-                                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm border border-red-100 flex items-center gap-2 ${feedback.trim() === ''
-                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
-                                                            : 'bg-red-50 text-red-600 hover:bg-red-500 hover:text-white hover:shadow-md'
-                                                            }`}
-                                                        title={feedback.trim() === '' ? 'Please provide feedback to reject' : 'Reject request'}
-                                                    >
-                                                        <X className="h-4 w-4" /> Reject Update
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openConfirmation('approved', request.id)}
-                                                        disabled={processingId === request.id || (selectedFields[request.id] && selectedFields[request.id].length === 0)}
-                                                        className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg hover:scale-[1.02] flex items-center gap-2 disabled:opacity-50"
-                                                    >
-                                                        <Check className="h-4 w-4" />
-                                                        {selectedFields[request.id]?.length === Object.keys(request.requested_changes).length || !selectedFields[request.id]
-                                                            ? 'Approve All Changes'
-                                                            : `Approve ${selectedFields[request.id]?.length} Selected Fields`}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="mt-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Shield className="h-4 w-4 text-gray-400" />
-                                                    <span className="text-xs font-bold text-gray-500 uppercase">Process Details</span>
-                                                </div>
-                                                <p className="text-sm text-gray-600">
-                                                    Status: <span className={`font-bold ${request.status === 'approved' ? 'text-emerald-600' : 'text-red-500'}`}>{request.status.toUpperCase()}</span>
-                                                </p>
-                                                {request.admin_feedback && (
-                                                    <p className="text-sm text-gray-600 mt-2 italic shadow-sm bg-white p-3 rounded-xl border border-gray-100">
-                                                        &quot; {request.admin_feedback} &quot;
-                                                    </p>
-                                                )}
                                             </div>
                                         )}
+
+                                        <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-full bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center border border-amber-200/80 shadow-2xs shrink-0">
+                                            <User className="h-4 w-4 sm:h-5 sm:w-5 text-amber-700" />
+                                        </div>
+
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
+                                                    {request.user?.name || 'Unknown User'}
+                                                </h3>
+                                                {request.status === 'pending' && (
+                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold shrink-0">
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        {changesCount} {changesCount === 1 ? 'change' : 'changes'}
+                                                    </span>
+                                                )}
+                                                {request.status === 'approved' && (
+                                                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold shrink-0">
+                                                        Approved
+                                                    </span>
+                                                )}
+                                                {request.status === 'rejected' && (
+                                                    <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[9px] font-bold shrink-0">
+                                                        Rejected
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-500 mt-0.5 flex-wrap">
+                                                <span className="flex items-center gap-1 truncate max-w-[140px] sm:max-w-[200px]" title={request.user?.email}>
+                                                    <Mail className="h-3 w-3 text-gray-400 shrink-0" />
+                                                    <span className="truncate">{request.user?.email || 'No email'}</span>
+                                                </span>
+                                                <span className="hidden xs:inline text-gray-300">•</span>
+                                                <span className="flex items-center gap-1 shrink-0 text-gray-400">
+                                                    <Calendar className="h-3 w-3 text-gray-400 shrink-0" />
+                                                    {new Date(request.created_at).toLocaleDateString(undefined, {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                        {request.status === 'pending' && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openConfirmation('approved', request.id);
+                                                }}
+                                                disabled={processingId === request.id}
+                                                className="px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-xl text-xs font-bold transition-all border border-emerald-200 hover:shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                                title="Quick Approve"
+                                            >
+                                                <Check className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline">Approve</span>
+                                            </button>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer ${
+                                                isExpanded
+                                                    ? 'bg-amber-100 text-amber-700'
+                                                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                                            }`}
+                                            title={isExpanded ? 'Collapse' : 'Expand Details'}
+                                        >
+                                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+
+                                {/* Expanded Comparison View */}
+                                {isExpanded && (
+                                    <div className="px-2.5 pb-3 sm:px-4 sm:pb-4 pt-1 border-t border-gray-100 bg-slate-50/60 animate-fadeIn">
+                                        <div className="bg-white rounded-xl border border-gray-200/80 p-3 sm:p-4 mt-1 space-y-3">
+                                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <History className="h-4 w-4 text-amber-600" />
+                                                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                                                        Changes Comparison
+                                                    </h4>
+                                                </div>
+                                                {selectedStatus === 'pending' && (
+                                                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: [] }))}
+                                                            className="text-gray-400 hover:text-rose-600 cursor-pointer"
+                                                        >
+                                                            Deselect All
+                                                        </button>
+                                                        <span className="text-gray-300">|</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: Object.keys(request.requested_changes) }))}
+                                                            className="text-gray-400 hover:text-emerald-600 cursor-pointer"
+                                                        >
+                                                            Select All
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Field Changes */}
+                                            <div className="space-y-1">
+                                                {Object.keys(request.requested_changes || {}).map(key =>
+                                                    renderFieldChange(request.id, key, request.requested_changes[key], request.current_values?.[key])
+                                                )}
+                                            </div>
+
+                                            {/* Feedback and Submission for Pending */}
+                                            {request.status === 'pending' ? (
+                                                <div className="pt-3 border-t border-gray-100 space-y-2.5">
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                                            <MessageCircle className="h-3.5 w-3.5 text-gray-500" />
+                                                            <label className="text-xs font-bold text-gray-700">
+                                                                Authority Feedback / Rejection Reason
+                                                            </label>
+                                                        </div>
+                                                        <textarea
+                                                            className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:border-amber-500 focus:bg-white outline-none resize-none transition-colors"
+                                                            rows={2}
+                                                            placeholder="Optional for approval; required if rejecting..."
+                                                            value={feedback}
+                                                            onChange={(e) => setFeedback(e.target.value)}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openConfirmation('rejected', request.id)}
+                                                            disabled={processingId === request.id}
+                                                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                                feedback.trim() === ''
+                                                                    ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                                                                    : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-600 hover:text-white'
+                                                            }`}
+                                                            title={feedback.trim() === '' ? 'Please provide feedback to reject' : 'Reject request'}
+                                                        >
+                                                            <X className="h-3.5 w-3.5" />
+                                                            Reject Update
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openConfirmation('approved', request.id)}
+                                                            disabled={processingId === request.id || (selectedFields[request.id] && selectedFields[request.id].length === 0)}
+                                                            className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                        >
+                                                            <Check className="h-3.5 w-3.5" />
+                                                            {selectedFields[request.id]?.length === Object.keys(request.requested_changes).length || !selectedFields[request.id]
+                                                                ? 'Approve All Changes'
+                                                                : `Approve (${selectedFields[request.id]?.length}) Selected`}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                                                    <div className="flex items-center gap-1.5 mb-1 text-gray-500 font-bold uppercase text-[10px]">
+                                                        <Shield className="h-3.5 w-3.5" />
+                                                        Processed
+                                                    </div>
+                                                    <div className="text-gray-700">
+                                                        Status:{' '}
+                                                        <span className={`font-bold ${request.status === 'approved' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {request.status.toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    {request.admin_feedback && (
+                                                        <p className="mt-1.5 text-gray-600 italic bg-white p-2 rounded-lg border border-gray-200 text-xs">
+                                                            &ldquo;{request.admin_feedback}&rdquo;
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
-            <div className="h-8" />
+            <div className="h-6" />
         </div>
     );
 }

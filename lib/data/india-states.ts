@@ -136,7 +136,8 @@ export const stateCities: Record<string, string[]> = {
     'Wardha', 'Udgir', 'Aurangabad', 'Malegaon', 'Pandharpur', 'Shrirampur', 'Parli', 'Pusad', 'Pimpri-Chinchwad', 'Bhiwandi',
     'Ulhasnagar', 'Kalyan', 'Dombivli', 'Vasai', 'Virar', 'Mira-Bhayandar', 'Navi Mumbai', 'Badlapur', 'Ambernath', 'Panvel',
     'Khopoli', 'Karjat', 'Matheran', 'Alibaug', 'Pen', 'Roha', 'Murud', 'Shrivardhan', 'Dapoli', 'Ratnagiri',
-    'Chiplun', 'Khed', 'Mahad', 'Poladpur', 'Mangaon', 'Roha', 'Alibag', 'Murud', 'Shrivardhan', 'Dapoli'
+    'Chiplun', 'Khed', 'Mahad', 'Poladpur', 'Mangaon', 'Roha', 'Alibag', 'Murud', 'Shrivardhan', 'Dapoli',
+    'Ghulewadi', 'Sangamner', 'Shrigonda', 'Rahuri', 'Kopargaon', 'Shevgaon', 'Parner', 'Newasa', 'Akole'
   ],
   'Manipur': [
     'Imphal', 'Thoubal', 'Kakching', 'Bishnupur', 'Churachandpur', 'Ukhrul', 'Senapati', 'Tamenglong'
