@@ -795,6 +795,10 @@ export interface CampAuditTransaction {
   participant_count: number;
   gross_amount?: number;
   total_amount: number;
+  net_camp_fee?: number;
+  gross_paid_amount?: number;
+  gateway_surcharge?: number;
+  is_test_mode?: boolean;
   total_meal_cost: number;
   total_acc_cost: number;
   total_late_fee?: number;

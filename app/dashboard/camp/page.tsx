@@ -2094,7 +2094,7 @@ function CampDashboardContent() {
 
   const grandTotal = Math.max(0, grandTotalBeforeCoupon - discountAmount);
 
-  const surchargePercent = selectedCamp?.payment_config?.surcharge_percent ?? 2.0;
+  const surchargePercent = Number(selectedCamp?.payment_config?.surcharge_percent ?? 0);
   const surchargeAmount = grandTotal > 0
     ? Math.round((grandTotal * surchargePercent) / 100)
     : 0;
@@ -3708,11 +3708,30 @@ function CampDashboardContent() {
                         {/* Bottom Actions: Digital Pass View, Amount & Refund View */}
                         <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <span className="text-gray-400 block text-[8px] sm:text-[9px] uppercase font-bold tracking-wider leading-none">Paid Amount</span>
+                            <span className="text-gray-400 block text-[8px] sm:text-[9px] uppercase font-bold tracking-wider leading-none">
+                              {reg.payment_method === 'RAZORPAY' ? 'Camp Fee' : 'Paid Amount'}
+                            </span>
                             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                               <span className={`font-black ${theme.paidAccent} text-xs sm:text-sm leading-tight`}>
                                 ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
                               </span>
+                              {reg.payment_method === 'RAZORPAY' && Number(reg.total_cost || 0) > 0 && (() => {
+                                const surchargePct = Number(
+                                  reg.camp_payment_config?.surcharge_percent ??
+                                  selectedCamp?.payment_config?.surcharge_percent ??
+                                  0
+                                );
+                                const gatewaySurcharge = Math.round(Number(reg.total_cost || 0) * (surchargePct / 100));
+                                const totalGrossPaid = Number(reg.total_cost || 0) + gatewaySurcharge;
+                                return gatewaySurcharge > 0 ? (
+                                  <span
+                                    className="text-[8.5px] sm:text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap"
+                                    title={`Devotee paid ₹${totalGrossPaid} at checkout (incl. ₹${gatewaySurcharge} gateway processing fee)`}
+                                  >
+                                    Paid: ₹{totalGrossPaid.toLocaleString('en-IN')} (incl. fee)
+                                  </span>
+                                ) : null;
+                              })()}
                               {Number(reg.late_fee || 0) > 0 && (
                                 <span className="text-[8px] sm:text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap" title={`Includes ₹${reg.late_fee} Late Fee (Non-refundable)`}>
                                   ₹{reg.late_fee} Late Fee

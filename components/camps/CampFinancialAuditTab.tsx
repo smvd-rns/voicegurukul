@@ -203,6 +203,8 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
     let totalGross = 0;
     let netCashReceived = 0;
     let rzpInflow = 0;
+    let rzpGrossPaid = 0;
+    let rzpSurchargeTotal = 0;
     let transfersInflow = 0;
     let missingBookingsCount = 0;
     let missingBookingsAmount = 0;
@@ -223,6 +225,10 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
         netCashReceived += amt;
         if (t.payment_method === 'RAZORPAY') {
           rzpInflow += amt;
+          const gross = Number(t.gross_paid_amount || (amt + (t.gateway_surcharge || 0)));
+          const surcharge = Number(t.gateway_surcharge || Math.max(0, gross - amt));
+          rzpGrossPaid += gross;
+          rzpSurchargeTotal += surcharge;
         } else if (t.payment_method === 'INTER_TEMPLE_TRANSFER' || t.payment_method === 'IDT') {
           transfersInflow += amt;
         }
@@ -233,6 +239,8 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
       totalGross,
       netCashReceived,
       rzpInflow,
+      rzpGrossPaid,
+      rzpSurchargeTotal,
       transfersInflow,
       missingBookingsCount,
       missingBookingsAmount,
@@ -461,16 +469,22 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
         </div>
 
         <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center gap-1">
-            <CreditCard className="w-3 h-3 text-emerald-600" />
-            <span>Razorpay Inflow</span>
+          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <CreditCard className="w-3 h-3 text-emerald-600" />
+              <span>Razorpay Online</span>
+            </span>
+            <span className="text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+              Gateway
+            </span>
           </span>
           <div className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">
             ₹{metrics.rzpInflow.toLocaleString('en-IN')}
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">
-            Online Gateway
-          </span>
+          <div className="text-[9.5px] sm:text-[10px] text-slate-500 font-semibold mt-0.5 space-y-0.5 leading-tight">
+            <div>Paid: <strong className="text-indigo-950 font-bold">₹{metrics.rzpGrossPaid.toLocaleString('en-IN')}</strong></div>
+            <div className="text-emerald-700 font-bold">Camp: ₹{metrics.rzpInflow.toLocaleString('en-IN')} &bull; Fee: +₹{metrics.rzpSurchargeTotal.toLocaleString('en-IN')}</div>
+          </div>
         </div>
 
         <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
@@ -643,12 +657,23 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
                   {/* Right: Amount & Action Buttons */}
                   <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
                     <div className="text-right">
-                      <div className="text-base sm:text-lg font-black text-slate-900">
-                        ₹{Number(txn.total_amount || 0).toLocaleString('en-IN')}
+                      <div className="flex items-baseline justify-end gap-1">
+                        <span className="text-base sm:text-lg font-black text-slate-900">
+                          ₹{Number(txn.total_amount || 0).toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-bold">
+                          Camp Fee
+                        </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 block">
-                        {isMissingBooking ? 'Razorpay Received' : 'Net Received'}
-                      </span>
+                      {txn.payment_method === 'RAZORPAY' && Boolean((txn.gross_paid_amount || 0) > Number(txn.total_amount || 0) || txn.gateway_surcharge) ? (
+                        <div className="text-[10px] text-indigo-700 font-extrabold mt-0.5" title="Total amount charged at Razorpay gateway">
+                          Paid: ₹{(txn.gross_paid_amount || (Number(txn.total_amount) + (txn.gateway_surcharge || 0))).toLocaleString('en-IN')} <span className="font-medium text-slate-500">(incl. ₹{txn.gateway_surcharge ?? Math.max(0, (txn.gross_paid_amount || 0) - Number(txn.total_amount))} fee)</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 block">
+                          {isMissingBooking ? 'Razorpay Received' : 'Net Received'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Action Buttons */}
@@ -882,12 +907,14 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
                   ? Math.round((campFee * surchargePercent) / 100)
                   : 0;
                 const grandTotalWithGateway = campFee + gatewayFee;
-                const paidAmount = Number(selectedTxn.total_amount);
+                const paidGross = Number(selectedTxn.gross_paid_amount || selectedTxn.total_amount);
+                const paidNet = Number(selectedTxn.net_camp_fee || selectedTxn.total_amount);
+                const paidAmount = paidGross;
 
-                const isExactMatchWithGateway = grandTotalWithGateway === paidAmount;
-                const isExactMatchDirect = campFee === paidAmount;
+                const isExactMatchWithGateway = grandTotalWithGateway === paidGross || grandTotalWithGateway === paidNet;
+                const isExactMatchDirect = campFee === paidNet || campFee === paidGross;
                 const isMatch = isExactMatchWithGateway || isExactMatchDirect;
-                const effectiveDiff = isMatch ? 0 : Math.abs(grandTotalWithGateway - paidAmount);
+                const effectiveDiff = isMatch ? 0 : Math.min(Math.abs(grandTotalWithGateway - paidGross), Math.abs(campFee - paidNet));
 
                 return (
                   <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-200/90 space-y-3">

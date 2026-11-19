@@ -629,6 +629,8 @@ export default function AdminCampsPage() {
     let totalCollected = 0;
     let totalParticipants = 0;
     let pendingVerificationCount = 0;
+    let totalRzpGrossPaid = 0;
+    let totalRzpSurcharge = 0;
 
     for (const t of filteredTransactions) {
       const gross = Number((t as any).gross_amount || (Number(t.total_amount || 0) + Number(t.total_discount || 0)));
@@ -645,6 +647,12 @@ export default function AdminCampsPage() {
         totalDiscounts += disc;
         if (disc > 0 || t.coupon_code) {
           totalCouponsCount++;
+        }
+        if (t.payment_method === 'RAZORPAY') {
+          const grossPaid = Number(t.gross_paid_amount || (amt + (t.gateway_surcharge || 0)));
+          const surcharge = Number(t.gateway_surcharge || Math.max(0, grossPaid - amt));
+          totalRzpGrossPaid += grossPaid;
+          totalRzpSurcharge += surcharge;
         }
       }
 
@@ -673,6 +681,8 @@ export default function AdminCampsPage() {
       total_discounts: totalDiscounts,
       total_coupons_count: totalCouponsCount,
       total_collected: totalCollected,
+      total_rzp_gross_paid: totalRzpGrossPaid,
+      total_rzp_surcharge: totalRzpSurcharge,
       total_refunded: totalRefunded,
       net_revenue: Math.max(0, totalCollected - totalRefunded),
       total_transactions: filteredTransactions.length,
@@ -1438,7 +1448,7 @@ export default function AdminCampsPage() {
       },
       payment_config: {
         enable_razorpay: camp.payment_config?.enable_razorpay ?? true,
-        surcharge_percent: camp.payment_config?.surcharge_percent ?? 2.0,
+        surcharge_percent: camp.payment_config?.surcharge_percent ?? 0,
         enable_idt: camp.payment_config?.enable_idt ?? true,
         allow_student_idt: camp.payment_config?.allow_student_idt ?? false,
         idt_passcodes_str: passcodes.join(', '),
@@ -2948,7 +2958,13 @@ export default function AdminCampsPage() {
                         <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-800 mt-0.5">
                           ₹{dynamicStats.total_collected.toLocaleString('en-IN')}
                         </div>
-                        <span className="text-[9px] sm:text-[10px] text-emerald-700 block truncate mt-0.5">Bank &amp; Gateway Inflow</span>
+                        {dynamicStats.total_rzp_surcharge > 0 ? (
+                          <span className="text-[8.5px] sm:text-[9.5px] text-slate-600 font-semibold block truncate mt-0.5" title={`Paid by Devotees at Gateway: ₹${(dynamicStats.total_collected + dynamicStats.total_rzp_surcharge).toLocaleString('en-IN')} (incl. ₹${dynamicStats.total_rzp_surcharge.toLocaleString('en-IN')} gateway fees)`}>
+                            Paid: ₹{(dynamicStats.total_collected + dynamicStats.total_rzp_surcharge).toLocaleString('en-IN')} (incl. ₹{dynamicStats.total_rzp_surcharge.toLocaleString('en-IN')} fee)
+                          </span>
+                        ) : (
+                          <span className="text-[9px] sm:text-[10px] text-emerald-700 block truncate mt-0.5">Bank &amp; Gateway Inflow</span>
+                        )}
                       </div>
 
                       {/* 4. Total Cash Refunded */}
@@ -3436,14 +3452,21 @@ export default function AdminCampsPage() {
                                     <td className="py-2 px-2.5">
                                       <div className="flex items-center gap-1.5">
                                         {t.payment_method === 'RAZORPAY' && (
-                                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${isMissingBooking
-                                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                              : isFailed
-                                                ? 'bg-slate-100 text-slate-600 border-slate-300'
-                                                : 'bg-blue-50 text-blue-700 border-blue-200'
-                                            }`}>
-                                            RAZORPAY
-                                          </span>
+                                          <div className="flex items-center gap-1">
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${isMissingBooking
+                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                : isFailed
+                                                  ? 'bg-slate-100 text-slate-600 border-slate-300'
+                                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                                              }`}>
+                                              RAZORPAY
+                                            </span>
+                                            {t.is_test_mode && (
+                                              <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-300" title="Sandbox test payment via rzp_test keys">
+                                                TEST
+                                              </span>
+                                            )}
+                                          </div>
                                         )}
                                         {t.payment_method === 'IDT' && (
                                           <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
@@ -3480,12 +3503,20 @@ export default function AdminCampsPage() {
                                         <span className={`font-extrabold text-xs sm:text-sm ${isMissingBooking ? 'text-rose-700' : 'text-slate-900'}`}>
                                           ₹{t.total_amount.toLocaleString('en-IN')}
                                         </span>
+                                        <span className="text-[10px] text-slate-500 font-medium">
+                                          Camp Fee
+                                        </span>
                                         {t.total_discount > 0 && (
                                           <span className="text-[10px] line-through text-slate-400 font-semibold" title="Original Billed Fee before discount">
                                             ₹{((t.gross_amount || (t.total_amount + t.total_discount))).toLocaleString('en-IN')}
                                           </span>
                                         )}
                                       </div>
+                                      {t.payment_method === 'RAZORPAY' && Boolean(t.gateway_surcharge && t.gateway_surcharge > 0) && (
+                                        <div className="text-[10px] text-indigo-700 font-bold" title={`Paid at checkout: ₹${t.gross_paid_amount} (including ₹${t.gateway_surcharge} processing fee)`}>
+                                          Paid: ₹{t.gross_paid_amount?.toLocaleString('en-IN')} <span className="text-[9px] font-normal text-slate-400">(incl. ₹{t.gateway_surcharge} fee)</span>
+                                        </div>
+                                      )}
                                       <div className="text-[9.5px] text-slate-400">
                                         Meals: ₹{t.total_meal_cost} | Stay: ₹{t.total_acc_cost}
                                         {Boolean(t.total_late_fee) && ` | Late: ₹${t.total_late_fee}`}
@@ -4057,10 +4088,16 @@ export default function AdminCampsPage() {
                 {/* Financial Summary & Itemized Division */}
                 <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200/80 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Net Cash Paid (₹)</span>
-                    <span className="text-xs font-black text-slate-500">
-                      Billed Gross: ₹{((selectedTxn.gross_amount || (selectedTxn.total_amount + selectedTxn.total_discount))).toLocaleString('en-IN')}
-                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Camp Fee (Net)</span>
+                    {selectedTxn.gross_paid_amount && selectedTxn.gross_paid_amount > selectedTxn.total_amount ? (
+                      <span className="text-[10.5px] font-black text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md" title="Total amount charged at Razorpay gateway">
+                        Paid: ₹{selectedTxn.gross_paid_amount.toLocaleString('en-IN')} (incl. fee)
+                      </span>
+                    ) : (
+                      <span className="text-xs font-black text-slate-500">
+                        Billed Gross: ₹{((selectedTxn.gross_amount || (selectedTxn.total_amount + selectedTxn.total_discount))).toLocaleString('en-IN')}
+                      </span>
+                    )}
                   </div>
                   <div className="text-2xl font-black text-emerald-800">
                     ₹{selectedTxn.total_amount.toLocaleString('en-IN')}
@@ -4095,23 +4132,18 @@ export default function AdminCampsPage() {
                       </div>
                     )}
                     {selectedTxn.payment_method === 'RAZORPAY' && (() => {
-                      const campForTxn = camps.find(c => c.id === selectedTxn.camp_id);
-                      const surchargePct = Number(
-                        campForTxn?.payment_config?.surcharge_percent ??
-                        (campForTxn as any)?.online_payment_surcharge_percent ??
-                        2.0
-                      );
-                      const approxGatewayFee = Math.round(selectedTxn.total_amount - (selectedTxn.total_amount / (1 + surchargePct / 100)));
-                      const netCampValue = selectedTxn.total_amount - approxGatewayFee;
+                      const grossPaid = selectedTxn.gross_paid_amount || (selectedTxn.gateway_surcharge ? selectedTxn.total_amount + selectedTxn.gateway_surcharge : null);
+                      const surcharge = selectedTxn.gateway_surcharge ?? (grossPaid ? Math.max(0, grossPaid - selectedTxn.total_amount) : 0);
+                      if (!surcharge && !grossPaid) return null;
                       return (
                         <>
                           <div className="flex items-center justify-between text-blue-700 col-span-2">
-                            <span>Gateway Processing Fee ({surchargePct}%):</span>
-                            <strong className="text-blue-800">₹{approxGatewayFee}</strong>
+                            <span>Gateway Processing Fee:</span>
+                            <strong className="text-blue-800">+₹{surcharge}</strong>
                           </div>
-                          <div className="flex items-center justify-between text-slate-700 col-span-2 text-[11px] pt-1 border-t border-slate-200/60 font-semibold">
-                            <span>Net Camp Registration Value:</span>
-                            <strong className="text-emerald-700">₹{netCampValue}</strong>
+                          <div className="flex items-center justify-between text-indigo-900 col-span-2 text-[11px] pt-1 border-t border-slate-200/60 font-semibold">
+                            <span>Total Paid by Devotee (Gross):</span>
+                            <strong className="text-indigo-950 font-black">₹{(grossPaid || selectedTxn.total_amount).toLocaleString('en-IN')}</strong>
                           </div>
                         </>
                       );
@@ -4763,14 +4795,16 @@ export default function AdminCampsPage() {
               ? Math.round((campFee * surchargePercent) / 100)
               : 0;
             const grandTotalWithGateway = campFee + gatewayFee;
-            const paidAmount = Number(selectedTxn.total_amount);
+            const paidGross = Number(selectedTxn.gross_paid_amount || selectedTxn.total_amount);
+            const paidNet = Number(selectedTxn.net_camp_fee || selectedTxn.total_amount);
+            const paidAmount = paidGross;
 
             // An exact match can occur if paidAmount equals the grand total (with gateway fee)
             // or if it directly equals the campFee (in case no gateway fee was charged)
-            const isExactMatchWithGateway = grandTotalWithGateway === paidAmount;
-            const isExactMatchDirect = campFee === paidAmount;
+            const isExactMatchWithGateway = grandTotalWithGateway === paidGross || grandTotalWithGateway === paidNet;
+            const isExactMatchDirect = campFee === paidNet || campFee === paidGross;
             const isMatch = isExactMatchWithGateway || isExactMatchDirect;
-            const effectiveDiff = isMatch ? 0 : Math.abs(grandTotalWithGateway - paidAmount);
+            const effectiveDiff = isMatch ? 0 : Math.min(Math.abs(grandTotalWithGateway - paidGross), Math.abs(campFee - paidNet));
 
             return (
               <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-200/90 space-y-3">

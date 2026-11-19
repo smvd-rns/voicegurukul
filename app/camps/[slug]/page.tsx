@@ -1365,7 +1365,7 @@ export default function PublicCampRegistrationPage() {
     }
   }
   const finalTotalAmount = Math.max(0, baseTotalAmount - discountAmount);
-  const surchargePercent = camp?.payment_config?.surcharge_percent ?? 2.0;
+  const surchargePercent = Number(camp?.payment_config?.surcharge_percent ?? 0);
   const surchargeAmount = selectedMethod === 'RAZORPAY' && finalTotalAmount > 0 ? (finalTotalAmount * surchargePercent) / 100 : 0;
   const grandTotalWithSurcharge = Math.round(finalTotalAmount + surchargeAmount);
 

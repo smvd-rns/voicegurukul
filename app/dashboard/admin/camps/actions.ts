@@ -2028,6 +2028,7 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
     // Fetch recent live payments from Razorpay API
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const isTestGateway = Boolean(keyId && keyId.startsWith('rzp_test_'));
     let rzpPayments: any[] = [];
     if (keyId && keySecret) {
       try {
@@ -2042,12 +2043,20 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
     const handledPaymentIds = new Set<string>();
     const handledOrderIds = new Set<string>();
 
+    const ordersByOrderId = new Map<string, any>();
+    const ordersByPaymentId = new Map<string, any>();
+    for (const o of campOrders) {
+      if (o.order_id) ordersByOrderId.set(o.order_id, o);
+      if (o.payment_id) ordersByPaymentId.set(o.payment_id, o);
+    }
+
     // Index existing registrations & enrich with live gateway status if available
     for (const t of transactions) {
       t.booking_status = 'confirmed';
       if (t.payment_id) handledPaymentIds.add(t.payment_id);
       if (t.order_id) handledOrderIds.add(t.order_id);
 
+      const matchedOrder = (t.order_id && ordersByOrderId.get(t.order_id)) || (t.payment_id && ordersByPaymentId.get(t.payment_id));
       const matchedRzp = rzpPayments.find(p => p.id === t.payment_id || (t.order_id && p.order_id === t.order_id));
       if (matchedRzp) {
         t.gateway_status = matchedRzp.status;
@@ -2055,13 +2064,31 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
         t.gateway_tax = matchedRzp.tax ? matchedRzp.tax / 100 : undefined;
         t.gateway_method = matchedRzp.method;
       }
-    }
 
-    const ordersByOrderId = new Map<string, any>();
-    const ordersByPaymentId = new Map<string, any>();
-    for (const o of campOrders) {
-      if (o.order_id) ordersByOrderId.set(o.order_id, o);
-      if (o.payment_id) ordersByPaymentId.set(o.payment_id, o);
+      const campForTxn = allCamps.find((c: any) => c.id === t.camp_id);
+      const surchargePct = Number(
+        campForTxn?.payment_config?.surcharge_percent ??
+        (campForTxn as any)?.online_payment_surcharge_percent ??
+        0
+      );
+
+      // Net camp fee received by Gurukul/Camp
+      t.net_camp_fee = Number(t.total_amount || 0);
+
+      // Gross amount paid by devotee at checkout (including gateway surcharge)
+      if (t.payment_method === 'RAZORPAY') {
+        if (matchedOrder && Number(matchedOrder.amount) > 0) {
+          t.gross_paid_amount = Number(matchedOrder.amount);
+        } else if (matchedRzp && Number(matchedRzp.amount) > 0) {
+          t.gross_paid_amount = Number(matchedRzp.amount) / 100;
+        } else {
+          t.gross_paid_amount = surchargePct > 0 ? Math.round(t.net_camp_fee * (1 + surchargePct / 100)) : t.net_camp_fee;
+        }
+        t.gateway_surcharge = Math.max(0, t.gross_paid_amount - t.net_camp_fee);
+      } else {
+        t.gross_paid_amount = t.net_camp_fee;
+        t.gateway_surcharge = 0;
+      }
     }
 
     // Process Razorpay payments not yet in camp_registrations
@@ -2071,6 +2098,10 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
       }
 
       const orderDoc = (p.order_id && ordersByOrderId.get(p.order_id)) || ordersByPaymentId.get(p.id);
+      if (orderDoc && (orderDoc.status === 'reconciled_externally' || orderDoc.status === 'dismissed')) {
+        continue;
+      }
+
       const isCampDescription = (p.description || '').toLowerCase().includes('camp');
       const isCampNotes = (p.notes?.payment_for || '').toLowerCase().includes('camp') || (p.notes?.website || '').includes('camp');
       const isCampOrder = !!orderDoc || isCampDescription || isCampNotes;
@@ -2080,22 +2111,24 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
         continue;
       }
 
-      handledPaymentIds.add(p.id);
-      if (p.order_id) handledOrderIds.add(p.order_id);
-
       let matchedCamp = allCamps.find((c: any) =>
         c.id === orderDoc?.camp_id ||
         (p.notes?.camp_id && c.id === p.notes.camp_id) ||
         (p.notes?.payment_for && c.title.toLowerCase() === p.notes.payment_for.toLowerCase()) ||
         (p.description && p.description.toLowerCase().includes(c.title.toLowerCase()))
       );
-      if (!matchedCamp && allCamps.length > 0 && !targetCampId) {
-        matchedCamp = allCamps[0];
+
+      // Do NOT arbitrarily assign unmapped or old test camp payments to unrelated camps
+      if (!matchedCamp) {
+        continue;
       }
 
       if (targetCampId && matchedCamp?.id !== targetCampId) {
         continue;
       }
+
+      handledPaymentIds.add(p.id);
+      if (p.order_id) handledOrderIds.add(p.order_id);
 
       const campTitle = matchedCamp?.title || p.notes?.payment_for || 'Camp Retreat';
       const campSlug = matchedCamp?.slug || '';
@@ -2104,8 +2137,15 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
       const payerName = orderDoc?.payer_name || p.notes?.payer_name || (p.email ? p.email.split('@')[0] : 'Devotee');
       const payerContact = orderDoc?.payer_contact || p.contact || '';
       const payerEmail = orderDoc?.payer_email || p.email || '';
-      const paidAmount = Number(p.amount || 0) / 100;
+      const paidGrossAmount = Number(p.amount || 0) / 100;
       const paymentCreatedAt = new Date((p.created_at || Date.now() / 1000) * 1000).toISOString();
+      const surchargePct = Number(
+        matchedCamp?.payment_config?.surcharge_percent ??
+        (matchedCamp as any)?.online_payment_surcharge_percent ??
+        0
+      );
+      const calculatedNetCampFee = surchargePct > 0 ? Math.round(paidGrossAmount / (1 + surchargePct / 100)) : paidGrossAmount;
+      const gatewaySurcharge = Math.max(0, paidGrossAmount - calculatedNetCampFee);
 
       let bookingStatus: 'confirmed' | 'missing_booking' | 'failed' | 'abandoned' = 'missing_booking';
       let paymentStatus = 'missing_booking';
@@ -2151,8 +2191,12 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
         order_id: p.order_id,
         created_at: paymentCreatedAt,
         participant_count: Array.isArray(entriesPayload) ? entriesPayload.length : 0,
-        gross_amount: paidAmount,
-        total_amount: paidAmount,
+        gross_amount: paidGrossAmount,
+        total_amount: calculatedNetCampFee,
+        net_camp_fee: calculatedNetCampFee,
+        gross_paid_amount: paidGrossAmount,
+        gateway_surcharge: gatewaySurcharge,
+        is_test_mode: isTestGateway,
         total_meal_cost: 0,
         total_acc_cost: 0,
         total_late_fee: 0,
@@ -2187,20 +2231,34 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
       if (handledOrderIds.has(o.order_id) || (o.payment_id && handledPaymentIds.has(o.payment_id))) {
         continue;
       }
-
-      handledOrderIds.add(o.order_id);
-      if (o.payment_id) handledPaymentIds.add(o.payment_id);
+      if (o.status === 'reconciled_externally' || o.status === 'dismissed') {
+        continue;
+      }
 
       let matchedCamp = allCamps.find((c: any) => c.id === o.camp_id);
-      if (!matchedCamp && allCamps.length > 0 && !targetCampId) matchedCamp = allCamps[0];
+      if (!matchedCamp) {
+        continue;
+      }
       if (targetCampId && matchedCamp?.id !== targetCampId && o.camp_id !== targetCampId) {
         continue;
       }
+
+      handledOrderIds.add(o.order_id);
+      if (o.payment_id) handledPaymentIds.add(o.payment_id);
 
       const campTitle = matchedCamp?.title || 'Camp Retreat';
       const campSlug = matchedCamp?.slug || '';
       const campId = matchedCamp?.id || o.camp_id || '';
       const amount = Number(o.amount || 0);
+
+      const grossOrderAmount = Number(o.amount || 0);
+      const surchargePct = Number(
+        matchedCamp?.payment_config?.surcharge_percent ??
+        (matchedCamp as any)?.online_payment_surcharge_percent ??
+        0
+      );
+      const calculatedNetCampFee = surchargePct > 0 ? Math.round(grossOrderAmount / (1 + surchargePct / 100)) : grossOrderAmount;
+      const gatewaySurcharge = Math.max(0, grossOrderAmount - calculatedNetCampFee);
 
       const entriesPayload = o.entries_payload
         ? (typeof o.entries_payload === 'string' ? JSON.parse(o.entries_payload) : o.entries_payload)
@@ -2235,8 +2293,12 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
         order_id: o.order_id,
         created_at: new Date(o.created_at).toISOString(),
         participant_count: Array.isArray(entriesPayload) ? entriesPayload.length : 0,
-        gross_amount: amount,
-        total_amount: amount,
+        gross_amount: grossOrderAmount,
+        total_amount: calculatedNetCampFee,
+        net_camp_fee: calculatedNetCampFee,
+        gross_paid_amount: grossOrderAmount,
+        gateway_surcharge: gatewaySurcharge,
+        is_test_mode: isTestGateway,
         total_meal_cost: 0,
         total_acc_cost: 0,
         total_late_fee: 0,
@@ -2338,6 +2400,9 @@ export async function getAllCampTransactionsAction(targetCampId?: string) {
       // Numerical conversions
       t.gross_amount = Number((t as any).gross_amount || t.total_amount || 0);
       t.total_amount = Number(t.total_amount || 0);
+      t.net_camp_fee = Number(t.net_camp_fee || t.total_amount || 0);
+      t.gross_paid_amount = Number(t.gross_paid_amount || t.gross_amount || t.total_amount || 0);
+      t.gateway_surcharge = Number(t.gateway_surcharge || Math.max(0, t.gross_paid_amount - t.net_camp_fee));
       t.total_meal_cost = Number(t.total_meal_cost || 0);
       t.total_acc_cost = Number(t.total_acc_cost || 0);
       t.total_late_fee = Number((t as any).total_late_fee || 0);

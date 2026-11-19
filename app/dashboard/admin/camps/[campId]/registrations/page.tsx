@@ -1243,6 +1243,19 @@ export default function CampRegistrationsAdminPage() {
 
       batch.refundAmount = batchRefundAmt;
       batch.refundStatus = batchRefundStatus;
+
+      const surchargePct = Number(
+        camp?.payment_config?.surcharge_percent ??
+        (camp as any)?.online_payment_surcharge_percent ??
+        0
+      );
+      if (batch.isRazorpay && batch.totalAmount > 0) {
+        batch.gatewaySurcharge = surchargePct > 0 ? Math.round(batch.totalAmount * (surchargePct / 100)) : 0;
+        batch.grossPaidAmount = batch.totalAmount + batch.gatewaySurcharge;
+      } else {
+        batch.grossPaidAmount = batch.totalAmount;
+        batch.gatewaySurcharge = 0;
+      }
     });
 
     return Array.from(map.values()).sort((a, b) => {
@@ -1310,6 +1323,16 @@ export default function CampRegistrationsAdminPage() {
 
   const razorpayBatchesCount = useMemo(() => filteredBatches.filter(b => b.isRazorpay).length, [filteredBatches]);
   const razorpayAmount = useMemo(() => filteredBatches.filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded')).reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
+  const razorpayGrossPaid = useMemo(() => {
+    return filteredBatches
+      .filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded'))
+      .reduce((s, b) => s + Number(b.grossPaidAmount || b.totalAmount), 0);
+  }, [filteredBatches]);
+  const razorpaySurchargeTotal = useMemo(() => {
+    return filteredBatches
+      .filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded'))
+      .reduce((s, b) => s + Number(b.gatewaySurcharge || 0), 0);
+  }, [filteredBatches]);
   const ittBatchesCount = useMemo(() => filteredBatches.filter(b => b.isItt).length, [filteredBatches]);
   const ittAmount = useMemo(() => filteredBatches.filter(b => b.isItt && (b.status === 'completed' || b.status === 'refunded')).reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
   const idtBatchesCount = useMemo(() => filteredBatches.filter(b => b.isIdt).length, [filteredBatches]);
@@ -2355,6 +2378,20 @@ export default function CampRegistrationsAdminPage() {
                               <span className="text-[9.5px] text-teal-700 font-bold flex items-center gap-1 mt-0.5">
                                 <CheckCircle2 className="w-2.5 h-2.5 text-teal-600" /> Full (-₹{discount})
                               </span>
+                              {reg.payment_method === 'RAZORPAY' && netReceived > 0 && (() => {
+                                const surchargePct = Number(
+                                  camp?.payment_config?.surcharge_percent ??
+                                  (camp as any)?.online_payment_surcharge_percent ??
+                                  0
+                                );
+                                const gatewayFee = Math.round(netReceived * (surchargePct / 100));
+                                const totalPaid = netReceived + gatewayFee;
+                                return gatewayFee > 0 ? (
+                                  <span className="text-[8.5px] text-indigo-700 font-extrabold mt-0.5" title={`Gross paid at Razorpay: ₹${totalPaid} (incl. ₹${gatewayFee} gateway fee)`}>
+                                    Paid: ₹{totalPaid.toLocaleString('en-IN')} (incl. fee)
+                                  </span>
+                                ) : null;
+                              })()}
                             </div>
                           ) : (
                             <div className="inline-flex flex-col items-end px-2.5 py-1 rounded-xl bg-emerald-50/90 border border-emerald-300/90 shadow-2xs">
@@ -2364,6 +2401,20 @@ export default function CampRegistrationsAdminPage() {
                               <span className="text-[9.5px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
                                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Received in Full
                               </span>
+                              {reg.payment_method === 'RAZORPAY' && netReceived > 0 && (() => {
+                                const surchargePct = Number(
+                                  camp?.payment_config?.surcharge_percent ??
+                                  (camp as any)?.online_payment_surcharge_percent ??
+                                  0
+                                );
+                                const gatewayFee = Math.round(netReceived * (surchargePct / 100));
+                                const totalPaid = netReceived + gatewayFee;
+                                return gatewayFee > 0 ? (
+                                  <span className="text-[8.5px] text-indigo-700 font-extrabold mt-0.5" title={`Gross paid at Razorpay: ₹${totalPaid} (incl. ₹${gatewayFee} gateway processing fee)`}>
+                                    Paid: ₹{totalPaid.toLocaleString('en-IN')} (incl. fee)
+                                  </span>
+                                ) : null;
+                              })()}
                             </div>
                           )}
                         </td>
@@ -3167,18 +3218,19 @@ export default function CampRegistrationsAdminPage() {
             </span>
           </div>
 
-          {/* Card 4: Razorpay Inflow */}
+          {/* Card 4: Razorpay Gateway Breakdown (Gross Paid, Camp Retained, Gateway Fee) */}
           <div className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
             <span className="text-[9.5px] sm:text-[10.5px] font-bold text-emerald-800 uppercase tracking-wider flex items-center justify-between">
-              <span>Razorpay Gateway</span>
+              <span>Razorpay Online</span>
               <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
             </span>
-            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-600 mt-0.5">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-700 mt-0.5">
               ₹{razorpayAmount.toLocaleString('en-IN')}
             </div>
-            <span className="text-[9px] sm:text-[10px] text-emerald-800 font-semibold block truncate mt-0.5">
-              {razorpayBatchesCount} Online Transactions
-            </span>
+            <div className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5 space-y-0.5 leading-tight">
+              <div>Paid: <strong className="text-indigo-950 font-bold">₹{razorpayGrossPaid.toLocaleString('en-IN')}</strong></div>
+              <div className="text-emerald-700 font-bold">Camp: ₹{razorpayAmount.toLocaleString('en-IN')} &bull; Fee: +₹{razorpaySurchargeTotal.toLocaleString('en-IN')}</div>
+            </div>
           </div>
 
           {/* Card 5: ITT & IDT Transfers */}
@@ -3557,19 +3609,29 @@ export default function CampRegistrationsAdminPage() {
 
                           {/* Amount Paid & Itemized Division */}
                           <td className="py-2 px-2.5 whitespace-nowrap">
-                            <span className="text-sm font-black text-slate-900 block">
-                              ₹{b.totalAmount.toLocaleString('en-IN')}
-                            </span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-sm font-black text-slate-900 block">
+                                ₹{b.totalAmount.toLocaleString('en-IN')}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-bold">
+                                Camp Fee
+                              </span>
+                            </div>
+                            {b.isRazorpay && Boolean((b.gatewaySurcharge || 0) > 0) && (
+                              <div className="text-[10px] text-indigo-700 font-extrabold mt-0.5" title={`Total paid at Razorpay checkout: ₹${b.grossPaidAmount?.toLocaleString('en-IN')} (incl. ₹${b.gatewaySurcharge} gateway processing fee)`}>
+                                Paid: ₹{b.grossPaidAmount?.toLocaleString('en-IN')} <span className="font-medium text-slate-500">(incl. ₹{b.gatewaySurcharge} fee)</span>
+                              </div>
+                            )}
                             {b.refundAmount > 0 ? (
-                              <span className="text-[9.5px] text-purple-700 font-bold block">
+                              <span className="text-[9.5px] text-purple-700 font-bold block mt-0.5">
                                 Refunded: ₹{b.refundAmount.toLocaleString('en-IN')}
                               </span>
                             ) : b.cancelledAttendeesCount > 0 ? (
-                              <span className="text-[9.5px] text-rose-600 font-bold block">
+                              <span className="text-[9.5px] text-rose-600 font-bold block mt-0.5">
                                 {b.cancelledAttendeesCount} cancelled
                               </span>
                             ) : (
-                              <span className="text-[10px] text-slate-400 font-medium block">
+                              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
                                 ₹{Math.round(b.totalAmount / (b.totalRegisteredCount || b.attendeesCount || 1)).toLocaleString('en-IN')} / devotee
                               </span>
                             )}
