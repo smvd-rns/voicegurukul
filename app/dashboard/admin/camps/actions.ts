@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import Razorpay from 'razorpay';
-import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
+import { sendCampDevoteeWelcomeAccountEmail, dispatchEmail } from '@/lib/utils/email';
 
 import { query } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
@@ -5751,5 +5751,415 @@ export async function approveCampWaitingListRegistrationAction(registrationId: s
   } catch (error: any) {
     console.error('approveCampWaitingListRegistrationAction error:', error);
     return { success: false, error: error.message || 'Failed to approve waiting list registration.' };
+  }
+}
+
+/**
+ * Super Admin: Search devotees across system to auto-fill details when transferring a pass
+ */
+export async function superAdminSearchDevoteesAction(searchTerm: string) {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin access required.' };
+    }
+
+    const clean = (searchTerm || '').trim();
+    if (!clean || clean.length < 2) {
+      return { success: true, devotees: [] };
+    }
+
+    const sql = `
+      SELECT id, name, email, phone, gender, current_center, center, other_center, current_temple, parent_temple, counselor_name
+      FROM users
+      WHERE (
+        name ILIKE $1 
+        OR phone ILIKE $1 
+        OR email ILIKE $1
+      )
+      ORDER BY name ASC
+      LIMIT 15
+    `;
+
+    const res = await query(sql, [`%${clean}%`]);
+    return { success: true, devotees: res.rows };
+  } catch (error: any) {
+    console.error('superAdminSearchDevoteesAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Get list of all available camps to support transferring a pass across camps
+ */
+export async function superAdminGetAvailableCampsAction() {
+  try {
+    const { isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Super Admin access required.' };
+    }
+
+    const res = await query(
+      `SELECT id, title, slug, status, start_date, end_date, tracks, participant_types, meal_pricing, payment_config, venue, is_archived
+       FROM camps
+       ORDER BY start_date DESC, created_at DESC`
+    );
+
+    return { success: true, camps: res.rows as Camp[] };
+  } catch (error: any) {
+    console.error('superAdminGetAvailableCampsAction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Super Admin: Transfer a Camp Pass from one devotee to another, with option to modify the camp.
+ * - Carries over full payment, meals, and accommodations to the new recipient.
+ * - Supports transferring to the same camp or switching to a different camp.
+ * - Provisions/links devotee account and dispatches digital pass confirmation email.
+ * - Strictly restricted to Super Admin.
+ */
+export async function superAdminTransferCampPassAction(params: {
+  registrationId: string;
+  targetCampId?: string;
+  newParticipant: {
+    participant_name: string;
+    whatsapp: string;
+    email: string;
+    gender?: string;
+    age?: number | string | null;
+    married_since_year?: number | string | null;
+    voice_name?: string;
+    parent_temple?: string;
+    counselor_name?: string;
+    poc_name?: string;
+    poc_contact?: string;
+    camp_track?: string;
+    participant_type?: string;
+    first_meal_date?: string;
+    first_meal_type?: string;
+    last_meal_date?: string;
+    last_meal_type?: string;
+    dinner_type?: string;
+    accommodation?: string;
+  };
+  overrideFinancials?: {
+    total_cost?: number;
+    meal_cost?: number;
+    acc_cost?: number;
+    discount_amount?: number;
+  };
+  transferReason?: string;
+  sendNewPassEmail?: boolean;
+  notifyOriginalDevotee?: boolean;
+}) {
+  try {
+    const { user, isSuperAdmin } = await verifyAdminAuth();
+    if (!isSuperAdmin) {
+      return { success: false, error: 'Forbidden: Only Super Admin can transfer camp passes.' };
+    }
+
+    const { registrationId, targetCampId, newParticipant, overrideFinancials, transferReason } = params;
+
+    if (!registrationId) {
+      return { success: false, error: 'Registration ID is required.' };
+    }
+    if (!newParticipant?.participant_name?.trim()) {
+      return { success: false, error: 'New participant devotee name is required.' };
+    }
+    if (!newParticipant?.whatsapp?.trim()) {
+      return { success: false, error: 'New participant WhatsApp/Phone number is required.' };
+    }
+    if (!newParticipant?.email?.trim()) {
+      return { success: false, error: 'New participant email address is required.' };
+    }
+
+    // 1. Fetch current registration record and its current camp
+    const regRes = await query(
+      `SELECT r.*, c.title AS camp_title, c.slug AS camp_slug, c.venue AS camp_venue, c.start_date AS camp_start_date, c.end_date AS camp_end_date
+       FROM camp_registrations r
+       JOIN camps c ON c.id = r.camp_id
+       WHERE r.id = $1`,
+      [registrationId]
+    );
+
+    if (regRes.rows.length === 0) {
+      return { success: false, error: 'Registration record not found.' };
+    }
+
+    const current = regRes.rows[0];
+    const oldDevotee = {
+      name: current.participant_name,
+      email: current.email,
+      phone: current.whatsapp,
+      campTitle: current.camp_title,
+      campId: current.camp_id
+    };
+
+    // 2. Resolve target camp (same camp or modified camp)
+    let finalCampId = current.camp_id;
+    let targetCamp = {
+      id: current.camp_id,
+      title: current.camp_title,
+      slug: current.camp_slug,
+      venue: current.camp_venue,
+      start_date: current.camp_start_date,
+      end_date: current.camp_end_date
+    };
+
+    if (targetCampId && targetCampId !== current.camp_id) {
+      const campCheck = await query('SELECT id, title, slug, venue, start_date, end_date FROM camps WHERE id = $1', [targetCampId]);
+      if (campCheck.rows.length === 0) {
+        return { success: false, error: 'Target camp not found.' };
+      }
+      finalCampId = targetCampId;
+      targetCamp = campCheck.rows[0];
+    }
+
+    // 3. Ensure audit columns exist in camp_registrations
+    await query(`
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transferred_from_name TEXT;
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transferred_from_contact TEXT;
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transferred_from_camp_id UUID;
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transferred_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transferred_by TEXT;
+      ALTER TABLE camp_registrations ADD COLUMN IF NOT EXISTS transfer_reason TEXT;
+    `);
+
+    // 4. Determine final values
+    const cleanName = newParticipant.participant_name.trim();
+    const cleanWhatsapp = newParticipant.whatsapp.trim();
+    const cleanEmail = newParticipant.email.trim().toLowerCase();
+    const cleanGender = newParticipant.gender || current.gender || 'Male';
+    const cleanAge = newParticipant.age ? Number(newParticipant.age) : current.age || null;
+    const cleanMarriedYear = newParticipant.married_since_year ? Number(newParticipant.married_since_year) : current.married_since_year || null;
+    const cleanVoiceName = newParticipant.voice_name !== undefined ? newParticipant.voice_name.trim() : current.voice_name || '';
+    const cleanParentTemple = newParticipant.parent_temple !== undefined ? newParticipant.parent_temple.trim() : current.parent_temple || '';
+    const cleanCounselor = newParticipant.counselor_name !== undefined ? newParticipant.counselor_name.trim() : current.counselor_name || '';
+    const cleanPocName = newParticipant.poc_name !== undefined ? newParticipant.poc_name.trim() : (current.poc_name || cleanName);
+    const cleanPocContact = newParticipant.poc_contact !== undefined ? newParticipant.poc_contact.trim() : (current.poc_contact || cleanWhatsapp);
+    const cleanTrack = newParticipant.camp_track !== undefined ? newParticipant.camp_track.trim() : current.camp_track;
+    const cleanParticipantType = newParticipant.participant_type !== undefined ? newParticipant.participant_type.trim() : current.participant_type;
+    const cleanFirstMealDate = newParticipant.first_meal_date || current.first_meal_date;
+    const cleanFirstMealType = newParticipant.first_meal_type || current.first_meal_type;
+    const cleanLastMealDate = newParticipant.last_meal_date || current.last_meal_date;
+    const cleanLastMealType = newParticipant.last_meal_type || current.last_meal_type;
+    const cleanDinnerType = newParticipant.dinner_type || current.dinner_type || 'Dinner Meal';
+    const cleanAccommodation = newParticipant.accommodation || current.accommodation || 'No';
+
+    // Financials: Carry over full payment by default, or apply override
+    const finalTotalCost = overrideFinancials?.total_cost !== undefined ? Number(overrideFinancials.total_cost) : Number(current.total_cost);
+    const finalMealCost = overrideFinancials?.meal_cost !== undefined ? Number(overrideFinancials.meal_cost) : Number(current.meal_cost);
+    const finalAccCost = overrideFinancials?.acc_cost !== undefined ? Number(overrideFinancials.acc_cost) : Number(current.acc_cost);
+    const finalDiscount = overrideFinancials?.discount_amount !== undefined ? Number(overrideFinancials.discount_amount) : Number(current.discount_amount || 0);
+
+    const adminIdentifier = (user as any)?.email || user?.id || 'Super Admin';
+    const cleanTransferReason = (transferReason || 'Pass transferred to another devotee by Super Admin').trim();
+
+    // 5. Update registration record
+    const updateSql = `
+      UPDATE camp_registrations
+      SET
+        camp_id = $1,
+        participant_name = $2,
+        whatsapp = $3,
+        email = $4,
+        gender = $5,
+        age = $6,
+        married_since_year = $7,
+        voice_name = $8,
+        current_center = $8,
+        parent_temple = $9,
+        current_temple = $9,
+        counselor_name = $10,
+        poc_name = $11,
+        poc_contact = $12,
+        camp_track = $13,
+        participant_type = $14,
+        first_meal_date = $15,
+        first_meal_type = $16,
+        last_meal_date = $17,
+        last_meal_type = $18,
+        dinner_type = $19,
+        accommodation = $20,
+        total_cost = $21,
+        meal_cost = $22,
+        acc_cost = $23,
+        discount_amount = $24,
+        transferred_from_name = $25,
+        transferred_from_contact = $26,
+        transferred_from_camp_id = $27,
+        transferred_at = NOW(),
+        transferred_by = $28,
+        transfer_reason = $29,
+        checked_in = false,
+        checked_in_at = null,
+        updated_at = NOW()
+      WHERE id = $30
+      RETURNING *
+    `;
+
+    const updateParams = [
+      finalCampId,
+      cleanName,
+      cleanWhatsapp,
+      cleanEmail,
+      cleanGender,
+      cleanAge,
+      cleanMarriedYear,
+      cleanVoiceName,
+      cleanParentTemple,
+      cleanCounselor,
+      cleanPocName,
+      cleanPocContact,
+      cleanTrack,
+      cleanParticipantType,
+      cleanFirstMealDate,
+      cleanFirstMealType,
+      cleanLastMealDate,
+      cleanLastMealType,
+      cleanDinnerType,
+      cleanAccommodation,
+      finalTotalCost,
+      finalMealCost,
+      finalAccCost,
+      finalDiscount,
+      oldDevotee.name,
+      oldDevotee.phone,
+      oldDevotee.campId,
+      adminIdentifier,
+      cleanTransferReason,
+      registrationId
+    ];
+
+    const updateRes = await query(updateSql, updateParams);
+    const updatedRecord = updateRes.rows[0];
+
+    // 6. Devotee account creation/linking for new participant
+    let isNewAccount = false;
+    let tempPlainPassword = '';
+    const cleanPhoneDigits = cleanWhatsapp.replace(/\D/g, '').slice(-10);
+
+    try {
+      const devoteeCheck = await query(
+        `SELECT id, name, email, phone FROM users 
+         WHERE (LOWER(email) = $1 AND email <> '') 
+            OR (phone LIKE $2 AND phone <> '')
+         LIMIT 1`,
+        [cleanEmail, `%${cleanPhoneDigits}`]
+      );
+
+      if (devoteeCheck.rows.length === 0) {
+        isNewAccount = true;
+        const newUserId = crypto.randomUUID();
+        tempPlainPassword = `Devotee@${Math.floor(1000 + Math.random() * 9000)}`;
+        const passwordHash = await bcrypt.hash(tempPlainPassword, 10);
+
+        await query(
+          `INSERT INTO users (
+            id, email, name, phone, parent_temple, current_center, password_hash,
+            role, is_active, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            ARRAY[0], true, NOW(), NOW()
+          )`,
+          [
+            newUserId,
+            cleanEmail,
+            cleanName,
+            cleanWhatsapp,
+            cleanParentTemple,
+            cleanVoiceName,
+            passwordHash
+          ]
+        );
+      }
+    } catch (accErr) {
+      console.warn('[Pass Transfer] Account verification/creation notice:', accErr);
+    }
+
+    // 7. Send official pass confirmation email to new devotee
+    if (params.sendNewPassEmail !== false && cleanEmail) {
+      try {
+        await sendCampDevoteeWelcomeAccountEmail({
+          userEmail: cleanEmail,
+          userName: cleanName,
+          tempPassword: isNewAccount ? tempPlainPassword : undefined,
+          isExistingAccount: !isNewAccount,
+          campTitle: targetCamp.title,
+          trackName: cleanTrack || 'Standard Track',
+          centerName: cleanVoiceName,
+          templeName: cleanParentTemple,
+          registrationId: updatedRecord.id,
+          userPhone: cleanWhatsapp,
+          campStartDate: targetCamp.start_date,
+          campEndDate: targetCamp.end_date,
+          venue: targetCamp.venue,
+          mealInfo: {
+            firstMealDate: cleanFirstMealDate,
+            firstMealType: cleanFirstMealType,
+            lastMealDate: cleanLastMealDate,
+            lastMealType: cleanLastMealType,
+            dinnerType: cleanDinnerType,
+            accommodation: cleanAccommodation,
+          }
+        });
+      } catch (emailErr) {
+        console.warn('[Pass Transfer] Email notice error for new devotee:', emailErr);
+      }
+    }
+
+    // 8. Courtesy notification to original devotee if requested
+    if (params.notifyOriginalDevotee !== false && oldDevotee.email && oldDevotee.email.toLowerCase() !== cleanEmail) {
+      try {
+        await dispatchEmail({
+          to: oldDevotee.email,
+          subject: `Camp Pass Transferred — ${oldDevotee.campTitle}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+              <div style="background: linear-gradient(135deg, #7c3aed, #4f46e5); padding: 24px; text-align: center; color: #ffffff;">
+                <h2 style="margin: 0; font-size: 20px;">Hare Krishna, ${oldDevotee.name}</h2>
+                <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">VOICE Gurukul Camp Registration Pass Transfer</p>
+              </div>
+              <div style="padding: 24px;">
+                <p style="font-size: 14px;">This is to confirm that your pass for <strong>${oldDevotee.campTitle}</strong> has been transferred to <strong>${cleanName}</strong> by Gurukul administration.</p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin: 16px 0; font-size: 13px;">
+                  <div><strong>Transferred To:</strong> ${cleanName}</div>
+                  <div><strong>Original Booking ID:</strong> ${current.group_id || current.id}</div>
+                  <div><strong>Pass Status:</strong> Transferred &amp; Re-issued</div>
+                  ${cleanTransferReason ? `<div><strong>Transfer Reason:</strong> ${cleanTransferReason}</div>` : ''}
+                </div>
+                <p style="font-size: 12px; color: #64748b;">All payment entitlements, meal allocations, and camp pass access have been reassigned to the new participant. Your original pass is now inactive.</p>
+                <p style="font-size: 12px; color: #64748b;">If you have any questions or require assistance, please contact your camp administration team.</p>
+              </div>
+              <div style="background-color: #f1f5f9; padding: 14px; text-align: center; font-size: 11px; color: #94a3b8;">
+                VOICE Gurukul Camps Administration &bull; Automated System Notice
+              </div>
+            </div>
+          `
+        });
+      } catch (oldNoticeErr) {
+        console.warn('[Pass Transfer] Email notice error for old devotee:', oldNoticeErr);
+      }
+    }
+
+    // 9. Revalidate cache paths
+    revalidatePath(`/dashboard/admin/camps/${oldDevotee.campId}/registrations`);
+    if (finalCampId !== oldDevotee.campId) {
+      revalidatePath(`/dashboard/admin/camps/${finalCampId}/registrations`);
+    }
+    revalidatePath('/dashboard/admin/camps');
+    revalidatePath('/dashboard/camp');
+    revalidatePath('/camps/verify-pass');
+
+    return {
+      success: true,
+      message: `Pass successfully transferred to ${cleanName} for ${targetCamp.title}!`,
+      registration: updatedRecord as CampRegistration,
+      targetCamp
+    };
+  } catch (error: any) {
+    console.error('superAdminTransferCampPassAction error:', error);
+    return { success: false, error: error.message };
   }
 }

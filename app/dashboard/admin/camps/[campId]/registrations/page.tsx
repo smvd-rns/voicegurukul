@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy, Check,
   Undo2, Banknote, AlertTriangle, CheckCheck, RotateCcw, Ticket, QrCode,
   Edit2, Pencil, ShieldAlert, Calculator, Sparkles, KeyRound, XCircle,
-  FileText, Tag, Calendar, MessageCircle, Share2
+  FileText, Tag, Calendar, MessageCircle, Share2, ArrowRightLeft
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
@@ -22,6 +22,7 @@ import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal'
 import CampPrasadamTab from '@/components/camps/CampPrasadamTab';
 import CampAccommodationTab from '@/components/camps/CampAccommodationTab';
 import CampFinancialAuditTab from '@/components/camps/CampFinancialAuditTab';
+import SuperAdminPassTransferModal from '@/components/camps/SuperAdminPassTransferModal';
 import { calculateDynamicCampCost, formatParticipantMealDate } from '@/lib/camp-cost';
 import {
   approveCampWaitingListRegistrationAction,
@@ -188,6 +189,25 @@ export default function CampRegistrationsAdminPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  // Super Admin Pass Transfer Modal State
+  const [transferModalReg, setTransferModalReg] = useState<CampRegistration | null>(null);
+
+  const handleOpenPassTransfer = (reg: CampRegistration) => {
+    setTransferModalReg(reg);
+  };
+
+  const handleTransferSuccess = (updatedReg: CampRegistration, targetCampTitle?: string) => {
+    if (updatedReg.camp_id && camp?.id && updatedReg.camp_id !== camp.id) {
+      setRegistrations((prev) => prev.filter((r) => r.id !== updatedReg.id));
+      toast.success(`Pass transferred to ${updatedReg.participant_name} and moved to ${targetCampTitle || 'new camp'}!`, { duration: 5000 });
+    } else {
+      setRegistrations((prev) =>
+        prev.map((r) => (r.id === updatedReg.id ? { ...r, ...updatedReg } : r))
+      );
+      toast.success(`Pass successfully transferred to ${updatedReg.participant_name}!`, { duration: 4000 });
+    }
+  };
 
   const handleOpenSuperAdminEdit = (reg: CampRegistration) => {
     setEditModalReg(reg);
@@ -2019,15 +2039,26 @@ export default function CampRegistrationsAdminPage() {
                               <span>Pass &amp; QR</span>
                             </button>
                             {userAccess.isSuperAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenSuperAdminEdit(reg)}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-bold transition-all cursor-pointer shadow-2xs hover:scale-105"
-                                title="Super Admin Emergency Edit: Modify devotee details, meal counts, arrival/departure dates, or fees"
-                              >
-                                <Edit2 className="w-2.5 h-2.5 text-purple-700" />
-                                <span>Edit</span>
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSuperAdminEdit(reg)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-bold transition-all cursor-pointer shadow-2xs hover:scale-105"
+                                  title="Super Admin Emergency Edit: Modify devotee details, meal counts, arrival/departure dates, or fees"
+                                >
+                                  <Edit2 className="w-2.5 h-2.5 text-purple-700" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPassTransfer(reg)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 text-[9px] font-bold transition-all cursor-pointer shadow-2xs hover:scale-105"
+                                  title="Super Admin: Transfer pass, meals, and payment to another devotee or another camp"
+                                >
+                                  <ArrowRightLeft className="w-2.5 h-2.5 text-indigo-700" />
+                                  <span>Transfer</span>
+                                </button>
+                              </>
                             )}
                             {reg.is_cancelled && (
                               <span
@@ -5167,6 +5198,19 @@ export default function CampRegistrationsAdminPage() {
                   <span className="px-2 py-0.5 rounded-full bg-white/20 text-purple-200 text-[10px] font-bold border border-white/20 font-mono">
                     Pass #T-{(editModalReg as any).serial_no || (editModalReg as any).token_no || 1}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = editModalReg;
+                      setEditModalReg(null);
+                      if (cur) handleOpenPassTransfer(cur);
+                    }}
+                    className="px-2.5 py-0.5 rounded-full bg-indigo-500/40 hover:bg-indigo-500/60 text-indigo-100 border border-indigo-300/50 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                    title="Transfer this pass, payment, and meals to another devotee"
+                  >
+                    <ArrowRightLeft className="w-3 h-3 text-indigo-200" />
+                    <span>Transfer Pass &rarr;</span>
+                  </button>
                 </div>
                 <h3 className="text-base sm:text-xl font-black text-white leading-tight">
                   Edit Registration: {editModalReg.participant_name}
@@ -5838,6 +5882,17 @@ export default function CampRegistrationsAdminPage() {
         defaultCampId={campId}
         defaultCampTitle={camp?.title}
       />
+
+      {/* SUPER ADMIN PASS TRANSFER MODAL */}
+      {userAccess.isSuperAdmin && camp && (
+        <SuperAdminPassTransferModal
+          isOpen={Boolean(transferModalReg)}
+          onClose={() => setTransferModalReg(null)}
+          registration={transferModalReg}
+          currentCamp={camp}
+          onTransferSuccess={handleTransferSuccess}
+        />
+      )}
     </div>
   );
 }

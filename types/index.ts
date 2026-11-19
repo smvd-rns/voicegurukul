@@ -743,6 +743,12 @@ export interface CampRegistration {
   current_temple?: string;
   current_center?: string;
   is_own_registration?: boolean;
+  transferred_from_name?: string;
+  transferred_from_contact?: string;
+  transferred_from_camp_id?: string;
+  transferred_at?: string;
+  transferred_by?: string;
+  transfer_reason?: string;
 }
 
 export interface CampAdminAllocation {
