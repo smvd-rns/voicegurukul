@@ -2838,11 +2838,12 @@ export async function checkDevoteePendingPaymentAction(params: {
 
     if (cleanOrderId) {
       queryParams.push(cleanOrderId);
-      identityConds.push(`order_id = $${queryParams.length}`);
+      // Match both Razorpay order_id and payment_id when devotee pastes pay_...
+      identityConds.push(`(order_id = $${queryParams.length} OR payment_id = $${queryParams.length})`);
     }
     if (effectivePhone && effectivePhone.length === 10) {
       queryParams.push(effectivePhone);
-      identityConds.push(`RIGHT(payer_contact, 10) = $${queryParams.length}`);
+      identityConds.push(`RIGHT(REGEXP_REPLACE(COALESCE(payer_contact, ''), '[^0-9]', '', 'g'), 10) = $${queryParams.length}`);
     }
     if (effectiveEmail && effectiveEmail.includes('@')) {
       queryParams.push(effectiveEmail);
@@ -2853,19 +2854,60 @@ export async function checkDevoteePendingPaymentAction(params: {
       return { success: true, hasPendingPayment: false };
     }
 
+    // IMPORTANT: When we have a known orderId (mobile UPI return), include 'created' orders too.
+    // Webhook may not have marked captured yet — autoComplete will live-verify with Razorpay.
+    const statusClause = cleanOrderId
+      ? `(status IN ('created', 'paid', 'captured', 'registration_completed', 'attempted') OR payment_id IS NOT NULL)`
+      : `(status IN ('paid', 'captured', 'registration_completed') OR payment_id IS NOT NULL)`;
+
     const sql = `
-      SELECT id, order_id, payment_id, payer_name, payer_contact, amount, created_at, status, booking_status
+      SELECT id, order_id, payment_id, payer_name, payer_contact, payer_email, amount, created_at, status, booking_status
       FROM camp_payment_orders
       WHERE camp_id = $1
         AND (${identityConds.join(' OR ')})
-        AND (status = 'paid' OR status = 'captured' OR payment_id IS NOT NULL)
-        AND (booking_status IS NULL OR booking_status != 'confirmed')
+        AND ${statusClause}
+        AND COALESCE(status, '') <> 'underpaid_flagged'
+        AND COALESCE(status, '') <> 'failed'
+        AND COALESCE(status, '') <> 'registration_completed'
+        AND COALESCE(booking_status, '') <> 'confirmed'
       ORDER BY created_at DESC
       LIMIT 1
     `;
 
     const res = await query(sql, queryParams);
     if (res.rows.length === 0) {
+      // If orderId was provided and booking already confirmed, tell client to show pass
+      if (cleanOrderId) {
+        const done = await query(
+          `SELECT o.order_id, o.payment_id, o.payer_name, o.payer_contact, o.payer_email, o.amount, o.status, o.booking_status,
+                  r.group_id, COUNT(r.id)::int AS reg_count
+           FROM camp_payment_orders o
+           LEFT JOIN camp_registrations r ON (r.order_id = o.order_id OR r.payment_id = o.payment_id)
+           WHERE o.camp_id = $1 AND (o.order_id = $2 OR o.payment_id = $2)
+             AND (o.status = 'registration_completed' OR o.booking_status = 'confirmed')
+           GROUP BY o.order_id, o.payment_id, o.payer_name, o.payer_contact, o.payer_email, o.amount, o.status, o.booking_status, r.group_id
+           LIMIT 1`,
+          [campId, cleanOrderId]
+        );
+        if (done.rows.length > 0) {
+          const row = done.rows[0];
+          return {
+            success: true,
+            hasPendingPayment: false,
+            isAlreadyConfirmed: true,
+            confirmation: {
+              groupId: row.group_id,
+              count: row.reg_count || 1,
+              amount: Number(row.amount) || 0,
+              payerName: row.payer_name || 'Devotee',
+              payerContact: row.payer_contact || '',
+              payerEmail: row.payer_email || '',
+              paymentId: row.payment_id || row.order_id,
+              orderId: row.order_id,
+            }
+          };
+        }
+      }
       return { success: true, hasPendingPayment: false };
     }
 
@@ -2881,33 +2923,89 @@ export async function checkDevoteePendingPaymentAction(params: {
         [order.payment_id || '', order.order_id || '']
       );
       if (regCheck.rows.length > 0) {
-        // Registration already exists! Update order status to confirmed
-        await query("UPDATE camp_payment_orders SET booking_status = 'confirmed' WHERE id = $1", [order.id]);
-        return { success: true, hasPendingPayment: false, isAlreadyConfirmed: true };
+        const countRes = await query(
+          `SELECT COUNT(*)::int AS c FROM camp_registrations WHERE group_id = $1 OR payment_id = $2 OR order_id = $3`,
+          [regCheck.rows[0].group_id, order.payment_id || '', order.order_id || '']
+        );
+        await query(
+          `UPDATE camp_payment_orders
+           SET booking_status = 'confirmed', status = 'registration_completed', updated_at = NOW()
+           WHERE id = $1`,
+          [order.id]
+        );
+        return {
+          success: true,
+          hasPendingPayment: false,
+          isAlreadyConfirmed: true,
+          confirmation: {
+            groupId: regCheck.rows[0].group_id,
+            count: countRes.rows[0]?.c || 1,
+            amount: Number(order.amount) || 0,
+            payerName: order.payer_name || 'Devotee',
+            payerContact: order.payer_contact || '',
+            payerEmail: order.payer_email || '',
+            paymentId: order.payment_id || order.order_id,
+            orderId: order.order_id,
+          }
+        };
       }
 
-      // If payment was captured but browser was interrupted (e.g. mobile app switch), auto-complete booking now!
-      if (order.payment_id && (order.status === 'paid' || order.status === 'captured')) {
-        const autoRes = await autoCompleteCampOrderRegistration(order.order_id, order.payment_id);
-        if (autoRes.success) {
-          await query("UPDATE camp_payment_orders SET booking_status = 'confirmed' WHERE id = $1", [order.id]);
-          return { success: true, hasPendingPayment: false, isAlreadyConfirmed: true };
-        }
+      // Mobile UPI recovery: live-verify with Razorpay and auto-complete booking.
+      // Works even when status is still 'created' (webhook delayed) as long as we have order_id.
+      const autoRes = await autoCompleteCampOrderRegistration(order.order_id, order.payment_id || undefined);
+      if (autoRes.success) {
+        await query(
+          `UPDATE camp_payment_orders
+           SET booking_status = 'confirmed', status = 'registration_completed', updated_at = NOW()
+           WHERE id = $1`,
+          [order.id]
+        );
+        return {
+          success: true,
+          hasPendingPayment: false,
+          isAlreadyConfirmed: true,
+          confirmation: {
+            groupId: autoRes.groupId,
+            count: autoRes.count || 1,
+            amount: autoRes.amount || Number(order.amount) || 0,
+            payerName: autoRes.payerName || order.payer_name || 'Devotee',
+            payerContact: autoRes.payerContact || order.payer_contact || '',
+            payerEmail: autoRes.payerEmail || order.payer_email || '',
+            paymentId: order.payment_id || order.order_id,
+            orderId: order.order_id,
+          }
+        };
+      }
+
+      // Underpayment: do NOT show as "pending confirmation" — block misuse path
+      if (autoRes.underpaid) {
+        return {
+          success: true,
+          hasPendingPayment: false,
+          underpaidBlocked: true,
+          error: autoRes.error || 'Payment amount is less than required camp fee. Booking was not created.'
+        };
       }
     }
 
-    return {
-      success: true,
-      hasPendingPayment: true,
-      pendingPayment: {
-        paymentId: order.payment_id || order.order_id,
-        orderId: order.order_id,
-        amount: Number(order.amount),
-        payerName: order.payer_name || 'Devotee',
-        createdAt: order.created_at,
-        status: 'pending_accountant_review'
-      }
-    };
+    // Payment captured / known but auto-register still pending (rare) — reassure devotee, do not ask to repay
+    if (order.payment_id || order.status === 'captured' || order.status === 'paid') {
+      return {
+        success: true,
+        hasPendingPayment: true,
+        pendingPayment: {
+          paymentId: order.payment_id || order.order_id,
+          orderId: order.order_id,
+          amount: Number(order.amount),
+          payerName: order.payer_name || 'Devotee',
+          createdAt: order.created_at,
+          status: 'pending_accountant_review'
+        }
+      };
+    }
+
+    // Order exists but Razorpay has no captured payment yet (user dismissed without paying)
+    return { success: true, hasPendingPayment: false };
   } catch (error: any) {
     console.error('checkDevoteePendingPaymentAction error:', error);
     return { success: false, error: error.message };

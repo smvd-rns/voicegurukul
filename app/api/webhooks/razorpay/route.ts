@@ -5,14 +5,43 @@ import { query } from '@/lib/db';
 import { sendDonationCapturedEmails } from '@/lib/utils/email';
 import { autoCompleteCampOrderRegistration } from '@/lib/camps/auto-register';
 
+const UNDERPAY_TOLERANCE_PAISE = 100; // ₹1 rounding only
+
+function extractCampPayment(event: any): { orderId?: string; paymentId?: string; paidPaise: number; status?: string } {
+  const payment = event.payload?.payment?.entity;
+  const order = event.payload?.order?.entity;
+
+  // payment.captured / payment.authorized — payment entity is primary
+  if (payment?.order_id || payment?.id) {
+    return {
+      orderId: payment.order_id || order?.id,
+      paymentId: payment.id,
+      paidPaise: Number(payment.amount) || 0,
+      status: payment.status,
+    };
+  }
+
+  // order.paid — may only have order entity; payment may be nested differently
+  if (order?.id) {
+    return {
+      orderId: order.id,
+      paymentId: undefined,
+      paidPaise: Number(order.amount) || 0,
+      status: order.status,
+    };
+  }
+
+  return { paidPaise: 0 };
+}
+
 export async function POST(req: Request) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get('x-razorpay-signature');
-    
+
     // Use Key Secret if user hasn't set an explicit Webhook Secret
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
-    
+
     if (!webhookSecret) {
       console.error('Razorpay webhook secret not configured');
       return NextResponse.json({ success: false, error: 'Webhook secret not configured' }, { status: 500 });
@@ -33,10 +62,8 @@ export async function POST(req: Request) {
 
     const event = JSON.parse(rawBody);
 
-    if (event.event === 'payment.captured' || event.event === 'order.paid') {
-      const payment = event.payload?.payment?.entity;
-      const orderId = payment?.order_id;
-      const paymentId = payment?.id;
+    if (event.event === 'payment.captured' || event.event === 'order.paid' || event.event === 'payment.authorized') {
+      const { orderId, paymentId, paidPaise } = extractCampPayment(event);
 
       if (!orderId) {
         return NextResponse.json({ success: true, message: 'No order_id, ignored' });
@@ -51,32 +78,46 @@ export async function POST(req: Request) {
 
         if (campOrderRes.rows.length > 0) {
           const campOrder = campOrderRes.rows[0];
-          const paidPaise = Number(payment?.amount) || 0;
           const expectedPaise = Math.round(Number(campOrder.amount) * 100);
 
-          // Anti-Tampering: Underpayment guard
-          if (paidPaise < expectedPaise - 100) {
+          // Persist capture FIRST so mobile recovery can find this order even if auto-register fails momentarily
+          if (paymentId) {
+            await query(
+              `UPDATE camp_payment_orders
+               SET payment_id = COALESCE($1, payment_id),
+                   status = CASE
+                     WHEN status IN ('registration_completed', 'underpaid_flagged') THEN status
+                     ELSE 'captured'
+                   END,
+                   updated_at = NOW()
+               WHERE order_id = $2`,
+              [paymentId, orderId]
+            );
+          }
+
+          // Anti-Tampering: Underpayment guard — NEVER auto-create booking for less payment
+          if (paidPaise > 0 && paidPaise < expectedPaise - UNDERPAY_TOLERANCE_PAISE) {
             console.warn(`[Camp Razorpay Webhook] Security Alert: Underpayment detected for order ${orderId}! Expected: ${expectedPaise}, Paid: ${paidPaise}`);
             await query(
-              `UPDATE camp_payment_orders 
-               SET status = 'underpaid_flagged', payment_id = $1, error_message = $2, updated_at = NOW() 
+              `UPDATE camp_payment_orders
+               SET status = 'underpaid_flagged', payment_id = COALESCE($1, payment_id), error_message = $2, updated_at = NOW()
                WHERE order_id = $3`,
               [paymentId, `Underpayment alert: received ₹${(paidPaise / 100).toFixed(2)}, expected ₹${Number(campOrder.amount).toFixed(2)}`, orderId]
             );
-            return NextResponse.json({ success: false, error: 'Underpayment flagged' }, { status: 400 });
+            // 200 so Razorpay does not retry; booking intentionally NOT created
+            return NextResponse.json({ success: true, type: 'camp_order', status: 'underpaid_flagged', blocked: true });
           }
 
           // Check if registration already completed
           const regRes = await query(
             'SELECT id FROM camp_registrations WHERE payment_id = $1 OR order_id = $2 LIMIT 1',
-            [paymentId, orderId]
+            [paymentId || '', orderId]
           );
 
           if (regRes.rows.length > 0) {
-            // Already created by browser callback
             await query(
-              `UPDATE camp_payment_orders 
-               SET status = 'registration_completed', payment_id = $1, updated_at = NOW() 
+              `UPDATE camp_payment_orders
+               SET status = 'registration_completed', booking_status = 'confirmed', payment_id = COALESCE($1, payment_id), updated_at = NOW()
                WHERE order_id = $2`,
               [paymentId, orderId]
             );
@@ -84,25 +125,40 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, type: 'camp_order', status: 'registration_completed' });
           }
 
-          // If registration was NOT created by browser (e.g. devotee app-switched to PhonePe/GPay on mobile):
-          // Auto-create the registration immediately from the verified camp_payment_orders payload!
+          // Mobile UPI app-switch case: browser handler never ran — auto-create booking now
           console.log(`[Camp Razorpay Webhook] Registration not yet created by browser for order ${orderId} (mobile app switch). Auto-completing booking now...`);
           const autoRes = await autoCompleteCampOrderRegistration(orderId, paymentId);
           console.log(`[Camp Razorpay Webhook] Auto-registration result for ${orderId}:`, autoRes);
+
+          if (autoRes.underpaid) {
+            return NextResponse.json({ success: true, type: 'camp_order', status: 'underpaid_flagged', blocked: true });
+          }
+
+          if (!autoRes.success && !autoRes.alreadyRegistered) {
+            // Ask Razorpay to retry shortly — payment is already marked captured for client-side recovery
+            console.error(`[Camp Razorpay Webhook] Auto-register failed for ${orderId}: ${autoRes.error}`);
+            return NextResponse.json(
+              { success: false, type: 'camp_order', status: 'captured_pending_registration', error: autoRes.error },
+              { status: 500 }
+            );
+          }
 
           return NextResponse.json({
             success: true,
             type: 'camp_order',
             status: 'registration_completed',
-            autoRegistered: autoRes.success
+            autoRegistered: true,
+            groupId: autoRes.groupId,
           });
         }
       } catch (campErr) {
         console.error('[Razorpay Webhook] Error updating camp payment order:', campErr);
+        // Retryable — client recovery still works once payment_id is persisted on a later attempt
+        return NextResponse.json({ success: false, error: 'Camp webhook processing error' }, { status: 500 });
       }
 
       const sadhanaDb = getSadhanaAdminClient();
-      
+
       // Update donation status to captured
       const { error } = await sadhanaDb
         .from('donations')
@@ -127,8 +183,8 @@ export async function POST(req: Request) {
       if (orderId || paymentId) {
         try {
           await query(
-            `UPDATE camp_payment_orders 
-             SET 
+            `UPDATE camp_payment_orders
+             SET
                status = 'failed',
                payment_id = COALESCE($1, payment_id),
                error_code = $2,

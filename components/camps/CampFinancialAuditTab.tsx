@@ -209,6 +209,8 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
     let missingBookingsCount = 0;
     let missingBookingsAmount = 0;
     let confirmedCount = 0;
+    let pendingTransfersAmount = 0;
+    let pendingTransfersCount = 0;
 
     for (const t of transactions) {
       const amt = Number(t.total_amount || 0);
@@ -222,15 +224,22 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
       if (isConfirmed) {
         confirmedCount++;
         totalGross += Number(t.gross_amount || amt);
-        netCashReceived += amt;
-        if (t.payment_method === 'RAZORPAY') {
-          rzpInflow += amt;
-          const gross = Number(t.gross_paid_amount || (amt + (t.gateway_surcharge || 0)));
-          const surcharge = Number(t.gateway_surcharge || Math.max(0, gross - amt));
-          rzpGrossPaid += gross;
-          rzpSurchargeTotal += surcharge;
-        } else if (t.payment_method === 'INTER_TEMPLE_TRANSFER' || t.payment_method === 'IDT') {
-          transfersInflow += amt;
+        const isPendingVerify = t.payment_status === 'processing';
+
+        if (!isPendingVerify) {
+          netCashReceived += amt;
+          if (t.payment_method === 'RAZORPAY') {
+            rzpInflow += amt;
+            const gross = Number(t.gross_paid_amount || (amt + (t.gateway_surcharge || 0)));
+            const surcharge = Number(t.gateway_surcharge || Math.max(0, gross - amt));
+            rzpGrossPaid += gross;
+            rzpSurchargeTotal += surcharge;
+          } else if (t.payment_method === 'INTER_TEMPLE_TRANSFER' || t.payment_method === 'IDT') {
+            transfersInflow += amt;
+          }
+        } else {
+          pendingTransfersAmount += amt;
+          pendingTransfersCount++;
         }
       }
     }
@@ -242,6 +251,8 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
       rzpGrossPaid,
       rzpSurchargeTotal,
       transfersInflow,
+      pendingTransfersAmount,
+      pendingTransfersCount,
       missingBookingsCount,
       missingBookingsAmount,
       confirmedCount
@@ -496,7 +507,9 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
             ₹{metrics.transfersInflow.toLocaleString('en-IN')}
           </div>
           <span className="text-[10px] text-slate-400 block mt-0.5">
-            Offline Bank Transfers
+            {metrics.pendingTransfersAmount > 0
+              ? `Approved Inflow (₹${metrics.pendingTransfersAmount.toLocaleString('en-IN')} pending)`
+              : 'Approved Offline Bank Transfers'}
           </span>
         </div>
 

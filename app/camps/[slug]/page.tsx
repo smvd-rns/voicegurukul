@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Script from 'next/script';
 import Link from 'next/link';
@@ -241,6 +241,8 @@ export default function PublicCampRegistrationPage() {
     createdAt: string;
     status: string;
   } | null>(null);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+  const mobileRecoveryInFlight = useRef(false);
   const [showPaymentCheckModal, setShowPaymentCheckModal] = useState(false);
   const [checkPhoneInput, setCheckPhoneInput] = useState('');
   const [checkPhoneLoading, setCheckPhoneLoading] = useState(false);
@@ -381,7 +383,45 @@ export default function PublicCampRegistrationPage() {
     }
   }, [camp?.id, userData?.id]);
 
-  // Auto-check for unlinked captured payment awaiting accountant reconciliation
+  const applyPaymentConfirmation = useCallback((confirmation: {
+    groupId?: string;
+    count?: number;
+    amount?: number;
+    payerName?: string;
+    payerContact?: string;
+    payerEmail?: string;
+  }) => {
+    if (typeof window !== 'undefined' && camp?.id) {
+      try {
+        sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
+        localStorage.removeItem(`pending_camp_order_${camp.id}`);
+      } catch (e) {}
+    }
+    setPendingPaymentInfo(null);
+    setShowPaymentModal(false);
+    setIsSubmitting(false);
+    setIsConfirmingPayment(false);
+    setRegistrationSuccess({
+      groupId: confirmation.groupId || 'CONFIRMED',
+      count: confirmation.count || entries.length || 1,
+      totalPaid: Number(confirmation.amount) || 0,
+      paymentMethod: 'RAZORPAY',
+      paymentStatus: 'completed',
+      pocName: confirmation.payerName || pocDetails.pocName,
+      pocContact: confirmation.payerContact || pocDetails.pocContact,
+      email: confirmation.payerEmail || pocDetails.email,
+      entries,
+    });
+    try {
+      const callerId = userData?.id || user?.id || '';
+      if (camp?.id) {
+        fetch(`/api/camps/draft?campId=${camp.id}&userId=${callerId}`, { method: 'DELETE' }).catch(() => { });
+      }
+      setActiveDraft(null);
+    } catch (e) { }
+  }, [camp?.id, entries, pocDetails.pocName, pocDetails.pocContact, pocDetails.email, userData?.id, user?.id]);
+
+  // Auto-check for unlinked captured payment; on mobile UPI return this confirms the pass
   const checkPendingPayment = useCallback(async () => {
     if (!camp?.id) return;
     let cachedOrderId: string | undefined;
@@ -405,6 +445,17 @@ export default function PublicCampRegistrationPage() {
         orderId: cachedOrderId,
       });
 
+      if (res.isAlreadyConfirmed && res.confirmation) {
+        applyPaymentConfirmation(res.confirmation);
+        return res;
+      }
+
+      if (res.underpaidBlocked) {
+        setPaymentError(res.error || 'Payment amount is less than the required camp fee. Booking was not created. Please contact camp finance.');
+        setPendingPaymentInfo(null);
+        return res;
+      }
+
       if (res.success && res.hasPendingPayment && res.pendingPayment) {
         setPendingPaymentInfo({
           paymentId: res.pendingPayment.paymentId,
@@ -414,34 +465,56 @@ export default function PublicCampRegistrationPage() {
           createdAt: res.pendingPayment.createdAt,
           status: res.pendingPayment.status,
         });
-      } else if (res.isAlreadyConfirmed) {
-        if (typeof window !== 'undefined' && camp?.id) {
-          try {
-            sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
-            localStorage.removeItem(`pending_camp_order_${camp.id}`);
-          } catch (e) {}
-        }
-        setPendingPaymentInfo(null);
-        window.location.reload();
-      } else {
-        if (typeof window !== 'undefined') {
-          try {
-            sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
-            localStorage.removeItem(`pending_camp_order_${camp.id}`);
-          } catch (e) {}
-        }
       }
       return res;
     } catch (err) {
       console.error('Error auto-checking devotee pending payment:', err);
     }
-  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email]);
+  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email, applyPaymentConfirmation]);
+
+  /** After PhonePe/GPay return, poll until booking is confirmed (or timeout). */
+  const recoverMobilePaymentWithPolling = useCallback(async () => {
+    if (!camp?.id || mobileRecoveryInFlight.current) return;
+    mobileRecoveryInFlight.current = true;
+    setIsConfirmingPayment(true);
+    setIsSubmitting(true);
+    setPaymentError(null);
+
+    try {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const res = await checkPendingPayment();
+        if (res?.isAlreadyConfirmed) {
+          return;
+        }
+        if (res?.underpaidBlocked) {
+          break;
+        }
+        // Wait before next poll — webhook / Razorpay capture may lag on mobile UPI
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      // Final check — if still not confirmed, pending banner may show
+      await checkPendingPayment();
+    } finally {
+      mobileRecoveryInFlight.current = false;
+      setIsConfirmingPayment(false);
+      setIsSubmitting(false);
+    }
+  }, [camp?.id, checkPendingPayment]);
 
   useEffect(() => {
     checkPendingPayment();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState !== 'visible' || !camp?.id) return;
+      let cachedOrderId: string | null = null;
+      try {
+        cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
+          localStorage.getItem(`pending_camp_order_${camp.id}`);
+      } catch (e) {}
+      // Only run aggressive UPI recovery poll when we know an order was started
+      if (cachedOrderId) {
+        recoverMobilePaymentWithPolling();
+      } else {
         checkPendingPayment();
       }
     };
@@ -452,7 +525,7 @@ export default function PublicCampRegistrationPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [checkPendingPayment]);
+  }, [camp?.id, checkPendingPayment, recoverMobilePaymentWithPolling]);
 
   const handleManualPaymentCheck = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -477,6 +550,11 @@ export default function PublicCampRegistrationPage() {
 
       if (!res.success) {
         setCheckPhoneError(res.error || 'Failed to verify payment status.');
+      } else if (res.isAlreadyConfirmed && res.confirmation) {
+        setShowPaymentCheckModal(false);
+        applyPaymentConfirmation(res.confirmation);
+      } else if (res.underpaidBlocked) {
+        setCheckPhoneError(res.error || 'Payment amount is less than required. Booking was not created.');
       } else if (res.hasPendingPayment && res.pendingPayment) {
         setCheckPhoneResult({
           found: true,
@@ -493,7 +571,7 @@ export default function PublicCampRegistrationPage() {
       } else {
         setCheckPhoneResult({
           found: false,
-          message: 'No pending payment under review found for this number or ID. If your payment was completed, please check your registered email or contact the camp coordinators.',
+          message: 'No confirmed or pending payment found for this number or ID. If money was debited, wait a minute and try again, or contact camp coordinators with your Payment ID.',
         });
       }
     } catch (err: any) {
@@ -1513,28 +1591,31 @@ export default function PublicCampRegistrationPage() {
           color: '#f59e0b',
         },
         handler: async function (response: any) {
-          await submitRegistrationsToBackend({
+          const ok = await submitRegistrationsToBackend({
             paymentMethod: 'RAZORPAY',
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_order_id: response.razorpay_order_id,
             razorpay_signature: response.razorpay_signature,
           });
+          if (!ok) {
+            // Money may already be captured — recover via Razorpay live verify + auto-register
+            await recoverMobilePaymentWithPolling();
+          }
         },
         modal: {
           ondismiss: async function () {
-            setIsSubmitting(false);
-            // On mobile, user may have completed payment in PhonePe/GPay and returned
-            await checkPendingPayment();
+            // On mobile, user may have completed payment in PhonePe/GPay while this tab was suspended
+            await recoverMobilePaymentWithPolling();
           },
         },
       };
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', async function (resp: any) {
-        // Double check with server to ensure payment was not actually captured before displaying error
+        // UPI sometimes reports failure in-browser while bank debit still succeeds — verify with server first
+        await recoverMobilePaymentWithPolling();
         const checkRes = await checkPendingPayment();
         if (checkRes?.isAlreadyConfirmed) {
-          setIsSubmitting(false);
           return;
         }
 
@@ -1663,8 +1744,8 @@ export default function PublicCampRegistrationPage() {
     }
   };
 
-  // Shared Backend Submission
-  const submitRegistrationsToBackend = async (paymentDetails: any) => {
+  // Shared Backend Submission — returns true on success so Razorpay handler can fall back to mobile recovery
+  const submitRegistrationsToBackend = async (paymentDetails: any): Promise<boolean> => {
     try {
       const res = await fetch('/api/camps/register', {
         method: 'POST',
@@ -1720,8 +1801,10 @@ export default function PublicCampRegistrationPage() {
         }
         setActiveDraft(null);
       } catch (e) { }
+      return true;
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to submit registration');
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -2069,8 +2152,27 @@ export default function PublicCampRegistrationPage() {
               </div>
             ) : null}
 
-            {/* Devotee Reassurance Banner: Debited Payment Under Accountant Review */}
-            {pendingPaymentInfo && (
+            {/* Confirming after mobile UPI return */}
+            {isConfirmingPayment && (
+              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/15 border-2 border-emerald-500 text-emerald-950 shadow-md animate-in fade-in space-y-3 mb-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm sm:text-base font-black text-emerald-950">
+                      Confirming your camp pass&hellip;
+                    </h3>
+                    <p className="text-xs sm:text-sm text-emerald-900 mt-1 leading-relaxed">
+                      We detected a payment attempt. Please keep this page open for a few seconds while we verify with Razorpay and issue your digital pass. Do not make another payment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Rare fallback: payment captured but auto-register still pending */}
+            {pendingPaymentInfo && !isConfirmingPayment && (
               <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-500 text-amber-950 shadow-md animate-in fade-in space-y-3 mb-6">
                 <div className="flex items-start gap-4">
                   <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
@@ -2079,7 +2181,7 @@ export default function PublicCampRegistrationPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm sm:text-base font-black text-amber-950">
-                        Payment Received &mdash; Under Finance Verification
+                        Payment Received &mdash; Finalizing Your Pass
                       </h3>
                       <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[10px] uppercase tracking-wide">
                         Do Not Repay
@@ -2089,8 +2191,16 @@ export default function PublicCampRegistrationPage() {
                       Hare Krishna, <strong>{pendingPaymentInfo.payerName || 'Devotee'}</strong>. We have securely recorded your payment of <strong>₹{pendingPaymentInfo.amount}</strong> (Payment ID: <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-[11px] font-semibold">{pendingPaymentInfo.paymentId}</code>).
                     </p>
                     <p className="text-xs text-amber-800 mt-1.5 leading-relaxed">
-                      Please do not worry! If money has been debited from your bank account, your funds are completely safe. Our camp finance team is reviewing transactions against the bank ledger. Once verified, your camp registration will be automatically confirmed and your digital pass will be sent to your registered email.
+                      Your funds are safe. Refresh this page or tap &ldquo;Check Payment Status&rdquo; below — your booking and digital pass will appear as soon as Razorpay confirmation syncs (usually within a minute).
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => recoverMobilePaymentWithPolling()}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold"
+                    >
+                      <Loader2 className={`w-3.5 h-3.5 ${isConfirmingPayment ? 'animate-spin' : ''}`} />
+                      Confirm My Pass Now
+                    </button>
                   </div>
                 </div>
               </div>

@@ -1317,20 +1317,20 @@ export default function CampRegistrationsAdminPage() {
   const grossBatchesAmount = useMemo(() => {
     return filteredBatches.filter(b => b.status === 'completed' || b.status === 'refunded').reduce((s, b) => s + (b.grossAmount || 0), 0);
   }, [filteredBatches]);
-  const approvedBatchesAmount = useMemo(() => filteredBatches.filter(b => b.status === 'completed' || b.status === 'refunded').reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
+  const approvedBatchesAmount = useMemo(() => filteredBatches.filter(b => b.status !== 'processing' && b.status !== 'rejected').reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
   const totalDevoteesInBatches = useMemo(() => filteredBatches.reduce((s, b) => s + (b.totalRegisteredCount || b.attendeesCount), 0), [filteredBatches]);
   const activeDevoteesInBatches = useMemo(() => filteredBatches.reduce((s, b) => s + (b.activeAttendeesCount || 0), 0), [filteredBatches]);
 
   const razorpayBatchesCount = useMemo(() => filteredBatches.filter(b => b.isRazorpay).length, [filteredBatches]);
-  const razorpayAmount = useMemo(() => filteredBatches.filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded')).reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
+  const razorpayAmount = useMemo(() => filteredBatches.filter(b => b.isRazorpay && b.status !== 'processing' && b.status !== 'rejected').reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
   const razorpayGrossPaid = useMemo(() => {
     return filteredBatches
-      .filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded'))
+      .filter(b => b.isRazorpay && b.status !== 'processing' && b.status !== 'rejected')
       .reduce((s, b) => s + Number(b.grossPaidAmount || b.totalAmount), 0);
   }, [filteredBatches]);
   const razorpaySurchargeTotal = useMemo(() => {
     return filteredBatches
-      .filter(b => b.isRazorpay && (b.status === 'completed' || b.status === 'refunded'))
+      .filter(b => b.isRazorpay && b.status !== 'processing' && b.status !== 'rejected')
       .reduce((s, b) => s + Number(b.gatewaySurcharge || 0), 0);
   }, [filteredBatches]);
   const ittBatchesCount = useMemo(() => filteredBatches.filter(b => b.isItt).length, [filteredBatches]);
