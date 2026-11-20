@@ -34,16 +34,21 @@ export async function POST(req: NextRequest) {
     const campSlug = orderRes.rows[0]?.slug || '';
     const redirectBase = campSlug ? `/camps/${campSlug}` : '/camps';
 
-    // Verify signature if key secret is available
+    // Cryptographic security check: Require valid Razorpay signature
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (keySecret && signature && paymentId) {
+    if (keySecret) {
+      if (!signature || !paymentId) {
+        console.warn(`[Razorpay Callback Security] Rejected unsigned payment callback for order ${orderId}`);
+        return NextResponse.redirect(new URL(`${redirectBase}?payment_error=missing_credentials`, req.url));
+      }
+
       const expectedSignature = crypto
         .createHmac('sha256', keySecret)
         .update(`${orderId}|${paymentId}`)
         .digest('hex');
 
       if (expectedSignature !== signature) {
-        console.error(`[Razorpay Callback] Invalid signature for order ${orderId}`);
+        console.error(`[Razorpay Callback Security] Signature mismatch for order ${orderId}`);
         return NextResponse.redirect(new URL(`${redirectBase}?payment_error=signature_mismatch`, req.url));
       }
     }
