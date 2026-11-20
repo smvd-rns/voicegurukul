@@ -787,15 +787,15 @@ export default function CounselorPage() {
   }, [searchTerm, selectedCampFilter, selectedAshram, itemsPerPage, sortOrder, selectedLetter]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-orange-50 via-gray-50 to-amber-50/30 py-4 sm:py-6 px-2 sm:px-4">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-5">
-        {/* Header - Compact & Colorful for 13"-14" Laptops */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1 border-b border-orange-200/70">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-orange-50 via-gray-50 to-amber-50/30 py-3 sm:py-5 px-2.5 sm:px-4 lg:px-6 pb-28 sm:pb-16">
+      <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-4">
+        {/* Header - Compact & Clean for All Screens */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-orange-200/70">
           <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-orange-500 via-amber-500 to-rose-500 rounded-xl shadow-md text-white flex-shrink-0">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-orange-500 via-amber-500 to-rose-500 rounded-xl shadow-md text-white shrink-0">
               <Activity className="h-5 w-5 stroke-[2.5px]" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 tracking-tight">
                   Counselor Dashboard
@@ -804,16 +804,17 @@ export default function CounselorPage() {
                   Counselor Sangha
                 </span>
               </div>
-              <p className="text-[10.5px] sm:text-xs text-slate-500 font-bold flex items-center gap-1.5 mt-0.5">
-                <Shield className="h-3 w-3 text-orange-500" />
-                <span className="truncate max-w-[280px] sm:max-w-none">{userData?.email}</span>
-                <span className="text-slate-300">•</span>
+              <p className="text-[10.5px] sm:text-xs text-slate-500 font-bold flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <Shield className="h-3 w-3 text-orange-500 shrink-0" />
+                <span className="truncate max-w-[200px] sm:max-w-none">{userData?.email}</span>
+                <span className="text-slate-300 hidden xs:inline">•</span>
                 <span className="text-orange-700 font-extrabold">{students.length} Total Devotees</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 p-1 bg-white/90 backdrop-blur-md rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto">
+          {/* Quick Tab Switcher Pills */}
+          <div className="flex items-center gap-1 p-1 bg-white/90 backdrop-blur-md rounded-xl border border-slate-200 shadow-2xs overflow-x-auto no-scrollbar">
             {(['sadhana-reports', 'spiritual-approvals', 'new-dev-approvals'] as const).map((tab) => {
               const isActive = activeTab === tab;
               const tabLabels: Record<string, string> = {
@@ -829,7 +830,7 @@ export default function CounselorPage() {
                     setActiveTab(tab);
                     if (tab === 'spiritual-approvals') setApprovalStatus('pending');
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${isActive
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
                 >
@@ -845,33 +846,33 @@ export default function CounselorPage() {
           </div>
         </div>
 
-        {/* Dynamic & Colorful Stats Cards - High Contrast on Small Screens */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+        {/* Dynamic & Colorful Stats Cards - Responsive 3-Column Tab Row */}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
           {/* Card 1: Sadhana Reports */}
           <div
             onClick={() => setActiveTab('sadhana-reports')}
-            className={`group cursor-pointer p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-orange-50/90 via-white to-amber-50/40 ${activeTab === 'sadhana-reports'
-              ? 'border-orange-400 ring-2 ring-orange-200/70 shadow-sm'
+            className={`group cursor-pointer p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-orange-50/90 via-white to-amber-50/40 ${activeTab === 'sadhana-reports'
+              ? 'border-orange-500 ring-2 ring-orange-200 shadow-xs'
               : 'border-slate-200/90 hover:border-orange-300 shadow-2xs hover:shadow-xs'}`}
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                  <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
                 </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sadhana Reports</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl sm:text-2xl font-black text-slate-900">
+                <div className="min-w-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Sadhana</span>
+                  <div className="flex items-baseline gap-1 sm:gap-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900">
                       {stats.loading ? '...' : stats.devotees}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9.5px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
+                    <span className="hidden xs:inline px-1 sm:px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
                       Active
                     </span>
                   </div>
                 </div>
               </div>
-              <ChevronRight className={`h-4 w-4 transition-transform ${activeTab === 'sadhana-reports' ? 'text-orange-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-orange-500'}`} />
+              <ChevronRight className={`hidden md:block h-4 w-4 transition-transform shrink-0 ${activeTab === 'sadhana-reports' ? 'text-orange-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-orange-500'}`} />
             </div>
           </div>
 
@@ -881,80 +882,62 @@ export default function CounselorPage() {
               setActiveTab('spiritual-approvals');
               setApprovalStatus('pending');
             }}
-            className={`group cursor-pointer p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-purple-50/90 via-white to-indigo-50/40 ${activeTab === 'spiritual-approvals'
-              ? 'border-purple-400 ring-2 ring-purple-200/70 shadow-sm'
+            className={`group cursor-pointer p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-purple-50/90 via-white to-indigo-50/40 ${activeTab === 'spiritual-approvals'
+              ? 'border-purple-500 ring-2 ring-purple-200 shadow-xs'
               : 'border-slate-200/90 hover:border-purple-300 shadow-2xs hover:shadow-xs'}`}
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <FileCheck className="h-4 w-4 sm:h-5 sm:w-5" />
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                  <FileCheck className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
                 </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Spiritual Delta</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl sm:text-2xl font-black text-slate-900">
+                <div className="min-w-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Spiritual</span>
+                  <div className="flex items-baseline gap-1 sm:gap-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900">
                       {stats.loading ? '...' : stats.pendingSpiritual}
                     </span>
-                    <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-extrabold border ${stats.pendingSpiritual > 0 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                    <span className={`hidden xs:inline px-1 sm:px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-extrabold border ${stats.pendingSpiritual > 0 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
                       {stats.pendingSpiritual > 0 ? 'Pending' : 'Clear'}
                     </span>
                   </div>
                 </div>
               </div>
-              <ChevronRight className={`h-4 w-4 transition-transform ${activeTab === 'spiritual-approvals' ? 'text-purple-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-purple-500'}`} />
+              <ChevronRight className={`hidden md:block h-4 w-4 transition-transform shrink-0 ${activeTab === 'spiritual-approvals' ? 'text-purple-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-purple-500'}`} />
             </div>
           </div>
 
           {/* Card 3: Registrations */}
           <div
             onClick={() => setActiveTab('new-dev-approvals')}
-            className={`group cursor-pointer p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/40 ${activeTab === 'new-dev-approvals'
-              ? 'border-emerald-400 ring-2 ring-emerald-200/70 shadow-sm'
+            className={`group cursor-pointer p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all duration-200 relative overflow-hidden bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/40 ${activeTab === 'new-dev-approvals'
+              ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-xs'
               : 'border-slate-200/90 hover:border-emerald-300 shadow-2xs hover:shadow-xs'}`}
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                  <ShieldCheck className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
                 </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Registrations</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl sm:text-2xl font-black text-slate-900">
+                <div className="min-w-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block truncate">Registrations</span>
+                  <div className="flex items-baseline gap-1 sm:gap-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900">
                       {stats.loading ? '...' : stats.pendingRegistrations}
                     </span>
-                    <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-extrabold border ${stats.pendingRegistrations > 0 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}>
+                    <span className={`hidden xs:inline px-1 sm:px-1.5 py-0.2 rounded text-[8.5px] sm:text-[9.5px] font-extrabold border ${stats.pendingRegistrations > 0 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}>
                       {stats.pendingRegistrations > 0 ? 'Pending' : 'Clear'}
                     </span>
                   </div>
                 </div>
               </div>
-              <ChevronRight className={`h-4 w-4 transition-transform ${activeTab === 'new-dev-approvals' ? 'text-emerald-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-emerald-500'}`} />
+              <ChevronRight className={`hidden md:block h-4 w-4 transition-transform shrink-0 ${activeTab === 'new-dev-approvals' ? 'text-emerald-600 translate-x-0' : 'text-slate-300 opacity-60 group-hover:opacity-100 group-hover:text-emerald-500'}`} />
             </div>
           </div>
         </div>
 
-        {/* Tabs Navigation - Mobile Only (Compact) */}
-        <div className="md:hidden flex gap-1 p-1 bg-white/80 backdrop-blur-xl rounded-2xl border border-orange-100 shadow-sm overflow-x-auto no-scrollbar">
-          {(['sadhana-reports', 'spiritual-approvals', 'new-dev-approvals'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => {
-                setActiveTab(tab);
-                if (tab === 'spiritual-approvals') setApprovalStatus('pending');
-              }}
-              className={`flex-1 min-w-[100px] px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-500 whitespace-nowrap ${activeTab === tab
-                ? 'bg-orange-600 text-white shadow-lg shadow-orange-200'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
-            >
-              {tab.split('-')[0].toUpperCase()}
-            </button>
-          ))}
-        </div>
-
         {/* Content Area */}
-        <div className="min-h-[400px]">
+        <div className="min-h-[350px]">
           {activeTab === 'sadhana-reports' && (
             <div className="space-y-3 sm:space-y-3.5 animate-in fade-in duration-300">
               {/* Dynamic Filter-Responsive Stat Cards - Values update live with filters */}
@@ -1036,19 +1019,20 @@ export default function CounselorPage() {
                 </div>
               </div>
 
-              {/* Controls Panel: Compact, High-Contrast & Colorful */}
-              <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
-                {/* Row 1: Search, Official Ashram Filter, Camp, A-Z Sort & Date Range */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center">
+              {/* Controls Panel: Responsive, Modern & Non-Overflowing */}
+              <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs space-y-3">
+                {/* Row 1: Search & Filter Dropdowns */}
+                                {/* Row 1: Search & Filter Dropdowns (Clean 4-column grid on desktop, 2-column on tablet, 1-column on mobile) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
                   {/* Search Devotee */}
-                  <div className="relative group sm:col-span-2 lg:col-span-3">
+                  <div className="relative group sm:col-span-2 lg:col-span-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                     <input
                       type="text"
-                      placeholder="Search legal/initiated name, email, phone..."
+                      placeholder="Search devotee, email, phone..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl focus:ring-2 focus:ring-orange-100 text-xs font-medium transition-all shadow-2xs"
+                      className="w-full pl-9 pr-7 py-2 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl focus:ring-2 focus:ring-orange-100 text-xs font-medium transition-all shadow-2xs"
                     />
                     {searchTerm && (
                       <button
@@ -1061,7 +1045,7 @@ export default function CounselorPage() {
                   </div>
 
                   {/* Official Ashram Filter Dropdown */}
-                  <div className="relative sm:col-span-1 lg:col-span-2">
+                  <div className="relative">
                     <select
                       value={selectedAshram}
                       onChange={(e) => setSelectedAshram(e.target.value)}
@@ -1076,7 +1060,7 @@ export default function CounselorPage() {
                   </div>
 
                   {/* Camp Filter Dropdown */}
-                  <div className="relative sm:col-span-1 lg:col-span-2">
+                  <div className="relative">
                     <select
                       value={selectedCampFilter}
                       onChange={(e) => setSelectedCampFilter(e.target.value)}
@@ -1091,7 +1075,7 @@ export default function CounselorPage() {
                   </div>
 
                   {/* A-Z Sort Dropdown */}
-                  <div className="relative sm:col-span-1 lg:col-span-2">
+                  <div className="relative">
                     <select
                       value={sortOrder}
                       onChange={(e) => setSortOrder(e.target.value as any)}
@@ -1109,68 +1093,42 @@ export default function CounselorPage() {
                       <ArrowDownAZ className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-600 pointer-events-none" />
                     )}
                   </div>
+                </div>
 
-                  {/* Compact Date Range & Run Analysis */}
-                  <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-3">
-                    <div className="flex-1 flex items-center gap-1 bg-slate-50/70 border border-slate-300 rounded-xl px-2 py-1.5 shadow-2xs">
+                {/* Row 2: Date Range & Action Controls (Dedicated Row with ample breathing room) */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-2 flex-1 max-w-full sm:max-w-md">
+                    <div className="flex-1 flex items-center gap-1.5 bg-slate-50/80 border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs min-w-0">
                       <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                       <input
                         type="date"
                         value={dateRange.from}
                         onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                        className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer"
+                        className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
                         title="Start Date"
                       />
-                      <span className="text-slate-400 text-[10px] font-bold">-</span>
+                      <span className="text-slate-400 text-xs font-bold shrink-0">→</span>
                       <input
                         type="date"
                         value={dateRange.to}
                         onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                        className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer"
+                        className="min-w-0 flex-1 bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
                         title="End Date"
                       />
                     </div>
                     <button
                       onClick={loadStudents}
                       disabled={isAnalyzing}
-                      className="px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                      title="Run sadhana analysis"
+                      className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold text-xs shadow-xs active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      title="Run sadhana analysis for selected date range"
                     >
                       {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                      <span className="hidden sm:inline">Analyze</span>
+                      <span>Analyze</span>
                     </button>
-                  </div>
-                </div>
-
-                {/* Row 2: A-Z Alphabet Strip & Quick Controls */}
-                <div className="pt-2 border-t border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                  {/* Horizontal Scrollable Alphabet Bar */}
-                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
-                      <Compass className="w-3 h-3 text-orange-500" /> A-Z:
-                    </span>
-                    {ALPHABET.map((letter) => {
-                      const isSelected = selectedLetter === (letter === 'ALL' ? 'all' : letter);
-                      const hasDevotees = letter === 'ALL' || availableLetters.has(letter);
-                      return (
-                        <button
-                          key={letter}
-                          onClick={() => setSelectedLetter(letter === 'ALL' ? 'all' : letter)}
-                          className={`px-2 py-0.5 rounded-md text-[10.5px] font-extrabold uppercase transition-all duration-150 shrink-0 cursor-pointer ${isSelected
-                            ? 'bg-slate-900 text-white shadow-2xs scale-105 ring-1 ring-slate-900'
-                            : hasDevotees
-                              ? 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:text-orange-700 hover:bg-orange-50/40 shadow-2xs'
-                              : 'bg-slate-50 text-slate-300 border border-slate-100 hover:text-slate-400'}`}
-                          title={letter === 'ALL' ? 'Show All Devotees' : `Show devotees starting with ${letter}`}
-                        >
-                          {letter}
-                        </button>
-                      );
-                    })}
                   </div>
 
                   {/* Summary & View Options */}
-                  <div className="flex items-center justify-between md:justify-end gap-2 shrink-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
                     <span className="text-[11px] font-bold text-slate-500">
                       Showing <strong className="text-orange-700 font-extrabold">{filteredStudents.length}</strong> of {students.length}
                     </span>
@@ -1183,7 +1141,7 @@ export default function CounselorPage() {
                           setSelectedCampFilter('all');
                           setSelectedAshram('all');
                         }}
-                        className="flex items-center gap-1 px-2 py-1 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer shadow-2xs"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer shadow-2xs"
                         title="Reset all filters"
                       >
                         <RotateCcw className="w-3 h-3" />
@@ -1194,13 +1152,40 @@ export default function CounselorPage() {
                     {aggregatedStats.length > 0 && (
                       <button
                         onClick={() => setShowChart(!showChart)}
-                        className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer shadow-2xs"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer shadow-2xs"
                         title="Toggle Velocity Chart"
                       >
-                        <BarChart3 className="w-3 h-3 text-orange-500" />
-                        <span>{showChart ? 'Hide Chart' : 'Show Chart'}</span>
+                        <BarChart3 className="w-3.5 h-3.5 text-orange-500" />
+                        <span>{showChart ? 'Hide Chart' : 'Velocity Chart'}</span>
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Row 3: A-Z Alphabet Strip (Scrollable & Smooth) */}
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 overflow-hidden">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+                    <Compass className="w-3 h-3 text-orange-500" /> A-Z:
+                  </span>
+                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
+                    {ALPHABET.map((letter) => {
+                      const isSelected = selectedLetter === (letter === 'ALL' ? 'all' : letter);
+                      const hasDevotees = letter === 'ALL' || availableLetters.has(letter);
+                      return (
+                        <button
+                          key={letter}
+                          onClick={() => setSelectedLetter(letter === 'ALL' ? 'all' : letter)}
+                          className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold uppercase transition-all duration-150 shrink-0 cursor-pointer ${isSelected
+                            ? 'bg-slate-900 text-white shadow-2xs scale-105 ring-1 ring-slate-900'
+                            : hasDevotees
+                              ? 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:text-orange-700 hover:bg-orange-50/40 shadow-2xs'
+                              : 'bg-slate-50 text-slate-300 border border-slate-100 hover:text-slate-400'}`}
+                          title={letter === 'ALL' ? 'Show All Devotees' : `Show devotees starting with ${letter}`}
+                        >
+                          {letter}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1284,9 +1269,30 @@ export default function CounselorPage() {
                   <p className="text-gray-600 font-medium">Loading your devotees...</p>
                 </div>
               ) : filteredStudents.length === 0 ? (
-                <div className="bg-white/95 backdrop-blur-md rounded-xl sm:rounded-2xl shadow-xl border border-orange-200 p-8 sm:p-12 text-center">
-                  <UserCircle className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No devotees found matching your search.</p>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/90 p-8 sm:p-12 text-center my-2">
+                  <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200 text-orange-500 mx-auto mb-3 flex items-center justify-center shadow-2xs">
+                    <Users className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800 mb-1">No Devotees Found</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {isFiltered
+                      ? 'No devotees match your current search or filters. Try resetting your filters to see everyone.'
+                      : 'You currently have no devotees assigned to your counselor sangha.'}
+                  </p>
+                  {isFiltered && (
+                    <button
+                      onClick={() => {
+                        setSelectedLetter('all');
+                        setSearchTerm('');
+                        setSelectedCampFilter('all');
+                        setSelectedAshram('all');
+                      }}
+                      className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reset Filters</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
