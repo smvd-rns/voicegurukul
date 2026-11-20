@@ -906,23 +906,19 @@ export default function CenterCampRegistrationsView({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                {/* Per Page Selector: 10 - 20 - 30 */}
-                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                  <span className="text-[10px] text-slate-500 pl-1.5 hidden xs:inline">Per page:</span>
-                  {[10, 20, 30].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => setPageSize(size)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-black transition-all cursor-pointer ${
-                        pageSize === size
-                          ? 'bg-white text-orange-600 shadow-2xs border border-orange-200'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                {/* Per Page Dropdown */}
+                <div className="relative inline-flex items-center">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg pl-2.5 pr-7 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white cursor-pointer transition-all shadow-2xs"
+                    aria-label="Items per page"
+                  >
+                    <option value={10}>10 / page</option>
+                    <option value={20}>20 / page</option>
+                    <option value={30}>30 / page</option>
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 </div>
 
                 {totalPages > 1 && (
