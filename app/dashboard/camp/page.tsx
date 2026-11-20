@@ -24,6 +24,7 @@ import { calculateDynamicCampCost, CalculatedCostResult } from '@/lib/camp-cost'
 import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { toast } from 'react-hot-toast';
 import CampShareModal from '@/components/camps/CampShareModal';
+import CenterCampRegistrationsView from '@/components/dashboard/CenterCampRegistrationsView';
 import {
   getActiveCampsForUserAction,
   getUserCampRegistrationsAction,
@@ -352,8 +353,18 @@ function CampDashboardContent() {
   const { user, userData, loading: authLoading } = useAuth();
   const isPending = userData?.verificationStatus === 'pending';
 
-  // Navigation Tabs: 'camps' | 'registrations' | 'register' | 'staff'
-  const [activeTab, setActiveTab] = useState<'camps' | 'registrations' | 'register' | 'staff'>('camps');
+  const tabParam = searchParams.get('tab');
+
+  // Navigation Tabs: 'camps' | 'registrations' | 'register' | 'staff' | 'center-registrations'
+  const [activeTab, setActiveTab] = useState<'camps' | 'registrations' | 'register' | 'staff' | 'center-registrations'>(
+    tabParam === 'center-registrations' ? 'center-registrations' : 'camps'
+  );
+
+  useEffect(() => {
+    if (tabParam === 'center-registrations') {
+      setActiveTab('center-registrations');
+    }
+  }, [tabParam]);
 
   // Staff & Coordinator Allocation State
   const [allocatedCamps, setAllocatedCamps] = useState<(Camp & { user_role: string; staff_notes?: string })[]>([]);
@@ -1225,6 +1236,19 @@ function CampDashboardContent() {
   const isManager = isCampManagerialUser(userData?.role, selectedCamp?.payment_config?.allowed_managerial_roles);
   const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
   const isSuperAdmin = userRoles.some((r: any) => Number(r) === 8 || String(r) === 'super_admin');
+
+  const isProjectManagerOrLeader = useMemo(() => {
+    if (!userData) return false;
+    const roles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+    const leaderRoleIds = [8, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+    return roles.some((r: any) =>
+      leaderRoleIds.includes(Number(r)) ||
+      r === 'super_admin' ||
+      r === 'project_manager' ||
+      r === 'center_manager' ||
+      r === 'managing_director'
+    ) || Boolean(managerAssignedCenter);
+  }, [userData, managerAssignedCenter]);
 
   // Strict center-based visibility filtering for Active Camps list
   const visibleActiveCamps = useMemo(() => {
@@ -2925,10 +2949,10 @@ function CampDashboardContent() {
             <div>
               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/25 backdrop-blur-md text-purple-200 text-[9.5px] sm:text-[10px] font-bold mb-1 border border-purple-400/40 shadow-xs">
                 <Tent className="w-3 h-3 text-purple-300" />
-                <span>{activeTab === 'register' ? 'Camp Registration' : 'Devotee Camp Portal'}</span>
+                <span>{activeTab === 'register' ? 'Camp Registration' : activeTab === 'center-registrations' ? 'Center Registrations' : 'Devotee Camp Portal'}</span>
               </div>
               <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight leading-tight text-white font-display">
-                {activeTab === 'register' && selectedCamp ? selectedCamp.title : 'Camp Retreats & Registrations'}
+                {activeTab === 'register' && selectedCamp ? selectedCamp.title : activeTab === 'center-registrations' ? 'Center Devotee Camp Registrations' : 'Camp Retreats & Registrations'}
               </h1>
               <p className="text-purple-100/90 text-[10.5px] sm:text-xs mt-0.5 max-w-lg line-clamp-1 font-medium">
                 Hare Krishna, <span className="font-bold text-purple-200 underline decoration-purple-400/60">{userData?.name || user?.email}</span>! Explore youth camps, register passes, and manage your booked retreats.
@@ -3041,6 +3065,26 @@ function CampDashboardContent() {
               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeTab === 'staff' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950' : 'bg-emerald-100 text-emerald-950'
                 }`}>
                 {allocatedCamps.length}
+              </span>
+            </button>
+          )}
+
+          {isProjectManagerOrLeader && (
+            <button
+              onClick={() => {
+                setActiveTab('center-registrations');
+                setSelectedCamp(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${activeTab === 'center-registrations'
+                ? 'bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white shadow-md border border-emerald-500'
+                : 'bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="hidden sm:inline">Center Registrations</span>
+              <span className="sm:hidden">Center Regs</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeTab === 'center-registrations' ? 'bg-white text-emerald-900' : 'bg-emerald-200 text-emerald-950'}`}>
+                PM
               </span>
             </button>
           )}
@@ -6111,6 +6155,13 @@ function CampDashboardContent() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB 5: CENTER CAMP REGISTRATIONS (FOR PROJECT MANAGERS & CENTER LEADERS) */}
+      {activeTab === 'center-registrations' && (
+        <div className="animate-in fade-in duration-300">
+          <CenterCampRegistrationsView sourceView="camp" />
         </div>
       )}
 

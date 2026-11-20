@@ -9,7 +9,7 @@ import {
     Users, FileCheck, Search, Activity, Shield, Filter, MapPin,
     CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight,
     History, Calendar, Mail, Quote, ShieldCheck, Check, Clock, X, ArrowRight, ShieldAlert, Edit, Plus, Trash2, Heart, Award, Lock,
-    Home, Building2, UserCheck, GraduationCap, Eye
+    Home, Building2, UserCheck, GraduationCap, Eye, Tent
 } from 'lucide-react';
 import { getRoleDisplayName, getHighestRole, getRoleHierarchyNumber } from '@/lib/utils/roles';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -17,6 +17,7 @@ import { User, UserRole } from '@/types';
 import { buildCenterMatchQuery, isCenterMatch, getUserCurrentCenter, getUserParentCenter } from '@/lib/center-utils';
 // Import UserDetailModal from MD dashboard (assuming it's generic enough)
 import UserDetailModal from '@/components/dashboard/UserDetailModal';
+import CenterCampRegistrationsView from '@/components/dashboard/CenterCampRegistrationsView';
 
 // --- Types ---
 
@@ -309,20 +310,20 @@ export default function ProjectManagerDashboard() {
     const searchParams = useSearchParams();
     const tabParam = searchParams?.get('tab');
     
-    const [activeTab, setActiveTab] = useState<'approvals' | 'user-management' | 'registrations' | 'service-team'>(
-        (tabParam === 'approvals' || tabParam === 'user-management' || tabParam === 'registrations' || tabParam === 'service-team')
+    const [activeTab, setActiveTab] = useState<'approvals' | 'user-management' | 'registrations' | 'service-team' | 'camp-registrations'>(
+        (tabParam === 'approvals' || tabParam === 'user-management' || tabParam === 'registrations' || tabParam === 'service-team' || tabParam === 'camp-registrations')
         ? tabParam as any
         : 'approvals'
     );
 
     // Sync activeTab with URL for back button support
     useEffect(() => {
-        if (tabParam && tabParam !== activeTab && ['approvals', 'user-management', 'registrations', 'service-team'].includes(tabParam)) {
+        if (tabParam && tabParam !== activeTab && ['approvals', 'user-management', 'registrations', 'service-team', 'camp-registrations'].includes(tabParam)) {
             setActiveTab(tabParam as any);
         }
     }, [tabParam, activeTab]);
 
-    const handleTabChange = (tab: 'approvals' | 'user-management' | 'registrations' | 'service-team') => {
+    const handleTabChange = (tab: 'approvals' | 'user-management' | 'registrations' | 'service-team' | 'camp-registrations') => {
         setActiveTab(tab);
         const params = new URLSearchParams(searchParams?.toString() || '');
         params.set('tab', tab);
@@ -1499,7 +1500,7 @@ export default function ProjectManagerDashboard() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-2.5">
                 {/* 1. Total Devotees */}
                 <div
                     onClick={() => handleTabChange('user-management')}
@@ -1595,7 +1596,7 @@ export default function ProjectManagerDashboard() {
                 {/* 5. Spiritual Progress */}
                 <div
                     onClick={() => router.push('/dashboard/project-manager/sadhana-report')}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-rose-50/80 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-rose-50/80 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
                 >
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-black text-rose-900 uppercase tracking-wider">Spiritual Progress</span>
@@ -1605,6 +1606,21 @@ export default function ProjectManagerDashboard() {
                     </div>
                     <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Sadhana Report</div>
                     <div className="text-[9.5px] text-rose-700 font-semibold mt-0.5">Center Progress</div>
+                </div>
+
+                {/* 6. Camp Registrations */}
+                <div
+                    onClick={() => handleTabChange('camp-registrations')}
+                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-indigo-50/80 via-white to-white border-2 border-indigo-200/90 shadow-2xs hover:shadow-md hover:border-indigo-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                >
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-indigo-900 uppercase tracking-wider">Camp Passes</span>
+                        <div className="h-6 w-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Tent className="h-3.5 w-3.5" />
+                        </div>
+                    </div>
+                    <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Camp Bookings</div>
+                    <div className="text-[9.5px] text-indigo-700 font-semibold mt-0.5">Center Devotees</div>
                 </div>
             </div>
 
@@ -1642,6 +1658,24 @@ export default function ProjectManagerDashboard() {
                     >
                         <Shield className="h-3.5 w-3.5" />
                         Management roles
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('service-team')}
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'service-team'
+                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
+                    >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Service Team
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('camp-registrations')}
+                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'camp-registrations'
+                            ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-xs'
+                            : 'text-slate-700 hover:text-purple-900 hover:bg-purple-50')}
+                    >
+                        <Tent className="h-3.5 w-3.5" />
+                        Center Camp Registrations
                     </button>
                 </div>
             </div>
@@ -2857,6 +2891,15 @@ export default function ProjectManagerDashboard() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                )}
+                {activeTab === 'camp-registrations' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <CenterCampRegistrationsView
+                            initialCenter={currentCenter}
+                            sourceView="project-manager"
+                            onCenterChange={(center) => setCurrentCenter(center)}
+                        />
                     </div>
                 )}
             </div>
