@@ -518,45 +518,24 @@ export default function CenterCampRegistrationsView({
           </div>
         </div>
 
-        {/* Filter Summary & Pagination Size */}
+        {/* Filter Summary */}
         <div className="flex items-center justify-between text-xs text-slate-500 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
           <span>
             Showing <strong className="text-slate-900 font-bold">{filteredRegistrations.length === 0 ? 0 : startIndex + 1}–{endIndex}</strong> of <strong className="text-slate-900 font-bold">{filteredRegistrations.length}</strong> devotees from <strong className="text-orange-900 font-bold">{selectedCenter}</strong>
           </span>
 
-          <div className="flex items-center gap-2">
-            {/* Page Size Selector: 10 - 20 - 30 */}
-            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-500 pl-1.5 hidden sm:inline">Per page:</span>
-              {[10, 20, 30].map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => setPageSize(size)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-black transition-all cursor-pointer ${
-                    pageSize === size
-                      ? 'bg-white text-orange-600 shadow-2xs border border-orange-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-
-            {(searchTerm || selectedCampId !== 'all' || statusFilter !== 'all') && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedCampId('all');
-                  setStatusFilter('all');
-                }}
-                className="text-rose-600 hover:text-rose-700 font-bold text-xs flex items-center gap-1 cursor-pointer"
-              >
-                Reset Filters
-              </button>
-            )}
-          </div>
+          {(searchTerm || selectedCampId !== 'all' || statusFilter !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCampId('all');
+                setStatusFilter('all');
+              }}
+              className="text-rose-600 hover:text-rose-700 font-bold text-xs flex items-center gap-1 cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -919,62 +898,85 @@ export default function CenterCampRegistrationsView({
           </div>
 
           {/* Pagination Controls Bar */}
-          {totalPages > 1 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-2.5 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+          {filteredRegistrations.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-2.5 sm:p-3 flex items-center justify-between gap-3 flex-wrap shadow-2xs">
               <div className="text-xs text-slate-500 font-medium">
                 Page <strong className="text-slate-900 font-bold">{safePage}</strong> of{' '}
                 <strong className="text-slate-900 font-bold">{totalPages}</strong> ({filteredRegistrations.length} total)
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={safePage <= 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
-                  title="Previous Page"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Prev</span>
-                </button>
-
-                {/* Page number buttons */}
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
-                    .map((p, idx, arr) => {
-                      const prev = arr[idx - 1];
-                      return (
-                        <div key={p} className="flex items-center gap-1">
-                          {prev && p - prev > 1 && (
-                            <span className="text-slate-400 px-1 text-xs">...</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setCurrentPage(p)}
-                            className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              safePage === p
-                                ? 'bg-orange-600 text-white shadow-xs'
-                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        </div>
-                      );
-                    })}
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                {/* Per Page Selector: 10 - 20 - 30 */}
+                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 pl-1.5 hidden xs:inline">Per page:</span>
+                  {[10, 20, 30].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setPageSize(size)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-black transition-all cursor-pointer ${
+                        pageSize === size
+                          ? 'bg-white text-orange-600 shadow-2xs border border-orange-200'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
                 </div>
 
-                <button
-                  type="button"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
-                  title="Next Page"
-                >
-                  <span className="hidden sm:inline">Next</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={safePage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                      title="Previous Page"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Prev</span>
+                    </button>
+
+                    {/* Page number buttons */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                        .map((p, idx, arr) => {
+                          const prev = arr[idx - 1];
+                          return (
+                            <div key={p} className="flex items-center gap-1">
+                              {prev && p - prev > 1 && (
+                                <span className="text-slate-400 px-1 text-xs">...</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setCurrentPage(p)}
+                                className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                  safePage === p
+                                    ? 'bg-orange-600 text-white shadow-xs'
+                                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                      title="Next Page"
+                    >
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
