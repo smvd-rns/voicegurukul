@@ -240,26 +240,26 @@ export default function CenterCampRegistrationsView({
   };
 
   return (
-    <div className="space-y-3.5 sm:space-y-4">
+    <div className="space-y-2.5 sm:space-y-4 pb-12 sm:pb-4">
       {/* Top Banner & Center Switcher */}
-      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-200/90 rounded-2xl p-2.5 sm:p-4 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-2xs">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-xs shrink-0">
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-200/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shadow-2xs">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="p-1.5 sm:p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-xs shrink-0">
             <Tent className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">
+              <h2 className="text-xs sm:text-lg font-black text-slate-900 tracking-tight">
                 Center Camp Registrations
               </h2>
               <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
                 <Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600" /> Center Isolated
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1 sm:gap-1.5 flex-wrap">
+            <p className="text-[10.5px] sm:text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1 sm:gap-1.5 flex-wrap">
               <Building2 className="w-3 h-3 text-orange-500 shrink-0" />
-              <span>Current Center:</span>
-              <strong className="text-orange-900 font-bold underline decoration-orange-300">
+              <span>Center:</span>
+              <strong className="text-orange-900 font-bold truncate max-w-[200px] sm:max-w-none">
                 {selectedCenter || 'Loading center...'}
               </strong>
             </p>
@@ -267,13 +267,13 @@ export default function CenterCampRegistrationsView({
         </div>
 
         {/* Center Selector (if multiple centers managed) & Source Link */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 self-stretch sm:self-auto shrink-0">
           {authorizedCenters.length > 1 && (
             <div className="relative flex-1 sm:flex-initial">
               <select
                 value={selectedCenter}
                 onChange={(e) => handleCenterSelect(e.target.value)}
-                className="w-full pl-8 pr-8 py-1.5 bg-white border border-orange-300 hover:border-orange-400 focus:border-orange-500 rounded-xl font-bold text-xs text-slate-800 shadow-2xs cursor-pointer outline-none appearance-none transition-colors"
+                className="w-full pl-7 pr-7 py-1 sm:py-1.5 bg-white border border-orange-300 hover:border-orange-400 focus:border-orange-500 rounded-xl font-bold text-[11px] sm:text-xs text-slate-800 shadow-2xs cursor-pointer outline-none appearance-none transition-colors"
                 title="Switch managed center"
               >
                 {authorizedCenters.map((c) => (
@@ -282,15 +282,15 @@ export default function CenterCampRegistrationsView({
                   </option>
                 ))}
               </select>
-              <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-orange-500 pointer-events-none" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
             </div>
           )}
 
           <button
             onClick={() => loadRegistrations(selectedCenter)}
             disabled={loading}
-            className="p-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-slate-600 hover:text-slate-900 shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            className="p-1.5 sm:p-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-slate-600 hover:text-slate-900 shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             title="Refresh registrations"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-orange-500' : ''}`} />
@@ -299,7 +299,7 @@ export default function CenterCampRegistrationsView({
           {sourceView === 'project-manager' ? (
             <Link
               href="/dashboard/camp"
-              className="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 hover:border-orange-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer shrink-0"
+              className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 hover:border-orange-300 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer shrink-0"
               title="Open Camp Portal"
             >
               <span>Camp Portal</span>
@@ -308,7 +308,7 @@ export default function CenterCampRegistrationsView({
           ) : (
             <Link
               href="/dashboard/project-manager?tab=camp-registrations"
-              className="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 hover:border-orange-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer shrink-0"
+              className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 hover:border-orange-300 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer shrink-0"
               title="Open Project Manager Dashboard"
             >
               <span>PM Dashboard</span>
@@ -318,44 +318,44 @@ export default function CenterCampRegistrationsView({
         </div>
       </div>
 
-      {/* KPI Stat Cards: Full picture of Center Devotees + Registrations */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
+      {/* KPI Stat Cards: Compact on mobile, detailed on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2.5">
         {/* 1. Total Center Devotees */}
         <div
           onClick={() => setStatusFilter('all')}
-          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+          className={`bg-white border rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
             statusFilter === 'all' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200/90 hover:border-blue-300'
           }`}
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Devotees</span>
+          <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Devotees</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-slate-900">
+          <div className="text-base sm:text-2xl font-black text-slate-900">
             {loading ? '...' : stats.totalCenterDevotees}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-blue-600 font-bold mt-0.5 truncate">In {selectedCenter}</p>
+          <p className="hidden sm:block text-[9.5px] sm:text-[10px] text-blue-600 font-bold mt-0.5 truncate">In {selectedCenter}</p>
         </div>
 
         {/* 2. Registered for Camps */}
         <div
           onClick={() => setStatusFilter('registered')}
-          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+          className={`bg-white border rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
             statusFilter === 'registered' ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-slate-200/90 hover:border-emerald-300'
           }`}
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Registered</span>
+          <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Registered</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-emerald-700">
+          <div className="text-base sm:text-2xl font-black text-emerald-700">
             {loading ? '...' : stats.registered}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-emerald-600 font-bold mt-0.5 truncate">
+          <p className="hidden sm:block text-[9.5px] sm:text-[10px] text-emerald-600 font-bold mt-0.5 truncate">
             {stats.totalCenterDevotees > 0 ? `${Math.round((stats.registered / stats.totalCenterDevotees) * 100)}% registered` : 'Active camp passes'}
           </p>
         </div>
@@ -363,53 +363,53 @@ export default function CenterCampRegistrationsView({
         {/* 3. Not Registered (Pending Registration) */}
         <div
           onClick={() => setStatusFilter('unregistered')}
-          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+          className={`bg-white border rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
             statusFilter === 'unregistered' ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200/90 hover:border-rose-300'
           }`}
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Not Registered</span>
+          <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Not Registered</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600">
-              <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <UserX className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-rose-600">
+          <div className="text-base sm:text-2xl font-black text-rose-600">
             {loading ? '...' : stats.unregistered}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-rose-600 font-bold mt-0.5 truncate">Follow-up Needed</p>
+          <p className="hidden sm:block text-[9.5px] sm:text-[10px] text-rose-600 font-bold mt-0.5 truncate">Follow-up Needed</p>
         </div>
 
         {/* 4. Confirmed Passes */}
         <div
           onClick={() => setStatusFilter('confirmed')}
-          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+          className={`bg-white border rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
             statusFilter === 'confirmed' ? 'border-teal-500 ring-2 ring-teal-100' : 'border-slate-200/90 hover:border-teal-300'
           }`}
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed</span>
+          <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-teal-50 text-teal-600">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-teal-700">
+          <div className="text-base sm:text-2xl font-black text-teal-700">
             {loading ? '...' : stats.confirmed}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-teal-600 font-bold mt-0.5 truncate">Pass Issued & Done</p>
+          <p className="hidden sm:block text-[9.5px] sm:text-[10px] text-teal-600 font-bold mt-0.5 truncate">Pass Issued & Done</p>
         </div>
 
         {/* 5. Total Confirmed Fee */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs hover:border-slate-300 transition-all col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Fee</span>
+        <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-2 sm:p-3 shadow-2xs hover:border-slate-300 transition-all col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Fee</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-orange-50 text-orange-600">
-              <IndianRupee className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <IndianRupee className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-slate-900">
+          <div className="text-base sm:text-2xl font-black text-slate-900">
             ₹{loading ? '...' : stats.totalAmount.toLocaleString('en-IN')}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-slate-400 font-bold mt-0.5 truncate">Net Contribution</p>
+          <p className="hidden sm:block text-[9.5px] sm:text-[10px] text-slate-400 font-bold mt-0.5 truncate">Net Contribution</p>
         </div>
       </div>
 
@@ -565,8 +565,8 @@ export default function CenterCampRegistrationsView({
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Mobile Card View: Ultra-compact, responsive, clear registration status */}
-          <div className="sm:hidden space-y-2">
+          {/* Mobile Card View: Ultra-compact, clean, and elegant */}
+          <div className="sm:hidden space-y-1.5">
             {paginatedRegistrations.map((reg) => {
               const isConfirmed = reg.is_registered && !reg.is_cancelled && reg.payment_status === 'completed';
               const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
@@ -574,12 +574,12 @@ export default function CenterCampRegistrationsView({
               return (
                 <div
                   key={reg.id}
-                  className={`bg-white border rounded-xl p-2.5 shadow-2xs space-y-2 transition-all ${
+                  className={`bg-white border rounded-xl p-2 sm:p-2.5 shadow-2xs space-y-1.5 transition-all ${
                     !reg.is_registered
-                      ? 'border-rose-200/90 hover:border-rose-400 bg-gradient-to-br from-rose-50/20 via-white to-white'
+                      ? 'border-slate-200 hover:border-slate-300'
                       : isConfirmed
-                      ? 'border-emerald-200/90 hover:border-emerald-400'
-                      : 'border-slate-200/90 hover:border-orange-300'
+                      ? 'border-emerald-200/90 hover:border-emerald-300'
+                      : 'border-slate-200 hover:border-orange-300'
                   }`}
                 >
                   {/* Top Header: Devotee & Status */}
@@ -596,14 +596,17 @@ export default function CenterCampRegistrationsView({
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-black text-xs text-slate-900 truncate">
+                          <span className="font-bold text-xs text-slate-900 truncate">
                             {reg.participant_name}
                           </span>
                           {reg.passcode && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                            <span className="px-1 py-0.2 rounded text-[8.5px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
                               #{reg.passcode}
                             </span>
                           )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium truncate">
+                          {reg.gender || 'Devotee'}{reg.age ? ` • ${reg.age}y` : ''}{reg.counselor_name ? ` • ${reg.counselor_name}` : ''}
                         </div>
                       </div>
                     </div>
@@ -611,73 +614,52 @@ export default function CenterCampRegistrationsView({
                     {/* Status Badge: Non-wrapping shrink-0 pill */}
                     <div className="shrink-0">
                       {!reg.is_registered ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-                          <UserX className="w-3 h-3 text-rose-500 shrink-0" /> Not Registered
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                          <UserX className="w-2.5 h-2.5 text-rose-500 shrink-0" /> Not Registered
                         </span>
                       ) : reg.is_cancelled ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300 whitespace-nowrap">
-                          <XCircle className="w-3 h-3 text-slate-500 shrink-0" /> Cancelled
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-slate-100 text-slate-600 border border-slate-300 whitespace-nowrap">
+                          <XCircle className="w-2.5 h-2.5 text-slate-500 shrink-0" /> Cancelled
                         </span>
                       ) : isConfirmed ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 whitespace-nowrap">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> Confirmed
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" /> Confirmed
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
-                          <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Approval
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
+                          <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" /> Pending Approval
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Devotee Metadata Sub-row */}
-                  <div className="text-[10.5px] text-slate-500 flex items-center gap-1.5 flex-wrap pl-9 -mt-1 font-medium leading-tight">
-                    <span>{reg.gender || 'Devotee'}</span>
-                    {reg.age && <span>• Age {reg.age}</span>}
-                    {reg.counselor_name && (
-                      <span className="text-slate-600 truncate max-w-[220px]">
-                        • Counselor: <span className="font-semibold text-slate-800">{reg.counselor_name}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Camp Information Strip */}
-                  {reg.is_registered && reg.camp_title ? (
-                    <div className="rounded-lg bg-orange-50/60 border border-orange-200/80 px-2.5 py-1.5 space-y-1">
-                      <div className="flex items-center justify-between gap-1.5 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <Tent className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                          <span className="font-bold text-orange-950 truncate text-[11.5px]">{reg.camp_title}</span>
+                  {/* Camp Information Strip (for registered devotees) */}
+                  {reg.is_registered && reg.camp_title && (
+                    <div className="rounded-lg bg-orange-50/70 border border-orange-200/80 px-2 py-1 space-y-0.5">
+                      <div className="flex items-center justify-between gap-1 text-[11px]">
+                        <div className="flex items-center gap-1 min-w-0 font-bold text-orange-950 truncate">
+                          <Tent className="w-3 h-3 text-orange-600 shrink-0" />
+                          <span className="truncate">{reg.camp_title}</span>
                         </div>
                         {reg.camp_track && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
+                          <span className="px-1.5 py-0.2 rounded text-[8.5px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
                             {reg.camp_track}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-orange-900/90 font-medium">
-                        <span className="flex items-center gap-1 font-semibold truncate">
-                          <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                      <div className="flex items-center justify-between gap-1 text-[9.5px] text-orange-900/80 font-medium">
+                        <span className="flex items-center gap-0.5 font-semibold truncate">
+                          <Calendar className="w-2.5 h-2.5 text-orange-500 shrink-0" />
                           {formatCampDatesCompact(reg.camp_start_date, reg.camp_end_date)}
                         </span>
                         {reg.camp_venue && (
-                          <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9.5px]">
+                          <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9px]">
                             <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            <span className="truncate max-w-[130px]">{reg.camp_venue}</span>
+                            <span className="truncate max-w-[120px]">{reg.camp_venue}</span>
                           </span>
                         )}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg bg-rose-50/50 border border-rose-200/60 px-2.5 py-1.5 flex items-center justify-between gap-1.5 text-xs">
-                      <div className="flex items-center gap-1.5 text-rose-900/90 font-semibold text-[11px]">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                        <span>No camp registration booked yet</span>
-                      </div>
-                      <span className="text-[9px] font-extrabold text-rose-700 bg-white border border-rose-200 px-1.5 py-0.2 rounded shadow-2xs">
-                        Follow-up Needed
-                      </span>
                     </div>
                   )}
 
@@ -693,35 +675,35 @@ export default function CenterCampRegistrationsView({
                           )}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all flex items-center gap-1 text-[10.5px] font-bold shadow-2xs cursor-pointer"
+                          className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all flex items-center gap-1 text-[10px] font-bold shadow-2xs cursor-pointer"
                           title={reg.is_registered ? 'Message on WhatsApp' : 'Send Camp Invite on WhatsApp'}
                         >
-                          <MessageCircle className="w-3 h-3 text-white" />
+                          <MessageCircle className="w-2.5 h-2.5 text-white" />
                           <span>{reg.is_registered ? 'WhatsApp' : 'WhatsApp Invite'}</span>
                         </a>
                       )}
                       {reg.whatsapp && (
                         <a
                           href={`tel:${reg.whatsapp}`}
-                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 transition-all flex items-center gap-1 text-[10.5px] font-bold cursor-pointer"
+                          className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 transition-all flex items-center gap-1 text-[10px] font-bold cursor-pointer"
                           title="Call devotee"
                         >
-                          <Phone className="w-3 h-3 text-slate-500" />
+                          <Phone className="w-2.5 h-2.5 text-slate-500" />
                           <span>Call</span>
                         </a>
                       )}
                     </div>
 
-                    <div className="text-right flex items-baseline gap-1.5">
+                    <div className="text-right flex items-baseline gap-1">
                       {reg.is_registered ? (
                         <>
-                          <span className="text-[9.5px] font-medium text-slate-400 uppercase tracking-wider">{reg.payment_method || 'Online'}</span>
-                          <span className="font-black text-slate-900 text-xs sm:text-sm">
+                          <span className="text-[9px] font-medium text-slate-400 uppercase">{reg.payment_method || 'Online'}</span>
+                          <span className="font-black text-slate-900 text-xs">
                             ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
                           </span>
                         </>
                       ) : (
-                        <span className="text-[10px] text-slate-400 font-medium">Pending Camp Pass</span>
+                        <span className="text-[9.5px] text-slate-400 font-medium">Pending Camp Pass</span>
                       )}
                     </div>
                   </div>
@@ -899,26 +881,26 @@ export default function CenterCampRegistrationsView({
 
           {/* Pagination Controls Bar */}
           {filteredRegistrations.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-2.5 sm:p-3 flex items-center justify-between gap-3 flex-wrap shadow-2xs">
-              <div className="text-xs text-slate-500 font-medium">
+            <div className="bg-white rounded-xl border border-slate-200 p-2 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+              <div className="text-[11px] sm:text-xs text-slate-500 font-medium">
                 Page <strong className="text-slate-900 font-bold">{safePage}</strong> of{' '}
                 <strong className="text-slate-900 font-bold">{totalPages}</strong> ({filteredRegistrations.length} total)
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
                 {/* Per Page Dropdown */}
                 <div className="relative inline-flex items-center">
                   <select
                     value={pageSize}
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg pl-2.5 pr-7 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white cursor-pointer transition-all shadow-2xs"
+                    className="appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 text-[11px] sm:text-xs font-bold rounded-lg pl-2 sm:pl-2.5 pr-6 sm:pr-7 py-1 sm:py-1.5 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white cursor-pointer transition-all shadow-2xs"
                     aria-label="Items per page"
                   >
                     <option value={10}>10 / page</option>
                     <option value={20}>20 / page</option>
                     <option value={30}>30 / page</option>
                   </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400 pointer-events-none" />
                 </div>
 
                 {totalPages > 1 && (
@@ -927,10 +909,10 @@ export default function CenterCampRegistrationsView({
                       type="button"
                       disabled={safePage <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                      className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
                       title="Previous Page"
                     >
-                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <ChevronLeft className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                       <span className="hidden sm:inline">Prev</span>
                     </button>
 
@@ -943,12 +925,12 @@ export default function CenterCampRegistrationsView({
                           return (
                             <div key={p} className="flex items-center gap-1">
                               {prev && p - prev > 1 && (
-                                <span className="text-slate-400 px-1 text-xs">...</span>
+                                <span className="text-slate-400 px-0.5 sm:px-1 text-[11px] sm:text-xs">...</span>
                               )}
                               <button
                                 type="button"
                                 onClick={() => setCurrentPage(p)}
-                                className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                                   safePage === p
                                     ? 'bg-orange-600 text-white shadow-xs'
                                     : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
@@ -965,11 +947,11 @@ export default function CenterCampRegistrationsView({
                       type="button"
                       disabled={safePage >= totalPages}
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
+                      className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer"
                       title="Next Page"
                     >
                       <span className="hidden sm:inline">Next</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                     </button>
                   </div>
                 )}
