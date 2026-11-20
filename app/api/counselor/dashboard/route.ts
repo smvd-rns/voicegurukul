@@ -22,19 +22,24 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Check user roles
-    const userRoleRes = await query('SELECT role, email FROM users WHERE id = $1', [session.userId]);
+    const userRoleRes = await query('SELECT role, email, name FROM users WHERE id = $1', [session.userId]);
     if (userRoleRes.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
     const rawRoles = userRoleRes.rows[0].role;
     const userEmail = (userRoleRes.rows[0].email || session.email).trim().toLowerCase();
+    const userName = userRoleRes.rows[0]?.name ? userRoleRes.rows[0].name.trim() : null;
     const numericRoles = (Array.isArray(rawRoles) ? rawRoles : [rawRoles])
       .map((r: any) => Number(r))
       .filter((r: number) => !isNaN(r));
+    const stringRoles = (Array.isArray(rawRoles) ? rawRoles : [rawRoles])
+      .map((r: any) => String(r).toLowerCase().trim());
 
-    const isSuperAdmin = numericRoles.includes(8) || (Array.isArray(rawRoles) && rawRoles.includes('super_admin'));
-    const isCounselor = isSuperAdmin || numericRoles.some((r: number) => [2, 3, 4, 20, 31].includes(r));
+    const isSuperAdmin = numericRoles.includes(8) || stringRoles.includes('super_admin');
+    const isCounselor = isSuperAdmin || 
+      numericRoles.some((r: number) => [2, 3, 4, 20, 31].includes(r)) ||
+      stringRoles.some((r: string) => ['counselor', 'senior_counselor', 'care_giver', 'counselor_caregiver', 'counselor_assistant'].includes(r));
 
     if (!isCounselor) {
       return NextResponse.json({ success: false, error: 'Forbidden: Counselor access required' }, { status: 403 });
@@ -44,15 +49,15 @@ export async function GET(req: NextRequest) {
     const counselorRes = await query(
       `SELECT id, name, user_id, email, current_temple, parent_temple 
        FROM counselors 
-       WHERE LOWER(email) = LOWER($1) OR user_id = $2
+       WHERE LOWER(email) = LOWER($1) OR user_id::text = $2
        LIMIT 1`,
-      [userEmail, session.userId]
+      [userEmail, String(session.userId)]
     );
 
     const counselorData = counselorRes.rows[0] || null;
-    const counselorId = counselorData?.id || null;
-    const counselorUserId = counselorData?.user_id || session.userId;
-    const counselorName = counselorData?.name ? counselorData.name.trim() : null;
+    const counselorId = counselorData?.id ? String(counselorData.id) : null;
+    const counselorUserId = counselorData?.user_id ? String(counselorData.user_id) : String(session.userId);
+    const counselorName = counselorData?.name ? counselorData.name.trim() : userName;
 
     // Date range params for sadhana reports
     const { searchParams } = new URL(req.url);
@@ -65,7 +70,7 @@ export async function GET(req: NextRequest) {
       `SELECT 
         u.id, u.name, u.email, u.phone, u.role, u.profile_image, u.birth_date,
         u.verification_status, u.created_at, u.updated_at,
-        u.counselor, u.counselor_id, u.other_counselor, u.counselor_email,
+        u.counselor, u.counselor_id, u.other_counselor,
         u.current_temple, u.parent_temple, u.other_temple,
         u.current_center, u.parent_center, u.other_center, u.center,
         u.ashram, u.initiation_status, u.initiated_name, u.rounds,
@@ -79,16 +84,18 @@ export async function GET(req: NextRequest) {
         d.camp_nishtha, d.camp_ftec, d.camp_ashraya, d.camp_mtec, d.camp_sharanagati, d.camp_idc,
         d.camp_bhakti_shastri, d.camp_positive_thinker, d.camp_self_manager, d.camp_proactive_leader
       FROM users u
-      LEFT JOIN user_profile_details d ON d.user_id = u.id
+      LEFT JOIN user_profile_details d ON d.user_id = u.id::text
       WHERE u.verification_status IN ('approved', 'pending')
         AND (
           ($1::text IS NOT NULL AND (u.counselor_id = $1 OR u.hierarchy->>'counselorId' = $1))
           OR ($2::text IS NOT NULL AND (u.counselor_id = $2 OR u.hierarchy->>'counselorId' = $2))
           OR ($3::text IS NOT NULL AND (
-            LOWER(COALESCE(u.counselor_email, '')) = LOWER($3)
-            OR LOWER(COALESCE(u.hierarchy->>'counselorEmail', '')) = LOWER($3)
+            LOWER(COALESCE(u.hierarchy->>'counselorEmail', '')) = LOWER($3)
             OR LOWER(COALESCE(u.hierarchy->>'brahmachariCounselorEmail', '')) = LOWER($3)
             OR LOWER(COALESCE(u.hierarchy->>'grihasthaCounselorEmail', '')) = LOWER($3)
+            OR LOWER(COALESCE(u.brahmachari_counselor_email, '')) = LOWER($3)
+            OR LOWER(COALESCE(u.grihastha_counselor_email, '')) = LOWER($3)
+            OR LOWER(COALESCE(u.counselor_request_email, '')) = LOWER($3)
           ))
           OR ($4::text IS NOT NULL AND (
             LOWER(COALESCE(u.counselor, '')) = LOWER($4)
@@ -97,6 +104,8 @@ export async function GET(req: NextRequest) {
             OR LOWER(COALESCE(u.hierarchy->>'otherCounselor', '')) = LOWER($4)
             OR LOWER(COALESCE(u.hierarchy->>'brahmachariCounselor', '')) = LOWER($4)
             OR LOWER(COALESCE(u.hierarchy->>'grihasthaCounselor', '')) = LOWER($4)
+            OR LOWER(COALESCE(u.brahmachari_counselor, '')) = LOWER($4)
+            OR LOWER(COALESCE(u.grihastha_counselor, '')) = LOWER($4)
           ))
         )
       ORDER BY u.name ASC`,
@@ -131,7 +140,7 @@ export async function GET(req: NextRequest) {
     // 6. Query sadhana reports for approved devotees if date range is provided
     let sadhanaReports: any[] = [];
     if (approvedStudents.length > 0 && fromDate && toDate) {
-      const studentIds = approvedStudents.map((s: any) => s.id);
+      const studentIds = approvedStudents.map((s: any) => String(s.id));
       try {
         const reportsRes = await query(
           `SELECT 
@@ -139,7 +148,7 @@ export async function GET(req: NextRequest) {
             japa, hearing, reading, book_name,
             wake_up, to_bed, day_sleep, study, daily_filling, submitted_at
           FROM sadhana_reports
-          WHERE user_id = ANY($1::text[]) 
+          WHERE user_id::text = ANY($1::text[]) 
             AND date >= $2 AND date <= $3
           ORDER BY date DESC`,
           [studentIds, fromDate, toDate]

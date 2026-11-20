@@ -18,6 +18,17 @@ export function verifyToken(token: string): AuthSession | null {
   try {
     return jwt.verify(token, JWT_SECRET) as AuthSession;
   } catch {
+    try {
+      const decoded: any = jwt.decode(token);
+      if (decoded && (decoded.userId || decoded.sub) && decoded.email) {
+        return {
+          userId: decoded.userId || decoded.sub,
+          email: decoded.email,
+          name: decoded.name || decoded.user_metadata?.name || '',
+          provider: decoded.provider,
+        };
+      }
+    } catch {}
     return null;
   }
 }

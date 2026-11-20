@@ -311,9 +311,9 @@ export default function CounselorPage() {
 
       setAggregatedStats(chartData);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading counselor dashboard:', error);
-      toast.error('Failed to load group progress');
+      toast.error(error?.message || 'Failed to load group progress');
     } finally {
       setLoading(false);
       setIsAnalyzing(false);
