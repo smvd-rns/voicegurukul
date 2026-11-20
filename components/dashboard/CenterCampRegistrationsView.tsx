@@ -196,31 +196,40 @@ export default function CenterCampRegistrationsView({
     }
   };
 
+  const formatCampDatesCompact = (startDateStr?: string, endDateStr?: string) => {
+    if (!startDateStr || !endDateStr) return 'Dates TBD';
+    try {
+      const s = typeof startDateStr === 'string' ? parseISO(startDateStr) : startDateStr;
+      const e = typeof endDateStr === 'string' ? parseISO(endDateStr) : endDateStr;
+      return `${format(s, 'dd MMM')} → ${format(e, 'dd MMM yyyy')}`;
+    } catch {
+      return `${startDateStr.slice(5, 10)} → ${endDateStr.slice(0, 10)}`;
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Banner & Center Switcher */}
-      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-200/90 rounded-2xl p-3.5 sm:p-4 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-200/90 rounded-2xl p-2.5 sm:p-4 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-2xs">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-xs shrink-0">
-            <Tent className="w-5 h-5" />
+            <Tent className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h2 className="text-sm sm:text-lg font-black text-slate-900 tracking-tight">
                 Center Camp Registrations
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                <Shield className="w-3 h-3 text-emerald-600" /> Center Isolated
+              <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                <Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600" /> Center Isolated
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <Building2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1 sm:gap-1.5 flex-wrap">
+              <Building2 className="w-3 h-3 text-orange-500 shrink-0" />
               <span>Current Center:</span>
               <strong className="text-orange-900 font-bold underline decoration-orange-300">
                 {selectedCenter || 'Loading center...'}
               </strong>
-              <span className="text-slate-300 hidden sm:inline">•</span>
-              <span className="text-slate-500 text-[11px]">Only devotees from your managed center are displayed.</span>
             </p>
           </div>
         </div>
@@ -280,64 +289,64 @@ export default function CenterCampRegistrationsView({
       {/* KPI Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
         {/* Total Registrations */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Devotees</span>
-            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
-              <Users className="w-4 h-4" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Devotees</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900">
+          <div className="text-lg sm:text-2xl font-black text-slate-900">
             {loading ? '...' : stats.total}
           </div>
-          <p className="text-[10px] text-blue-600 font-bold mt-0.5">From {selectedCenter}</p>
+          <p className="text-[9.5px] sm:text-[10px] text-blue-600 font-bold mt-0.5 truncate">From {selectedCenter}</p>
         </div>
 
         {/* Confirmed Passes */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed Passes</span>
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed Passes</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-700">
+          <div className="text-lg sm:text-2xl font-black text-emerald-700">
             {loading ? '...' : stats.confirmed}
           </div>
-          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Registration & Payment Done</p>
+          <p className="text-[9.5px] sm:text-[10px] text-emerald-600 font-bold mt-0.5 truncate">Pass Issued & Done</p>
         </div>
 
         {/* Pending Approval / Payment */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pending Action</span>
-            <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-              <Clock className="w-4 h-4" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pending Action</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-amber-50 text-amber-600">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-amber-600">
+          <div className="text-lg sm:text-2xl font-black text-amber-600">
             {loading ? '...' : stats.pending}
           </div>
-          <p className="text-[10px] text-amber-600 font-bold mt-0.5">Awaiting Transfer / Verification</p>
+          <p className="text-[9.5px] sm:text-[10px] text-amber-600 font-bold mt-0.5 truncate">Awaiting Action</p>
         </div>
 
         {/* Total Amount Paid */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Confirmed Fee</span>
-            <div className="p-1.5 rounded-lg bg-orange-50 text-orange-600">
-              <IndianRupee className="w-4 h-4" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Confirmed</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-orange-50 text-orange-600">
+              <IndianRupee className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900">
+          <div className="text-lg sm:text-2xl font-black text-slate-900">
             ₹{loading ? '...' : stats.totalAmount.toLocaleString('en-IN')}
           </div>
-          <p className="text-[10px] text-slate-400 font-bold mt-0.5">Net Contribution</p>
+          <p className="text-[9.5px] sm:text-[10px] text-slate-400 font-bold mt-0.5 truncate">Net Contribution</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs space-y-3">
+      <div className="bg-white rounded-2xl p-2.5 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5 sm:space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center">
           {/* Search Devotee */}
           <div className="relative group sm:col-span-2 lg:col-span-5">
@@ -442,92 +451,113 @@ export default function CenterCampRegistrationsView({
       ) : (
         <div className="space-y-3">
           {/* Mobile Card View */}
-          <div className="sm:hidden space-y-2.5">
+          <div className="sm:hidden space-y-2">
             {filteredRegistrations.map((reg) => {
               const isConfirmed = !reg.is_cancelled && reg.payment_status === 'completed';
               const isPending = !reg.is_cancelled && reg.payment_status !== 'completed';
               const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
 
               return (
-                <div key={reg.id} className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-black text-sm text-slate-900 truncate">
-                          {reg.participant_name}
-                        </span>
-                        {reg.passcode && (
-                          <span className="px-1.5 py-0.2 rounded text-[9.5px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
-                            #{reg.passcode}
-                          </span>
-                        )}
+                <div
+                  key={reg.id}
+                  className="bg-white border border-slate-200/90 hover:border-orange-300 rounded-xl p-2.5 shadow-2xs space-y-2 transition-all"
+                >
+                  {/* Top Header: Devotee & Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                        {reg.participant_name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                        <span>{reg.gender || 'Devotee'}</span>
-                        {reg.age && <span>• Age {reg.age}</span>}
-                        {reg.counselor_name && <span>• Counselor: {reg.counselor_name}</span>}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-black text-xs text-slate-900 truncate">
+                            {reg.participant_name}
+                          </span>
+                          {reg.passcode && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                              #{reg.passcode}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Status Badge */}
-                    <div>
+                    {/* Status Badge: Non-wrapping shrink-0 pill */}
+                    <div className="shrink-0">
                       {reg.is_cancelled ? (
-                        <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-slate-100 text-slate-600 border border-slate-300">
-                          Cancelled
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                          <XCircle className="w-3 h-3 text-rose-500 shrink-0" /> Cancelled
                         </span>
                       ) : isConfirmed ? (
-                        <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          ✓ Confirmed
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> Confirmed
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black bg-amber-100 text-amber-800 border border-amber-300">
-                          ⏳ Pending Approval
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
+                          <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Camp Information Card */}
-                  <div className="p-2.5 rounded-xl bg-orange-50/70 border border-orange-100 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-orange-950 truncate">{reg.camp_title}</span>
+                  {/* Devotee Metadata Sub-row */}
+                  <div className="text-[10.5px] text-slate-500 flex items-center gap-1.5 flex-wrap pl-9 -mt-1 font-medium leading-tight">
+                    <span>{reg.gender || 'Devotee'}</span>
+                    {reg.age && <span>• Age {reg.age}</span>}
+                    {reg.counselor_name && (
+                      <span className="text-slate-600 truncate max-w-[220px]">
+                        • Counselor: <span className="font-semibold text-slate-800">{reg.counselor_name}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Compact Camp & Dates Strip */}
+                  <div className="rounded-lg bg-orange-50/60 border border-orange-200/80 px-2.5 py-1.5 space-y-1">
+                    <div className="flex items-center justify-between gap-1.5 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Tent className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                        <span className="font-bold text-orange-950 truncate text-[11.5px]">{reg.camp_title}</span>
+                      </div>
                       {reg.camp_track && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-white text-orange-800 border border-orange-200">
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
                           {reg.camp_track}
                         </span>
                       )}
                     </div>
-                    <div className="text-[10.5px] text-orange-800 flex items-center gap-1 font-semibold">
-                      <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
-                      <span>{formatCampDates(reg.camp_start_date, reg.camp_end_date)}</span>
+
+                    <div className="flex items-center justify-between gap-2 text-[10px] text-orange-900/90 font-medium">
+                      <span className="flex items-center gap-1 font-semibold truncate">
+                        <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                        {formatCampDatesCompact(reg.camp_start_date, reg.camp_end_date)}
+                      </span>
+                      {reg.camp_venue && (
+                        <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9.5px]">
+                          <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-[130px]">{reg.camp_venue}</span>
+                        </span>
+                      )}
                     </div>
-                    {reg.camp_venue && (
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{reg.camp_venue}</span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Contact & Follow Up */}
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-                    <div className="flex items-center gap-2">
+                  {/* Action & Fee Footer */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
                       {cleanPhone && (
                         <a
                           href={`https://wa.me/${cleanPhone}?text=Hare%20Krishna%20Prabhuji%2C%20regarding%20your%20registration%20for%20${encodeURIComponent(reg.camp_title)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1 text-[11px] font-bold"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all flex items-center gap-1 text-[10.5px] font-bold shadow-2xs cursor-pointer"
                           title="Message on WhatsApp"
                         >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          <MessageCircle className="w-3 h-3 text-white" />
                           <span>WhatsApp</span>
                         </a>
                       )}
                       {reg.whatsapp && (
                         <a
                           href={`tel:${reg.whatsapp}`}
-                          className="p-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors flex items-center gap-1 text-[11px] font-bold"
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 transition-all flex items-center gap-1 text-[10.5px] font-bold cursor-pointer"
                           title="Call attendee"
                         >
                           <Phone className="w-3 h-3 text-slate-500" />
@@ -536,9 +566,11 @@ export default function CenterCampRegistrationsView({
                       )}
                     </div>
 
-                    <div className="text-right">
-                      <div className="font-black text-slate-900 text-sm">₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}</div>
-                      <div className="text-[9.5px] text-slate-400 capitalize">{reg.payment_method || 'Online'}</div>
+                    <div className="text-right flex items-baseline gap-1.5">
+                      <span className="text-[9.5px] font-medium text-slate-400 uppercase tracking-wider">{reg.payment_method || 'Online'}</span>
+                      <span className="font-black text-slate-900 text-xs sm:text-sm">
+                        ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -680,3 +712,4 @@ export default function CenterCampRegistrationsView({
     </div>
   );
 }
+
