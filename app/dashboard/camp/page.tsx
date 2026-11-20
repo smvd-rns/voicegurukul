@@ -2230,13 +2230,18 @@ function CampDashboardContent() {
         return false;
       };
 
-      const options = {
+      const callbackUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/api/camps/razorpay-callback`
+        : undefined;
+
+      const options: any = {
         key: orderData.keyId,
         amount: orderData.amount,
         currency: 'INR',
         name: 'VOICE Gurukul',
         description: `${selectedCamp?.title} Registration (${entries.length} Devotees)`,
         order_id: orderData.id,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         notes: {
           payment_for: selectedCamp?.title || '',
           website: currentWebsite,

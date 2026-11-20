@@ -425,15 +425,19 @@ export default function PublicCampRegistrationPage() {
   const checkPendingPayment = useCallback(async () => {
     if (!camp?.id) return;
     let cachedOrderId: string | undefined;
+    let storedPocPhone = '';
+    let storedPocEmail = '';
     if (typeof window !== 'undefined') {
       try {
         cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
                         localStorage.getItem(`pending_camp_order_${camp.id}`) ||
                         undefined;
+        storedPocPhone = localStorage.getItem('last_poc_contact') || '';
+        storedPocEmail = localStorage.getItem('last_poc_email') || '';
       } catch (e) {}
     }
-    const devoteePhone = userData?.phone || user?.phone || '';
-    const devoteeEmail = userData?.email || user?.email || '';
+    const devoteePhone = userData?.phone || user?.phone || pocDetails?.pocContact || entries[0]?.whatsapp || storedPocPhone || '';
+    const devoteeEmail = userData?.email || user?.email || pocDetails?.email || entries[0]?.email || storedPocEmail || '';
 
     if (!cachedOrderId && !devoteePhone && !devoteeEmail) return;
 
@@ -470,7 +474,7 @@ export default function PublicCampRegistrationPage() {
     } catch (err) {
       console.error('Error auto-checking devotee pending payment:', err);
     }
-  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email, applyPaymentConfirmation]);
+  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email, pocDetails?.pocContact, pocDetails?.email, entries, applyPaymentConfirmation]);
 
   /** After PhonePe/GPay return, poll until booking is confirmed (or timeout). */
   const recoverMobilePaymentWithPolling = useCallback(async () => {
@@ -502,17 +506,44 @@ export default function PublicCampRegistrationPage() {
   }, [camp?.id, checkPendingPayment]);
 
   useEffect(() => {
-    checkPendingPayment();
+    let urlOrderId: string | null = null;
+    let isSuccessRedirect = false;
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlOrderId = urlParams.get('order_id');
+        isSuccessRedirect = urlParams.get('payment_success') === 'true';
+        if (urlOrderId && camp?.id) {
+          sessionStorage.setItem(`pending_camp_order_${camp.id}`, urlOrderId);
+          localStorage.setItem(`pending_camp_order_${camp.id}`, urlOrderId);
+        }
+      } catch (e) {}
+    }
+
+    let cachedOrderId: string | null = null;
+    try {
+      if (camp?.id) {
+        cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
+          localStorage.getItem(`pending_camp_order_${camp.id}`);
+      }
+    } catch (e) {}
+
+    // If returning from mobile payment redirect or cached order exists, run recovery poll immediately!
+    if (isSuccessRedirect || urlOrderId || cachedOrderId) {
+      recoverMobilePaymentWithPolling();
+    } else {
+      checkPendingPayment();
+    }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible' || !camp?.id) return;
-      let cachedOrderId: string | null = null;
+      let activeOrderId: string | null = null;
       try {
-        cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
+        activeOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
           localStorage.getItem(`pending_camp_order_${camp.id}`);
       } catch (e) {}
       // Only run aggressive UPI recovery poll when we know an order was started
-      if (cachedOrderId) {
+      if (activeOrderId) {
         recoverMobilePaymentWithPolling();
       } else {
         checkPendingPayment();
@@ -1567,16 +1598,23 @@ export default function PublicCampRegistrationPage() {
         try {
           sessionStorage.setItem(`pending_camp_order_${camp.id}`, orderData.id);
           localStorage.setItem(`pending_camp_order_${camp.id}`, orderData.id);
+          if (pocDetails.pocContact) localStorage.setItem('last_poc_contact', pocDetails.pocContact);
+          if (pocDetails.email) localStorage.setItem('last_poc_email', pocDetails.email);
         } catch (e) {}
       }
 
-      const options = {
+      const callbackUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/api/camps/razorpay-callback`
+        : undefined;
+
+      const options: any = {
         key: orderData.keyId,
         amount: orderData.amount,
         currency: 'INR',
         name: 'VOICE Gurukul',
         description: `${camp?.title} Registration (${entries.length} Devotees)`,
         order_id: orderData.id,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         notes: {
           payment_for: camp?.title || '',
           website: currentWebsite,
