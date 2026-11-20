@@ -33,7 +33,8 @@ import {
   getUserAllocatedCampsAction,
   getCenterDevoteesForCampRegistrationAction,
   validateCampCouponAction,
-  getCampAccommodationCapacityStatusAction
+  getCampAccommodationCapacityStatusAction,
+  checkDevoteePendingPaymentAction
 } from '@/app/dashboard/admin/camps/actions';
 import CampPrasadamCard from '@/components/camps/CampPrasadamCard';
 import AdminCampQrScannerModal from '@/components/camps/AdminCampQrScannerModal';
@@ -2204,6 +2205,31 @@ function CampDashboardContent() {
 
       const orderData = await orderRes.json();
 
+      if (typeof window !== 'undefined' && selectedCamp?.id && orderData?.id) {
+        try {
+          sessionStorage.setItem(`pending_camp_order_${selectedCamp.id}`, orderData.id);
+          localStorage.setItem(`pending_camp_order_${selectedCamp.id}`, orderData.id);
+        } catch (e) {}
+      }
+
+      const verifyLivePaymentStatus = async () => {
+        if (!selectedCamp?.id) return null;
+        try {
+          const res = await checkDevoteePendingPaymentAction({
+            campId: selectedCamp.id,
+            orderId: orderData.id,
+            phone: payerContact || undefined,
+            email: payerEmail || undefined,
+          });
+          if (res.isAlreadyConfirmed) {
+            toast.success('Payment verified & booking confirmed!');
+            window.location.reload();
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      };
+
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
@@ -2233,14 +2259,23 @@ function CampDashboardContent() {
           });
         },
         modal: {
-          ondismiss: function () {
+          ondismiss: async function () {
             setIsSubmitting(false);
+            // On mobile, check if devotee completed payment in PhonePe/GPay before closing
+            await verifyLivePaymentStatus();
           },
         },
       };
 
       const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (resp: any) {
+      rzp.on('payment.failed', async function (resp: any) {
+        // Double check with server to ensure payment was not actually captured before displaying error
+        const isConfirmed = await verifyLivePaymentStatus();
+        if (isConfirmed) {
+          setIsSubmitting(false);
+          return;
+        }
+
         const errorMsg = resp.error?.description || 'Payment failed';
         setPaymentError(errorMsg);
         setIsSubmitting(false);

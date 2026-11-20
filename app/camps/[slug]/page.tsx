@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Script from 'next/script';
 import Link from 'next/link';
@@ -382,54 +382,77 @@ export default function PublicCampRegistrationPage() {
   }, [camp?.id, userData?.id]);
 
   // Auto-check for unlinked captured payment awaiting accountant reconciliation
-  useEffect(() => {
+  const checkPendingPayment = useCallback(async () => {
     if (!camp?.id) return;
-    const checkPendingPayment = async () => {
-      let cachedOrderId: string | undefined;
-      if (typeof window !== 'undefined') {
-        try {
-          cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
-                          localStorage.getItem(`pending_camp_order_${camp.id}`) ||
-                          undefined;
-        } catch (e) {}
-      }
-      const devoteePhone = userData?.phone || user?.phone || '';
-      const devoteeEmail = userData?.email || user?.email || '';
-
-      if (!cachedOrderId && !devoteePhone && !devoteeEmail) return;
-
+    let cachedOrderId: string | undefined;
+    if (typeof window !== 'undefined') {
       try {
-        const res = await checkDevoteePendingPaymentAction({
-          campId: camp.id,
-          phone: devoteePhone || undefined,
-          email: devoteeEmail || undefined,
-          orderId: cachedOrderId,
-        });
+        cachedOrderId = sessionStorage.getItem(`pending_camp_order_${camp.id}`) ||
+                        localStorage.getItem(`pending_camp_order_${camp.id}`) ||
+                        undefined;
+      } catch (e) {}
+    }
+    const devoteePhone = userData?.phone || user?.phone || '';
+    const devoteeEmail = userData?.email || user?.email || '';
 
-        if (res.success && res.hasPendingPayment && res.pendingPayment) {
-          setPendingPaymentInfo({
-            paymentId: res.pendingPayment.paymentId,
-            orderId: res.pendingPayment.orderId,
-            amount: res.pendingPayment.amount,
-            payerName: res.pendingPayment.payerName,
-            createdAt: res.pendingPayment.createdAt,
-            status: res.pendingPayment.status,
-          });
-        } else {
-          if (typeof window !== 'undefined') {
-            try {
-              sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
-              localStorage.removeItem(`pending_camp_order_${camp.id}`);
-            } catch (e) {}
-          }
+    if (!cachedOrderId && !devoteePhone && !devoteeEmail) return;
+
+    try {
+      const res = await checkDevoteePendingPaymentAction({
+        campId: camp.id,
+        phone: devoteePhone || undefined,
+        email: devoteeEmail || undefined,
+        orderId: cachedOrderId,
+      });
+
+      if (res.success && res.hasPendingPayment && res.pendingPayment) {
+        setPendingPaymentInfo({
+          paymentId: res.pendingPayment.paymentId,
+          orderId: res.pendingPayment.orderId,
+          amount: res.pendingPayment.amount,
+          payerName: res.pendingPayment.payerName,
+          createdAt: res.pendingPayment.createdAt,
+          status: res.pendingPayment.status,
+        });
+      } else if (res.isAlreadyConfirmed) {
+        if (typeof window !== 'undefined' && camp?.id) {
+          try {
+            sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
+            localStorage.removeItem(`pending_camp_order_${camp.id}`);
+          } catch (e) {}
         }
-      } catch (err) {
-        console.error('Error auto-checking devotee pending payment:', err);
+        setPendingPaymentInfo(null);
+        window.location.reload();
+      } else {
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.removeItem(`pending_camp_order_${camp.id}`);
+            localStorage.removeItem(`pending_camp_order_${camp.id}`);
+          } catch (e) {}
+        }
+      }
+      return res;
+    } catch (err) {
+      console.error('Error auto-checking devotee pending payment:', err);
+    }
+  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email]);
+
+  useEffect(() => {
+    checkPendingPayment();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkPendingPayment();
       }
     };
 
-    checkPendingPayment();
-  }, [camp?.id, userData?.phone, user?.phone, userData?.email, user?.email]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [checkPendingPayment]);
 
   const handleManualPaymentCheck = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1498,14 +1521,23 @@ export default function PublicCampRegistrationPage() {
           });
         },
         modal: {
-          ondismiss: function () {
+          ondismiss: async function () {
             setIsSubmitting(false);
+            // On mobile, user may have completed payment in PhonePe/GPay and returned
+            await checkPendingPayment();
           },
         },
       };
 
       const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (resp: any) {
+      rzp.on('payment.failed', async function (resp: any) {
+        // Double check with server to ensure payment was not actually captured before displaying error
+        const checkRes = await checkPendingPayment();
+        if (checkRes?.isAlreadyConfirmed) {
+          setIsSubmitting(false);
+          return;
+        }
+
         const errorMsg = resp.error?.description || 'Payment failed';
         setPaymentError(errorMsg);
         setIsSubmitting(false);

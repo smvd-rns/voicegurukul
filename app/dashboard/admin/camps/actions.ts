@@ -10,6 +10,7 @@ import { getAuthUserFromCookies } from '@/lib/supabase/admin';
 import { Camp, CampRegistration, CampRefundRequest, CampAuditTransaction, CampAdminAllocation } from '@/types';
 import { buildMealMatrix, sortMealDays, parseMealDayToIso } from '@/lib/camp-cost';
 import { revalidatePath } from 'next/cache';
+import { autoCompleteCampOrderRegistration } from '@/lib/camps/auto-register';
 
 /**
  * Verify if the caller is an authorized admin (Super Admin / Higher Admin / Event Admin)
@@ -2883,6 +2884,15 @@ export async function checkDevoteePendingPaymentAction(params: {
         // Registration already exists! Update order status to confirmed
         await query("UPDATE camp_payment_orders SET booking_status = 'confirmed' WHERE id = $1", [order.id]);
         return { success: true, hasPendingPayment: false, isAlreadyConfirmed: true };
+      }
+
+      // If payment was captured but browser was interrupted (e.g. mobile app switch), auto-complete booking now!
+      if (order.payment_id && (order.status === 'paid' || order.status === 'captured')) {
+        const autoRes = await autoCompleteCampOrderRegistration(order.order_id, order.payment_id);
+        if (autoRes.success) {
+          await query("UPDATE camp_payment_orders SET booking_status = 'confirmed' WHERE id = $1", [order.id]);
+          return { success: true, hasPendingPayment: false, isAlreadyConfirmed: true };
+        }
       }
     }
 

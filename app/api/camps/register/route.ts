@@ -294,12 +294,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Order ID mismatch for this payment ID' }, { status: 400 });
           }
 
-          const expectedPaise = Math.round(serverFinalTotal * 100);
+          if (payment.status !== 'captured' && payment.status !== 'authorized') {
+            return NextResponse.json({ error: `Payment is not captured or authorized (Status: ${payment.status}). Registration rejected.` }, { status: 400 });
+          }
+
+          const surchargePercent = Number(camp.payment_config?.surcharge_percent || 0);
+          const surchargeAmount = surchargePercent > 0 ? Math.round((serverFinalTotal * surchargePercent) / 100) : 0;
+          const expectedTotalWithSurcharge = serverFinalTotal + surchargeAmount;
+          const expectedPaise = Math.round(expectedTotalWithSurcharge * 100);
           const paidPaise = Number(payment.amount) || 0;
-          // Payment must be at least the expected total (surcharge may make it slightly higher)
-          if (paidPaise < expectedPaise) {
+
+          // Strict Anti-Tampering Check: Payment must match server-calculated required amount (allowing ₹1 tolerance for rounding)
+          if (paidPaise < expectedPaise - 100) {
             return NextResponse.json({
-              error: `Payment amount discrepancy: Received ₹${(paidPaise / 100).toFixed(2)}, but ₹${serverFinalTotal.toFixed(2)} is required. Registration rejected.`
+              error: `Payment amount discrepancy: Received ₹${(paidPaise / 100).toFixed(2)}, but ₹${expectedTotalWithSurcharge.toFixed(2)} is required. Registration rejected.`
             }, { status: 400 });
           }
         } catch (gatewayErr: any) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { query } from '@/lib/db';
+import { calculateDynamicCampCost } from '@/lib/camp-cost';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify camp exists and is active
-    const campRes = await query('SELECT id, status, title, slug FROM camps WHERE id = $1', [campId]);
+    const campRes = await query('SELECT * FROM camps WHERE id = $1', [campId]);
     if (campRes.rows.length === 0) {
       return NextResponse.json({ error: 'Camp not found' }, { status: 404 });
     }
@@ -45,6 +46,61 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    // --- Strict Anti-Tampering: Recompute true cost server-side ---
+    const entriesList = Array.isArray(entries) && entries.length > 0 ? entries : [];
+    if (entriesList.length === 0) {
+      return NextResponse.json({ error: 'At least one participant entry is required to create a payment order.' }, { status: 400 });
+    }
+
+    const isLate = Boolean(
+      (Number(camp.late_fee) > 0 && camp.late_fee_start_date && now >= new Date(camp.late_fee_start_date)) ||
+      (camp.late_fee_config?.enabled && camp.late_fee_config?.start_date && now >= new Date(camp.late_fee_config.start_date))
+    );
+
+    let serverBaseTotal = 0;
+    for (const entry of entriesList) {
+      const cost = calculateDynamicCampCost(camp, {
+        firstMealDate: entry.first_meal_date || entry.firstMealDate || '',
+        firstMealType: entry.first_meal_type || entry.firstMealType || 'Breakfast',
+        lastMealDate: entry.last_meal_date || entry.lastMealDate || '',
+        lastMealType: entry.last_meal_type || entry.lastMealType || 'Dinner',
+        accommodation: entry.accommodation || 'No',
+        participantType: entry.participant_type || entry.participantType || 'Camp Participant',
+        campTrack: entry.camp_track || entry.campTrack
+      }, isLate);
+      serverBaseTotal += cost.totalCost;
+    }
+
+    // Validate coupon code against camp configuration if provided
+    let serverDiscount = 0;
+    const requestedCoupon = formData?.couponCode || body.couponCode;
+    if (requestedCoupon && serverBaseTotal > 0) {
+      const coupons: any[] = camp.special_waivers?.coupons || [];
+      const cleanCode = String(requestedCoupon).trim().toUpperCase();
+      const matchedCoupon = coupons.find((c) => String(c.code).trim().toUpperCase() === cleanCode);
+      if (matchedCoupon) {
+        if (!matchedCoupon.max_uses || (Number(matchedCoupon.used_count) || 0) < matchedCoupon.max_uses) {
+          if (matchedCoupon.discount_type === 'PERCENT') {
+            serverDiscount = Math.round((serverBaseTotal * Number(matchedCoupon.discount_value)) / 100);
+          } else {
+            serverDiscount = Math.min(serverBaseTotal, Number(matchedCoupon.discount_value));
+          }
+        }
+      }
+    }
+
+    const netCampFee = Math.max(0, serverBaseTotal - serverDiscount);
+    const surchargePercent = Number(camp.payment_config?.surcharge_percent || 0);
+    const surchargeAmount = surchargePercent > 0 ? Math.round((netCampFee * surchargePercent) / 100) : 0;
+    const serverExpectedTotal = netCampFee + surchargeAmount;
+
+    // Reject underpayment / tampering attempts immediately (allowing ₹1 tolerance for integer rounding)
+    if (Number(amount) < serverExpectedTotal - 1) {
+      return NextResponse.json({
+        error: `Security Alert: Invalid payment amount detected. Expected ₹${serverExpectedTotal}, but client requested ₹${amount}. Order creation blocked.`
+      }, { status: 400 });
+    }
+
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -57,7 +113,8 @@ export async function POST(req: NextRequest) {
       key_secret: keySecret,
     });
 
-    const amountInPaise = Math.round(Number(amount) * 100);
+    // Razorpay amount MUST always be the server-calculated verified amount
+    const amountInPaise = Math.round(serverExpectedTotal * 100);
 
     // Resolve full website URL with public slug
     const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'voicegurukul.com';
@@ -98,7 +155,7 @@ export async function POST(req: NextRequest) {
         [
           order.id,
           camp.id,
-          Number(amount),
+          Number(serverExpectedTotal),
           'INR',
           payerName || null,
           payerEmail || null,
