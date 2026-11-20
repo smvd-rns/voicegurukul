@@ -170,14 +170,141 @@ export async function GET(req: NextRequest) {
     const registrationsRes = await query(sql, params);
     const registrations = registrationsRes.rows;
 
-    // 7. Calculate real-time stats
-    let totalCount = registrations.length;
+    // 7. Query active camps so camp filter is populated even with 0 registrations
+    const activeCampsRes = await query(`
+      SELECT id, title, slug, start_date AS "startDate", end_date AS "endDate", venue, status
+      FROM camps
+      WHERE status IN ('active', 'published', 'upcoming')
+      ORDER BY start_date ASC
+    `);
+
+    // 8. Query verified/approved devotees belonging to this center from users table
+    const usersRes = await query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.phone,
+        u.birth_date,
+        u.ashram,
+        u.counselor,
+        u.current_center,
+        u.center,
+        u.hierarchy
+      FROM users u
+      WHERE u.verification_status = 'approved'
+        AND (
+          u.current_center = ANY($1::text[])
+          OR u.center = ANY($1::text[])
+          OR u.hierarchy->>'currentCenter' = ANY($1::text[])
+          OR u.hierarchy->>'center' = ANY($1::text[])
+        )
+      ORDER BY u.name ASC
+    `, [targetAliases]);
+
+    // Map registrations by email and phone for matching
+    const regsByEmail = new Map<string, any>();
+    const regsByPhone = new Map<string, any>();
+    for (const r of registrations) {
+      if (r.email) regsByEmail.set(r.email.trim().toLowerCase(), r);
+      const p = String(r.whatsapp || '').replace(/[^0-9]/g, '').slice(-10);
+      if (p) regsByPhone.set(p, r);
+    }
+
+    const mergedAttendees: any[] = [];
+    const matchedRegIds = new Set<string>();
+
+    for (const u of usersRes.rows) {
+      const em = (u.email || '').trim().toLowerCase();
+      const ph = String(u.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      const reg = (em && regsByEmail.get(em)) || (ph && regsByPhone.get(ph)) || null;
+
+      const calcAge = u.birth_date
+        ? Math.floor((Date.now() - new Date(u.birth_date).getTime()) / (365.25 * 24 * 3600 * 1000))
+        : null;
+
+      if (reg) {
+        matchedRegIds.add(reg.id);
+        mergedAttendees.push({
+          ...reg,
+          devotee_id: u.id,
+          is_registered: true,
+          gender: reg.gender || (u.ashram === 'Brahmachari' ? 'Male' : 'Devotee'),
+          age: reg.age || calcAge,
+          counselor_name: reg.counselor_name || u.counselor || u.hierarchy?.counselor,
+        });
+      } else {
+        mergedAttendees.push({
+          id: `unreg-${u.id}`,
+          devotee_id: u.id,
+          participant_name: u.name,
+          email: u.email,
+          whatsapp: u.phone,
+          gender: u.ashram === 'Brahmachari' ? 'Male' : 'Devotee',
+          age: calcAge,
+          counselor_name: u.counselor || u.hierarchy?.counselor,
+          current_center: u.current_center || u.center || u.hierarchy?.currentCenter || targetCenterName,
+          voice_name: targetCenterName,
+          camp_id: null,
+          camp_title: null,
+          payment_status: 'not_registered',
+          is_registered: false,
+          is_cancelled: false,
+          total_cost: 0,
+          created_at: null,
+        });
+      }
+    }
+
+    // Any registrations not matched to existing user record
+    for (const r of registrations) {
+      if (!matchedRegIds.has(r.id)) {
+        mergedAttendees.push({
+          ...r,
+          devotee_id: r.id,
+          is_registered: true,
+        });
+      }
+    }
+
+    // 9. Calculate stats
+    const totalCenterDevotees = mergedAttendees.length;
+    let registeredCount = 0;
+    let unregisteredCount = 0;
     let confirmedCount = 0;
     let pendingCount = 0;
     let cancelledCount = 0;
     let totalAmount = 0;
 
+    for (const a of mergedAttendees) {
+      if (!a.is_registered) {
+        unregisteredCount++;
+      } else {
+        registeredCount++;
+        if (a.is_cancelled) {
+          cancelledCount++;
+        } else if (a.payment_status === 'completed') {
+          confirmedCount++;
+          totalAmount += Number(a.total_cost || 0);
+        } else {
+          // 'processing', 'pending', etc.
+          pendingCount++;
+        }
+      }
+    }
+
+    // 10. Distinct Camps Map
     const distinctCampsMap = new Map<string, { id: string; title: string; slug: string; startDate: string; endDate: string }>();
+
+    for (const c of activeCampsRes.rows) {
+      distinctCampsMap.set(c.id, {
+        id: c.id,
+        title: c.title,
+        slug: c.slug,
+        startDate: c.startDate,
+        endDate: c.endDate,
+      });
+    }
 
     for (const r of registrations) {
       if (r.camp_id && !distinctCampsMap.has(r.camp_id)) {
@@ -189,16 +316,6 @@ export async function GET(req: NextRequest) {
           endDate: r.camp_end_date,
         });
       }
-
-      if (r.is_cancelled) {
-        cancelledCount++;
-      } else if (r.payment_status === 'completed') {
-        confirmedCount++;
-        totalAmount += Number(r.total_cost || 0);
-      } else {
-        // 'processing', 'pending', etc.
-        pendingCount++;
-      }
     }
 
     return NextResponse.json({
@@ -206,14 +323,17 @@ export async function GET(req: NextRequest) {
       currentCenter: targetCenterName,
       authorizedCenters: authorizedCenters.map(c => ({ id: c.id, name: c.name, temple: c.temple_name })),
       stats: {
-        total: totalCount,
+        total: totalCenterDevotees,
+        totalCenterDevotees,
+        registered: registeredCount,
+        unregistered: unregisteredCount,
         confirmed: confirmedCount,
         pending: pendingCount,
         cancelled: cancelledCount,
         totalAmount,
       },
       distinctCamps: Array.from(distinctCampsMap.values()),
-      registrations,
+      registrations: mergedAttendees,
     }, {
       headers: {
         'Cache-Control': 'no-store',

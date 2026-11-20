@@ -21,7 +21,9 @@ import {
   Building2,
   Shield,
   ChevronDown,
-  AlertCircle
+  AlertCircle,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
@@ -37,11 +39,12 @@ export interface CampAttendee {
   voice_name?: string;
   current_temple?: string;
   counselor_name?: string;
-  camp_id: string;
+  is_registered: boolean;
+  camp_id?: string;
   camp_track?: string;
   accommodation?: string;
   passcode?: string;
-  payment_status: 'completed' | 'processing' | 'pending' | string;
+  payment_status: 'completed' | 'processing' | 'pending' | 'not_registered' | string;
   payment_method?: string;
   total_cost?: number | string;
   is_cancelled: boolean;
@@ -50,11 +53,11 @@ export interface CampAttendee {
   poc_name?: string;
   poc_contact?: string;
   group_id?: string;
-  created_at: string;
-  camp_title: string;
+  created_at?: string;
+  camp_title?: string;
   camp_slug?: string;
-  camp_start_date: string;
-  camp_end_date: string;
+  camp_start_date?: string;
+  camp_end_date?: string;
   camp_venue?: string;
   camp_status?: string;
 }
@@ -79,8 +82,19 @@ export default function CenterCampRegistrationsView({
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCampId, setSelectedCampId] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'unregistered' | 'confirmed' | 'pending' | 'cancelled'>('all');
   const [distinctCamps, setDistinctCamps] = useState<{ id: string; title: string; slug: string; startDate: string; endDate: string }[]>([]);
+
+  // Real-time server stats
+  const [stats, setStats] = useState({
+    totalCenterDevotees: 0,
+    registered: 0,
+    unregistered: 0,
+    confirmed: 0,
+    pending: 0,
+    cancelled: 0,
+    totalAmount: 0,
+  });
 
   // Update selectedCenter when prop changes
   useEffect(() => {
@@ -103,6 +117,18 @@ export default function CenterCampRegistrationsView({
 
       setRegistrations(json.registrations || []);
       setDistinctCamps(json.distinctCamps || []);
+      if (json.stats) {
+        setStats({
+          totalCenterDevotees: json.stats.totalCenterDevotees || json.stats.total || 0,
+          registered: json.stats.registered || 0,
+          unregistered: json.stats.unregistered || 0,
+          confirmed: json.stats.confirmed || 0,
+          pending: json.stats.pending || 0,
+          cancelled: json.stats.cancelled || 0,
+          totalAmount: json.stats.totalAmount || 0,
+        });
+      }
+
       if (json.authorizedCenters && json.authorizedCenters.length > 0) {
         setAuthorizedCenters(json.authorizedCenters);
         if (!centerToFetch && json.currentCenter) {
@@ -130,16 +156,22 @@ export default function CenterCampRegistrationsView({
   // Filtered registrations
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((reg) => {
-      // 1. Camp Filter
-      if (selectedCampId !== 'all' && reg.camp_id !== selectedCampId) {
-        return false;
+      // 1. Camp Filter (if camp selected, unreg devotees are omitted or shown based on status filter)
+      if (selectedCampId !== 'all') {
+        if (!reg.is_registered || reg.camp_id !== selectedCampId) {
+          return false;
+        }
       }
 
       // 2. Status Filter
-      if (statusFilter === 'confirmed') {
-        if (reg.is_cancelled || reg.payment_status !== 'completed') return false;
+      if (statusFilter === 'registered') {
+        if (!reg.is_registered) return false;
+      } else if (statusFilter === 'unregistered') {
+        if (reg.is_registered) return false;
+      } else if (statusFilter === 'confirmed') {
+        if (!reg.is_registered || reg.is_cancelled || reg.payment_status !== 'completed') return false;
       } else if (statusFilter === 'pending') {
-        if (reg.is_cancelled || reg.payment_status === 'completed') return false;
+        if (!reg.is_registered || reg.is_cancelled || reg.payment_status === 'completed') return false;
       } else if (statusFilter === 'cancelled') {
         if (!reg.is_cancelled) return false;
       }
@@ -152,9 +184,9 @@ export default function CenterCampRegistrationsView({
         const matchesPhone = (reg.whatsapp || '').toLowerCase().includes(q) || (reg.poc_contact || '').toLowerCase().includes(q);
         const matchesPasscode = (reg.passcode || '').toLowerCase().includes(q);
         const matchesCamp = (reg.camp_title || '').toLowerCase().includes(q);
-        const matchesPoc = (reg.poc_name || '').toLowerCase().includes(q);
+        const matchesCounselor = (reg.counselor_name || '').toLowerCase().includes(q);
 
-        if (!matchesName && !matchesEmail && !matchesPhone && !matchesPasscode && !matchesCamp && !matchesPoc) {
+        if (!matchesName && !matchesEmail && !matchesPhone && !matchesPasscode && !matchesCamp && !matchesCounselor) {
           return false;
         }
       }
@@ -162,28 +194,6 @@ export default function CenterCampRegistrationsView({
       return true;
     });
   }, [registrations, selectedCampId, statusFilter, searchTerm]);
-
-  // Overall Stats for selected center
-  const stats = useMemo(() => {
-    let total = registrations.length;
-    let confirmed = 0;
-    let pending = 0;
-    let cancelled = 0;
-    let totalAmount = 0;
-
-    for (const r of registrations) {
-      if (r.is_cancelled) {
-        cancelled++;
-      } else if (r.payment_status === 'completed') {
-        confirmed++;
-        totalAmount += Number(r.total_cost || 0);
-      } else {
-        pending++;
-      }
-    }
-
-    return { total, confirmed, pending, cancelled, totalAmount };
-  }, [registrations]);
 
   const formatCampDates = (startDateStr?: string, endDateStr?: string) => {
     if (!startDateStr || !endDateStr) return 'Dates TBD';
@@ -208,7 +218,7 @@ export default function CenterCampRegistrationsView({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5 sm:space-y-4">
       {/* Top Banner & Center Switcher */}
       <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-200/90 rounded-2xl p-2.5 sm:p-4 backdrop-blur-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-2xs">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -286,10 +296,15 @@ export default function CenterCampRegistrationsView({
         </div>
       </div>
 
-      {/* KPI Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
-        {/* Total Registrations */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+      {/* KPI Stat Cards: Full picture of Center Devotees + Registrations */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
+        {/* 1. Total Center Devotees */}
+        <div
+          onClick={() => setStatusFilter('all')}
+          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+            statusFilter === 'all' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200/90 hover:border-blue-300'
+          }`}
+        >
           <div className="flex items-center justify-between mb-1">
             <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Devotees</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600">
@@ -297,43 +312,74 @@ export default function CenterCampRegistrationsView({
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black text-slate-900">
-            {loading ? '...' : stats.total}
+            {loading ? '...' : stats.totalCenterDevotees}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-blue-600 font-bold mt-0.5 truncate">From {selectedCenter}</p>
+          <p className="text-[9.5px] sm:text-[10px] text-blue-600 font-bold mt-0.5 truncate">In {selectedCenter}</p>
         </div>
 
-        {/* Confirmed Passes */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+        {/* 2. Registered for Camps */}
+        <div
+          onClick={() => setStatusFilter('registered')}
+          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+            statusFilter === 'registered' ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-slate-200/90 hover:border-emerald-300'
+          }`}
+        >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed Passes</span>
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Registered</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black text-emerald-700">
-            {loading ? '...' : stats.confirmed}
+            {loading ? '...' : stats.registered}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-emerald-600 font-bold mt-0.5 truncate">Pass Issued & Done</p>
+          <p className="text-[9.5px] sm:text-[10px] text-emerald-600 font-bold mt-0.5 truncate">
+            {stats.totalCenterDevotees > 0 ? `${Math.round((stats.registered / stats.totalCenterDevotees) * 100)}% registered` : 'Active camp passes'}
+          </p>
         </div>
 
-        {/* Pending Approval / Payment */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+        {/* 3. Not Registered (Pending Registration) */}
+        <div
+          onClick={() => setStatusFilter('unregistered')}
+          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+            statusFilter === 'unregistered' ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200/90 hover:border-rose-300'
+          }`}
+        >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pending Action</span>
-            <div className="p-1 sm:p-1.5 rounded-lg bg-amber-50 text-amber-600">
-              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Not Registered</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600">
+              <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-black text-amber-600">
-            {loading ? '...' : stats.pending}
+          <div className="text-lg sm:text-2xl font-black text-rose-600">
+            {loading ? '...' : stats.unregistered}
           </div>
-          <p className="text-[9.5px] sm:text-[10px] text-amber-600 font-bold mt-0.5 truncate">Awaiting Action</p>
+          <p className="text-[9.5px] sm:text-[10px] text-rose-600 font-bold mt-0.5 truncate">Follow-up Needed</p>
         </div>
 
-        {/* Total Amount Paid */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs hover:border-slate-300 transition-all">
+        {/* 4. Confirmed Passes */}
+        <div
+          onClick={() => setStatusFilter('confirmed')}
+          className={`bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs transition-all cursor-pointer hover:-translate-y-0.5 ${
+            statusFilter === 'confirmed' ? 'border-teal-500 ring-2 ring-teal-100' : 'border-slate-200/90 hover:border-teal-300'
+          }`}
+        >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Confirmed</span>
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirmed</span>
+            <div className="p-1 sm:p-1.5 rounded-lg bg-teal-50 text-teal-600">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </div>
+          </div>
+          <div className="text-lg sm:text-2xl font-black text-teal-700">
+            {loading ? '...' : stats.confirmed}
+          </div>
+          <p className="text-[9.5px] sm:text-[10px] text-teal-600 font-bold mt-0.5 truncate">Pass Issued & Done</p>
+        </div>
+
+        {/* 5. Total Confirmed Fee */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs hover:border-slate-300 transition-all col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Fee</span>
             <div className="p-1 sm:p-1.5 rounded-lg bg-orange-50 text-orange-600">
               <IndianRupee className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
@@ -346,14 +392,77 @@ export default function CenterCampRegistrationsView({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-2.5 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5 sm:space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center">
+      <div className="bg-white rounded-2xl p-2.5 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
+        {/* Quick Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            All Devotees ({stats.totalCenterDevotees})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('registered')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              statusFilter === 'registered'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            Registered ({stats.registered})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('unregistered')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1 ${
+              statusFilter === 'unregistered'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+            }`}
+          >
+            <span>Not Registered ({stats.unregistered})</span>
+            {stats.unregistered > 0 && (
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('confirmed')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              statusFilter === 'confirmed'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+            }`}
+          >
+            Confirmed ({stats.confirmed})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('pending')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              statusFilter === 'pending'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+            }`}
+          >
+            Pending Action ({stats.pending})
+          </button>
+        </div>
+
+        {/* Search & Camp Filter Dropdowns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center pt-1 border-t border-slate-100">
           {/* Search Devotee */}
-          <div className="relative group sm:col-span-2 lg:col-span-5">
+          <div className="relative group sm:col-span-2 lg:col-span-7">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search devotee name, phone, email, passcode..."
+              placeholder="Search devotee name, phone, email, counselor, passcode..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl focus:ring-2 focus:ring-orange-100 text-xs font-medium transition-all shadow-2xs outline-none"
@@ -369,7 +478,7 @@ export default function CenterCampRegistrationsView({
           </div>
 
           {/* Camp Filter Dropdown */}
-          <div className="relative sm:col-span-1 lg:col-span-4">
+          <div className="relative sm:col-span-1 lg:col-span-5">
             <select
               value={selectedCampId}
               onChange={(e) => setSelectedCampId(e.target.value)}
@@ -385,28 +494,12 @@ export default function CenterCampRegistrationsView({
             <Tent className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
           </div>
-
-          {/* Status Filter Dropdown */}
-          <div className="relative sm:col-span-1 lg:col-span-3">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full pl-8 pr-7 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors outline-none"
-            >
-              <option value="all">All Statuses</option>
-              <option value="confirmed">🟢 Confirmed Passes</option>
-              <option value="pending">🟡 Pending Action / Transfer</option>
-              <option value="cancelled">⚪ Cancelled</option>
-            </select>
-            <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          </div>
         </div>
 
         {/* Filter Summary */}
-        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 flex-wrap gap-2">
+        <div className="flex items-center justify-between text-xs text-slate-500 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
           <span>
-            Showing <strong className="text-slate-900 font-bold">{filteredRegistrations.length}</strong> of {registrations.length} registrations from <strong className="text-orange-900 font-bold">{selectedCenter}</strong>
+            Showing <strong className="text-slate-900 font-bold">{filteredRegistrations.length}</strong> of {registrations.length} devotees from <strong className="text-orange-900 font-bold">{selectedCenter}</strong>
           </span>
 
           {(searchTerm || selectedCampId !== 'all' || statusFilter !== 'all') && (
@@ -428,7 +521,7 @@ export default function CenterCampRegistrationsView({
       {loading ? (
         <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/90 shadow-2xs">
           <RefreshCw className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-700">Loading registrations for {selectedCenter}...</p>
+          <p className="text-sm font-bold text-slate-700">Loading center devotees for {selectedCenter}...</p>
         </div>
       ) : errorMsg ? (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center text-rose-800 space-y-2">
@@ -439,33 +532,44 @@ export default function CenterCampRegistrationsView({
       ) : filteredRegistrations.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 sm:p-12 text-center border border-slate-200/90 shadow-2xs space-y-2">
           <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200 text-orange-500 mx-auto mb-3 flex items-center justify-center shadow-2xs">
-            <Tent className="w-7 h-7" />
+            <Users className="w-7 h-7" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">No Registrations Found</h3>
+          <h3 className="text-base font-bold text-slate-800">No Devotees Found</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
             {searchTerm || selectedCampId !== 'all' || statusFilter !== 'all'
-              ? 'No devotee registrations match your selected filters. Try clearing filters to see all.'
-              : `No devotees from "${selectedCenter}" have registered for camps yet.`}
+              ? 'No center devotees match your selected filters. Try clearing filters to see all.'
+              : `No devotees found for center "${selectedCenter}".`}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Mobile Card View */}
+          {/* Mobile Card View: Ultra-compact, responsive, clear registration status */}
           <div className="sm:hidden space-y-2">
             {filteredRegistrations.map((reg) => {
-              const isConfirmed = !reg.is_cancelled && reg.payment_status === 'completed';
-              const isPending = !reg.is_cancelled && reg.payment_status !== 'completed';
+              const isConfirmed = reg.is_registered && !reg.is_cancelled && reg.payment_status === 'completed';
               const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
 
               return (
                 <div
                   key={reg.id}
-                  className="bg-white border border-slate-200/90 hover:border-orange-300 rounded-xl p-2.5 shadow-2xs space-y-2 transition-all"
+                  className={`bg-white border rounded-xl p-2.5 shadow-2xs space-y-2 transition-all ${
+                    !reg.is_registered
+                      ? 'border-rose-200/90 hover:border-rose-400 bg-gradient-to-br from-rose-50/20 via-white to-white'
+                      : isConfirmed
+                      ? 'border-emerald-200/90 hover:border-emerald-400'
+                      : 'border-slate-200/90 hover:border-orange-300'
+                  }`}
                 >
                   {/* Top Header: Devotee & Status */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                      <div className={`w-7 h-7 rounded-lg text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs ${
+                        !reg.is_registered
+                          ? 'bg-gradient-to-br from-slate-400 to-slate-500'
+                          : isConfirmed
+                          ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                          : 'bg-gradient-to-br from-orange-500 to-amber-600'
+                      }`}>
                         {reg.participant_name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -484,9 +588,13 @@ export default function CenterCampRegistrationsView({
 
                     {/* Status Badge: Non-wrapping shrink-0 pill */}
                     <div className="shrink-0">
-                      {reg.is_cancelled ? (
+                      {!reg.is_registered ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-                          <XCircle className="w-3 h-3 text-rose-500 shrink-0" /> Cancelled
+                          <UserX className="w-3 h-3 text-rose-500 shrink-0" /> Not Registered
+                        </span>
+                      ) : reg.is_cancelled ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300 whitespace-nowrap">
+                          <XCircle className="w-3 h-3 text-slate-500 shrink-0" /> Cancelled
                         </span>
                       ) : isConfirmed ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 whitespace-nowrap">
@@ -494,7 +602,7 @@ export default function CenterCampRegistrationsView({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
-                          <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending
+                          <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Approval
                         </span>
                       )}
                     </div>
@@ -511,54 +619,70 @@ export default function CenterCampRegistrationsView({
                     )}
                   </div>
 
-                  {/* Compact Camp & Dates Strip */}
-                  <div className="rounded-lg bg-orange-50/60 border border-orange-200/80 px-2.5 py-1.5 space-y-1">
-                    <div className="flex items-center justify-between gap-1.5 text-xs">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Tent className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                        <span className="font-bold text-orange-950 truncate text-[11.5px]">{reg.camp_title}</span>
+                  {/* Camp Information Strip */}
+                  {reg.is_registered && reg.camp_title ? (
+                    <div className="rounded-lg bg-orange-50/60 border border-orange-200/80 px-2.5 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Tent className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                          <span className="font-bold text-orange-950 truncate text-[11.5px]">{reg.camp_title}</span>
+                        </div>
+                        {reg.camp_track && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
+                            {reg.camp_track}
+                          </span>
+                        )}
                       </div>
-                      {reg.camp_track && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
-                          {reg.camp_track}
-                        </span>
-                      )}
-                    </div>
 
-                    <div className="flex items-center justify-between gap-2 text-[10px] text-orange-900/90 font-medium">
-                      <span className="flex items-center gap-1 font-semibold truncate">
-                        <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
-                        {formatCampDatesCompact(reg.camp_start_date, reg.camp_end_date)}
-                      </span>
-                      {reg.camp_venue && (
-                        <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9.5px]">
-                          <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-[130px]">{reg.camp_venue}</span>
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-orange-900/90 font-medium">
+                        <span className="flex items-center gap-1 font-semibold truncate">
+                          <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                          {formatCampDatesCompact(reg.camp_start_date, reg.camp_end_date)}
                         </span>
-                      )}
+                        {reg.camp_venue && (
+                          <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9.5px]">
+                            <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[130px]">{reg.camp_venue}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-lg bg-rose-50/50 border border-rose-200/60 px-2.5 py-1.5 flex items-center justify-between gap-1.5 text-xs">
+                      <div className="flex items-center gap-1.5 text-rose-900/90 font-semibold text-[11px]">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span>No camp registration booked yet</span>
+                      </div>
+                      <span className="text-[9px] font-extrabold text-rose-700 bg-white border border-rose-200 px-1.5 py-0.2 rounded shadow-2xs">
+                        Follow-up Needed
+                      </span>
+                    </div>
+                  )}
 
                   {/* Action & Fee Footer */}
                   <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
                     <div className="flex items-center gap-1.5">
                       {cleanPhone && (
                         <a
-                          href={`https://wa.me/${cleanPhone}?text=Hare%20Krishna%20Prabhuji%2C%20regarding%20your%20registration%20for%20${encodeURIComponent(reg.camp_title)}`}
+                          href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                            reg.is_registered && reg.camp_title
+                              ? `Hare Krishna Prabhuji, regarding your registration for ${reg.camp_title} from ${selectedCenter}:`
+                              : `Hare Krishna Prabhuji, camp registrations are open for our center (${selectedCenter}). Please book your pass here: https://voicegurukul.com/dashboard/camp`
+                          )}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all flex items-center gap-1 text-[10.5px] font-bold shadow-2xs cursor-pointer"
-                          title="Message on WhatsApp"
+                          title={reg.is_registered ? 'Message on WhatsApp' : 'Send Camp Invite on WhatsApp'}
                         >
                           <MessageCircle className="w-3 h-3 text-white" />
-                          <span>WhatsApp</span>
+                          <span>{reg.is_registered ? 'WhatsApp' : 'WhatsApp Invite'}</span>
                         </a>
                       )}
                       {reg.whatsapp && (
                         <a
                           href={`tel:${reg.whatsapp}`}
                           className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 transition-all flex items-center gap-1 text-[10.5px] font-bold cursor-pointer"
-                          title="Call attendee"
+                          title="Call devotee"
                         >
                           <Phone className="w-3 h-3 text-slate-500" />
                           <span>Call</span>
@@ -567,10 +691,16 @@ export default function CenterCampRegistrationsView({
                     </div>
 
                     <div className="text-right flex items-baseline gap-1.5">
-                      <span className="text-[9.5px] font-medium text-slate-400 uppercase tracking-wider">{reg.payment_method || 'Online'}</span>
-                      <span className="font-black text-slate-900 text-xs sm:text-sm">
-                        ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
-                      </span>
+                      {reg.is_registered ? (
+                        <>
+                          <span className="text-[9.5px] font-medium text-slate-400 uppercase tracking-wider">{reg.payment_method || 'Online'}</span>
+                          <span className="font-black text-slate-900 text-xs sm:text-sm">
+                            ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-medium">Pending Camp Pass</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -595,16 +725,28 @@ export default function CenterCampRegistrationsView({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredRegistrations.map((reg) => {
-                    const isConfirmed = !reg.is_cancelled && reg.payment_status === 'completed';
-                    const isPending = !reg.is_cancelled && reg.payment_status !== 'completed';
+                    const isConfirmed = reg.is_registered && !reg.is_cancelled && reg.payment_status === 'completed';
                     const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
 
                     return (
-                      <tr key={reg.id} className="hover:bg-orange-50/30 transition-colors">
+                      <tr
+                        key={reg.id}
+                        className={`transition-colors ${
+                          !reg.is_registered
+                            ? 'hover:bg-rose-50/40'
+                            : 'hover:bg-orange-50/30'
+                        }`}
+                      >
                         {/* Devotee */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            <div className={`w-7 h-7 rounded-lg text-white font-black text-xs flex items-center justify-center shrink-0 ${
+                              !reg.is_registered
+                                ? 'bg-slate-400'
+                                : isConfirmed
+                                ? 'bg-emerald-600'
+                                : 'bg-gradient-to-br from-orange-400 to-amber-500'
+                            }`}>
                               {reg.participant_name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
@@ -631,26 +773,40 @@ export default function CenterCampRegistrationsView({
 
                         {/* Camp & Venue */}
                         <td className="px-3 py-3">
-                          <div className="font-bold text-slate-900 truncate max-w-[170px]" title={reg.camp_title}>
-                            {reg.camp_title}
-                          </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate max-w-[170px]">
-                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{reg.camp_venue || 'Venue confirmed'}</span>
-                          </div>
+                          {reg.is_registered && reg.camp_title ? (
+                            <>
+                              <div className="font-bold text-slate-900 truncate max-w-[170px]" title={reg.camp_title}>
+                                {reg.camp_title}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate max-w-[170px]">
+                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="truncate">{reg.camp_venue || 'Venue confirmed'}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">No camp pass booked</span>
+                          )}
                         </td>
 
                         {/* Camp Dates */}
                         <td className="px-3 py-3 whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-900 font-bold text-[11px] border border-orange-200">
-                            <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
-                            <span>{formatCampDates(reg.camp_start_date, reg.camp_end_date)}</span>
-                          </div>
+                          {reg.is_registered && reg.camp_start_date && reg.camp_end_date ? (
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-900 font-bold text-[11px] border border-orange-200">
+                              <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                              <span>{formatCampDates(reg.camp_start_date, reg.camp_end_date)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
 
                         {/* Status */}
                         <td className="px-3 py-3 text-center whitespace-nowrap">
-                          {reg.is_cancelled ? (
+                          {!reg.is_registered ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                              <UserX className="w-3 h-3 text-rose-500" /> Not Registered
+                            </span>
+                          ) : reg.is_cancelled ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600 border border-slate-300">
                               <XCircle className="w-3 h-3" /> Cancelled
                             </span>
@@ -667,26 +823,37 @@ export default function CenterCampRegistrationsView({
 
                         {/* Fee */}
                         <td className="px-3 py-3 text-right whitespace-nowrap">
-                          <div className="font-black text-slate-900 text-xs">
-                            ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-[9.5px] text-slate-400 capitalize">
-                            {reg.payment_method || 'Online'}
-                          </div>
+                          {reg.is_registered ? (
+                            <>
+                              <div className="font-black text-slate-900 text-xs">
+                                ₹{Number(reg.total_cost || 0).toLocaleString('en-IN')}
+                              </div>
+                              <div className="text-[9.5px] text-slate-400 capitalize">
+                                {reg.payment_method || 'Online'}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
 
                         {/* Follow-up Action */}
                         <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1.5">
                             {cleanPhone ? (
                               <a
-                                href={`https://wa.me/${cleanPhone}?text=Hare%20Krishna%20Prabhuji%2C%20regarding%20your%20registration%20for%20${encodeURIComponent(reg.camp_title)}`}
+                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                                  reg.is_registered && reg.camp_title
+                                    ? `Hare Krishna Prabhuji, regarding your registration for ${reg.camp_title} from ${selectedCenter}:`
+                                    : `Hare Krishna Prabhuji, camp registrations are open for our center (${selectedCenter}). Please book your pass here: https://voicegurukul.com/dashboard/camp`
+                                )}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs"
-                                title="Chat on WhatsApp"
+                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                                title={reg.is_registered ? 'Chat on WhatsApp' : 'Send Camp Invite on WhatsApp'}
                               >
                                 <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>{reg.is_registered ? 'WhatsApp' : 'Invite'}</span>
                               </a>
                             ) : null}
                             {reg.whatsapp && (
@@ -712,4 +879,3 @@ export default function CenterCampRegistrationsView({
     </div>
   );
 }
-
