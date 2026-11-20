@@ -203,7 +203,9 @@ export default function CenterCampRegistrationsView({
       }
 
       return true;
-    });
+    }).sort((a, b) =>
+      (a.participant_name || '').localeCompare(b.participant_name || '', undefined, { sensitivity: 'base' })
+    );
   }, [registrations, selectedCampId, statusFilter, searchTerm]);
 
   // Pagination Calculations

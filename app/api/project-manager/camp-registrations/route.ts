@@ -267,6 +267,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Sort devotees alphabetically (A-Z) by participant_name
+    mergedAttendees.sort((a, b) =>
+      (a.participant_name || '').localeCompare(b.participant_name || '', undefined, { sensitivity: 'base' })
+    );
+
     // 9. Calculate stats
     const totalCenterDevotees = mergedAttendees.length;
     let registeredCount = 0;
