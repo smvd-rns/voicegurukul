@@ -7,7 +7,7 @@ import { calculateDynamicCampCost } from '@/lib/camp-cost';
 import { isCampManagerialUser, userHasEligibleRole } from '@/lib/utils/roles';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
 import bcrypt from 'bcryptjs';
-import { sendCampDevoteeWelcomeAccountEmail } from '@/lib/utils/email';
+import { sendCampDevoteeWelcomeAccountEmail, sendCampTransferPendingPocEmail } from '@/lib/utils/email';
 import { getManagerAssignedLocations } from '@/app/dashboard/admin/camps/actions';
 
 export async function POST(req: NextRequest) {
@@ -958,31 +958,37 @@ export async function POST(req: NextRequest) {
           );
 
           // Asynchronously dispatch welcome email with login credentials & embedded digital pass
-          sendCampDevoteeWelcomeAccountEmail({
-            userEmail: entryEmail,
-            userName: entryParticipantName,
-            tempPassword: plainPassword,
-            campTitle: camp.title,
-            trackName: entryCampTrack,
-            centerName: studentCenter,
-            templeName: studentTemple,
-            isExistingAccount: false,
-            emailInstructions: camp.email_instructions || undefined,
-            emailLinks: camp.email_links || undefined,
-            registrationId: matchingReg?.id,
-            userPhone: entryWhatsapp || matchingReg?.whatsapp || '',
-            campStartDate: camp.start_date,
-            campEndDate: camp.end_date,
-            venue: camp.venue,
-            mealInfo: {
-              firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
-              firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
-              lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
-              lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
-              dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
-              accommodation: matchingReg?.accommodation || entry.accommodation,
-            },
-          }).catch((mailErr) => console.error('Failed to send welcome email to new student:', mailErr));
+          // ONLY if payment is already confirmed (e.g. Razorpay or 100% Coupon).
+          // For pending transfers (ITT/IDT), pass confirmation is held until administrative approval.
+          if (!isPendingVerification) {
+            sendCampDevoteeWelcomeAccountEmail({
+              userEmail: entryEmail,
+              userName: entryParticipantName,
+              tempPassword: plainPassword,
+              campTitle: camp.title,
+              trackName: entryCampTrack,
+              centerName: studentCenter,
+              templeName: studentTemple,
+              isExistingAccount: false,
+              emailInstructions: camp.email_instructions || undefined,
+              emailLinks: camp.email_links || undefined,
+              registrationId: matchingReg?.id,
+              userPhone: entryWhatsapp || matchingReg?.whatsapp || '',
+              campStartDate: camp.start_date,
+              campEndDate: camp.end_date,
+              venue: camp.venue,
+              mealInfo: {
+                firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
+                firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
+                lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
+                lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
+                dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
+                accommodation: matchingReg?.accommodation || entry.accommodation,
+              },
+            }).catch((mailErr) => console.error('Failed to send welcome email to new student:', mailErr));
+          } else {
+            console.log(`[Camp Register] Transfer verification pending for ${entryEmail}; holding pass dispatch until admin approval.`);
+          }
         } else {
           // B. Devotee ALREADY exists: Prevent duplicate account creation, send registration confirmation email with pass
           const rawEntryRounds = entry.rounds !== undefined && entry.rounds !== null && entry.rounds !== ''
@@ -1018,33 +1024,56 @@ export async function POST(req: NextRequest) {
               console.warn('Could not update counselor for existing user:', updErr);
             }
           }
-          sendCampDevoteeWelcomeAccountEmail({
-            userEmail: entryEmail,
-            userName: userCheck.rows[0].name || entryParticipantName,
-            campTitle: camp.title,
-            trackName: entryCampTrack,
-            centerName: studentCenter,
-            templeName: studentTemple,
-            isExistingAccount: true,
-            emailInstructions: camp.email_instructions || undefined,
-            emailLinks: camp.email_links || undefined,
-            registrationId: matchingReg?.id,
-            userPhone: entryWhatsapp || matchingReg?.whatsapp || userCheck.rows[0].whatsapp || '',
-            campStartDate: camp.start_date,
-            campEndDate: camp.end_date,
-            venue: camp.venue,
-            mealInfo: {
-              firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
-              firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
-              lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
-              lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
-              dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
-              accommodation: matchingReg?.accommodation || entry.accommodation,
-            },
-          }).catch((mailErr) => console.error('Failed to send camp registration email to existing student:', mailErr));
+          if (!isPendingVerification) {
+            sendCampDevoteeWelcomeAccountEmail({
+              userEmail: entryEmail,
+              userName: userCheck.rows[0].name || entryParticipantName,
+              campTitle: camp.title,
+              trackName: entryCampTrack,
+              centerName: studentCenter,
+              templeName: studentTemple,
+              isExistingAccount: true,
+              emailInstructions: camp.email_instructions || undefined,
+              emailLinks: camp.email_links || undefined,
+              registrationId: matchingReg?.id,
+              userPhone: entryWhatsapp || matchingReg?.whatsapp || userCheck.rows[0].whatsapp || '',
+              campStartDate: camp.start_date,
+              campEndDate: camp.end_date,
+              venue: camp.venue,
+              mealInfo: {
+                firstMealDate: matchingReg?.first_meal_date || entry.first_meal_date || entry.firstMealDate,
+                firstMealType: matchingReg?.first_meal_type || entry.first_meal_type || entry.firstMealType,
+                lastMealDate: matchingReg?.last_meal_date || entry.last_meal_date || entry.lastMealDate,
+                lastMealType: matchingReg?.last_meal_type || entry.last_meal_type || entry.lastMealType,
+                dinnerType: matchingReg?.dinner_type || entry.dinner_type || entry.dinnerType,
+                accommodation: matchingReg?.accommodation || entry.accommodation,
+              },
+            }).catch((mailErr) => console.error('Failed to send camp registration email to existing student:', mailErr));
+          } else {
+            console.log(`[Camp Register] Transfer verification pending for existing devotee ${entryEmail}; holding pass dispatch until admin approval.`);
+          }
         }
       } catch (accErr) {
         console.error('Non-blocking user account creation error:', accErr);
+      }
+    }
+
+    // 3.6 If payment requires verification (ITT / IDT), notify the POC that their transfer is under review
+    if (isPendingVerification) {
+      const pocEmail = (body.email || email || entries[0]?.email || '').trim().toLowerCase();
+      const pocName = body.pocName || body.poc_name || entries[0]?.poc_name || entries[0]?.pocName || 'Camp Coordinator';
+      if (pocEmail) {
+        sendCampTransferPendingPocEmail({
+          pocEmail,
+          pocName,
+          campTitle: camp.title,
+          participantCount: insertedRecords.length,
+          paymentMethod,
+          transactionRef: transactionRef || undefined,
+          totalAmount: serverFinalTotal,
+          centerName: managerAssignedCenter || managerCurrentCenter || undefined,
+          templeName: managerAssignedTemple || managerCurrentTemple || undefined,
+        }).catch((err) => console.error('Failed to send pending transfer acknowledgment to POC:', err));
       }
     }
 

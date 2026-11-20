@@ -1204,5 +1204,190 @@ export async function sendDonationCapturedEmails(
     }
 }
 
+/**
+ * Sends an acknowledgment email to the POC / submitter when an offline transfer (ITT / IDT)
+ * has been submitted and is awaiting administrative verification.
+ */
+export async function sendCampTransferPendingPocEmail(params: {
+    pocEmail: string;
+    pocName: string;
+    campTitle: string;
+    participantCount: number;
+    paymentMethod: string;
+    transactionRef?: string;
+    totalAmount: number;
+    centerName?: string;
+    templeName?: string;
+}) {
+    const {
+        pocEmail,
+        pocName,
+        campTitle,
+        participantCount,
+        paymentMethod,
+        transactionRef,
+        totalAmount,
+        centerName,
+        templeName
+    } = params;
+
+    const paymentLabel = paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT'
+        ? 'ISKCON to ISKCON Transfer (ITT)'
+        : (paymentMethod === 'IDT' ? 'Department Transfer (IDT)' : paymentMethod);
+
+    const subject = `Transfer Submitted (Pending Verification): ${campTitle} [${participantCount} Participant(s)]`;
+
+    const htmlBody = `
+        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${pocName}</strong>,</p>
+        <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+            Thank you for submitting registrations for <strong>${campTitle}</strong>. Your offline transfer details have been recorded and are currently awaiting administrative review and bank reconciliation.
+        </p>
+
+        <div style="background-color: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 20px; margin: 25px 0;">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.05em;">
+                    ⏳ Status: Pending Admin Verification
+                </span>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600; width: 40%;">Event:</td>
+                    <td style="padding: 6px 0; color: #451a03; font-weight: 700;">${campTitle}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600;">Participants:</td>
+                    <td style="padding: 6px 0; color: #451a03; font-weight: 700;">${participantCount} Devotee(s)</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600;">Payment Mode:</td>
+                    <td style="padding: 6px 0; color: #451a03; font-weight: 700;">${paymentLabel}</td>
+                </tr>
+                ${transactionRef ? `
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600;">Reference / UTR:</td>
+                    <td style="padding: 6px 0; color: #b45309; font-weight: 800; font-family: monospace;">${transactionRef}</td>
+                </tr>
+                ` : ''}
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600;">Total Amount:</td>
+                    <td style="padding: 6px 0; color: #047857; font-weight: 800; font-size: 15px;">₹${totalAmount.toLocaleString('en-IN')}</td>
+                </tr>
+                ${centerName ? `
+                <tr>
+                    <td style="padding: 6px 0; color: #78350f; font-weight: 600;">Center:</td>
+                    <td style="padding: 6px 0; color: #451a03; font-weight: 700;">${centerName}${templeName ? ` • ${templeName}` : ''}</td>
+                </tr>
+                ` : ''}
+            </table>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin: 25px 0;">
+            <h4 style="margin: 0 0 8px 0; color: #334155; font-size: 13.5px; font-weight: 800; text-transform: uppercase;">
+                📋 What Happens Next?
+            </h4>
+            <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.6;">
+                1. Our accounts team will reconcile the transaction UTR with the bank statement.<br/>
+                2. As soon as the transfer is verified and approved, <strong>each registered participant will automatically receive their official Camp Digital Pass &amp; account details</strong> via email.<br/>
+                3. If there are any discrepancies, the administration will contact you at this email address.
+            </p>
+        </div>
+
+        <p style="font-size: 14px; color: #64748b; line-height: 1.5;">
+            Thank you for your dedicated service and cooperation.
+        </p>
+    `;
+
+    const htmlContent = getEmailWrapper('Transfer Under Review', htmlBody);
+
+    return await dispatchEmail({
+        to: pocEmail,
+        subject: subject,
+        html: htmlContent,
+    });
+}
+
+/**
+ * Sends a notification email to the POC / submitter when an offline transfer (ITT / IDT)
+ * has been rejected by the camp administration.
+ */
+export async function sendCampTransferRejectedPocEmail(params: {
+    pocEmail: string;
+    pocName: string;
+    campTitle: string;
+    participantCount: number;
+    paymentMethod: string;
+    transactionRef?: string;
+    rejectionReason: string;
+}) {
+    const {
+        pocEmail,
+        pocName,
+        campTitle,
+        participantCount,
+        paymentMethod,
+        transactionRef,
+        rejectionReason
+    } = params;
+
+    const paymentLabel = paymentMethod === 'INTER_TEMPLE_TRANSFER' || paymentMethod === 'ITT'
+        ? 'ISKCON to ISKCON Transfer (ITT)'
+        : (paymentMethod === 'IDT' ? 'Department Transfer (IDT)' : paymentMethod);
+
+    const subject = `Transfer Verification Update: ${campTitle} [Action Required]`;
+
+    const htmlBody = `
+        <p style="margin-top: 0; font-size: 16px; color: #334155;">Hare Krishna <strong>${pocName}</strong>,</p>
+        <p style="font-size: 15px; color: #334155; line-height: 1.6;">
+            We are writing to update you regarding the offline transfer submitted for <strong>${campTitle}</strong> (${participantCount} participant(s)).
+        </p>
+
+        <div style="background-color: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 20px; margin: 25px 0;">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 800; color: #991b1b; text-transform: uppercase; letter-spacing: 0.05em;">
+                    ❌ Status: Transfer Not Approved
+                </span>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr>
+                    <td style="padding: 6px 0; color: #991b1b; font-weight: 600; width: 40%;">Event:</td>
+                    <td style="padding: 6px 0; color: #450a0a; font-weight: 700;">${campTitle}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #991b1b; font-weight: 600;">Payment Mode:</td>
+                    <td style="padding: 6px 0; color: #450a0a; font-weight: 700;">${paymentLabel}</td>
+                </tr>
+                ${transactionRef ? `
+                <tr>
+                    <td style="padding: 6px 0; color: #991b1b; font-weight: 600;">Reference / UTR:</td>
+                    <td style="padding: 6px 0; color: #450a0a; font-weight: 800; font-family: monospace;">${transactionRef}</td>
+                </tr>
+                ` : ''}
+                <tr>
+                    <td style="padding: 6px 0; color: #991b1b; font-weight: 600; vertical-align: top;">Reason:</td>
+                    <td style="padding: 6px 0; color: #b91c1c; font-weight: 800;">${rejectionReason || 'Transfer could not be verified in the bank statement.'}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin: 25px 0;">
+            <h4 style="margin: 0 0 8px 0; color: #334155; font-size: 13.5px; font-weight: 800; text-transform: uppercase;">
+                Need Help?
+            </h4>
+            <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.6;">
+                Please verify your bank transaction details or receipt, or contact the Camp Administration at manager@voicepune.com to resolve this issue and re-submit your registrations.
+            </p>
+        </div>
+    `;
+
+    const htmlContent = getEmailWrapper('Transfer Update', htmlBody);
+
+    return await dispatchEmail({
+        to: pocEmail,
+        subject: subject,
+        html: htmlContent,
+    });
+}
+
+
 
 

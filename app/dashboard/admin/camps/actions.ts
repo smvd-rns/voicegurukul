@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import Razorpay from 'razorpay';
-import { sendCampDevoteeWelcomeAccountEmail, dispatchEmail } from '@/lib/utils/email';
+import { sendCampDevoteeWelcomeAccountEmail, dispatchEmail, sendCampTransferRejectedPocEmail } from '@/lib/utils/email';
 
 import { query } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/supabase/admin';
@@ -610,6 +610,73 @@ export async function getCampRegistrationsAction(campId: string, searchTerm?: st
 }
 
 /**
+ * Helper to dispatch official digital camp passes & welcome emails to devotees
+ * once an offline transfer (ITT/IDT) or registration batch is verified and approved by admin.
+ */
+async function dispatchCampPassesForVerifiedRegistrations(regs: any[]) {
+  if (!regs || regs.length === 0) return;
+  const campId = regs[0].camp_id;
+  if (!campId) return;
+
+  let camp: any = null;
+  try {
+    const campRes = await query('SELECT * FROM camps WHERE id = $1', [campId]);
+    if (campRes.rows.length > 0) {
+      camp = campRes.rows[0];
+    }
+  } catch (campErr) {
+    console.warn('[Pass Dispatch] Failed to load camp metadata:', campErr);
+  }
+
+  const campTitle = camp?.title || 'Camp Retreat';
+
+  for (const reg of regs) {
+    const rawEmail = (reg.email || '').trim().toLowerCase();
+    if (!rawEmail) continue;
+
+    try {
+      const userCheck = await query(
+        'SELECT id, name FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+        [rawEmail]
+      );
+      const isExistingAccount = userCheck.rows.length > 0;
+      const rawPhone = String(reg.whatsapp || reg.poc_contact || '');
+      const entryWhatsapp = rawPhone.replace(/[^0-9]/g, '').slice(-10);
+      const first4Digits = entryWhatsapp.slice(0, 4) || '1234';
+      const plainPassword = `${first4Digits}HareKrishna@108`;
+
+      sendCampDevoteeWelcomeAccountEmail({
+        userEmail: rawEmail,
+        userName: reg.participant_name || userCheck.rows[0]?.name || 'Participant',
+        tempPassword: isExistingAccount ? undefined : plainPassword,
+        campTitle: campTitle,
+        trackName: reg.camp_track || 'Standard Track',
+        centerName: reg.current_center || reg.voice_name || 'Central VOICE',
+        templeName: reg.current_temple || reg.parent_temple || 'ISKCON NVCC • PUNE',
+        isExistingAccount: isExistingAccount,
+        emailInstructions: camp?.email_instructions || undefined,
+        emailLinks: camp?.email_links || undefined,
+        registrationId: reg.id,
+        userPhone: reg.whatsapp || '',
+        campStartDate: camp?.start_date,
+        campEndDate: camp?.end_date,
+        venue: camp?.venue,
+        mealInfo: {
+          firstMealDate: reg.first_meal_date,
+          firstMealType: reg.first_meal_type,
+          lastMealDate: reg.last_meal_date,
+          lastMealType: reg.last_meal_type,
+          dinnerType: reg.dinner_type,
+          accommodation: reg.accommodation,
+        },
+      }).catch((mailErr) => console.warn(`[Pass Dispatch] Error sending pass email to ${rawEmail}:`, mailErr));
+    } catch (err) {
+      console.warn(`[Pass Dispatch] Error processing pass for ${rawEmail}:`, err);
+    }
+  }
+}
+
+/**
  * Verify and approve an Inter-Temple Transfer (ITT) registration
  */
 export async function verifyAndApproveCampRegistrationAction(
@@ -666,6 +733,8 @@ export async function verifyAndApproveCampRegistrationAction(
     }
 
     const reg = res.rows[0];
+    // Dispatch official camp pass email to devotee now that payment is verified
+    dispatchCampPassesForVerifiedRegistrations([reg]).catch(e => console.warn('[verifyAndApproveCampRegistrationAction] Pass dispatch error:', e));
     revalidatePath(`/dashboard/admin/camps/${reg.camp_id}/registrations`);
     return { success: true, registration: reg as CampRegistration };
   } catch (error: any) {
@@ -725,6 +794,23 @@ export async function rejectCampRegistrationAction(
     }
 
     const reg = res.rows[0];
+    const pocEmail = (reg.email || reg.poc_contact || '').trim().toLowerCase();
+    if (pocEmail && pocEmail.includes('@')) {
+      query('SELECT title FROM camps WHERE id = $1', [reg.camp_id])
+        .then(cRes => {
+          const campTitle = cRes.rows[0]?.title || 'Camp Retreat';
+          return sendCampTransferRejectedPocEmail({
+            pocEmail,
+            pocName: reg.participant_name || reg.poc_name || 'Participant',
+            campTitle,
+            participantCount: 1,
+            paymentMethod: reg.payment_method || 'Inter-Temple Transfer',
+            transactionRef: reg.transaction_ref || reg.payment_id || undefined,
+            rejectionReason: cleanReason,
+          });
+        })
+        .catch(err => console.warn('[rejectCampRegistrationAction] Rejection email error:', err));
+    }
     revalidatePath(`/dashboard/admin/camps/${reg.camp_id}/registrations`);
     return { success: true, registration: reg as CampRegistration };
   } catch (error: any) {
@@ -777,7 +863,7 @@ export async function verifyAndApproveCampBatchAction(
         updated_at = NOW()
       WHERE (group_id = $4 OR payment_id = $4 OR id::text = $4)
         AND COALESCE(is_cancelled, false) = false
-      RETURNING camp_id
+      RETURNING *
     `;
 
     const res = await query(sql, [
@@ -792,6 +878,8 @@ export async function verifyAndApproveCampBatchAction(
     }
 
     const campId = res.rows[0].camp_id;
+    // Dispatch official camp pass emails to all devotees in the approved batch
+    dispatchCampPassesForVerifiedRegistrations(res.rows).catch(e => console.warn('[verifyAndApproveCampBatchAction] Pass dispatch error:', e));
     revalidatePath(`/dashboard/admin/camps/${campId}/registrations`);
     revalidatePath(`/dashboard/admin/camps`);
     return { success: true, count: res.rows.length };
@@ -839,7 +927,7 @@ export async function rejectCampBatchAction(
         verified_by = $2,
         updated_at = NOW()
       WHERE group_id = $3 OR payment_id = $3 OR id::text = $3
-      RETURNING camp_id
+      RETURNING *
     `;
 
     const res = await query(sql, [
@@ -852,7 +940,25 @@ export async function rejectCampBatchAction(
       return { success: false, error: 'No matching transaction records found to reject.' };
     }
 
-    const campId = res.rows[0].camp_id;
+    const firstReg = res.rows[0];
+    const campId = firstReg.camp_id;
+    const pocEmail = (firstReg?.email || firstReg?.poc_contact || '').trim().toLowerCase();
+    if (pocEmail && pocEmail.includes('@')) {
+      query('SELECT title FROM camps WHERE id = $1', [campId])
+        .then(cRes => {
+          const campTitle = cRes.rows[0]?.title || 'Camp Retreat';
+          return sendCampTransferRejectedPocEmail({
+            pocEmail,
+            pocName: firstReg.poc_name || 'Camp Coordinator',
+            campTitle,
+            participantCount: res.rows.length,
+            paymentMethod: firstReg.payment_method || 'Inter-Temple Transfer',
+            transactionRef: firstReg.transaction_ref || firstReg.payment_id || undefined,
+            rejectionReason: cleanReason,
+          });
+        })
+        .catch(err => console.warn('[rejectCampBatchAction] Rejection email error:', err));
+    }
     revalidatePath(`/dashboard/admin/camps/${campId}/registrations`);
     revalidatePath(`/dashboard/admin/camps`);
     return { success: true, count: res.rows.length };
