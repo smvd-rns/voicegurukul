@@ -6221,7 +6221,7 @@ function CampDashboardContent() {
                 </div>
 
                 <div className="p-2 sm:p-2.5 bg-slate-100 rounded-xl text-[10px] sm:text-[11px] text-slate-600 leading-relaxed text-left">
-                  ℹ️ <strong>Transfer Timeline:</strong> Refunds are credited manually via bank / UPI transfer by NVCC accounts within <strong>5-7 working days</strong>. Gateway processing fees are non-refundable.
+                  ℹ️ <strong>Transfer Timeline:</strong> {selectedCamp?.refund_config?.refund_instructions || 'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.'}
                 </div>
 
                 <button
@@ -6569,7 +6569,7 @@ function CampDashboardContent() {
                           {live.totalRefund === 0 ? (
                             <span className="text-rose-600 font-semibold">{live.reasonExplanation}</span>
                           ) : (
-                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • Credited in 5-7 working days</span>
+                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • {selectedCamp?.refund_config?.refund_instructions ? 'Subject to camp refund instructions' : 'Transferred per camp payout policy'}</span>
                           )}
                         </div>
                       </div>
@@ -6864,6 +6864,9 @@ function CampDashboardContent() {
               }
 
               if (isPending) {
+                const refundInstructions = viewingRefundStatus.reg?.camp_refund_config?.refund_instructions ||
+                  activeCamps.find(c => c.id === viewingRefundStatus.reg?.camp_id)?.refund_config?.refund_instructions ||
+                  'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.';
                 return (
                   <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-2.5">
                     <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -6872,7 +6875,7 @@ function CampDashboardContent() {
                         Cancellation Under Review
                       </span>
                       <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                        Your cancellation &amp; refund request is currently undergoing review and audit by the accounts team. Refunds are processed within 5-7 working days.
+                        Your cancellation &amp; refund request is currently undergoing review and audit by the accounts team. {refundInstructions}
                       </p>
                     </div>
                   </div>

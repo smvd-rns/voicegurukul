@@ -4246,7 +4246,7 @@ export default function PublicCampRegistrationPage() {
                 </div>
 
                 <div className="p-3 bg-slate-100 rounded-xl text-[11px] text-slate-600 leading-relaxed text-left">
-                  ℹ️ <strong>Transfer Timeline:</strong> Refunds are credited manually via bank / UPI transfer by NVCC accounts within <strong>5-7 working days</strong>. Gateway processing fees are non-refundable.
+                  ℹ️ <strong>Transfer Timeline:</strong> {camp?.refund_config?.refund_instructions || 'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.'}
                 </div>
 
                 <button
@@ -4558,7 +4558,7 @@ export default function PublicCampRegistrationPage() {
                           {live.baseRefundPercent === 0 ? (
                             <span className="text-rose-600 font-semibold">Post-deadline cancellation • Registrations non-refundable</span>
                           ) : (
-                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • Credited in 5-7 working days</span>
+                            <span>ℹ️ {live.baseRefundPercent}% base fee refund eligible • {camp?.refund_config?.refund_instructions ? 'Subject to camp refund instructions' : 'Transferred per camp payout policy'}</span>
                           )}
                         </div>
                       </div>

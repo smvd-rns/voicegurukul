@@ -415,7 +415,7 @@ export default function AdminCampsPage() {
       ] as CampRefundTier[],
       refund_meals: true,
       refund_accommodation: true,
-      refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
+      refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.'
     },
     eligible_centers: [] as string[]
   });
@@ -1369,7 +1369,7 @@ export default function AdminCampsPage() {
         ] as CampRefundTier[],
         refund_meals: true,
         refund_accommodation: true,
-        refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
+        refund_instructions: 'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.'
       },
       eligible_centers: []
     });
@@ -1478,7 +1478,7 @@ export default function AdminCampsPage() {
           ],
         refund_meals: camp.refund_config?.refund_meals ?? true,
         refund_accommodation: camp.refund_config?.refund_accommodation ?? true,
-        refund_instructions: camp.refund_config?.refund_instructions || 'Refunds are transferred manually to your submitted UPI or Bank Account within 5-7 working days after verification. Payment processing fees are non-refundable.'
+        refund_instructions: camp.refund_config?.refund_instructions || 'Refunds are transferred manually to your submitted UPI or Bank Account during or after the camp. Payment processing fees are non-refundable.'
       },
       eligible_centers: Array.isArray(camp.eligible_centers) ? camp.eligible_centers : []
     });
