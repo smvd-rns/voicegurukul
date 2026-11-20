@@ -308,11 +308,11 @@ export default function ProjectManagerDashboard() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const tabParam = searchParams?.get('tab');
-    
+
     const [activeTab, setActiveTab] = useState<'approvals' | 'user-management' | 'registrations' | 'service-team'>(
         (tabParam === 'approvals' || tabParam === 'user-management' || tabParam === 'registrations' || tabParam === 'service-team')
-        ? tabParam as any
-        : 'approvals'
+            ? tabParam as any
+            : 'approvals'
     );
 
     // Sync activeTab with URL for back button support
@@ -330,6 +330,7 @@ export default function ProjectManagerDashboard() {
     };
 
     // Context State
+    const [managedCenters, setManagedCenters] = useState<{ id: string, name: string, temple_name: string, userRole: string, pendingCount: number, pendingRegCount: number }[]>([]);
     const [currentCenter, setCurrentCenter] = useState<string>('');
     const [currentTemple, setCurrentTemple] = useState<string>('');
     const [loadingContext, setLoadingContext] = useState(true);
@@ -439,6 +440,11 @@ export default function ProjectManagerDashboard() {
 
     const loadStructure = useCallback(async () => {
         if (!supabase || !currentCenter) return;
+        const isAuthorizedCenter = managedCenters.some(c => isCenterMatch(c.name, currentCenter));
+        if (managedCenters.length > 0 && !isAuthorizedCenter) {
+            setCurrentCenterData(null);
+            return;
+        }
         setLoadingStructure(true);
         try {
             const { data, error } = await supabase
@@ -457,458 +463,695 @@ export default function ProjectManagerDashboard() {
             setLoadingStructure(false);
         }
     }, [currentCenter]);
+}, [currentCenter, managedCenters]);
 
-    const handleStructureUpdate = async (roleValue: number, userId: string) => {
-        if (!supabase || !currentCenterData?.id) return;
+const handleStructureUpdate = async (roleValue: number, userId: string) => {
+    if (!supabase || !currentCenterData?.id) return;
 
-        try {
-            setLoadingStructure(true);
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-
-            const response = await fetch('/api/centers/structure', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({
-                    centerId: currentCenterData.id,
-                    roleValue,
-                    userId: userId || null // Send null if empty string
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                toast.success('Structure updated successfully');
-                loadStructure(); // Reload to reflect changes
-                // Also reload users to update their role tags if visible
-                loadUsers();
-            } else {
-                toast.error(result.error || 'Update failed');
-            }
-
-        } catch (error) {
-            console.error('Update error:', error);
-            toast.error('Failed to update structure');
-        } finally {
-            setLoadingStructure(false);
-        }
-    };
-
-    // Multi-user version for Mentor (25) and Frontliner (26)
-    const handleStructureUpdateMulti = async (roleValue: number, userIds: string[]) => {
-        if (!supabase || !currentCenterData?.id) return;
-        try {
-            setLoadingStructure(true);
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            const response = await fetch('/api/centers/structure', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
-                body: JSON.stringify({ centerId: currentCenterData.id, roleValue, userIds })
-            });
-            const result = await response.json();
-            if (result.success) {
-                toast.success('Structure updated successfully');
-                loadStructure();
-                loadUsers();
-            } else {
-                toast.error(result.error || 'Update failed');
-            }
-        } catch (error) {
-            console.error('Update error:', error);
-            toast.error('Failed to update structure');
-        } finally {
-            setLoadingStructure(false);
-        }
-    };
-
-
-    // Role Assignment Modal
-    // Role Assignment
-    const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-    // Removed modal state: showAssignModal, assignRoles, selectedUser
-
-    // View User Modal
-    const [showViewModal, setShowViewModal] = useState(false);
-    const [userForView, setUserForView] = useState<User | null>(null);
-
-    // Physical Back Button Support for User View Modal
-    useEffect(() => {
-        const handleHashChange = () => {
-            if (window.location.hash !== '#user-detail' && showViewModal) {
-                setShowViewModal(false);
-            }
-        };
-        window.addEventListener('popstate', handleHashChange);
-        return () => window.removeEventListener('popstate', handleHashChange);
-    }, [showViewModal]);
-
-    const openUserView = (user: User) => {
-        setUserForView(user);
-        setShowViewModal(true);
-        window.location.hash = 'user-detail';
-    };
-
-    const closeUserView = () => {
-        if (window.location.hash === '#user-detail') {
-            window.history.back();
-        } else {
-            setShowViewModal(false);
-        }
-    };
-
-    // Access Control
-    // Allowed Roles: Project Advisor (14), Project Manager (15), Acting Manager (16), OC (17), Care Giver (20),
-    // Youth Preacher (21), Internal Manager (22), Preaching Coordinator (23), Morning Program In-charge (24),
-    // Mentor (25), Frontliner (26), Accountant (27), Kitchen Head (28), Study In-charge (29), Event Admin (30),
-    // Grihastha Counselor (31), Easy Incharge (32), Prerna Incharge (33)
-    const ALLOWED_ROLES = [1, 2, 3, 11, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
-    const ALLOWED_ROLE_NAMES = [
-        'managing_director', 'admin', 'director',
-        'project_advisor', 'project_manager', 'acting_manager', 'oc', 'care_giver',
-        'youth_preacher', 'internal_manager', 'preaching_coordinator', 'morning_program_in_charge',
-        'mentor', 'frontliner', 'accountant', 'kitchen_head', 'study_in_charge', 'event_admin',
-        'grihstha_counselor', 'easy_incharge', 'prerna_incharge'
-    ];
-
-    const isProjectManager = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).some(r =>
-        ALLOWED_ROLES.includes(Number(r)) || ALLOWED_ROLE_NAMES.includes(String(r))
-    );
-
-    // State for multiple managed centers
-    const [managedCenters, setManagedCenters] = useState<{ id: string, name: string, temple_name: string, userRole: string, pendingCount: number, pendingRegCount: number }[]>([]);
-
-    // Helper to determine role label
-    const getCenterRoleLabel = (center: any, userId: string, assignedTempleNames: string[] = []) => {
-        if (center.project_manager_id === userId) return 'Project Manager';
-        if (center.project_advisor_id === userId) return 'Project Advisor';
-        if (center.acting_manager_id === userId) return 'Acting Manager';
-        if (center.internal_manager_id === userId) return 'Internal Manager';
-        if (center.oc_id === userId) return 'OC';
-        if (center.preaching_coordinator_id === userId) return 'Preaching Coordinator';
-        if (center.care_giver_id === userId) return 'Care Giver';
-        if (center.youth_preacher_id === userId) return 'Youth Preacher';
-        if (center.morning_program_in_charge_id === userId) return 'Morning Program In-charge';
-        if (center.accountant_id === userId) return 'Accountant';
-        if (center.kitchen_head_id === userId) return 'Kitchen Head';
-        if (center.study_in_charge_id === userId) return 'Study In-charge';
-        if (center.event_admin_id === userId) return 'Event Admin';
-        if (center.grihstha_counselor_id === userId) return 'Grihastha Counselor';
-        if (center.easy_incharge_id === userId) return 'Easy Incharge';
-        if (center.prerna_incharge_id === userId) return 'Prerna Incharge';
-        if (assignedTempleNames.some(t => t.trim().toLowerCase() === (center.temple_name || '').trim().toLowerCase())) {
-            return 'Managing Director';
-        }
-        return 'Center Manager';
-    };
-
-    const buildCenterMatch = useCallback((centerName: string) => {
-        return buildCenterMatchQuery(centerName);
-    }, []);
-
-    const refreshCounts = useCallback(async (centersToMap: any[]) => {
-        if (!supabase) return;
+    try {
+        setLoadingStructure(true);
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
 
-        try {
-            // Fetch ALL pending requests once via API to handle RLS/Roles correctly
-            const res = await fetch('/api/profile-requests?status=pending', {
-                headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
-            });
-            const json = await res.json();
-            if (json.success) {
-                const allPending = json.data;
-                console.log(`PM Dashboard: Fetched ${allPending.length} pending requests for count context.`);
+        const response = await fetch('/api/centers/structure', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+                centerId: currentCenterData.id,
+                roleValue,
+                userId: userId || null // Send null if empty string
+            })
+        });
 
-                const pendingList: { centerName: string }[] = [];
+        const result = await response.json();
 
-                // --- NEW: Pending Registration Counts ---
-                // Group users by current_center where verification_status is 'pending'
-                const { data: regStats, error: regError } = await supabase
-                    .from('users')
-                    .select('current_center, center, hierarchy')
-                    .eq('verification_status', 'pending');
-
-                const pendingRegList: string[] = [];
-                if (!regError && regStats) {
-                    (regStats as any[]).forEach((u: any) => {
-                        const cName = getUserCurrentCenter(u);
-                        if (cName) pendingRegList.push(cName);
-                    });
-                }
-
-                (allPending || []).forEach((req: any) => {
-                    let cName = req.center_name;
-                    if (!cName) {
-                        const h = req.user?.hierarchy;
-                        cName = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
-                    }
-                    if (cName) {
-                        pendingList.push({ centerName: cName });
-                    }
-                });
-
-                const centersWithCounts = centersToMap.map(center => {
-                    // Match with alias resolution
-                    const pendingCount = pendingList.filter(req => isCenterMatch(req.centerName, center.name)).length;
-                    const regCount = pendingRegList.filter(cName => isCenterMatch(cName, center.name)).length;
-
-                    return {
-                        ...center,
-                        pendingCount,
-                        pendingRegCount: regCount
-                    };
-                });
-
-                setManagedCenters(centersWithCounts);
-                localStorage.setItem('pm_managed_centers', JSON.stringify(centersWithCounts));
-            } else {
-                console.warn('PM Dashboard: Failed to fetch pending counts from API', json.error);
-            }
-        } catch (err) {
-            console.error('PM Dashboard: Exception fetching pending counts', err);
+        if (result.success) {
+            toast.success('Structure updated successfully');
+            loadStructure(); // Reload to reflect changes
+            // Also reload users to update their role tags if visible
+            loadUsers();
+        } else {
+            toast.error(result.error || 'Update failed');
         }
-    }, []);
 
-    useEffect(() => {
-        if (!userData || !isProjectManager) {
-            if (!isProjectManager && userData) { // Only redirect if userData exists but role is wrong
-                router.push('/dashboard');
+    } catch (error) {
+        console.error('Update error:', error);
+        toast.error('Failed to update structure');
+    } finally {
+        setLoadingStructure(false);
+    }
+};
+
+// Multi-user version for Mentor (25) and Frontliner (26)
+const handleStructureUpdateMulti = async (roleValue: number, userIds: string[]) => {
+    if (!supabase || !currentCenterData?.id) return;
+    try {
+        setLoadingStructure(true);
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        const response = await fetch('/api/centers/structure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ centerId: currentCenterData.id, roleValue, userIds })
+        });
+        const result = await response.json();
+        if (result.success) {
+            toast.success('Structure updated successfully');
+            loadStructure();
+            loadUsers();
+        } else {
+            toast.error(result.error || 'Update failed');
+        }
+    } catch (error) {
+        console.error('Update error:', error);
+        toast.error('Failed to update structure');
+    } finally {
+        setLoadingStructure(false);
+    }
+};
+
+
+// Role Assignment Modal
+// Role Assignment
+const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+// Removed modal state: showAssignModal, assignRoles, selectedUser
+
+// View User Modal
+const [showViewModal, setShowViewModal] = useState(false);
+const [userForView, setUserForView] = useState<User | null>(null);
+
+// Physical Back Button Support for User View Modal
+useEffect(() => {
+    const handleHashChange = () => {
+        if (window.location.hash !== '#user-detail' && showViewModal) {
+            setShowViewModal(false);
+        }
+    };
+    window.addEventListener('popstate', handleHashChange);
+    return () => window.removeEventListener('popstate', handleHashChange);
+}, [showViewModal]);
+
+const openUserView = (user: User) => {
+    setUserForView(user);
+    setShowViewModal(true);
+    window.location.hash = 'user-detail';
+};
+
+const closeUserView = () => {
+    if (window.location.hash === '#user-detail') {
+        window.history.back();
+    } else {
+        setShowViewModal(false);
+    }
+};
+
+// Access Control
+// Allowed Roles: Project Advisor (14), Project Manager (15), Acting Manager (16), OC (17), Care Giver (20),
+// Youth Preacher (21), Internal Manager (22), Preaching Coordinator (23), Morning Program In-charge (24),
+// Mentor (25), Frontliner (26), Accountant (27), Kitchen Head (28), Study In-charge (29), Event Admin (30),
+// Grihastha Counselor (31), Easy Incharge (32), Prerna Incharge (33)
+const ALLOWED_ROLES = [1, 2, 3, 11, 14, 15, 16, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+const ALLOWED_ROLE_NAMES = [
+    'managing_director', 'admin', 'director',
+    'project_advisor', 'project_manager', 'acting_manager', 'oc', 'care_giver',
+    'youth_preacher', 'internal_manager', 'preaching_coordinator', 'morning_program_in_charge',
+    'mentor', 'frontliner', 'accountant', 'kitchen_head', 'study_in_charge', 'event_admin',
+    'grihstha_counselor', 'easy_incharge', 'prerna_incharge'
+];
+
+const isProjectManager = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).some(r =>
+    ALLOWED_ROLES.includes(Number(r)) || ALLOWED_ROLE_NAMES.includes(String(r))
+);
+
+// State for multiple managed centers
+const [managedCenters, setManagedCenters] = useState<{ id: string, name: string, temple_name: string, userRole: string, pendingCount: number, pendingRegCount: number }[]>([]);
+
+// Helper to determine role label
+const getCenterRoleLabel = (center: any, userId: string, assignedTempleNames: string[] = []) => {
+    if (center.project_manager_id === userId) return 'Project Manager';
+    if (center.project_advisor_id === userId) return 'Project Advisor';
+    if (center.acting_manager_id === userId) return 'Acting Manager';
+    if (center.internal_manager_id === userId) return 'Internal Manager';
+    if (center.oc_id === userId) return 'OC';
+    if (center.preaching_coordinator_id === userId) return 'Preaching Coordinator';
+    if (center.care_giver_id === userId) return 'Care Giver';
+    if (center.youth_preacher_id === userId) return 'Youth Preacher';
+    if (center.morning_program_in_charge_id === userId) return 'Morning Program In-charge';
+    if (center.accountant_id === userId) return 'Accountant';
+    if (center.kitchen_head_id === userId) return 'Kitchen Head';
+    if (center.study_in_charge_id === userId) return 'Study In-charge';
+    if (center.event_admin_id === userId) return 'Event Admin';
+    if (center.grihstha_counselor_id === userId) return 'Grihastha Counselor';
+    if (center.easy_incharge_id === userId) return 'Easy Incharge';
+    if (center.prerna_incharge_id === userId) return 'Prerna Incharge';
+    if (assignedTempleNames.some(t => t.trim().toLowerCase() === (center.temple_name || '').trim().toLowerCase())) {
+        return 'Managing Director';
+    }
+    return 'Center Manager';
+};
+
+const buildCenterMatch = useCallback((centerName: string) => {
+    return buildCenterMatchQuery(centerName);
+}, []);
+
+const refreshCounts = useCallback(async (centersToMap: any[]) => {
+    if (!supabase) return;
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+
+    try {
+        // Fetch ALL pending requests once via API to handle RLS/Roles correctly
+        const res = await fetch('/api/profile-requests?status=pending', {
+            headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
+        });
+        const json = await res.json();
+        if (json.success) {
+            const allPending = json.data;
+            console.log(`PM Dashboard: Fetched ${allPending.length} pending requests for count context.`);
+
+            const pendingList: { centerName: string }[] = [];
+
+            // --- NEW: Pending Registration Counts ---
+            // Group users by current_center where verification_status is 'pending'
+            const { data: regStats, error: regError } = await supabase
+                .from('users')
+                .select('current_center, center, hierarchy')
+                .eq('verification_status', 'pending');
+
+            const pendingRegList: string[] = [];
+            if (!regError && regStats) {
+                (regStats as any[]).forEach((u: any) => {
+                    const cName = getUserCurrentCenter(u);
+                    if (cName) pendingRegList.push(cName);
+                });
             }
+
+            (allPending || []).forEach((req: any) => {
+                let cName = req.center_name;
+                if (!cName) {
+                    const h = req.user?.hierarchy;
+                    cName = h?.currentCenter?.name || (typeof h?.currentCenter === 'string' ? h?.currentCenter : '');
+                }
+                if (cName) {
+                    pendingList.push({ centerName: cName });
+                }
+            });
+
+            const centersWithCounts = centersToMap.map(center => {
+                // Match with alias resolution
+                const pendingCount = pendingList.filter(req => isCenterMatch(req.centerName, center.name)).length;
+                const regCount = pendingRegList.filter(cName => isCenterMatch(cName, center.name)).length;
+
+                return {
+                    ...center,
+                    pendingCount,
+                    pendingRegCount: regCount
+                };
+            });
+
+            setManagedCenters(centersWithCounts);
+            localStorage.setItem('pm_managed_centers', JSON.stringify(centersWithCounts));
+
+            // Immediately ensure currentCenter belongs to centersWithCounts
+            setCurrentCenter(prev => {
+                const isPrevValid = centersWithCounts.some(c => c.name.trim().toLowerCase() === (prev || '').trim().toLowerCase());
+                if (prev && isPrevValid) return prev;
+                const fallback = centersWithCounts.find(c => c.pendingCount > 0) || centersWithCounts[0];
+                const nextCenter = fallback ? fallback.name : '';
+                const nextTemple = fallback ? (fallback.temple_name || '') : '';
+                if (nextCenter) {
+                    localStorage.setItem('pm_current_center', nextCenter);
+                    localStorage.setItem('pm_current_temple', nextTemple);
+                    setCurrentTemple(nextTemple);
+                } else {
+                    localStorage.removeItem('pm_current_center');
+                    localStorage.removeItem('pm_current_temple');
+                    setCurrentTemple('');
+                }
+                return nextCenter;
+            });
+        } else {
+            console.warn('PM Dashboard: Failed to fetch pending counts from API', json.error);
+        }
+    } catch (err) {
+        console.error('PM Dashboard: Exception fetching pending counts', err);
+    }
+}, []);
+
+useEffect(() => {
+    if (!userData || !isProjectManager) {
+        if (!isProjectManager && userData) { // Only redirect if userData exists but role is wrong
+            router.push('/dashboard');
+        }
+        return;
+    }
+
+    const fetchInitialData = async () => {
+        if (!supabase) { setLoadingContext(false); return; }
+        const adminId = userData?.id;
+        if (!adminId) {
+            setLoadingContext(false);
             return;
         }
 
-        const fetchInitialData = async () => {
-            if (!supabase) { setLoadingContext(false); return; }
-            const adminId = userData?.id;
-            if (!adminId) {
-                setLoadingContext(false);
-                return;
-            }
-
-            // Only show full page loader if we don't have cached data
-            try {
-                // 1. Fetch temples where user is assigned as Managing Director, Director, Central VM, or YP
-                const { data: assignedTemplesData } = await supabase
-                    .from('temples')
-                    .select('id, name')
-                    .or(`managing_director_id.eq.${adminId},director_id.eq.${adminId},central_voice_manager_id.eq.${adminId},yp_id.eq.${adminId}`);
-
-                const assignedTempleNames: string[] = (assignedTemplesData || [])
-                    .map((t: any) => t.name?.trim())
-                    .filter(Boolean);
-
-                // Fallback to user profile's current_temple if user has MD/Director role and assignedTemplesData is empty
-                const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
-                const isMDOrDirector = userRoles.some(r => [1, 11, 'managing_director', 3, 'director'].includes(r));
-                if (isMDOrDirector && assignedTempleNames.length === 0) {
-                    const uH = userData?.hierarchy as any;
-                    const profileTemple = (userData as any)?.current_temple || userData?.currentTemple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
-                    if (profileTemple && profileTemple.trim()) {
-                        assignedTempleNames.push(profileTemple.trim());
-                    }
-                }
-
-                // 2. Fetch centers strictly isolated by temple or specific center assignment
-                const directCenterFilter = `project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId},internal_manager_id.eq.${adminId},oc_id.eq.${adminId},care_giver_id.eq.${adminId},youth_preacher_id.eq.${adminId},preaching_coordinator_id.eq.${adminId},morning_program_in_charge_id.eq.${adminId},accountant_id.eq.${adminId},kitchen_head_id.eq.${adminId},study_in_charge_id.eq.${adminId},event_admin_id.eq.${adminId},grihstha_counselor_id.eq.${adminId},easy_incharge_id.eq.${adminId},prerna_incharge_id.eq.${adminId}`;
-
-                let centersQuery = supabase
-                    .from('centers')
-                    .select('id, name, temple_name, project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, oc_id, care_giver_id, youth_preacher_id, preaching_coordinator_id, morning_program_in_charge_id, accountant_id, kitchen_head_id, study_in_charge_id, event_admin_id, grihstha_counselor_id, easy_incharge_id, prerna_incharge_id')
-                    .order('name');
-
-                let data: any[] | null = null;
-                let error: any = null;
-
-                if (assignedTempleNames.length > 0) {
-                    // Restrict strictly to centers under the user's assigned temple(s) OR where directly assigned in service team
-                    const templeFilters = assignedTempleNames.map((t: string) => `temple_name.eq.${t}`).join(',');
-                    const combinedFilter = `${templeFilters},${directCenterFilter}`;
-                    const res = await centersQuery.or(combinedFilter);
-                    data = res.data;
-                    error = res.error;
-                } else {
-                    // Only centers where directly assigned in leadership/service team
-                    const res = await centersQuery.or(directCenterFilter);
-                    data = res.data;
-                    error = res.error;
-                }
-
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    const mappedCenters = (data as any[]).map((center: any) => {
-                        const role = getCenterRoleLabel(center, adminId, assignedTempleNames);
-                        return {
-                            id: center.id,
-                            name: center.name,
-                            temple_name: center.temple_name,
-                            userRole: role,
-                            pendingCount: 0 // Will be updated by refreshCounts
-                        };
-                    });
-
-                    // 3. Refresh counts using the newly fetched centers
-                    await refreshCounts(mappedCenters);
-
-                } else {
-                    setManagedCenters([]);
-                    setCurrentCenter('');
-                    setCurrentTemple('');
-                    toast.error('No center assignment found for your account in the centers database.');
-                }
-            } catch (err) {
-                console.error('Failed to load initial PM data', err);
-                toast.error('Failed to load dashboard data.');
-            } finally {
-                setLoadingContext(false);
-            }
-        };
-
-        fetchInitialData();
-    }, [userData, isProjectManager, router, refreshCounts, managedCenters.length]);
-
-
-
-    // Handle Center Change
-    const handleCenterChange = (centerName: string) => {
-        const selected = managedCenters.find(c => c.name === centerName);
-        const targetName = selected?.name || centerName;
-        const targetTemple = selected?.temple_name || currentTemple || '';
-
-        setCurrentCenter(targetName);
-        localStorage.setItem('pm_current_center', targetName);
-        if (targetTemple) {
-            setCurrentTemple(targetTemple);
-            localStorage.setItem('pm_current_temple', targetTemple);
-        }
-
-        // Clear lists to prevent stale data
-        setUsers([]);
-        setRequests([]);
-        setPendingUsers([]);
-
-        // Reload stats for this new center immediately
-        loadStats(targetName, targetTemple);
-    };
-
-    // (useEffect for tab changes moved below, after all useCallbacks are declared)
-
-    // --- Data Loading Functions ---
-
-    const loadStats = useCallback(async (cName: string, tName: string) => {
-        if (!supabase || !cName) return;
-        setStats(prev => ({ ...prev, loading: true }));
+        // Only show full page loader if we don't have cached data
         try {
-            const targetCenterNorm = cName.trim().toLowerCase();
+            // 1. Fetch temples where user is assigned as Managing Director, Director, Central VM, or YP
+            const { data: assignedTemplesData } = await supabase
+                .from('temples')
+                .select('id, name')
+                .or(`managing_director_id.eq.${adminId},director_id.eq.${adminId},central_voice_manager_id.eq.${adminId},yp_id.eq.${adminId}`);
 
-            const [approvedUsersRes, pendingReqRes, pendingRegRes] = await Promise.all([
-                // Fetch approved users to segment current vs alumni for active center
-                supabase.from('users')
-                    .select('current_center, center, parent_center, other_parent_center, hierarchy')
-                    .eq('verification_status', 'approved')
-                    .or(buildCenterMatch(cName)),
-                // pending profile requests for active center
-                supabase.from('profile_update_requests')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('status', 'pending')
-                    .eq('center_name', cName),
-                // pending registrations for active center
-                supabase.from('users')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('verification_status', 'pending')
-                    .or(buildCenterMatch(cName))
-            ]);
+            const assignedTempleNames: string[] = (assignedTemplesData || [])
+                .map((t: any) => t.name?.trim())
+                .filter(Boolean);
 
-            let currentCount = 0;
-            let alumniCount = 0;
-
-            if (approvedUsersRes.data) {
-                approvedUsersRes.data.forEach((u: any) => {
-                    const uCurCenter = getUserCurrentCenter(u);
-                    const uParCenter = getUserParentCenter(u);
-
-                    const isCurrent = isCenterMatch(uCurCenter, cName);
-                    const isParent = isCenterMatch(uParCenter, cName);
-
-                    if (isCurrent) {
-                        currentCount++;
-                    } else if (isParent) {
-                        alumniCount++;
-                    }
-                });
+            // Fallback to user profile's current_temple if user has MD/Director role and assignedTemplesData is empty
+            const userRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
+            const isMDOrDirector = userRoles.some(r => [1, 11, 'managing_director', 3, 'director'].includes(r));
+            if (isMDOrDirector && assignedTempleNames.length === 0) {
+                const uH = userData?.hierarchy as any;
+                const profileTemple = (userData as any)?.current_temple || userData?.currentTemple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '');
+                if (profileTemple && profileTemple.trim()) {
+                    assignedTempleNames.push(profileTemple.trim());
+                }
             }
 
-            const totalDevotees = currentCount + alumniCount;
-            const pendingReqCount = pendingReqRes.error ? 0 : pendingReqRes.count ?? 0;
-            const pendingRegCount = pendingRegRes.error ? 0 : pendingRegRes.count ?? 0;
+            // 2. Fetch centers strictly isolated by temple or specific center assignment
+            const directCenterFilter = `project_manager_id.eq.${adminId},project_advisor_id.eq.${adminId},acting_manager_id.eq.${adminId},internal_manager_id.eq.${adminId},oc_id.eq.${adminId},care_giver_id.eq.${adminId},youth_preacher_id.eq.${adminId},preaching_coordinator_id.eq.${adminId},morning_program_in_charge_id.eq.${adminId},accountant_id.eq.${adminId},kitchen_head_id.eq.${adminId},study_in_charge_id.eq.${adminId},event_admin_id.eq.${adminId},grihstha_counselor_id.eq.${adminId},easy_incharge_id.eq.${adminId},prerna_incharge_id.eq.${adminId}`;
 
-            setStats({
-                devotees: totalDevotees,
-                currentCount: currentCount,
-                alumniCount: alumniCount,
-                pendingRequests: pendingReqCount,
-                newRegistrations: pendingRegCount,
-                loading: false
-            });
-        } catch (err) {
-            console.error('Error loading stats:', err);
-            setStats(prev => ({ ...prev, loading: false }));
-        }
-    }, [buildCenterMatch]);
+            let centersQuery = supabase
+                .from('centers')
+                .select('id, name, temple_name, project_manager_id, project_advisor_id, acting_manager_id, internal_manager_id, oc_id, care_giver_id, youth_preacher_id, preaching_coordinator_id, morning_program_in_charge_id, accountant_id, kitchen_head_id, study_in_charge_id, event_admin_id, grihstha_counselor_id, easy_incharge_id, prerna_incharge_id')
+                .order('name');
 
-    // Effect to set initial center once managedCenters is populated
-    useEffect(() => {
-        if (managedCenters.length > 0 && !currentCenter && !loadingContext) {
-            // Prioritize centers with pending requests, otherwise pick the first one
-            const firstCenter = managedCenters.find(c => c.pendingCount > 0) || managedCenters[0];
-            if (firstCenter) {
-                setCurrentCenter(firstCenter.name);
-                const tName = firstCenter.temple_name || '';
-                setCurrentTemple(tName);
-                loadStats(firstCenter.name, tName);
+            let data: any[] | null = null;
+            let error: any = null;
+
+            if (assignedTempleNames.length > 0) {
+                // Restrict strictly to centers under the user's assigned temple(s) OR where directly assigned in service team
+                const templeFilters = assignedTempleNames.map((t: string) => `temple_name.eq.${t}`).join(',');
+                const combinedFilter = `${templeFilters},${directCenterFilter}`;
+                const res = await centersQuery.or(combinedFilter);
+                data = res.data;
+                error = res.error;
+            } else {
+                // Only centers where directly assigned in leadership/service team
+                const res = await centersQuery.or(directCenterFilter);
+                data = res.data;
+                error = res.error;
             }
-        }
-    }, [managedCenters, currentCenter, loadingContext, loadStats]);
-
-    // --- New User Registrations Logic ---
-    const loadPendingUsers = useCallback(async () => {
-        if (!supabase || !currentCenter) return;
-        setLoadingPendingUsers(true);
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('verification_status', 'pending')
-                .or(buildCenterMatch(currentCenter));
 
             if (error) throw error;
 
-            // Strict center and temple isolation filter with alias matching
-            const targetTemple = (currentTemple || '').trim().toLowerCase();
+            if (data && data.length > 0) {
+                const mappedCenters = (data as any[]).map((center: any) => {
+                    const role = getCenterRoleLabel(center, adminId, assignedTempleNames);
+                    return {
+                        id: center.id,
+                        name: center.name,
+                        temple_name: center.temple_name,
+                        userRole: role,
+                        pendingCount: 0 // Will be updated by refreshCounts
+                    };
+                });
 
-            const filtered = (data || []).filter((u: any) => {
-                const uCenter = getUserCurrentCenter(u);
-                if (!uCenter || uCenter.toLowerCase() === 'none' || !isCenterMatch(uCenter, currentCenter)) {
-                    return false;
+                // 3. Refresh counts using the newly fetched centers
+                await refreshCounts(mappedCenters);
+
+            } else {
+                setManagedCenters([]);
+                setCurrentCenter('');
+                setCurrentTemple('');
+                localStorage.removeItem('pm_current_center');
+                localStorage.removeItem('pm_current_temple');
+                localStorage.removeItem('pm_managed_centers');
+                toast.error('No center assignment found for your account in the centers database.');
+            }
+        } catch (err) {
+            console.error('Failed to load initial PM data', err);
+            toast.error('Failed to load dashboard data.');
+        } finally {
+            setLoadingContext(false);
+        }
+    };
+
+    fetchInitialData();
+}, [userData, isProjectManager, router, refreshCounts, managedCenters.length]);
+    }, [userData, isProjectManager, router, refreshCounts]);
+
+
+
+// Handle Center Change
+const handleCenterChange = (centerName: string) => {
+    const selected = managedCenters.find(c => c.name === centerName);
+    const targetName = selected?.name || centerName;
+    if (!selected) {
+        console.warn(`[Project Manager Security] Blocked attempt to select unmanaged center: ${centerName}`);
+        return;
+    }
+    const targetName = selected.name;
+    const targetTemple = selected?.temple_name || currentTemple || '';
+
+    setCurrentCenter(targetName);
+    localStorage.setItem('pm_current_center', targetName);
+    if (targetTemple) {
+        setCurrentTemple(targetTemple);
+        localStorage.setItem('pm_current_temple', targetTemple);
+    }
+
+    // Clear lists to prevent stale data
+    setUsers([]);
+    setRequests([]);
+    setPendingUsers([]);
+
+    // Reload stats for this new center immediately
+    loadStats(targetName, targetTemple);
+};
+
+// (useEffect for tab changes moved below, after all useCallbacks are declared)
+
+// --- Data Loading Functions ---
+
+const loadStats = useCallback(async (cName: string, tName: string) => {
+    if (!supabase || !cName) return;
+
+    // Security: Ensure PM is authorized to manage cName
+    const isAuthorizedCenter = managedCenters.some(c => isCenterMatch(c.name, cName));
+    if (managedCenters.length > 0 && !isAuthorizedCenter) {
+        return;
+    }
+
+    setStats(prev => ({ ...prev, loading: true }));
+    try {
+        const targetCenterNorm = cName.trim().toLowerCase();
+
+        const [approvedUsersRes, pendingReqRes, pendingRegRes] = await Promise.all([
+            // Fetch approved users to segment current vs alumni for active center
+            supabase.from('users')
+                .select('current_center, center, parent_center, other_parent_center, hierarchy')
+                .eq('verification_status', 'approved')
+                .or(buildCenterMatch(cName)),
+            // pending profile requests for active center
+            supabase.from('profile_update_requests')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'pending')
+                .eq('center_name', cName),
+            // pending registrations for active center
+            supabase.from('users')
+                .select('id', { count: 'exact', head: true })
+                .eq('verification_status', 'pending')
+                .or(buildCenterMatch(cName))
+        ]);
+
+        let currentCount = 0;
+        let alumniCount = 0;
+
+        if (approvedUsersRes.data) {
+            approvedUsersRes.data.forEach((u: any) => {
+                const uCurCenter = getUserCurrentCenter(u);
+                const uParCenter = getUserParentCenter(u);
+
+                const isCurrent = isCenterMatch(uCurCenter, cName);
+                const isParent = isCenterMatch(uParCenter, cName);
+
+                if (isCurrent) {
+                    currentCount++;
+                } else if (isParent) {
+                    alumniCount++;
                 }
-                if (targetTemple) {
-                    const uH = u.hierarchy as any;
-                    const uTemple = (u.current_temple || u.parent_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || uH?.parentTemple || '').trim().toLowerCase();
-                    if (uTemple && uTemple !== targetTemple) {
-                        return false;
+            });
+        }
+
+        const totalDevotees = currentCount + alumniCount;
+        const pendingReqCount = pendingReqRes.error ? 0 : pendingReqRes.count ?? 0;
+        const pendingRegCount = pendingRegRes.error ? 0 : pendingRegRes.count ?? 0;
+
+        setStats({
+            devotees: totalDevotees,
+            currentCount: currentCount,
+            alumniCount: alumniCount,
+            pendingRequests: pendingReqCount,
+            newRegistrations: pendingRegCount,
+            loading: false
+        });
+    } catch (err) {
+        console.error('Error loading stats:', err);
+        setStats(prev => ({ ...prev, loading: false }));
+    }
+}, [buildCenterMatch]);
+    }, [buildCenterMatch, managedCenters]);
+
+// Effect to set initial center once managedCenters is populated
+// Effect to set and reconcile active center once managedCenters is populated or updated
+useEffect(() => {
+    if (managedCenters.length > 0 && !currentCenter && !loadingContext) {
+        // Prioritize centers with pending requests, otherwise pick the first one
+        const firstCenter = managedCenters.find(c => c.pendingCount > 0) || managedCenters[0];
+        if (firstCenter) {
+            setCurrentCenter(firstCenter.name);
+            const tName = firstCenter.temple_name || '';
+            setCurrentTemple(tName);
+            loadStats(firstCenter.name, tName);
+            if (loadingContext) return;
+
+            if (managedCenters.length > 0) {
+                const isCurrentValid = managedCenters.some(c => c.name.trim().toLowerCase() === (currentCenter || '').trim().toLowerCase());
+                if (!currentCenter || !isCurrentValid) {
+                    // If currentCenter is missing or no longer managed, switch immediately to first valid managed center
+                    const targetCenter = managedCenters.find(c => c.pendingCount > 0) || managedCenters[0];
+                    if (targetCenter) {
+                        setCurrentCenter(targetCenter.name);
+                        const tName = targetCenter.temple_name || '';
+                        setCurrentTemple(tName);
+                        localStorage.setItem('pm_current_center', targetCenter.name);
+                        localStorage.setItem('pm_current_temple', tName);
+                        loadStats(targetCenter.name, tName);
                     }
                 }
-                return true;
-            });
+            } else {
+                setCurrentCenter('');
+                setCurrentTemple('');
+                localStorage.removeItem('pm_current_center');
+                localStorage.removeItem('pm_current_temple');
+                localStorage.removeItem('pm_managed_centers');
+            }
+        }, [managedCenters, currentCenter, loadingContext, loadStats]);
 
-            setPendingUsers(filtered.map((u: any) => ({
+// --- New User Registrations Logic ---
+const loadPendingUsers = useCallback(async () => {
+    if (!supabase || !currentCenter) return;
+
+    // Security: Ensure PM is authorized to manage currentCenter
+    const isAuthorizedCenter = managedCenters.some(c => isCenterMatch(c.name, currentCenter));
+    if (managedCenters.length > 0 && !isAuthorizedCenter) {
+        console.warn(`[Project Manager Security] Blocked unauthorized attempt to load pending users for center: "${currentCenter}"`);
+        setPendingUsers([]);
+        return;
+    }
+
+    setLoadingPendingUsers(true);
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('verification_status', 'pending')
+            .or(buildCenterMatch(currentCenter));
+
+        if (error) throw error;
+
+        // Strict center and temple isolation filter with alias matching
+        const targetTemple = (currentTemple || '').trim().toLowerCase();
+
+        const filtered = (data || []).filter((u: any) => {
+            const uCenter = getUserCurrentCenter(u);
+            if (!uCenter || uCenter.toLowerCase() === 'none' || !isCenterMatch(uCenter, currentCenter)) {
+                return false;
+            }
+            if (targetTemple) {
+                const uH = u.hierarchy as any;
+                const uTemple = (u.current_temple || u.parent_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || uH?.parentTemple || '').trim().toLowerCase();
+                if (uTemple && uTemple !== targetTemple) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        setPendingUsers(filtered.map((u: any) => ({
+            ...u,
+            hierarchy: {
+                ...(u.hierarchy || {}),
+                currentTemple: u.current_temple || u.hierarchy?.currentTemple,
+                currentCenter: u.current_center || u.hierarchy?.currentCenter,
+                center: u.center || u.hierarchy?.center,
+                counselor: u.counselor || u.hierarchy?.counselor,
+                otherCenter: u.other_center || u.hierarchy?.otherCenter,
+                otherTemple: u.other_temple || u.hierarchy?.otherTemple,
+                ashram: u.ashram || u.hierarchy?.ashram,
+            }
+        })));
+    } catch (error: any) {
+        console.error('Error loading pending users:', error?.message || error);
+        toast.error(`Failed to load pending users: ${error?.message || ''}`);
+    } finally {
+        setLoadingPendingUsers(false);
+    }
+}, [buildCenterMatch, currentCenter, currentTemple]);
+    }, [buildCenterMatch, currentCenter, currentTemple, managedCenters]);
+
+const handleUserVerification = async (userId: string, status: 'approved' | 'rejected', reason?: string) => {
+    if (!supabase) return;
+    try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+
+        const res = await fetch('/api/admin/verify-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+                type: 'user',
+                ids: [userId],
+                action: status === 'approved' ? 'approve' : 'reject',
+                reason
+            })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to update user status');
+
+        toast.success(`User ${status} successfully`);
+        loadPendingUsers();
+        loadStats(currentCenter, currentTemple);
+        setSelectedPendingUserIds(prev => prev.filter(id => id !== userId));
+    } catch (error: any) {
+        console.error('Error verifying user:', error);
+        toast.error(error?.message || 'Failed to update user status');
+    }
+};
+
+const handleBulkVerification = async (status: 'approved' | 'rejected', reason?: string) => {
+    if (!supabase || selectedPendingUserIds.length === 0) return;
+    try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+
+        const res = await fetch('/api/admin/verify-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+                type: 'user',
+                ids: selectedPendingUserIds,
+                action: status === 'approved' ? 'approve' : 'reject',
+                reason
+            })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Bulk update failed');
+
+        toast.success(`${selectedPendingUserIds.length} users ${status} successfully`);
+        loadPendingUsers();
+        loadStats(currentCenter, currentTemple);
+        setSelectedPendingUserIds([]);
+    } catch (error: any) {
+        console.error('Error in bulk verification:', error);
+        toast.error(error?.message || 'Bulk update failed');
+    }
+};
+
+const loadRequests = useCallback(async () => {
+    if (!supabase || !currentCenter) return;
+
+    // Security: Ensure PM is authorized to manage currentCenter
+    const isAuthorizedCenter = managedCenters.some(c => isCenterMatch(c.name, currentCenter));
+    if (managedCenters.length > 0 && !isAuthorizedCenter) {
+        console.warn(`[Project Manager Security] Blocked unauthorized attempt to load requests for center: "${currentCenter}"`);
+        setRequests([]);
+        return;
+    }
+
+    setLoadingRequests(true);
+    try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+
+        // API handles filtering by temple AND center now
+        const response = await fetch(`/api/profile-requests?status=${approvalStatus}&temple=${encodeURIComponent(currentTemple)}&center=${encodeURIComponent(currentCenter)}&_t=${Date.now()}`, {
+            headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            setRequests(data.data || []);
+        } else {
+            toast.error(data.error || 'Failed to fetch requests');
+        }
+
+    } catch (error) {
+        console.error(error);
+        toast.error('Network error loading requests');
+    } finally {
+        setLoadingRequests(false);
+    }
+}, [currentCenter, currentTemple, approvalStatus]);
+    }, [currentCenter, currentTemple, approvalStatus, managedCenters]);
+
+const loadUsers = useCallback(async () => {
+    if (!supabase || !currentCenter) return;
+
+    // Security: Ensure PM is authorized to manage currentCenter
+    const isAuthorizedCenter = managedCenters.some(c => isCenterMatch(c.name, currentCenter));
+    if (managedCenters.length > 0 && !isAuthorizedCenter) {
+        console.warn(`[Project Manager Security] Blocked unauthorized attempt to load users for center: "${currentCenter}"`);
+        setUsers([]);
+        return;
+    }
+
+    setLoadingUsers(true);
+    try {
+        // Fetch all users and filter by center client-side (users table is not huge yet, but ideally we'd filter on DB)
+        // But 'hierarchy' is JSONB, so client-side filtering is often reliable enough for <10k users if we fetch light data
+        // For now, fetching * is okay.
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('verification_status', 'approved')
+            .or(buildCenterMatch(currentCenter));
+
+        if (error) throw error;
+
+        const mappedUsers = (data || []).map((u: any) => {
+            const uH = u.hierarchy as any;
+            const uCurCenter = getUserCurrentCenter(u);
+            const uParCenter = getUserParentCenter(u);
+
+            const isCurrent = isCenterMatch(uCurCenter, currentCenter);
+            const isParent = isCenterMatch(uParCenter, currentCenter);
+
+            // User must be connected to this center either as current member or as alumni (parent/origin center)
+            if (!isCurrent && !isParent) return null;
+
+            const centerConnection: 'current' | 'alumni' | 'both' = (isCurrent && isParent) ? 'both' : isCurrent ? 'current' : 'alumni';
+
+            return {
                 ...u,
+                _centerConnection: centerConnection,
+                _currentCenterDisplay: uCurCenter || 'None',
+                _parentCenterDisplay: uParCenter || 'None',
+                _currentTempleDisplay: u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None',
                 hierarchy: {
                     ...(u.hierarchy || {}),
                     currentTemple: u.current_temple || u.hierarchy?.currentTemple,
@@ -918,2033 +1161,1882 @@ export default function ProjectManagerDashboard() {
                     otherCenter: u.other_center || u.hierarchy?.otherCenter,
                     otherTemple: u.other_temple || u.hierarchy?.otherTemple,
                     ashram: u.ashram || u.hierarchy?.ashram,
-                }
-            })));
-        } catch (error: any) {
-            console.error('Error loading pending users:', error?.message || error);
-            toast.error(`Failed to load pending users: ${error?.message || ''}`);
-        } finally {
-            setLoadingPendingUsers(false);
-        }
-    }, [buildCenterMatch, currentCenter, currentTemple]);
+                },
+                // Relative contact fields
+                relative1Name: u.relative_1_name,
+                relative1Relationship: u.relative_1_relationship,
+                relative1Phone: u.relative_1_phone,
+                relative2Name: u.relative_2_name,
+                relative2Relationship: u.relative_2_relationship,
+                relative2Phone: u.relative_2_phone,
+                relative3Name: u.relative_3_name,
+                relative3Relationship: u.relative_3_relationship,
+                relative3Phone: u.relative_3_phone,
+                // Health fields
+                healthChronicDisease: u.health_chronic_disease,
+                introducedToKcIn: u.introduced_to_kc_in || uH?.introducedToKcIn,
+            };
+        }).filter(Boolean);
 
-    const handleUserVerification = async (userId: string, status: 'approved' | 'rejected', reason?: string) => {
-        if (!supabase) return;
-        try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            
+        setUsers(mappedUsers);
+    } catch (error) {
+        console.error('Error loading users:', error);
+        toast.error('Failed to load users');
+    } finally {
+        setLoadingUsers(false);
+    }
+}, [buildCenterMatch, currentCenter]);
+    }, [buildCenterMatch, currentCenter, managedCenters]);
+useEffect(() => {
+    if (!currentCenter) return;
+    loadStats(currentCenter, currentTemple);
 
-            const res = await fetch('/api/admin/verify-data', {
+    if (activeTab === 'approvals') {
+        loadRequests();
+    } else if (activeTab === 'registrations') {
+        loadPendingUsers();
+    } else if (activeTab === 'user-management') {
+        loadUsers();
+    } else if (activeTab === 'service-team') {
+        loadStructure();
+        loadUsers(); // Also load users for role assignment
+    }
+}, [activeTab, currentCenter, approvalStatus, loadStats, loadRequests, loadPendingUsers, loadUsers, loadStructure, currentTemple]);
+
+// --- Action Handlers ---
+
+const handleApprovalAction = async (requestId: string, action: 'approved' | 'rejected', requestIds?: string[]) => {
+    if (!supabase) return;
+
+    try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+        // Bulk support
+        if (requestId === '' && requestIds && Array.isArray(requestIds)) {
+            const bulkIds = requestIds;
+            const response = await fetch('/api/profile-requests/batch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
-                    type: 'user',
-                    ids: [userId],
-                    action: status === 'approved' ? 'approve' : 'reject',
-                    reason
-                })
-            });
-
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error || 'Failed to update user status');
-
-            toast.success(`User ${status} successfully`);
-            loadPendingUsers();
-            loadStats(currentCenter, currentTemple);
-            setSelectedPendingUserIds(prev => prev.filter(id => id !== userId));
-        } catch (error: any) {
-            console.error('Error verifying user:', error);
-            toast.error(error?.message || 'Failed to update user status');
-        }
-    };
-
-    const handleBulkVerification = async (status: 'approved' | 'rejected', reason?: string) => {
-        if (!supabase || selectedPendingUserIds.length === 0) return;
-        try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            
-
-            const res = await fetch('/api/admin/verify-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({
-                    type: 'user',
-                    ids: selectedPendingUserIds,
-                    action: status === 'approved' ? 'approve' : 'reject',
-                    reason
-                })
-            });
-
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error || 'Bulk update failed');
-
-            toast.success(`${selectedPendingUserIds.length} users ${status} successfully`);
-            loadPendingUsers();
-            loadStats(currentCenter, currentTemple);
-            setSelectedPendingUserIds([]);
-        } catch (error: any) {
-            console.error('Error in bulk verification:', error);
-            toast.error(error?.message || 'Bulk update failed');
-        }
-    };
-
-    const loadRequests = useCallback(async () => {
-        if (!supabase || !currentCenter) return;
-        setLoadingRequests(true);
-        try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            
-
-            // API handles filtering by temple AND center now
-            const response = await fetch(`/api/profile-requests?status=${approvalStatus}&temple=${encodeURIComponent(currentTemple)}&center=${encodeURIComponent(currentCenter)}&_t=${Date.now()}`, {
-                headers: token ? { ...(token ? { "Authorization": `Bearer ${token}` } : {}) } : undefined
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                setRequests(data.data || []);
-            } else {
-                toast.error(data.error || 'Failed to fetch requests');
-            }
-
-        } catch (error) {
-            console.error(error);
-            toast.error('Network error loading requests');
-        } finally {
-            setLoadingRequests(false);
-        }
-    }, [currentCenter, currentTemple, approvalStatus]);
-
-    const loadUsers = useCallback(async () => {
-        if (!supabase || !currentCenter) return;
-        setLoadingUsers(true);
-        try {
-            // Fetch all users and filter by center client-side (users table is not huge yet, but ideally we'd filter on DB)
-            // But 'hierarchy' is JSONB, so client-side filtering is often reliable enough for <10k users if we fetch light data
-            // For now, fetching * is okay.
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('verification_status', 'approved')
-                .or(buildCenterMatch(currentCenter));
-
-            if (error) throw error;
-
-            const mappedUsers = (data || []).map((u: any) => {
-                const uH = u.hierarchy as any;
-                const uCurCenter = getUserCurrentCenter(u);
-                const uParCenter = getUserParentCenter(u);
-
-                const isCurrent = isCenterMatch(uCurCenter, currentCenter);
-                const isParent = isCenterMatch(uParCenter, currentCenter);
-
-                // User must be connected to this center either as current member or as alumni (parent/origin center)
-                if (!isCurrent && !isParent) return null;
-
-                const centerConnection: 'current' | 'alumni' | 'both' = (isCurrent && isParent) ? 'both' : isCurrent ? 'current' : 'alumni';
-
-                return {
-                    ...u,
-                    _centerConnection: centerConnection,
-                    _currentCenterDisplay: uCurCenter || 'None',
-                    _parentCenterDisplay: uParCenter || 'None',
-                    _currentTempleDisplay: u.current_temple || uH?.currentTemple?.name || (typeof uH?.currentTemple === 'string' ? uH?.currentTemple : '') || 'None',
-                    hierarchy: {
-                        ...(u.hierarchy || {}),
-                        currentTemple: u.current_temple || u.hierarchy?.currentTemple,
-                        currentCenter: u.current_center || u.hierarchy?.currentCenter,
-                        center: u.center || u.hierarchy?.center,
-                        counselor: u.counselor || u.hierarchy?.counselor,
-                        otherCenter: u.other_center || u.hierarchy?.otherCenter,
-                        otherTemple: u.other_temple || u.hierarchy?.otherTemple,
-                        ashram: u.ashram || u.hierarchy?.ashram,
-                    },
-                    // Relative contact fields
-                    relative1Name: u.relative_1_name,
-                    relative1Relationship: u.relative_1_relationship,
-                    relative1Phone: u.relative_1_phone,
-                    relative2Name: u.relative_2_name,
-                    relative2Relationship: u.relative_2_relationship,
-                    relative2Phone: u.relative_2_phone,
-                    relative3Name: u.relative_3_name,
-                    relative3Relationship: u.relative_3_relationship,
-                    relative3Phone: u.relative_3_phone,
-                    // Health fields
-                    healthChronicDisease: u.health_chronic_disease,
-                    introducedToKcIn: u.introduced_to_kc_in || uH?.introducedToKcIn,
-                };
-            }).filter(Boolean);
-
-            setUsers(mappedUsers);
-        } catch (error) {
-            console.error('Error loading users:', error);
-            toast.error('Failed to load users');
-        } finally {
-            setLoadingUsers(false);
-        }
-    }, [buildCenterMatch, currentCenter]);
-    useEffect(() => {
-        if (!currentCenter) return;
-        loadStats(currentCenter, currentTemple);
-
-        if (activeTab === 'approvals') {
-            loadRequests();
-        } else if (activeTab === 'registrations') {
-            loadPendingUsers();
-        } else if (activeTab === 'user-management') {
-            loadUsers();
-        } else if (activeTab === 'service-team') {
-            loadStructure();
-            loadUsers(); // Also load users for role assignment
-        }
-    }, [activeTab, currentCenter, approvalStatus, loadStats, loadRequests, loadPendingUsers, loadUsers, loadStructure, currentTemple]);
-
-    // --- Action Handlers ---
-
-    const handleApprovalAction = async (requestId: string, action: 'approved' | 'rejected', requestIds?: string[]) => {
-        if (!supabase) return;
-
-        try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-
-            // Bulk support
-            if (requestId === '' && requestIds && Array.isArray(requestIds)) {
-                const bulkIds = requestIds;
-                const response = await fetch('/api/profile-requests/batch', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { "Authorization": `Bearer ${token}` } : {})
-                    },
-                    body: JSON.stringify({
-                        requestIds: bulkIds,
-                        status: action,
-                        feedback: action === 'rejected' ? (feedback || 'Bulk rejection') : undefined
-                    })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    toast.success(result.message || `Bulk ${action} successful`);
-                    setConfirmation({ isOpen: false, type: null, count: 0 });
-                    setFeedback('');
-                    setSelectedRequestIds([]);
-                    loadRequests(); // Reload existing tab
-                    loadStats(currentCenter, currentTemple); // Reload primary card
-                    refreshCounts(managedCenters); // Reload breakdown list & dropdown
-                } else {
-                    toast.error(result.error || 'Bulk action failed');
-                }
-                return;
-            }
-
-            const response = await fetch(`/api/profile-requests/${requestId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({
+                    requestIds: bulkIds,
                     status: action,
-                    feedback,
-                    approvedFields: action === 'approved' ? selectedFields[requestId] : undefined
+                    feedback: action === 'rejected' ? (feedback || 'Bulk rejection') : undefined
                 })
             });
-
             const result = await response.json();
             if (result.success) {
-                toast.success(`Request ${action}`);
-                // Remove from list
-                setRequests(prev => prev.filter(r => r.id !== requestId));
+                toast.success(result.message || `Bulk ${action} successful`);
+                setConfirmation({ isOpen: false, type: null, count: 0 });
                 setFeedback('');
-                setExpandedRequestId(null);
-                loadStats(currentCenter, currentTemple);
+                setSelectedRequestIds([]);
+                loadRequests(); // Reload existing tab
+                loadStats(currentCenter, currentTemple); // Reload primary card
+                refreshCounts(managedCenters); // Reload breakdown list & dropdown
             } else {
-                toast.error(result.error || 'Action failed');
+                toast.error(result.error || 'Bulk action failed');
             }
-        } catch (error: any) {
-            toast.error(error.message || 'Action failed');
+            return;
         }
-    };
 
-    const renderFieldChange = (requestId: string, key: string, newValue: any, oldValue: any) => {
-        // Skip internal technical ID fields (show names instead)
-        if (key === 'counselorId' || key === 'counselor_id') return null;
+        const response = await fetch(`/api/profile-requests/${requestId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+                status: action,
+                feedback,
+                approvedFields: action === 'approved' ? selectedFields[requestId] : undefined
+            })
+        });
 
-        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-        const displayOld = (oldValue === null || oldValue === undefined || oldValue === '') ? 'Not Set' : oldValue.toString();
-        const displayNew = (newValue === null || newValue === undefined || newValue === '') ? 'Cleared' : newValue.toString();
+        const result = await response.json();
+        if (result.success) {
+            toast.success(`Request ${action}`);
+            // Remove from list
+            setRequests(prev => prev.filter(r => r.id !== requestId));
+            setFeedback('');
+            setExpandedRequestId(null);
+            loadStats(currentCenter, currentTemple);
+        } else {
+            toast.error(result.error || 'Action failed');
+        }
+    } catch (error: any) {
+        toast.error(error.message || 'Action failed');
+    }
+};
 
-        if (displayOld === 'Not Set' && (displayNew === 'Cleared' || displayNew === '')) return null;
-        if (displayOld === displayNew) return null;
+const renderFieldChange = (requestId: string, key: string, newValue: any, oldValue: any) => {
+    // Skip internal technical ID fields (show names instead)
+    if (key === 'counselorId' || key === 'counselor_id') return null;
 
-        const isSelected = selectedFields[requestId]?.includes(key) ?? true;
+    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    const displayOld = (oldValue === null || oldValue === undefined || oldValue === '') ? 'Not Set' : oldValue.toString();
+    const displayNew = (newValue === null || newValue === undefined || newValue === '') ? 'Cleared' : newValue.toString();
 
-        const toggleField = () => {
-            setSelectedFields(prev => {
-                const current = prev[requestId] || Object.keys(requests.find(r => r.id === requestId)?.requested_changes || {});
-                if (current.includes(key)) {
-                    return { ...prev, [requestId]: current.filter(k => k !== key) };
-                } else {
-                    return { ...prev, [requestId]: [...current, key] };
-                }
-            });
-        };
+    if (displayOld === 'Not Set' && (displayNew === 'Cleared' || displayNew === '')) return null;
+    if (displayOld === displayNew) return null;
 
-        return (
-            <div
-                key={key}
-                className={`flex items-start gap-3 sm:gap-4 py-3 sm:py-4 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors px-2 rounded-lg cursor-pointer ${!isSelected ? 'opacity-60 grayscale-[0.5]' : ''}`}
-                onClick={approvalStatus === 'pending' ? toggleField : undefined}
-            >
-                {approvalStatus === 'pending' && (
-                    <div className="pt-4 sm:pt-5">
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500 ring-2 ring-amber-200 shadow-sm' : 'border-gray-300 bg-white'}`}>
-                            {isSelected && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
-                        </div>
-                    </div>
-                )}
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label} (Current)</span>
-                        <div className="inline-flex">
-                            <span className="text-xs sm:text-sm text-gray-600 line-through decoration-red-300 opacity-70 bg-red-50/30 px-2 py-1 rounded truncate max-w-full">{displayOld}</span>
-                        </div>
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] sm:text-xs font-black text-blue-400 uppercase tracking-widest mb-1">{label} (Requested)</span>
-                        <div className="flex items-center gap-2">
-                            <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400 flex-shrink-0" />
-                            <span className="text-xs sm:text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded shadow-sm truncate max-w-full">{displayNew}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    const isSelected = selectedFields[requestId]?.includes(key) ?? true;
 
-    const openConfirmation = (type: 'approved' | 'rejected', requestId: string | null = null) => {
-        setConfirmation({
-            isOpen: true,
-            type,
-            count: requestId ? 1 : requests.filter(r => selectedRequestIds.includes(r.id)).length,
-            requestId
+    const toggleField = () => {
+        setSelectedFields(prev => {
+            const current = prev[requestId] || Object.keys(requests.find(r => r.id === requestId)?.requested_changes || {});
+            if (current.includes(key)) {
+                return { ...prev, [requestId]: current.filter(k => k !== key) };
+            } else {
+                return { ...prev, [requestId]: [...current, key] };
+            }
         });
     };
 
-    const confirmAction = async () => {
-        if (confirmation.type) {
-            if (confirmation.requestId) {
-                await handleApprovalAction(confirmation.requestId, confirmation.type);
-            } else {
-                // @ts-ignore - passing 3rd arg for bulk
-                await handleApprovalAction('', confirmation.type, selectedRequestIds);
-            }
-            setConfirmation({ isOpen: false, type: null, count: 0, requestId: null });
-        }
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedRequestIds.length === requests.length) {
-            setSelectedRequestIds([]);
-        } else {
-            setSelectedRequestIds(requests.map(r => r.id));
-        }
-    };
-
-    const toggleSelection = (id: string) => {
-        setSelectedRequestIds(prev =>
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        );
-    };
-
-    const handleInlineRoleUpdate = async (user: any, newRoles: number[]) => {
-        if (!supabase) return;
-        setUpdatingUserId(user.id);
-
-        try {
-            // Backend handles merging with other non-manageable roles, we just send the new set of manageable roles.
-            // But we must ensure "Member" (1) logic is respected if we rely on backend for that?
-            // Actually the backend just takes "roles" array and merges it.
-            // So we send exactly what we want the manageable roles to be.
-
-            const response = await fetch('/api/centers/assign-role', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
-                },
-                body: JSON.stringify({
-                    userId: user.id,
-                    roles: newRoles
-                })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to update user roles');
-            }
-
-            const rolesDisplay = newRoles.map(r => CENTER_POST_OPTIONS.find(o => o.value === r)?.label).join(', ');
-            toast.success(`Roles updated to: ${rolesDisplay}`);
-            loadUsers(); // Refresh list to show updated roles
-        } catch (error: any) {
-            toast.error(error.message || 'Update failed');
-        } finally {
-            setUpdatingUserId(null);
-        }
-    };
-
-    const handleAssignGroup = async (userId: string, groupName: string) => {
-        if (!supabase) return;
-        setUpdatingGroupUserId(userId);
-
-        try {
-            const response = await fetch('/api/admin/assign-bv-group', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
-                },
-                body: JSON.stringify({
-                    userId,
-                    bvGroup: groupName || null
-                })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to assign group');
-            }
-
-            toast.success(`Group assigned successfully`);
-            loadUsers(); // Refresh list to show updated group
-            loadStats(currentCenter, currentTemple);
-        } catch (error: any) {
-            toast.error(error.message || 'Group assignment failed');
-        } finally {
-            setUpdatingGroupUserId(null);
-        }
-    };
-
-    const handleAssignKCStatus = async (userId: string, kcStatus: string) => {
-        if (!supabase) return;
-        setUpdatingKCStatusUserId(userId);
-
-        try {
-            const { error } = await supabase
-                .from('users')
-                .update({ 
-                    hierarchy: { 
-                        ...users.find(u => u.id === userId)?.hierarchy,
-                        kcStatus 
-                    } 
-                })
-                .eq('id', userId);
-
-            if (error) throw error;
-            
-            toast.success(`KC Status updated to ${kcStatus}`);
-            loadUsers();
-        } catch (error: any) {
-            toast.error(error.message || 'KC Status update failed');
-        } finally {
-            setUpdatingKCStatusUserId(null);
-        }
-    };
-
-    // --- Render ---
-
-    if (loadingContext) {
-        return <div className="flex h-screen items-center justify-center">Loading...</div>;
-    }
-
     return (
-        <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-3 px-2 sm:px-4 lg:px-6 py-2 sm:py-3.5 bg-slate-100/80 min-h-screen">
-            {/* Header */}
-            <div className="relative rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-2.5 sm:p-3 shadow-sm border border-teal-700/40 z-10 overflow-hidden">
-                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
-                <div className="absolute bottom-0 left-1/3 -ml-16 -mb-16 w-48 h-48 rounded-full bg-cyan-400/20 blur-2xl pointer-events-none"></div>
-
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
-                    <div className="text-white flex items-center gap-2.5">
-                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl text-white shadow-xs">
-                            <Shield className="h-5 w-5 stroke-[2.5px]" />
-                        </div>
-                        <div>
-                            <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">Project Management</h1>
-                            <p className="text-[10px] sm:text-[11px] text-teal-100 font-medium opacity-90">Center Leadership & Spiritual Approvals</p>
-                        </div>
+        <div
+            key={key}
+            className={`flex items-start gap-3 sm:gap-4 py-3 sm:py-4 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors px-2 rounded-lg cursor-pointer ${!isSelected ? 'opacity-60 grayscale-[0.5]' : ''}`}
+            onClick={approvalStatus === 'pending' ? toggleField : undefined}
+        >
+            {approvalStatus === 'pending' && (
+                <div className="pt-4 sm:pt-5">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500 ring-2 ring-amber-200 shadow-sm' : 'border-gray-300 bg-white'}`}>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
                     </div>
-
+                </div>
+            )}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label} (Current)</span>
+                    <div className="inline-flex">
+                        <span className="text-xs sm:text-sm text-gray-600 line-through decoration-red-300 opacity-70 bg-red-50/30 px-2 py-1 rounded truncate max-w-full">{displayOld}</span>
+                    </div>
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] sm:text-xs font-black text-blue-400 uppercase tracking-widest mb-1">{label} (Requested)</span>
                     <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-white/20 backdrop-blur-md text-white border border-white/25 shadow-xs flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 text-teal-200" />
-                            {managedCenters.length} {managedCenters.length === 1 ? 'Center Available' : 'Centers Managed'}
-                        </span>
+                        <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400 flex-shrink-0" />
+                        <span className="text-xs sm:text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded shadow-sm truncate max-w-full">{displayNew}</span>
                     </div>
                 </div>
             </div>
+        </div>
+    );
+};
 
-            {/* Dedicated Active Center & Switcher Bar - Clear, High-Visibility */}
-            <div className="bg-white rounded-xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center text-teal-700 flex-shrink-0 shadow-2xs">
-                        <Building2 className="h-5 w-5 stroke-[2.5px]" />
+const openConfirmation = (type: 'approved' | 'rejected', requestId: string | null = null) => {
+    setConfirmation({
+        isOpen: true,
+        type,
+        count: requestId ? 1 : requests.filter(r => selectedRequestIds.includes(r.id)).length,
+        requestId
+    });
+};
+
+const confirmAction = async () => {
+    if (confirmation.type) {
+        if (confirmation.requestId) {
+            await handleApprovalAction(confirmation.requestId, confirmation.type);
+        } else {
+            // @ts-ignore - passing 3rd arg for bulk
+            await handleApprovalAction('', confirmation.type, selectedRequestIds);
+        }
+        setConfirmation({ isOpen: false, type: null, count: 0, requestId: null });
+    }
+};
+
+const toggleSelectAll = () => {
+    if (selectedRequestIds.length === requests.length) {
+        setSelectedRequestIds([]);
+    } else {
+        setSelectedRequestIds(requests.map(r => r.id));
+    }
+};
+
+const toggleSelection = (id: string) => {
+    setSelectedRequestIds(prev =>
+        prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+};
+
+const handleInlineRoleUpdate = async (user: any, newRoles: number[]) => {
+    if (!supabase) return;
+    setUpdatingUserId(user.id);
+
+    try {
+        // Backend handles merging with other non-manageable roles, we just send the new set of manageable roles.
+        // But we must ensure "Member" (1) logic is respected if we rely on backend for that?
+        // Actually the backend just takes "roles" array and merges it.
+        // So we send exactly what we want the manageable roles to be.
+
+        const response = await fetch('/api/centers/assign-role', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                roles: newRoles
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to update user roles');
+        }
+
+        const rolesDisplay = newRoles.map(r => CENTER_POST_OPTIONS.find(o => o.value === r)?.label).join(', ');
+        toast.success(`Roles updated to: ${rolesDisplay}`);
+        loadUsers(); // Refresh list to show updated roles
+    } catch (error: any) {
+        toast.error(error.message || 'Update failed');
+    } finally {
+        setUpdatingUserId(null);
+    }
+};
+
+const handleAssignGroup = async (userId: string, groupName: string) => {
+    if (!supabase) return;
+    setUpdatingGroupUserId(userId);
+
+    try {
+        const response = await fetch('/api/admin/assign-bv-group', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...((await supabase.auth.getSession()).data.session?.access_token ? { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
+            },
+            body: JSON.stringify({
+                userId,
+                bvGroup: groupName || null
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to assign group');
+        }
+
+        toast.success(`Group assigned successfully`);
+        loadUsers(); // Refresh list to show updated group
+        loadStats(currentCenter, currentTemple);
+    } catch (error: any) {
+        toast.error(error.message || 'Group assignment failed');
+    } finally {
+        setUpdatingGroupUserId(null);
+    }
+};
+
+const handleAssignKCStatus = async (userId: string, kcStatus: string) => {
+    if (!supabase) return;
+    setUpdatingKCStatusUserId(userId);
+
+    try {
+        const { error } = await supabase
+            .from('users')
+            .update({
+                hierarchy: {
+                    ...users.find(u => u.id === userId)?.hierarchy,
+                    kcStatus
+                }
+            })
+            .eq('id', userId);
+
+        if (error) throw error;
+
+        toast.success(`KC Status updated to ${kcStatus}`);
+        loadUsers();
+    } catch (error: any) {
+        toast.error(error.message || 'KC Status update failed');
+    } finally {
+        setUpdatingKCStatusUserId(null);
+    }
+};
+
+// --- Render ---
+
+if (loadingContext) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+}
+
+return (
+    <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-3 px-2 sm:px-4 lg:px-6 py-2 sm:py-3.5 bg-slate-100/80 min-h-screen">
+        {/* Header */}
+        <div className="relative rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-2.5 sm:p-3 shadow-sm border border-teal-700/40 z-10 overflow-hidden">
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-1/3 -ml-16 -mb-16 w-48 h-48 rounded-full bg-cyan-400/20 blur-2xl pointer-events-none"></div>
+
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+                <div className="text-white flex items-center gap-2.5">
+                    <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl text-white shadow-xs">
+                        <Shield className="h-5 w-5 stroke-[2.5px]" />
                     </div>
                     <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Active Managed Center</span>
-                            {managedCenters.find(c => c.name === currentCenter)?.userRole && (
-                                <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black bg-teal-100 text-teal-900 border border-teal-300 uppercase tracking-wider">
-                                    {managedCenters.find(c => c.name === currentCenter)?.userRole}
-                                </span>
-                            )}
-                        </div>
-                        <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight mt-0.5">
-                            {currentCenter || 'No Center Selected'}
-                        </h2>
+                        <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">Project Management</h1>
+                        <p className="text-[10px] sm:text-[11px] text-teal-100 font-medium opacity-90">Center Leadership & Spiritual Approvals</p>
                     </div>
                 </div>
 
-                {/* Dropdown to change center */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
-                    <label className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5 text-teal-600" />
-                        <span>Change Center:</span>
-                    </label>
-                    <div className="relative w-full sm:w-72">
-                        <select
-                            value={currentCenter}
-                            onChange={(e) => handleCenterChange(e.target.value)}
-                            className="w-full bg-slate-50 hover:bg-white text-slate-900 font-bold text-xs py-2 pl-3 pr-8 rounded-lg border-2 border-teal-500 hover:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer shadow-2xs transition-all"
-                        >
-                            {managedCenters.map(c => (
-                                <option key={c.id} value={c.name} className="text-slate-900 bg-white font-bold">
-                                    🏛️ {c.name} {c.pendingCount > 0 ? `(${c.pendingCount} pending)` : ''}
-                                </option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-700 pointer-events-none" />
+                <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-white/20 backdrop-blur-md text-white border border-white/25 shadow-xs flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-teal-200" />
+                        {managedCenters.length} {managedCenters.length === 1 ? 'Center Available' : 'Centers Managed'}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {/* Dedicated Active Center & Switcher Bar - Clear, High-Visibility */}
+        <div className="bg-white rounded-xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center text-teal-700 flex-shrink-0 shadow-2xs">
+                    <Building2 className="h-5 w-5 stroke-[2.5px]" />
+                </div>
+                <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Active Managed Center</span>
+                        {managedCenters.find(c => c.name === currentCenter)?.userRole && (
+                            <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black bg-teal-100 text-teal-900 border border-teal-300 uppercase tracking-wider">
+                                {managedCenters.find(c => c.name === currentCenter)?.userRole}
+                            </span>
+                        )}
                     </div>
+                    <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight mt-0.5">
+                        {currentCenter || 'No Center Selected'}
+                    </h2>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-2.5">
-                {/* 1. Total Devotees */}
-                <div
-                    onClick={() => handleTabChange('user-management')}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-blue-50/80 via-white to-white border-2 border-blue-200/90 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
-                >
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Total Devotees</span>
-                        <div className="h-6 w-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                            <Users className="h-3.5 w-3.5" />
-                        </div>
-                    </div>
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
-                            {users.length > 0 ? dynamicDevoteeStats.total : stats.devotees}
-                        </div>
-                        {(users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount) > 0 && (
-                            <span className="text-[9.5px] font-black text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded-md">
-                                +{users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
-                            </span>
-                        )}
-                    </div>
-                    <div className="text-[9.5px] text-slate-500 font-semibold mt-0.5 truncate">
-                        {users.length > 0 ? dynamicDevoteeStats.currentCount : stats.currentCount} Current • {users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
-                    </div>
-                </div>
-
-                {/* 2. Pending Requests */}
-                <div
-                    onClick={() => {
-                        setApprovalStatus('pending');
-                        handleTabChange('approvals');
-                    }}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-amber-50/80 via-white to-white border-2 border-amber-200/90 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
-                >
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Pending Requests</span>
-                        <div className="h-6 w-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                            <Clock className="h-3.5 w-3.5" />
-                        </div>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-1">
-                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
-                            {stats.pendingRequests}
-                        </div>
-                        {stats.pendingRequests > 0 && (
-                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                                Action needed
-                            </span>
-                        )}
-                    </div>
-                    <div className="text-[9.5px] text-amber-700 font-semibold mt-0.5 truncate">Profile Approvals</div>
-                </div>
-
-                {/* 3. New Registrations */}
-                <div
-                    onClick={() => handleTabChange('registrations')}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-emerald-50/80 via-white to-white border-2 border-emerald-200/90 shadow-2xs hover:shadow-md hover:border-emerald-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
-                >
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-emerald-900 uppercase tracking-wider">New Registrations</span>
-                        <div className="h-6 w-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                            <UserCheck className="h-3.5 w-3.5" />
-                        </div>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-1">
-                        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
-                            {stats.newRegistrations}
-                        </div>
-                        {stats.newRegistrations > 0 && (
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
-                                Action needed
-                            </span>
-                        )}
-                    </div>
-                    <div className="text-[9.5px] text-emerald-700 font-semibold mt-0.5 truncate">New Devotees</div>
-                </div>
-
-                {/* 4. Service Team */}
-                <div
-                    onClick={() => handleTabChange('service-team')}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-purple-50/80 via-white to-white border-2 border-purple-200/90 shadow-2xs hover:shadow-md hover:border-purple-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
-                >
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-purple-900 uppercase tracking-wider">Service Team</span>
-                        <div className="h-6 w-6 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                        </div>
-                    </div>
-                    <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Management</div>
-                    <div className="text-[9.5px] text-purple-700 font-semibold mt-0.5">Center Service Team</div>
-                </div>
-
-                {/* 5. Spiritual Progress */}
-                <div
-                    onClick={() => router.push('/dashboard/project-manager/sadhana-report')}
-                    className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-rose-50/80 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
-                >
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-rose-900 uppercase tracking-wider">Spiritual Progress</span>
-                        <div className="h-6 w-6 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                            <Activity className="h-3.5 w-3.5" />
-                        </div>
-                    </div>
-                    <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Sadhana Report</div>
-                    <div className="text-[9.5px] text-rose-700 font-semibold mt-0.5">Center Progress</div>
+            {/* Dropdown to change center */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                <label className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 text-teal-600" />
+                    <span>Change Center:</span>
+                </label>
+                <div className="relative w-full sm:w-72">
+                    <select
+                        value={currentCenter}
+                        onChange={(e) => handleCenterChange(e.target.value)}
+                        className="w-full bg-slate-50 hover:bg-white text-slate-900 font-bold text-xs py-2 pl-3 pr-8 rounded-lg border-2 border-teal-500 hover:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer shadow-2xs transition-all"
+                    >
+                        {managedCenters.map(c => (
+                            <option key={c.id} value={c.name} className="text-slate-900 bg-white font-bold">
+                                🏛️ {c.name} {c.pendingCount > 0 ? `(${c.pendingCount} pending)` : ''}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-700 pointer-events-none" />
                 </div>
             </div>
+        </div>
 
-            {/* Tabs */}
-            <div className="overflow-x-auto no-scrollbar">
-                <div className="flex gap-1 p-1 bg-white rounded-xl w-fit border-2 border-slate-300 shadow-2xs">
-                    <button
-                        onClick={() => handleTabChange('approvals')}
-                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'approvals'
-                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
-                    >
-                        <FileCheck className="h-3.5 w-3.5" />
-                        Spiritual Approval
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('registrations')}
-                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'registrations'
-                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
-                    >
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-2.5">
+            {/* 1. Total Devotees */}
+            <div
+                onClick={() => handleTabChange('user-management')}
+                className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-blue-50/80 via-white to-white border-2 border-blue-200/90 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+            >
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Total Devotees</span>
+                    <div className="h-6 w-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                         <Users className="h-3.5 w-3.5" />
-                        New Dev Approval
-                        {stats.newRegistrations > 0 && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-orange-500 text-white ml-1">
-                                {stats.newRegistrations}
-                            </span>
-                        )}
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('user-management')}
-                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'user-management'
-                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
-                            : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
-                    >
-                        <Shield className="h-3.5 w-3.5" />
-                        Management roles
-                    </button>
+                    </div>
+                </div>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                        {users.length > 0 ? dynamicDevoteeStats.total : stats.devotees}
+                    </div>
+                    {(users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount) > 0 && (
+                        <span className="text-[9.5px] font-black text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded-md">
+                            +{users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
+                        </span>
+                    )}
+                </div>
+                <div className="text-[9.5px] text-slate-500 font-semibold mt-0.5 truncate">
+                    {users.length > 0 ? dynamicDevoteeStats.currentCount : stats.currentCount} Current • {users.length > 0 ? dynamicDevoteeStats.alumniCount : stats.alumniCount} Alumni
                 </div>
             </div>
 
-            {/* Content Area */}
-            <div className="min-h-[400px]">
-                {activeTab === 'approvals' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-6 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm">
-                            <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 items-center overflow-x-auto no-scrollbar">
-                                <div className="flex min-w-max gap-1">
-                                    {(['pending', 'approved', 'rejected'] as const).map(status => {
-                                        const isActive = approvalStatus === status;
-                                        return (
-                                            <button
-                                                key={status}
-                                                onClick={() => {
-                                                    setApprovalStatus(status);
-                                                    setSelectedRequestIds([]);
-                                                }}
-                                                className={`px-3.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${isActive
-                                                    ? 'bg-white text-gray-900 shadow-sm transform scale-[1.02]'
-                                                    : 'text-gray-500 hover:text-gray-700'
-                                                    }`}
-                                            >
-                                                {status}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+            {/* 2. Pending Requests */}
+            <div
+                onClick={() => {
+                    setApprovalStatus('pending');
+                    handleTabChange('approvals');
+                }}
+                className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-amber-50/80 via-white to-white border-2 border-amber-200/90 shadow-2xs hover:shadow-md hover:border-amber-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+            >
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Pending Requests</span>
+                    <div className="h-6 w-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <Clock className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="flex items-baseline justify-between gap-1">
+                    <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                        {stats.pendingRequests}
+                    </div>
+                    {stats.pendingRequests > 0 && (
+                        <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                            Action needed
+                        </span>
+                    )}
+                </div>
+                <div className="text-[9.5px] text-amber-700 font-semibold mt-0.5 truncate">Profile Approvals</div>
+            </div>
 
-                            {approvalStatus === 'pending' && selectedRequestIds.length > 0 && (
-                                <div className="flex items-center justify-between gap-4 bg-teal-600 p-2 pl-4 sm:pl-6 rounded-xl shadow-lg shadow-teal-200 animate-in zoom-in-95 duration-300">
-                                    <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">{selectedRequestIds.length} Selected</span>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={() => openConfirmation('rejected')}
-                                            className="px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
-                                        >
-                                            Reject
-                                        </button>
-                                        <button
-                                            onClick={() => openConfirmation('approved')}
-                                            className="px-3 sm:px-4 py-2 bg-white text-teal-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:shadow-lg active:scale-95"
-                                        >
-                                            Approve
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+            {/* 3. New Registrations */}
+            <div
+                onClick={() => handleTabChange('registrations')}
+                className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-emerald-50/80 via-white to-white border-2 border-emerald-200/90 shadow-2xs hover:shadow-md hover:border-emerald-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+            >
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-emerald-900 uppercase tracking-wider">New Registrations</span>
+                    <div className="h-6 w-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <UserCheck className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="flex items-baseline justify-between gap-1">
+                    <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
+                        {stats.newRegistrations}
+                    </div>
+                    {stats.newRegistrations > 0 && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            Action needed
+                        </span>
+                    )}
+                </div>
+                <div className="text-[9.5px] text-emerald-700 font-semibold mt-0.5 truncate">New Devotees</div>
+            </div>
 
-                        {loadingRequests ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
-                                <div className="animate-spin h-10 w-10 border-4 border-teal-100 border-t-teal-600 rounded-full mb-4"></div>
-                                <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px]">Retrieving requests...</p>
-                            </div>
-                        ) : requests.length === 0 ? (
-                            <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
-                                <div className="bg-gray-50 h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <History className="h-10 w-10 text-gray-300" />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 tracking-tight">Queue Clear</h3>
-                                <p className="text-gray-500 font-medium mt-2 max-w-sm mx-auto">No {approvalStatus} profile update requests found for {currentCenter}.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {approvalStatus === 'pending' && requests.length > 0 && (
-                                    <div className="flex items-center gap-4 px-6 py-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-                                        <div
-                                            className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${selectedRequestIds.length === requests.length && requests.length > 0 ? 'bg-teal-600 border-teal-600 shadow-sm' : 'border-gray-300 hover:border-teal-400'}`}
-                                            onClick={toggleSelectAll}
-                                        >
-                                            {selectedRequestIds.length === requests.length && requests.length > 0 && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
-                                        </div>
-                                        <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
-                                            {selectedRequestIds.length === 0 ? 'Select All Requests' : `Batch Management (${selectedRequestIds.length})`}
-                                        </span>
-                                    </div>
-                                )}
+            {/* 4. Service Team */}
+            <div
+                onClick={() => handleTabChange('service-team')}
+                className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-purple-50/80 via-white to-white border-2 border-purple-200/90 shadow-2xs hover:shadow-md hover:border-purple-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+            >
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-purple-900 uppercase tracking-wider">Service Team</span>
+                    <div className="h-6 w-6 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Management</div>
+                <div className="text-[9.5px] text-purple-700 font-semibold mt-0.5">Center Service Team</div>
+            </div>
 
-                                {requests.map(request => {
-                                    const isExpanded = expandedRequestId === request.id;
-                                    const changeCount = Object.keys(request.requested_changes).length;
+            {/* 5. Spiritual Progress */}
+            <div
+                onClick={() => router.push('/dashboard/project-manager/sadhana-report')}
+                className="relative overflow-hidden rounded-xl p-2 sm:p-2.5 bg-gradient-to-br from-rose-50/80 via-white to-white border-2 border-rose-200/90 shadow-2xs hover:shadow-md hover:border-rose-400 transition-all duration-200 cursor-pointer group hover:-translate-y-0.5 col-span-2 sm:col-span-1"
+            >
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-rose-900 uppercase tracking-wider">Spiritual Progress</span>
+                    <div className="h-6 w-6 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <Activity className="h-3.5 w-3.5" />
+                    </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">Sadhana Report</div>
+                <div className="text-[9.5px] text-rose-700 font-semibold mt-0.5">Center Progress</div>
+            </div>
+        </div>
 
+        {/* Tabs */}
+        <div className="overflow-x-auto no-scrollbar">
+            <div className="flex gap-1 p-1 bg-white rounded-xl w-fit border-2 border-slate-300 shadow-2xs">
+                <button
+                    onClick={() => handleTabChange('approvals')}
+                    className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'approvals'
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
+                >
+                    <FileCheck className="h-3.5 w-3.5" />
+                    Spiritual Approval
+                </button>
+                <button
+                    onClick={() => handleTabChange('registrations')}
+                    className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'registrations'
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
+                >
+                    <Users className="h-3.5 w-3.5" />
+                    New Dev Approval
+                    {stats.newRegistrations > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-orange-500 text-white ml-1">
+                            {stats.newRegistrations}
+                        </span>
+                    )}
+                </button>
+                <button
+                    onClick={() => handleTabChange('user-management')}
+                    className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 min-w-max ' + (activeTab === 'user-management'
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100')}
+                >
+                    <Shield className="h-3.5 w-3.5" />
+                    Management roles
+                </button>
+            </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="min-h-[400px]">
+            {activeTab === 'approvals' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-6 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+                        <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 items-center overflow-x-auto no-scrollbar">
+                            <div className="flex min-w-max gap-1">
+                                {(['pending', 'approved', 'rejected'] as const).map(status => {
+                                    const isActive = approvalStatus === status;
                                     return (
-                                        <div key={request.id} className={`group bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-teal-300 shadow-xl ring-4 ring-teal-500/10' : 'border-gray-200 shadow-sm hover:border-teal-200 hover:shadow-md'}`}>
-                                            <div
-                                                className={`p-5 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6 cursor-pointer transition-colors ${isExpanded ? 'bg-teal-50/30' : 'hover:bg-gray-50/50'}`}
-                                                onClick={() => setExpandedRequestId(isExpanded ? null : request.id)}
-                                            >
-                                                <div className="flex items-center gap-4 sm:gap-6 w-full md:w-auto">
-                                                    {approvalStatus === 'pending' && (
-                                                        <div
-                                                            className="flex-shrink-0"
-                                                            onClick={(e) => { e.stopPropagation(); toggleSelection(request.id); }}
-                                                        >
-                                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${selectedRequestIds.includes(request.id) ? 'bg-teal-600 border-teal-600 shadow-md rotate-0' : 'border-gray-300 hover:border-teal-400 bg-white rotate-12 hover:rotate-0'}`}>
-                                                                {selectedRequestIds.includes(request.id) && <Check className="h-4 w-4 text-white stroke-[3px]" />}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-                                                        <div className={`p-3 rounded-xl shadow-inner flex-shrink-0 ${request.status === 'pending' ? 'bg-amber-100 text-amber-600' : request.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                                                            {request.status === 'pending' ? <Clock className="h-5 w-5 stroke-[2.5px]" /> : request.status === 'approved' ? <Check className="h-5 w-5 stroke-[2.5px]" /> : <X className="h-5 w-5 stroke-[2.5px]" />}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <h3 className="text-sm sm:text-base font-black text-gray-900 tracking-tight group-hover:text-teal-700 transition-colors uppercase truncate">{request.user?.name || 'Unknown Identity'}</h3>
-                                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                                    <Calendar className="h-3 w-3" /> {new Date(request.created_at).toLocaleDateString()}
-                                                                </p>
-                                                                <div className="hidden xs:block h-1 w-1 rounded-full bg-gray-300" />
-                                                                <p className="text-[10px] font-black text-teal-500 uppercase tracking-widest flex items-center gap-1.5 truncate">
-                                                                    <Mail className="h-3 w-3" /> {request.user?.email || 'OFFLINE'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t border-gray-100 md:border-0 pt-4 md:pt-0">
-                                                    <div className="px-3 py-1.5 bg-gray-100 rounded-lg border border-gray-200">
-                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
-                                                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                                                            {changeCount} Delta{changeCount !== 1 ? 's' : ''}
-                                                        </span>
-                                                    </div>
-                                                    <div className={`p-2 rounded-lg border transition-all ${isExpanded ? 'bg-teal-600 border-teal-600 text-white rotate-180 shadow-md' : 'bg-white border-gray-200 text-gray-400 group-hover:border-teal-300 group-hover:text-teal-600'}`}>
-                                                        <ChevronDown className="h-5 w-5" />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-
-                                            {
-                                                isExpanded && (
-                                                    <div className="p-5 sm:p-8 bg-gray-50/50 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
-                                                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
-                                                            <div>
-                                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                                                                    <History className="h-4 w-4 text-teal-500" /> Modification Audit
-                                                                </h4>
-                                                                <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wider">Review proposed changes</p>
-                                                            </div>
-                                                            {approvalStatus === 'pending' && (
-                                                                <div className="flex bg-gray-200 p-1 rounded-lg border border-gray-300">
-                                                                    <button
-                                                                        onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: [] }))}
-                                                                        className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-red-600 transition-colors"
-                                                                    >
-                                                                        Reject All
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: Object.keys(request.requested_changes) }))}
-                                                                        className="px-3 py-1.5 bg-white text-[10px] font-black uppercase tracking-widest text-teal-700 rounded shadow-sm hover:shadow transition-all"
-                                                                    >
-                                                                        Sync All
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="grid grid-cols-1 gap-3 mb-8 bg-white rounded-xl border border-gray-200 p-4">
-                                                            {Object.keys(request.requested_changes).map(key =>
-                                                                renderFieldChange(request.id, key, request.requested_changes[key], request.current_values[key])
-                                                            )}
-                                                        </div>
-
-                                                        {request.status === 'pending' ? (
-                                                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
-                                                                <div className="space-y-2">
-                                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Feedback & Rationale</label>
-                                                                    <textarea
-                                                                        className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-200 focus:ring-4 focus:ring-teal-500/10 outline-none font-medium transition-all resize-none text-gray-700 text-sm"
-                                                                        rows={2}
-                                                                        placeholder="Optional notes..."
-                                                                        value={feedback}
-                                                                        onChange={(e) => setFeedback(e.target.value)}
-                                                                    />
-                                                                </div>
-                                                                <div className="flex flex-col sm:flex-row justify-end gap-4">
-                                                                    <button
-                                                                        onClick={() => openConfirmation('rejected', request.id)}
-                                                                        disabled={!feedback.trim()}
-                                                                        className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center justify-center gap-2 ${!feedback.trim() ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' : 'bg-white text-red-600 border-red-100 hover:bg-red-50'}`}
-                                                                    >
-                                                                        <X className="h-4 w-4 stroke-[3px]" /> Reject
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => openConfirmation('approved', request.id)}
-                                                                        disabled={selectedFields[request.id] && selectedFields[request.id].length === 0}
-                                                                        className="px-6 py-3 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-teal-200 hover:shadow-xl hover:bg-teal-700 transform transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale"
-                                                                    >
-                                                                        <Check className="h-4 w-4 stroke-[3px]" />
-                                                                        {selectedFields[request.id]?.length === changeCount || !selectedFields[request.id]
-                                                                            ? 'Approve Full Identity'
-                                                                            : `Authorize ${selectedFields[request.id]?.length} Deltas`}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                                                                <div className="flex items-center justify-between gap-4">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`h-3 w-3 rounded-full ${request.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                                        <p className="text-lg font-black text-gray-900 tracking-tight uppercase">Request {request.status}</p>
-                                                                    </div>
-                                                                </div>
-                                                                {request.admin_feedback && (
-                                                                    <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200 italic text-sm text-gray-500 font-medium">
-                                                                        <span className="font-bold text-gray-400 not-italic mr-2">Feedback:</span>
-                                                                        &quot;{request.admin_feedback}&quot;
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )
-                                            }
-                                        </div>
+                                        <button
+                                            key={status}
+                                            onClick={() => {
+                                                setApprovalStatus(status);
+                                                setSelectedRequestIds([]);
+                                            }}
+                                            className={`px-3.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${isActive
+                                                ? 'bg-white text-gray-900 shadow-sm transform scale-[1.02]'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            {status}
+                                        </button>
                                     );
                                 })}
                             </div>
+                        </div>
+
+                        {approvalStatus === 'pending' && selectedRequestIds.length > 0 && (
+                            <div className="flex items-center justify-between gap-4 bg-teal-600 p-2 pl-4 sm:pl-6 rounded-xl shadow-lg shadow-teal-200 animate-in zoom-in-95 duration-300">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">{selectedRequestIds.length} Selected</span>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => openConfirmation('rejected')}
+                                        className="px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
+                                    >
+                                        Reject
+                                    </button>
+                                    <button
+                                        onClick={() => openConfirmation('approved')}
+                                        className="px-3 sm:px-4 py-2 bg-white text-teal-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:shadow-lg active:scale-95"
+                                    >
+                                        Approve
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
-                )}
 
-                {activeTab === 'registrations' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Status Filter & Bulk Actions */}
-                        <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-6 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm">
-                            <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-                                <Users className="h-6 w-6 text-orange-600" />
-                                New Dev Approvals
-                            </h2>
-
-                            {selectedPendingUserIds.length > 0 && (
-                                <div className="flex items-center justify-between gap-4 bg-teal-600 p-2 pl-4 sm:pl-6 rounded-xl shadow-lg shadow-teal-200 animate-in zoom-in-95 duration-300">
-                                    <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">{selectedPendingUserIds.length} Selected</span>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={() => {
-                                                setVerificationAction('rejected');
-                                                setVerificationMode('bulk');
-                                                setShowRejectionModal(true);
-                                            }}
-                                            className="px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
-                                        >
-                                            Reject
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setVerificationAction('approved');
-                                                setVerificationMode('bulk');
-                                                setConfirmation({
-                                                    isOpen: true,
-                                                    type: 'approved',
-                                                    count: selectedPendingUserIds.length
-                                                });
-                                            }}
-                                            className="px-3 sm:px-4 py-2 bg-white text-teal-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:shadow-lg active:scale-95"
-                                        >
-                                            Approve
-                                        </button>
+                    {loadingRequests ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+                            <div className="animate-spin h-10 w-10 border-4 border-teal-100 border-t-teal-600 rounded-full mb-4"></div>
+                            <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px]">Retrieving requests...</p>
+                        </div>
+                    ) : requests.length === 0 ? (
+                        <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
+                            <div className="bg-gray-50 h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                <History className="h-10 w-10 text-gray-300" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 tracking-tight">Queue Clear</h3>
+                            <p className="text-gray-500 font-medium mt-2 max-w-sm mx-auto">No {approvalStatus} profile update requests found for {currentCenter}.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {approvalStatus === 'pending' && requests.length > 0 && (
+                                <div className="flex items-center gap-4 px-6 py-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                    <div
+                                        className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${selectedRequestIds.length === requests.length && requests.length > 0 ? 'bg-teal-600 border-teal-600 shadow-sm' : 'border-gray-300 hover:border-teal-400'}`}
+                                        onClick={toggleSelectAll}
+                                    >
+                                        {selectedRequestIds.length === requests.length && requests.length > 0 && <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />}
                                     </div>
+                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                                        {selectedRequestIds.length === 0 ? 'Select All Requests' : `Batch Management (${selectedRequestIds.length})`}
+                                    </span>
                                 </div>
                             )}
-                        </div>
 
-                        {loadingPendingUsers ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
-                                <div className="animate-spin h-10 w-10 border-4 border-teal-100 border-t-teal-600 rounded-full mb-4"></div>
-                                <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px]">Retrieving registrations...</p>
-                            </div>
-                        ) : pendingUsers.length === 0 ? (
-                            <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
-                                <div className="bg-gray-50 h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    <Users className="h-10 w-10 text-gray-300" />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">All caught up!</h3>
-                                <p className="text-gray-500 font-medium max-w-xs mx-auto mt-2 text-sm">No pending user registrations for {currentCenter} at the moment.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {/* Mobile Card View */}
-                                <div className="lg:hidden space-y-4">
-                                    {pendingUsers.map((user) => (
-                                        <div key={user.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
-                                            <div className="flex items-center gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedPendingUserIds.includes(user.id)}
-                                                    onChange={() => {
-                                                        setSelectedPendingUserIds(prev =>
-                                                            prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
-                                                        );
-                                                    }}
-                                                    className="w-5 h-5 rounded-md border-gray-300 text-teal-600"
-                                                />
-                                                <div className="min-w-0">
-                                                    <h4 className="text-sm font-black text-gray-900 truncate">{user.name}</h4>
-                                                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                                                </div>
-                                            </div>
+                            {requests.map(request => {
+                                const isExpanded = expandedRequestId === request.id;
+                                const changeCount = Object.keys(request.requested_changes).length;
 
-                                            <div className="grid grid-cols-2 gap-3 pb-2 border-b border-gray-100">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Center Info</p>
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] font-bold text-gray-700 truncate">
-                                                            {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-teal-600 truncate">
-                                                            {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None' 
-                                                                ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None') 
-                                                                : (user.hierarchy?.currentCenter || 'N/A')}
-                                                        </span>
+                                return (
+                                    <div key={request.id} className={`group bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-teal-300 shadow-xl ring-4 ring-teal-500/10' : 'border-gray-200 shadow-sm hover:border-teal-200 hover:shadow-md'}`}>
+                                        <div
+                                            className={`p-5 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6 cursor-pointer transition-colors ${isExpanded ? 'bg-teal-50/30' : 'hover:bg-gray-50/50'}`}
+                                            onClick={() => setExpandedRequestId(isExpanded ? null : request.id)}
+                                        >
+                                            <div className="flex items-center gap-4 sm:gap-6 w-full md:w-auto">
+                                                {approvalStatus === 'pending' && (
+                                                    <div
+                                                        className="flex-shrink-0"
+                                                        onClick={(e) => { e.stopPropagation(); toggleSelection(request.id); }}
+                                                    >
+                                                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${selectedRequestIds.includes(request.id) ? 'bg-teal-600 border-teal-600 shadow-md rotate-0' : 'border-gray-300 hover:border-teal-400 bg-white rotate-12 hover:rotate-0'}`}>
+                                                            {selectedRequestIds.includes(request.id) && <Check className="h-4 w-4 text-white stroke-[3px]" />}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="space-y-1 text-right">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Spiritual</p>
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] font-bold text-orange-600 truncate">
-                                                            {(() => {
-                                                                const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
-                                                                const isCounselorOther = counselor === 'Other';
-                                                                const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
-                                                                if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
-                                                                if (isCounselorNone) return 'None';
-                                                                return counselor || 'N/A';
-                                                            })()}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-blue-600 truncate">{user.hierarchy?.ashram || 'N/A'}</span>
+                                                )}
+
+                                                <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+                                                    <div className={`p-3 rounded-xl shadow-inner flex-shrink-0 ${request.status === 'pending' ? 'bg-amber-100 text-amber-600' : request.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                                        {request.status === 'pending' ? <Clock className="h-5 w-5 stroke-[2.5px]" /> : request.status === 'approved' ? <Check className="h-5 w-5 stroke-[2.5px]" /> : <X className="h-5 w-5 stroke-[2.5px]" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-sm sm:text-base font-black text-gray-900 tracking-tight group-hover:text-teal-700 transition-colors uppercase truncate">{request.user?.name || 'Unknown Identity'}</h3>
+                                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                                <Calendar className="h-3 w-3" /> {new Date(request.created_at).toLocaleDateString()}
+                                                            </p>
+                                                            <div className="hidden xs:block h-1 w-1 rounded-full bg-gray-300" />
+                                                            <p className="text-[10px] font-black text-teal-500 uppercase tracking-widest flex items-center gap-1.5 truncate">
+                                                                <Mail className="h-3 w-3" /> {request.user?.email || 'OFFLINE'}
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={() => {
-                                                        setUserToVerify(user);
-                                                        setVerificationAction('rejected');
-                                                        setVerificationMode('single');
-                                                        setShowRejectionModal(true);
-                                                    }}
-                                                    className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all border border-rose-100"
-                                                >
-                                                    Reject
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setUserToVerify(user);
-                                                        setVerificationAction('approved');
-                                                        setVerificationMode('single');
-                                                        setConfirmation({
-                                                            isOpen: true,
-                                                            type: 'approved',
-                                                            count: 1,
-                                                            requestId: user.id
-                                                        });
-                                                    }}
-                                                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-md"
-                                                >
-                                                    Approve
-                                                </button>
+                                            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t border-gray-100 md:border-0 pt-4 md:pt-0">
+                                                <div className="px-3 py-1.5 bg-gray-100 rounded-lg border border-gray-200">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
+                                                        <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                                                        {changeCount} Delta{changeCount !== 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                                <div className={`p-2 rounded-lg border transition-all ${isExpanded ? 'bg-teal-600 border-teal-600 text-white rotate-180 shadow-md' : 'bg-white border-gray-200 text-gray-400 group-hover:border-teal-300 group-hover:text-teal-600'}`}>
+                                                    <ChevronDown className="h-5 w-5" />
+                                                </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
 
-                                {/* Desktop Table View */}
-                                <div className="hidden lg:block bg-white rounded-[2rem] border border-gray-200 shadow-xl shadow-gray-100/50 overflow-hidden">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50/50">
-                                            <tr>
-                                                <th className="px-6 py-4 text-left">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedPendingUserIds.length === pendingUsers.length && pendingUsers.length > 0}
-                                                        onChange={() => {
-                                                            if (selectedPendingUserIds.length === pendingUsers.length) setSelectedPendingUserIds([]);
-                                                            else setSelectedPendingUserIds(pendingUsers.map(u => u.id));
-                                                        }}
-                                                        className="w-4 h-4 rounded-md border-gray-300 text-teal-600 focus:ring-teal-500"
-                                                    />
-                                                </th>
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">User Details</th>
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Hierarchy</th>
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Counselor & Ashram</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {pendingUsers.map((user) => (
-                                                <tr key={user.id} className="hover:bg-gray-50/80 transition-all duration-300 group">
-                                                    <td className="px-3.5 py-1.5">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedPendingUserIds.includes(user.id)}
-                                                            onChange={() => {
-                                                                setSelectedPendingUserIds(prev =>
-                                                                    prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
-                                                                );
-                                                            }}
-                                                            className="w-4 h-4 rounded-md border-gray-300 text-teal-600 focus:ring-teal-500"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3.5 py-1.5">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-sm font-black text-gray-900 tracking-tight">{user.name}</span>
-                                                            <span className="text-xs font-bold text-gray-400">{user.email}</span>
+
+                                        {
+                                            isExpanded && (
+                                                <div className="p-5 sm:p-8 bg-gray-50/50 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                                                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
+                                                        <div>
+                                                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                                                <History className="h-4 w-4 text-teal-500" /> Modification Audit
+                                                            </h4>
+                                                            <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wider">Review proposed changes</p>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-3.5 py-1.5">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                                                                <span className="text-[10px] font-black text-gray-500 tracking-tight">
-                                                                    {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
-                                                                </span>
+                                                        {approvalStatus === 'pending' && (
+                                                            <div className="flex bg-gray-200 p-1 rounded-lg border border-gray-300">
+                                                                <button
+                                                                    onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: [] }))}
+                                                                    className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-red-600 transition-colors"
+                                                                >
+                                                                    Reject All
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setSelectedFields(prev => ({ ...prev, [request.id]: Object.keys(request.requested_changes) }))}
+                                                                    className="px-3 py-1.5 bg-white text-[10px] font-black uppercase tracking-widest text-teal-700 rounded shadow-sm hover:shadow transition-all"
+                                                                >
+                                                                    Sync All
+                                                                </button>
                                                             </div>
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                                                <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">
-                                                                    {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None' 
-                                                                        ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None') 
-                                                                        : (user.hierarchy?.currentCenter || 'N/A')}
-                                                                </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-3 mb-8 bg-white rounded-xl border border-gray-200 p-4">
+                                                        {Object.keys(request.requested_changes).map(key =>
+                                                            renderFieldChange(request.id, key, request.requested_changes[key], request.current_values[key])
+                                                        )}
+                                                    </div>
+
+                                                    {request.status === 'pending' ? (
+                                                        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+                                                            <div className="space-y-2">
+                                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Feedback & Rationale</label>
+                                                                <textarea
+                                                                    className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-200 focus:ring-4 focus:ring-teal-500/10 outline-none font-medium transition-all resize-none text-gray-700 text-sm"
+                                                                    rows={2}
+                                                                    placeholder="Optional notes..."
+                                                                    value={feedback}
+                                                                    onChange={(e) => setFeedback(e.target.value)}
+                                                                />
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3.5 py-1.5">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
-                                                                <span className="text-[10px] font-black text-gray-500 tracking-tight">
-                                                                    {(() => {
-                                                                        const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
-                                                                        const isCounselorOther = counselor === 'Other';
-                                                                        const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
-                                                                        if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
-                                                                        if (isCounselorNone) return 'None';
-                                                                        return counselor || 'N/A';
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
-                                                                <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">{user.hierarchy?.ashram || 'N/A'}</span>
+                                                            <div className="flex flex-col sm:flex-row justify-end gap-4">
+                                                                <button
+                                                                    onClick={() => openConfirmation('rejected', request.id)}
+                                                                    disabled={!feedback.trim()}
+                                                                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center justify-center gap-2 ${!feedback.trim() ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' : 'bg-white text-red-600 border-red-100 hover:bg-red-50'}`}
+                                                                >
+                                                                    <X className="h-4 w-4 stroke-[3px]" /> Reject
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => openConfirmation('approved', request.id)}
+                                                                    disabled={selectedFields[request.id] && selectedFields[request.id].length === 0}
+                                                                    className="px-6 py-3 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-teal-200 hover:shadow-xl hover:bg-teal-700 transform transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale"
+                                                                >
+                                                                    <Check className="h-4 w-4 stroke-[3px]" />
+                                                                    {selectedFields[request.id]?.length === changeCount || !selectedFields[request.id]
+                                                                        ? 'Approve Full Identity'
+                                                                        : `Authorize ${selectedFields[request.id]?.length} Deltas`}
+                                                                </button>
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex items-center justify-end gap-3 translate-x-2 group-hover:translate-x-0 transition-transform duration-300">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setUserToVerify(user);
-                                                                    setVerificationAction('rejected');
-                                                                    setVerificationMode('single');
-                                                                    setShowRejectionModal(true);
-                                                                }}
-                                                                className="flex items-center gap-2 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[10px] font-black transition-all active:scale-95 border border-rose-100"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                                Reject
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setUserToVerify(user);
-                                                                    setVerificationAction('approved');
-                                                                    setVerificationMode('single');
-                                                                    setConfirmation({
-                                                                        isOpen: true,
-                                                                        type: 'approved',
-                                                                        count: 1,
-                                                                        requestId: user.id
-                                                                    });
-                                                                }}
-                                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-[10px] font-black transition-all active:scale-95 border border-emerald-100"
-                                                            >
-                                                                <Check className="h-3 w-3" />
-                                                                Approve
-                                                            </button>
+                                                    ) : (
+                                                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                                                            <div className="flex items-center justify-between gap-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`h-3 w-3 rounded-full ${request.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                                    <p className="text-lg font-black text-gray-900 tracking-tight uppercase">Request {request.status}</p>
+                                                                </div>
+                                                            </div>
+                                                            {request.admin_feedback && (
+                                                                <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200 italic text-sm text-gray-500 font-medium">
+                                                                    <span className="font-bold text-gray-400 not-italic mr-2">Feedback:</span>
+                                                                    &quot;{request.admin_feedback}&quot;
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                    )}
+                                                </div>
+                                            )
+                                        }
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'registrations' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Status Filter & Bulk Actions */}
+                    <div className="flex flex-col items-stretch lg:flex-row lg:items-center justify-between gap-6 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+                        <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+                            <Users className="h-6 w-6 text-orange-600" />
+                            New Dev Approvals
+                        </h2>
+
+                        {selectedPendingUserIds.length > 0 && (
+                            <div className="flex items-center justify-between gap-4 bg-teal-600 p-2 pl-4 sm:pl-6 rounded-xl shadow-lg shadow-teal-200 animate-in zoom-in-95 duration-300">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">{selectedPendingUserIds.length} Selected</span>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => {
+                                            setVerificationAction('rejected');
+                                            setVerificationMode('bulk');
+                                            setShowRejectionModal(true);
+                                        }}
+                                        className="px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
+                                    >
+                                        Reject
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setVerificationAction('approved');
+                                            setVerificationMode('bulk');
+                                            setConfirmation({
+                                                isOpen: true,
+                                                type: 'approved',
+                                                count: selectedPendingUserIds.length
+                                            });
+                                        }}
+                                        className="px-3 sm:px-4 py-2 bg-white text-teal-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:shadow-lg active:scale-95"
+                                    >
+                                        Approve
+                                    </button>
                                 </div>
                             </div>
                         )}
                     </div>
-                )}
 
-                {activeTab === 'user-management' && (
-                    <div className="space-y-3">
-                        {/* Search & Scope Header */}
-                        <div className="bg-white rounded-2xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm">
-                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-3 mb-2.5 pb-2.5 border-b border-slate-200">
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 w-full lg:w-auto">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">Devotee Directory</h2>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline">•</span>
-                                            <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">Search & Segment</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <button
-                                            type="button"
-                                            onClick={() => setCenterScope('all')}
-                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                                centerScope === 'all'
-                                                    ? 'bg-slate-900 text-white shadow-xs'
-                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                                            }`}
-                                        >
-                                            All ({dynamicDevoteeStats.total})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCenterScope('current')}
-                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                                centerScope === 'current'
-                                                    ? 'bg-emerald-600 text-white shadow-xs'
-                                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                                            }`}
-                                        >
-                                            🟢 Current ({dynamicDevoteeStats.currentCount})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCenterScope('alumni')}
-                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                                centerScope === 'alumni'
-                                                    ? 'bg-purple-700 text-white shadow-xs'
-                                                    : 'bg-purple-50 text-purple-800 border border-purple-300 hover:bg-purple-100'
-                                            }`}
-                                        >
-                                            🟣 Alumni ({dynamicDevoteeStats.alumniCount})
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="relative w-full lg:w-[320px] group">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-600 transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search by name, email, phone..."
-                                        value={userSearch}
-                                        onChange={(e) => setUserSearch(e.target.value)}
-                                        className="w-full pl-9 pr-7 py-1.5 bg-slate-50 hover:bg-white border-2 border-slate-300 focus:border-teal-500 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all shadow-2xs"
-                                    />
-                                    {userSearch && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setUserSearch('')}
-                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                                        >
-                                            ✕
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* 6 Filter Dropdowns in a single compact responsive row */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-                                {/* 1. VOICE Connection */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        Connection
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-purple-100 text-purple-700 rounded-md pointer-events-none">
-                                            <GraduationCap className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={centerScope}
-                                            onChange={(e) => setCenterScope(e.target.value as any)}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-purple-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="all">🏛️ All ({dynamicDevoteeStats.total})</option>
-                                            <option value="current">🟢 Current ({dynamicDevoteeStats.currentCount})</option>
-                                            <option value="alumni">🟣 Alumni ({dynamicDevoteeStats.alumniCount})</option>
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* 2. Spiritual Group */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        Spiritual Group
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-teal-100 text-teal-700 rounded-md pointer-events-none">
-                                            <Users className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={filterGroup}
-                                            onChange={(e) => setFilterGroup(e.target.value)}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-teal-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="">All Groups</option>
-                                            {BV_GROUPS.map(g => (
-                                                <option key={g} value={g}>{g}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* 3. KC Status */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        KC Status
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
-                                            <Activity className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={filterKCStatus}
-                                            onChange={(e) => setFilterKCStatus(e.target.value)}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="">All KC Status</option>
-                                            {KC_STATUS_OPTIONS.map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* 4. Ashram */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        Ashram
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-blue-100 text-blue-700 rounded-md pointer-events-none">
-                                            <Building2 className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={filterAshram}
-                                            onChange={(e) => setFilterAshram(e.target.value)}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="">All Ashrams</option>
-                                            {ASHRAM_OPTIONS.map(a => (
-                                                <option key={a} value={a}>{a}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* 5. Admin Role */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        Admin Role
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
-                                            <UserCheck className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={filterRole}
-                                            onChange={(e) => setFilterRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="">All Roles</option>
-                                            {(() => {
-                                                const userRoles = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).filter(Boolean) as UserRole[];
-                                                const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
-                                                const isPMLelvel = userRoleNums.some(num => [14, 15, 16].includes(num));
-                                                
-                                                let visibleRoles = MANAGEABLE_ROLES;
-                                                if (isPMLelvel) {
-                                                    const allowedSet = ['royal', 1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
-                                                    visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
-                                                }
-                                                
-                                                return visibleRoles.map(role => (
-                                                    <option key={role.value} value={role.value}>{role.label}</option>
-                                                ));
-                                            })()}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-
-                                {/* 6. Camp Completed */}
-                                <div className="group">
-                                    <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
-                                        Camp Completed
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-emerald-100 text-emerald-700 rounded-md pointer-events-none">
-                                            <Shield className="h-3.5 w-3.5" />
-                                        </div>
-                                        <select
-                                            value={filterCamp}
-                                            onChange={(e) => setFilterCamp(e.target.value)}
-                                            className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-emerald-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <option value="">Any Status</option>
-                                            {CAMP_OPTIONS.map(c => (
-                                                <option key={c.value} value={c.value}>{c.label}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-                            </div>
+                    {loadingPendingUsers ? (
+                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+                            <div className="animate-spin h-10 w-10 border-4 border-teal-100 border-t-teal-600 rounded-full mb-4"></div>
+                            <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px]">Retrieving registrations...</p>
                         </div>
-
-                        {/* Mobile Card View */}
-                        <div className="lg:hidden space-y-4">
-                            {users
-                                .filter(u => {
-                                    const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-                                                    u.email.toLowerCase().includes(userSearch.toLowerCase());
-                                    const scopeMatch = !centerScope || centerScope === 'all'
-                                        ? true
-                                        : centerScope === 'current'
-                                            ? u._centerConnection !== 'alumni'
-                                            : u._centerConnection === 'alumni';
-                                    const groupMatch = !filterGroup || u.bv_group === filterGroup;
-                                    const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
-                                    const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
-                                    
-                                    const userRoles = Array.isArray(u.role) ? u.role : [u.role];
-                                    const roleMatch = !filterRole || (
-                                        filterRole === 'royal'
-                                            ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
-                                            : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
-                                    );
-                                    
-                                    const campMatch = !filterCamp || (u as any)[filterCamp];
-
-                                    return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
-                                })
-                                .map((user) => (
-                                    <div key={user.id} className={`bg-white rounded-2xl border shadow-sm p-5 space-y-4 ${user._centerConnection === 'alumni' ? 'border-purple-200 bg-purple-50/15' : 'border-gray-200'}`}>
-                                        <div className="flex justify-between items-start">
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <h4 className="text-sm font-black text-gray-900 truncate uppercase">{user.name}</h4>
-                                                    {user._centerConnection === 'alumni' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
-                                                            🎓 Voice Alumni
-                                                        </span>
-                                                    ) : user._centerConnection === 'both' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
-                                                            🔷 Current & Alumni
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                                            🟢 Current Member
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                                                {user._centerConnection === 'alumni' && (
-                                                    <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
-                                                        Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <button
-                                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group"
-                                                onClick={() => {
-                                                    setUserForView(user);
-                                                    openUserView(user);
-                                                }}
-                                                title="View Devotee Profile"
-                                            >
-                                                <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
-                                                <span>View</span>
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Roles</p>
-                                            <div className="flex flex-wrap gap-1.5 mt-1">
-                                                {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
-                                                    <span key={i} className="px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-100 rounded text-[10px] font-bold uppercase">
-                                                        {getRoleDisplayName(r)}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-4">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Center Post</label>
-                                            <div className="mt-1 relative">
-                                                {(() => {
-                                                    const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
-                                                    // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
-                                                    const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
-                                                    const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
-
-                                                    // Find current center post (first matching manageable role)
-                                                    // Prioritize higher roles 29->17->1
-                                                    // But actually we just find the one that exists in CENTER_POST_OPTIONS
-                                                    // Sort user roles by value descending to pick "highest" post
-                                                    const currentPost = existingRoles
-                                                        .filter((r: number) => CENTER_POST_OPTIONS.some(o => o.value === r))
-                                                        .sort((a: number, b: number) => b - a)[0] || 1;
-
-                                                    if (isLocked) {
-                                                        return (
-                                                            <div className="w-full py-3 px-4 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold border border-gray-200 flex items-center justify-between">
-                                                                <span>Locked (Higher Role)</span>
-                                                                <Lock className="h-3 w-3" />
-                                                            </div>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <div className="relative">
-                                                            <RoleMultiSelect
-                                                                user={user}
-                                                                currentRoles={existingRoles}
-                                                                options={CENTER_POST_OPTIONS}
-                                                                onUpdate={(newRoles) => handleInlineRoleUpdate(user, newRoles)}
-                                                                isUpdating={updatingUserId === user.id}
-                                                            />
-                                                        </div>
+                    ) : pendingUsers.length === 0 ? (
+                        <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
+                            <div className="bg-gray-50 h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                <Users className="h-10 w-10 text-gray-300" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 tracking-tight">All caught up!</h3>
+                            <p className="text-gray-500 font-medium max-w-xs mx-auto mt-2 text-sm">No pending user registrations for {currentCenter} at the moment.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Mobile Card View */}
+                            <div className="lg:hidden space-y-4">
+                                {pendingUsers.map((user) => (
+                                    <div key={user.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPendingUserIds.includes(user.id)}
+                                                onChange={() => {
+                                                    setSelectedPendingUserIds(prev =>
+                                                        prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
                                                     );
-                                                })()}
+                                                }}
+                                                className="w-5 h-5 rounded-md border-gray-300 text-teal-600"
+                                            />
+                                            <div className="min-w-0">
+                                                <h4 className="text-sm font-black text-gray-900 truncate">{user.name}</h4>
+                                                <p className="text-xs text-gray-400 truncate">{user.email}</p>
                                             </div>
                                         </div>
 
-                                        <div className="mt-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">VOICE group level</label>
-                                            <div className="relative">
-                                                <select
-                                                    value={user.bv_group || ''}
-                                                    onChange={(e) => handleAssignGroup(user.id, e.target.value)}
-                                                    disabled={updatingGroupUserId === user.id}
-                                                    className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
-                                                >
-                                                    <option value="">-- No Group Segment --</option>
-                                                    {BV_GROUPS.map(g => (
-                                                        <option key={g} value={g}>{g}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                    {updatingGroupUserId === user.id ? (
-                                                        <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
-                                                    ) : (
-                                                        <ChevronDown className="h-3.5 w-3.5" />
-                                                    )}
+                                        <div className="grid grid-cols-2 gap-3 pb-2 border-b border-gray-100">
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Center Info</p>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-[10px] font-bold text-gray-700 truncate">
+                                                        {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-teal-600 truncate">
+                                                        {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None'
+                                                            ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None')
+                                                            : (user.hierarchy?.currentCenter || 'N/A')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1 text-right">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Spiritual</p>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-[10px] font-bold text-orange-600 truncate">
+                                                        {(() => {
+                                                            const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
+                                                            const isCounselorOther = counselor === 'Other';
+                                                            const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
+                                                            if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
+                                                            if (isCounselorNone) return 'None';
+                                                            return counselor || 'N/A';
+                                                        })()}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-blue-600 truncate">{user.hierarchy?.ashram || 'N/A'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="mt-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">KC Status</label>
-                                            <div className="relative">
-                                                <select
-                                                    value={user.hierarchy?.kcStatus || ''}
-                                                    onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
-                                                    disabled={updatingKCStatusUserId === user.id}
-                                                    className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
-                                                >
-                                                    <option value="">-- No KC Status --</option>
-                                                    {KC_STATUS_OPTIONS.map(status => (
-                                                        <option key={status} value={status}>{status}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                    {updatingKCStatusUserId === user.id ? (
-                                                        <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
-                                                    ) : (
-                                                        <ChevronDown className="h-3.5 w-3.5" />
-                                                    )}
-                                                </div>
-                                            </div>
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setUserToVerify(user);
+                                                    setVerificationAction('rejected');
+                                                    setVerificationMode('single');
+                                                    setShowRejectionModal(true);
+                                                }}
+                                                className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all border border-rose-100"
+                                            >
+                                                Reject
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setUserToVerify(user);
+                                                    setVerificationAction('approved');
+                                                    setVerificationMode('single');
+                                                    setConfirmation({
+                                                        isOpen: true,
+                                                        type: 'approved',
+                                                        count: 1,
+                                                        requestId: user.id
+                                                    });
+                                                }}
+                                                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-md"
+                                            >
+                                                Approve
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
-                        </div>
+                            </div>
 
-                        {/* Desktop Table View */}
-                        <div className="hidden lg:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-hidden">
-                            <table className="min-w-full divide-y divide-slate-200">
-                                <thead className="bg-slate-100 border-b-2 border-slate-200">
-                                    <tr>
-                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">User</th>
-                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">Role</th>
-                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-44">Center Post</th>
-                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">VOICE Group</th>
-                                        <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">KC Status</th>
-                                        <th className="px-3.5 py-2 text-right text-[11px] font-black text-slate-700 uppercase tracking-wider w-14">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-slate-200">
-                                    {users
-                                        .filter(u => {
-                                            const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-                                                            u.email.toLowerCase().includes(userSearch.toLowerCase());
-                                            const scopeMatch = !centerScope || centerScope === 'all'
-                                                ? true
-                                                : centerScope === 'current'
-                                                    ? u._centerConnection !== 'alumni'
-                                                    : u._centerConnection === 'alumni';
-                                            const groupMatch = !filterGroup || u.bv_group === filterGroup;
-                                            const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
-                                            const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
-                                            
-                                            const userRoles = Array.isArray(u.role) ? u.role : [u.role];
-                                            const roleMatch = !filterRole || (
-                                                filterRole === 'royal'
-                                                    ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
-                                                    : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
-                                            );
-                                            
-                                            const campMatch = !filterCamp || (u as any)[filterCamp];
-
-                                            return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
-                                        })
-                                        .map((user) => (
-                                            <tr key={user.id} className={`hover:bg-slate-50/90 transition-colors ${user._centerConnection === 'alumni' ? 'bg-purple-50/30' : ''}`}>
+                            {/* Desktop Table View */}
+                            <div className="hidden lg:block bg-white rounded-[2rem] border border-gray-200 shadow-xl shadow-gray-100/50 overflow-hidden">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50/50">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPendingUserIds.length === pendingUsers.length && pendingUsers.length > 0}
+                                                    onChange={() => {
+                                                        if (selectedPendingUserIds.length === pendingUsers.length) setSelectedPendingUserIds([]);
+                                                        else setSelectedPendingUserIds(pendingUsers.map(u => u.id));
+                                                    }}
+                                                    className="w-4 h-4 rounded-md border-gray-300 text-teal-600 focus:ring-teal-500"
+                                                />
+                                            </th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">User Details</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Hierarchy</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Counselor & Ashram</th>
+                                            <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {pendingUsers.map((user) => (
+                                            <tr key={user.id} className="hover:bg-gray-50/80 transition-all duration-300 group">
                                                 <td className="px-3.5 py-1.5">
-                                                    <div className="flex items-center">
-                                                        <div className="ml-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="text-sm font-bold text-gray-900">{user.name}</span>
-                                                                {user._centerConnection === 'alumni' ? (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
-                                                                        🎓 Voice Alumni
-                                                                    </span>
-                                                                ) : user._centerConnection === 'both' ? (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
-                                                                        🔷 Current & Alumni
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                                                        🟢 Current Member
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-xs text-gray-500">{user.email}</div>
-                                                            {user._centerConnection === 'alumni' && (
-                                                                <div className="text-[10px] font-bold text-purple-700 mt-0.5">
-                                                                    Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3.5 py-1.5">
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
-                                                                {getRoleDisplayName(r)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="relative w-48 text-left">
-                                                        {(() => {
-                                                            const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
-                                                            // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
-                                                            const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
-                                                            const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
-
-                                                            // Find current center post
-                                                            const currentPost = existingRoles
-                                                                .filter((r: number) => CENTER_POST_OPTIONS.some(o => o.value === r))
-                                                                .sort((a: number, b: number) => b - a)[0] || 1;
-
-                                                            if (isLocked) {
-                                                                return (
-                                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-                                                                        <Lock className="h-3 w-3" /> Locked
-                                                                    </div>
-                                                                );
-                                                            }
-
-                                                            return (
-                                                                <div className="relative">
-                                                                    <RoleMultiSelect
-                                                                        user={user}
-                                                                        currentRoles={existingRoles}
-                                                                        options={CENTER_POST_OPTIONS}
-                                                                        onUpdate={(newRoles) => handleInlineRoleUpdate(user, newRoles)}
-                                                                        isUpdating={updatingUserId === user.id}
-                                                                    />
-                                                                </div>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedPendingUserIds.includes(user.id)}
+                                                        onChange={() => {
+                                                            setSelectedPendingUserIds(prev =>
+                                                                prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
                                                             );
-                                                        })()}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3.5 py-1.5">
-                                                    <div className="relative w-full">
-                                                        <select
-                                                            value={user.bv_group || ''}
-                                                            onChange={(e) => handleAssignGroup(user.id, e.target.value)}
-                                                            disabled={updatingGroupUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-                                                        >
-                                                            <option value="">- No Group -</option>
-                                                            {BV_GROUPS.map(g => (
-                                                                <option key={g} value={g}>{g}</option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                            {updatingGroupUserId === user.id ? (
-                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
-                                                            ) : (
-                                                                <ChevronDown className="h-3.5 w-3.5" />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3.5 py-1.5">
-                                                    <div className="relative w-full">
-                                                        <select
-                                                            value={user.hierarchy?.kcStatus || ''}
-                                                            onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
-                                                            disabled={updatingKCStatusUserId === user.id}
-                                                            className="w-full appearance-none bg-white border border-slate-300 hover:border-orange-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-                                                        >
-                                                            <option value="">- No Status -</option>
-                                                            {KC_STATUS_OPTIONS.map(status => (
-                                                                <option key={status} value={status}>{status}</option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                            {updatingKCStatusUserId === user.id ? (
-                                                                <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
-                                                            ) : (
-                                                                <ChevronDown className="h-3.5 w-3.5" />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
-                                                    <button
-                                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group cursor-pointer"
-                                                        onClick={() => {
-                                                            setUserForView(user);
-                                                            openUserView(user);
                                                         }}
-                                                        title="View Devotee Profile"
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
-                                                        <span>View</span>
-                                                    </button>
+                                                        className="w-4 h-4 rounded-md border-gray-300 text-teal-600 focus:ring-teal-500"
+                                                    />
+                                                </td>
+                                                <td className="px-3.5 py-1.5">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-black text-gray-900 tracking-tight">{user.name}</span>
+                                                        <span className="text-xs font-bold text-gray-400">{user.email}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3.5 py-1.5">
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                                            <span className="text-[10px] font-black text-gray-500 tracking-tight">
+                                                                {user.other_temple || user.hierarchy?.otherTemple || (user.hierarchy?.currentTemple as any)?.name || user.hierarchy?.currentTemple || 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                                            <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">
+                                                                {user.hierarchy?.currentCenter === 'Other' || !user.hierarchy?.currentCenter || user.hierarchy?.currentCenter === 'None'
+                                                                    ? (user.hierarchy?.currentCenter === 'Other' ? `Other: ${user.other_center || 'Unspecified'}` : 'None')
+                                                                    : (user.hierarchy?.currentCenter || 'N/A')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3.5 py-1.5">
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                                                            <span className="text-[10px] font-black text-gray-500 tracking-tight">
+                                                                {(() => {
+                                                                    const counselor = (user.hierarchy?.counselor as any)?.name || user.hierarchy?.counselor || user.hierarchy?.grihasthaCounselor || user.hierarchy?.brahmachariCounselor;
+                                                                    const isCounselorOther = counselor === 'Other';
+                                                                    const isCounselorNone = !counselor || counselor === 'None' || counselor === 'Not Assigned';
+                                                                    if (isCounselorOther) return `Other: ${user.other_counselor || 'Unspecified'}`;
+                                                                    if (isCounselorNone) return 'None';
+                                                                    return counselor || 'N/A';
+                                                                })()}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                                                            <span className="text-[10px] font-bold text-gray-600 tracking-tight italic">{user.hierarchy?.ashram || 'N/A'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-3 translate-x-2 group-hover:translate-x-0 transition-transform duration-300">
+                                                        <button
+                                                            onClick={() => {
+                                                                setUserToVerify(user);
+                                                                setVerificationAction('rejected');
+                                                                setVerificationMode('single');
+                                                                setShowRejectionModal(true);
+                                                            }}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[10px] font-black transition-all active:scale-95 border border-rose-100"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                            Reject
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setUserToVerify(user);
+                                                                setVerificationAction('approved');
+                                                                setVerificationMode('single');
+                                                                setConfirmation({
+                                                                    isOpen: true,
+                                                                    type: 'approved',
+                                                                    count: 1,
+                                                                    requestId: user.id
+                                                                });
+                                                            }}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-[10px] font-black transition-all active:scale-95 border border-emerald-100"
+                                                        >
+                                                            <Check className="h-3 w-3" />
+                                                            Approve
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-                {activeTab === 'service-team' && (
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-[2rem] shadow-xl shadow-gray-100/50 border border-teal-100/50 overflow-hidden relative">
-                            {/* Header Background */}
-                            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-teal-500/5 to-emerald-500/5 pointer-events-none" />
-
-                            <div className="p-8 relative">
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="p-3 bg-teal-50 rounded-2xl">
-                                        <ShieldCheck className="h-8 w-8 text-teal-600 stroke-[1.5px]" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">Service Team Structure</h3>
-                                        <p className="text-gray-500 font-medium mt-1">Manage operational roles for {currentCenter}</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {MANAGEABLE_ROLES.filter((r): r is { label: string; value: number } => typeof r.value === 'number' && r.value >= 17).map((role) => {
-                                        const isMultiUser = [23, 25, 26, 31, 32, 33].includes(role.value);
-                                        const idsCol = roleToColumnMap[role.value]?.replace('_id', '_ids');
-
-                                        // Multi-user: read from _ids array (jsonb col — may be string or array)
-                                        const rawIds = isMultiUser ? (currentCenterData as any)?.[idsCol] : null;
-                                        const currentIds: string[] = isMultiUser
-                                            ? (Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds || '[]') : []))
-                                            : [];
-
-                                        // Single-user: read legacy single ID column
-                                        const currentHolderId = !isMultiUser
-                                            ? ((currentCenterData as any)?.[roleToColumnMap[role.value]] || '')
-                                            : '';
-
-                                        const currentHolderName = !isMultiUser
-                                            ? ((currentCenterData as any)?.[roleToColumnMap[role.value]?.replace('_id', '_name')] || '')
-                                            : '';
-
-                                        const isActive = isMultiUser ? currentIds.length > 0 : !!currentHolderId;
-
-                                        return (
-                                            <div key={role.value} className="bg-gray-50/50 rounded-2xl border border-gray-100 p-5 hover:bg-white hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isActive ? 'bg-teal-100 text-teal-600' : 'bg-gray-200 text-gray-400 group-hover:bg-white group-hover:text-teal-500'}`}>
-                                                            <Award className="h-5 w-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-black text-gray-900">{role.label}</h4>
-                                                            {isMultiUser && (
-                                                                <span className="text-[9px] font-bold text-teal-600 uppercase tracking-widest">Multi-user</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {isActive && (
-                                                        <div className="px-2 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase rounded-lg">
-                                                            {isMultiUser ? `${currentIds.length} Assigned` : 'Active'}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block">Assigned To</label>
-
-                                                    {isMultiUser ? (
-                                                        // ---- Multi-checkbox list ----
-                                                        <div className="max-h-48 overflow-y-auto space-y-1 pr-1 rounded-xl border border-gray-200 bg-white p-2">
-                                                            {users.length === 0 ? (
-                                                                <p className="text-[10px] text-gray-400 text-center py-3">No users in this center</p>
-                                                            ) : (
-                                                                users.map(u => {
-                                                                    const checked = currentIds.includes(u.id);
-                                                                    return (
-                                                                        <label
-                                                                            key={u.id}
-                                                                            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${checked ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'} ${loadingStructure ? 'opacity-50 pointer-events-none' : ''}`}
-                                                                        >
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={checked}
-                                                                                disabled={loadingStructure}
-                                                                                onChange={() => {
-                                                                                    const newIds = checked
-                                                                                        ? currentIds.filter(id => id !== u.id)
-                                                                                        : [...currentIds, u.id];
-                                                                                    handleStructureUpdateMulti(role.value, newIds);
-                                                                                }}
-                                                                                className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                                                                            />
-                                                                            <span className={`text-xs font-bold truncate ${checked ? 'text-teal-700' : 'text-gray-700'}`}>
-                                                                                {u.name}
-                                                                            </span>
-                                                                        </label>
-                                                                    );
-                                                                })
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        // ---- Single select dropdown ----
-                                                        <div className="relative">
-                                                            <select
-                                                                className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-3 pl-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all cursor-pointer hover:border-teal-200"
-                                                                value={currentHolderId}
-                                                                onChange={(e) => handleStructureUpdate(role.value, e.target.value)}
-                                                                disabled={loadingStructure}
-                                                            >
-                                                                <option value="">-- No Assignment --</option>
-                                                                {users.map(u => (
-                                                                    <option key={u.id} value={u.id}>
-                                                                        {u.name} ({getRoleDisplayName(getHighestRole(u.role))})
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                                <ChevronDown className="h-4 w-4" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Current holder display for single-user */}
-                                                    {!isMultiUser && currentHolderId && (
-                                                        <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-100">
-                                                            <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                                                            <span className="text-xs font-bold text-gray-600 truncate">{currentHolderName || 'Unknown User'}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Assigned pills for multi-user */}
-                                                    {isMultiUser && currentIds.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1.5 pt-1">
-                                                            {currentIds.map(id => {
-                                                                const u = users.find(x => x.id === id);
-                                                                return (
-                                                                    <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-100 text-teal-700 rounded-full text-[10px] font-bold">
-                                                                        <div className="w-1.5 h-1.5 bg-teal-500 rounded-full" />
-                                                                        {u?.name || 'Unknown'}
-                                                                    </span>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
 
-            {/* Confirmation Modal (Approvals) - MD Style */}
-            {
-                confirmation.isOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-white/20 animate-in zoom-in-95 duration-300">
-                            <div className={`p-8 ${confirmation.type === 'approved' ? 'bg-gradient-to-br from-emerald-50 to-teal-50' : 'bg-gradient-to-br from-red-50 to-rose-50'}`}>
-                                <div className="flex flex-col items-center text-center gap-4">
-                                    <div className={`p-4 rounded-2xl ${confirmation.type === 'approved' ? 'bg-white text-emerald-600 shadow-emerald-100' : 'bg-white text-red-600 shadow-red-100'} shadow-xl`}>
-                                        {confirmation.type === 'approved' ? <Check className="h-8 w-8 stroke-[2.5px]" /> : <AlertCircle className="h-8 w-8 stroke-[2.5px]" />}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                                            {confirmation.type === 'approved' ? 'Approve Updates?' : 'Reject Updates?'}
-                                        </h3>
-                                        <p className="text-gray-500 font-medium mt-1">
-                                            You are about to {confirmation.type} <span className="text-gray-900 font-bold underline decoration-2 decoration-teal-400">{confirmation.count}</span> {activeTab === 'registrations' ? (confirmation.count === 1 ? 'user registration' : 'user registrations') : (confirmation.count === 1 ? 'profiled request' : 'profiled requests')}.
-                                        </p>
+            {activeTab === 'user-management' && (
+                <div className="space-y-3">
+                    {/* Search & Scope Header */}
+                    <div className="bg-white rounded-2xl p-3 sm:p-3.5 border-2 border-slate-300 shadow-sm">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-3 mb-2.5 pb-2.5 border-b border-slate-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 w-full lg:w-auto">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">Devotee Directory</h2>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline">•</span>
+                                        <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">Search & Segment</span>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="p-8 bg-white space-y-4">
-                                {confirmation.type === 'rejected' && activeTab === 'registrations' && (
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Rejection Reason</label>
-                                        <textarea
-                                            className="w-full px-4 py-3 text-sm bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-400 focus:bg-white outline-none transition-all resize-none"
-                                            rows={3}
-                                            placeholder="Please provide constructive feedback..."
-                                            value={feedback}
-                                            onChange={(e) => setFeedback(e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                                <div className="flex flex-col gap-3 pt-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                     <button
-                                        onClick={() => {
-                                            if (activeTab === 'registrations') {
-                                                if (verificationMode === 'single' && confirmation.requestId) {
-                                                    handleUserVerification(confirmation.requestId, 'approved');
-                                                } else {
-                                                    handleBulkVerification('approved');
-                                                }
-                                                setConfirmation({ isOpen: false, type: null, count: 0 });
-                                            } else {
-                                                confirmAction();
-                                            }
-                                        }}
-                                        disabled={confirmation.type === 'rejected' && activeTab === 'registrations' && !feedback.trim()}
-                                        className={`w-full py-4 text-sm font-black text-white rounded-2xl shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale ${confirmation.type === 'approved'
-                                            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 shadow-emerald-200'
-                                            : 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-red-200'
+                                        type="button"
+                                        onClick={() => setCenterScope('all')}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${centerScope === 'all'
+                                                ? 'bg-slate-900 text-white shadow-xs'
+                                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
                                             }`}
                                     >
-                                        {confirmation.type === 'approved' ? 'CONFIRM APPROVAL' : 'CONFIRM REJECTION'}
+                                        All ({dynamicDevoteeStats.total})
                                     </button>
                                     <button
-                                        onClick={() => setConfirmation({ isOpen: false, type: null, count: 0, requestId: null })}
-                                        className="w-full py-4 text-sm font-black text-gray-400 hover:text-gray-600 transition-colors"
+                                        type="button"
+                                        onClick={() => setCenterScope('current')}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${centerScope === 'current'
+                                                ? 'bg-emerald-600 text-white shadow-xs'
+                                                : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                            }`}
                                     >
-                                        CANCEL
+                                        🟢 Current ({dynamicDevoteeStats.currentCount})
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCenterScope('alumni')}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${centerScope === 'alumni'
+                                                ? 'bg-purple-700 text-white shadow-xs'
+                                                : 'bg-purple-50 text-purple-800 border border-purple-300 hover:bg-purple-100'
+                                            }`}
+                                    >
+                                        🟣 Alumni ({dynamicDevoteeStats.alumniCount})
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="relative w-full lg:w-[320px] group">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-600 transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, email, phone..."
+                                    value={userSearch}
+                                    onChange={(e) => setUserSearch(e.target.value)}
+                                    className="w-full pl-9 pr-7 py-1.5 bg-slate-50 hover:bg-white border-2 border-slate-300 focus:border-teal-500 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all shadow-2xs"
+                                />
+                                {userSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserSearch('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 6 Filter Dropdowns in a single compact responsive row */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                            {/* 1. VOICE Connection */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    Connection
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-purple-100 text-purple-700 rounded-md pointer-events-none">
+                                        <GraduationCap className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={centerScope}
+                                        onChange={(e) => setCenterScope(e.target.value as any)}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-purple-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="all">🏛️ All ({dynamicDevoteeStats.total})</option>
+                                        <option value="current">🟢 Current ({dynamicDevoteeStats.currentCount})</option>
+                                        <option value="alumni">🟣 Alumni ({dynamicDevoteeStats.alumniCount})</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* 2. Spiritual Group */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    Spiritual Group
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-teal-100 text-teal-700 rounded-md pointer-events-none">
+                                        <Users className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={filterGroup}
+                                        onChange={(e) => setFilterGroup(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-teal-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="">All Groups</option>
+                                        {BV_GROUPS.map(g => (
+                                            <option key={g} value={g}>{g}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* 3. KC Status */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    KC Status
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
+                                        <Activity className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={filterKCStatus}
+                                        onChange={(e) => setFilterKCStatus(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="">All KC Status</option>
+                                        {KC_STATUS_OPTIONS.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* 4. Ashram */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    Ashram
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-blue-100 text-blue-700 rounded-md pointer-events-none">
+                                        <Building2 className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={filterAshram}
+                                        onChange={(e) => setFilterAshram(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-blue-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="">All Ashrams</option>
+                                        {ASHRAM_OPTIONS.map(a => (
+                                            <option key={a} value={a}>{a}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* 5. Admin Role */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    Admin Role
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-amber-100 text-amber-700 rounded-md pointer-events-none">
+                                        <UserCheck className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={filterRole}
+                                        onChange={(e) => setFilterRole(e.target.value === 'royal' ? 'royal' : (e.target.value ? parseInt(e.target.value) : ''))}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-amber-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="">All Roles</option>
+                                        {(() => {
+                                            const userRoles = (Array.isArray(userData?.role) ? userData.role : [userData?.role]).filter(Boolean) as UserRole[];
+                                            const userRoleNums = userRoles.map(r => getRoleHierarchyNumber(r));
+                                            const isPMLelvel = userRoleNums.some(num => [14, 15, 16].includes(num));
+
+                                            let visibleRoles = MANAGEABLE_ROLES;
+                                            if (isPMLelvel) {
+                                                const allowedSet = ['royal', 1, 14, 15, 16, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+                                                visibleRoles = MANAGEABLE_ROLES.filter(role => allowedSet.includes(role.value));
+                                            }
+
+                                            return visibleRoles.map(role => (
+                                                <option key={role.value} value={role.value}>{role.label}</option>
+                                            ));
+                                        })()}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* 6. Camp Completed */}
+                            <div className="group">
+                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1 ml-0.5 truncate">
+                                    Camp Completed
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 bg-emerald-100 text-emerald-700 rounded-md pointer-events-none">
+                                        <Shield className="h-3.5 w-3.5" />
+                                    </div>
+                                    <select
+                                        value={filterCamp}
+                                        onChange={(e) => setFilterCamp(e.target.value)}
+                                        className="w-full pl-8 pr-7 py-1.5 bg-slate-50/90 hover:bg-white border-2 border-slate-300 hover:border-slate-400 focus:border-emerald-600 rounded-lg appearance-none outline-none font-bold text-xs text-slate-800 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                        <option value="">Any Status</option>
+                                        {CAMP_OPTIONS.map(c => (
+                                            <option key={c.value} value={c.value}>{c.label}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                                 </div>
                             </div>
                         </div>
                     </div>
-                )
-            }
 
-            {/* Rejection Modal (Registrations) - Redesigned to match MD style */}
-            {
-                showRejectionModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-                        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
-                            <div className="p-8 sm:p-10 bg-gradient-to-br from-rose-600 to-red-700 text-white relative">
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl" />
-                                <div className="flex items-center gap-5 relative z-10">
-                                    <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl shadow-xl">
-                                        <ShieldAlert className="h-8 w-8 text-white stroke-[2.5px]" />
+                    {/* Mobile Card View */}
+                    <div className="lg:hidden space-y-4">
+                        {users
+                            .filter(u => {
+                                const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+                                    u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                const scopeMatch = !centerScope || centerScope === 'all'
+                                    ? true
+                                    : centerScope === 'current'
+                                        ? u._centerConnection !== 'alumni'
+                                        : u._centerConnection === 'alumni';
+                                const groupMatch = !filterGroup || u.bv_group === filterGroup;
+                                const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
+                                const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
+
+                                const userRoles = Array.isArray(u.role) ? u.role : [u.role];
+                                const roleMatch = !filterRole || (
+                                    filterRole === 'royal'
+                                        ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
+                                        : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
+                                );
+
+                                const campMatch = !filterCamp || (u as any)[filterCamp];
+
+                                return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                            })
+                            .map((user) => (
+                                <div key={user.id} className={`bg-white rounded-2xl border shadow-sm p-5 space-y-4 ${user._centerConnection === 'alumni' ? 'border-purple-200 bg-purple-50/15' : 'border-gray-200'}`}>
+                                    <div className="flex justify-between items-start">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <h4 className="text-sm font-black text-gray-900 truncate uppercase">{user.name}</h4>
+                                                {user._centerConnection === 'alumni' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                        🎓 Voice Alumni
+                                                    </span>
+                                                ) : user._centerConnection === 'both' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                                                        🔷 Current & Alumni
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                        🟢 Current Member
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                                            {user._centerConnection === 'alumni' && (
+                                                <p className="text-[10px] font-bold text-purple-700 mt-0.5 truncate">
+                                                    Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <button
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group"
+                                            onClick={() => {
+                                                setUserForView(user);
+                                                openUserView(user);
+                                            }}
+                                            title="View Devotee Profile"
+                                        >
+                                            <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                            <span>View</span>
+                                        </button>
                                     </div>
-                                    <div>
-                                        <h3 className="text-xl font-black tracking-tight">Access Denied</h3>
-                                        <p className="text-rose-100 text-[10px] font-bold uppercase tracking-widest mt-0.5">Identity Verification Failed</p>
+
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Roles</p>
+                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                            {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
+                                                <span key={i} className="px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-100 rounded text-[10px] font-bold uppercase">
+                                                    {getRoleDisplayName(r)}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
+
+                                    <div className="mt-4">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Center Post</label>
+                                        <div className="mt-1 relative">
+                                            {(() => {
+                                                const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
+                                                // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
+                                                const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
+                                                const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
+
+                                                // Find current center post (first matching manageable role)
+                                                // Prioritize higher roles 29->17->1
+                                                // But actually we just find the one that exists in CENTER_POST_OPTIONS
+                                                // Sort user roles by value descending to pick "highest" post
+                                                const currentPost = existingRoles
+                                                    .filter((r: number) => CENTER_POST_OPTIONS.some(o => o.value === r))
+                                                    .sort((a: number, b: number) => b - a)[0] || 1;
+
+                                                if (isLocked) {
+                                                    return (
+                                                        <div className="w-full py-3 px-4 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold border border-gray-200 flex items-center justify-between">
+                                                            <span>Locked (Higher Role)</span>
+                                                            <Lock className="h-3 w-3" />
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div className="relative">
+                                                        <RoleMultiSelect
+                                                            user={user}
+                                                            currentRoles={existingRoles}
+                                                            options={CENTER_POST_OPTIONS}
+                                                            onUpdate={(newRoles) => handleInlineRoleUpdate(user, newRoles)}
+                                                            isUpdating={updatingUserId === user.id}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">VOICE group level</label>
+                                        <div className="relative">
+                                            <select
+                                                value={user.bv_group || ''}
+                                                onChange={(e) => handleAssignGroup(user.id, e.target.value)}
+                                                disabled={updatingGroupUserId === user.id}
+                                                className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
+                                            >
+                                                <option value="">-- No Group Segment --</option>
+                                                {BV_GROUPS.map(g => (
+                                                    <option key={g} value={g}>{g}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                {updatingGroupUserId === user.id ? (
+                                                    <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
+                                                ) : (
+                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block mb-1">KC Status</label>
+                                        <div className="relative">
+                                            <select
+                                                value={user.hierarchy?.kcStatus || ''}
+                                                onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                disabled={updatingKCStatusUserId === user.id}
+                                                className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-2 pl-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 disabled:opacity-70 transition-all cursor-pointer"
+                                            >
+                                                <option value="">-- No KC Status --</option>
+                                                {KC_STATUS_OPTIONS.map(status => (
+                                                    <option key={status} value={status}>{status}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                {updatingKCStatusUserId === user.id ? (
+                                                    <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                ) : (
+                                                    <ChevronDown className="h-3.5 w-3.5" />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden lg:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-hidden">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-100 border-b-2 border-slate-200">
+                                <tr>
+                                    <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">User</th>
+                                    <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider">Role</th>
+                                    <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-44">Center Post</th>
+                                    <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">VOICE Group</th>
+                                    <th className="px-3.5 py-2 text-left text-[11px] font-black text-slate-700 uppercase tracking-wider w-36">KC Status</th>
+                                    <th className="px-3.5 py-2 text-right text-[11px] font-black text-slate-700 uppercase tracking-wider w-14">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-200">
+                                {users
+                                    .filter(u => {
+                                        const nameMatch = u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+                                            u.email.toLowerCase().includes(userSearch.toLowerCase());
+                                        const scopeMatch = !centerScope || centerScope === 'all'
+                                            ? true
+                                            : centerScope === 'current'
+                                                ? u._centerConnection !== 'alumni'
+                                                : u._centerConnection === 'alumni';
+                                        const groupMatch = !filterGroup || u.bv_group === filterGroup;
+                                        const kcMatch = !filterKCStatus || u.hierarchy?.kcStatus === filterKCStatus;
+                                        const ashramMatch = !filterAshram || u.hierarchy?.ashram === filterAshram;
+
+                                        const userRoles = Array.isArray(u.role) ? u.role : [u.role];
+                                        const roleMatch = !filterRole || (
+                                            filterRole === 'royal'
+                                                ? userRoles.some((r: any) => [17, 22, 23, 24, 25, 26].includes(getRoleHierarchyNumber(r)))
+                                                : userRoles.some((r: any) => getRoleHierarchyNumber(r) === filterRole)
+                                        );
+
+                                        const campMatch = !filterCamp || (u as any)[filterCamp];
+
+                                        return nameMatch && scopeMatch && groupMatch && kcMatch && ashramMatch && roleMatch && campMatch;
+                                    })
+                                    .map((user) => (
+                                        <tr key={user.id} className={`hover:bg-slate-50/90 transition-colors ${user._centerConnection === 'alumni' ? 'bg-purple-50/30' : ''}`}>
+                                            <td className="px-3.5 py-1.5">
+                                                <div className="flex items-center">
+                                                    <div className="ml-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-sm font-bold text-gray-900">{user.name}</span>
+                                                            {user._centerConnection === 'alumni' ? (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                                                                    🎓 Voice Alumni
+                                                                </span>
+                                                            ) : user._centerConnection === 'both' ? (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                                                                    🔷 Current & Alumni
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                    🟢 Current Member
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">{user.email}</div>
+                                                        {user._centerConnection === 'alumni' && (
+                                                            <div className="text-[10px] font-bold text-purple-700 mt-0.5">
+                                                                Now at: {user._currentCenterDisplay !== 'None' ? user._currentCenterDisplay : (user._currentTempleDisplay || 'Other Center')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-3.5 py-1.5">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(Array.isArray(user.role) ? user.role : [user.role]).map((r: any, i: number) => (
+                                                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                                                            {getRoleDisplayName(r)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
+                                                <div className="relative w-48 text-left">
+                                                    {(() => {
+                                                        const existingRoles = (Array.isArray(user.role) ? user.role : [user.role]).map((r: any) => Number(r));
+                                                        // Lock if user holds a role that the PM cannot manage (e.g. MD, Director, etc.)
+                                                        const NON_PM_ROLES = MANAGEABLE_ROLES.map(r => r.value as number).filter(v => !PM_ASSIGNABLE_ROLE_IDS.includes(v) && v !== 2 && v !== 20);
+                                                        const isLocked = existingRoles.some((r: number) => NON_PM_ROLES.includes(r));
+
+                                                        // Find current center post
+                                                        const currentPost = existingRoles
+                                                            .filter((r: number) => CENTER_POST_OPTIONS.some(o => o.value === r))
+                                                            .sort((a: number, b: number) => b - a)[0] || 1;
+
+                                                        if (isLocked) {
+                                                            return (
+                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
+                                                                    <Lock className="h-3 w-3" /> Locked
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div className="relative">
+                                                                <RoleMultiSelect
+                                                                    user={user}
+                                                                    currentRoles={existingRoles}
+                                                                    options={CENTER_POST_OPTIONS}
+                                                                    onUpdate={(newRoles) => handleInlineRoleUpdate(user, newRoles)}
+                                                                    isUpdating={updatingUserId === user.id}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </td>
+                                            <td className="px-3.5 py-1.5">
+                                                <div className="relative w-full">
+                                                    <select
+                                                        value={user.bv_group || ''}
+                                                        onChange={(e) => handleAssignGroup(user.id, e.target.value)}
+                                                        disabled={updatingGroupUserId === user.id}
+                                                        className="w-full appearance-none bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                                                    >
+                                                        <option value="">- No Group -</option>
+                                                        {BV_GROUPS.map(g => (
+                                                            <option key={g} value={g}>{g}</option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                        {updatingGroupUserId === user.id ? (
+                                                            <div className="animate-spin h-3.5 w-3.5 border-2 border-teal-500 border-t-transparent rounded-full" />
+                                                        ) : (
+                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-3.5 py-1.5">
+                                                <div className="relative w-full">
+                                                    <select
+                                                        value={user.hierarchy?.kcStatus || ''}
+                                                        onChange={(e) => handleAssignKCStatus(user.id, e.target.value)}
+                                                        disabled={updatingKCStatusUserId === user.id}
+                                                        className="w-full appearance-none bg-white border border-slate-300 hover:border-orange-500 text-slate-800 text-xs font-bold py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                                                    >
+                                                        <option value="">- No Status -</option>
+                                                        {KC_STATUS_OPTIONS.map(status => (
+                                                            <option key={status} value={status}>{status}</option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                        {updatingKCStatusUserId === user.id ? (
+                                                            <div className="animate-spin h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                                                        ) : (
+                                                            <ChevronDown className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-3.5 py-1.5 whitespace-nowrap text-right text-sm font-medium">
+                                                <button
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-2 border-blue-200 hover:border-blue-600 rounded-lg text-xs font-bold transition-all shadow-2xs group cursor-pointer"
+                                                    onClick={() => {
+                                                        setUserForView(user);
+                                                        openUserView(user);
+                                                    }}
+                                                    title="View Devotee Profile"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                                    <span>View</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+            {activeTab === 'service-team' && (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-[2rem] shadow-xl shadow-gray-100/50 border border-teal-100/50 overflow-hidden relative">
+                        {/* Header Background */}
+                        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-teal-500/5 to-emerald-500/5 pointer-events-none" />
+
+                        <div className="p-8 relative">
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className="p-3 bg-teal-50 rounded-2xl">
+                                    <ShieldCheck className="h-8 w-8 text-teal-600 stroke-[1.5px]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-gray-900 tracking-tight">Service Team Structure</h3>
+                                    <p className="text-gray-500 font-medium mt-1">Manage operational roles for {currentCenter}</p>
                                 </div>
                             </div>
 
-                            <div className="p-8 sm:p-10 space-y-8 bg-[#fffdfa]">
-                                <div className="text-center">
-                                    <p className="text-gray-500 font-medium">
-                                        {verificationMode === 'single'
-                                            ? `Rejecting registration for ${userToVerify?.name}.`
-                                            : `Rejecting ${selectedPendingUserIds.length} selected registrations.`}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {MANAGEABLE_ROLES.filter((r): r is { label: string; value: number } => typeof r.value === 'number' && r.value >= 17).map((role) => {
+                                    const isMultiUser = [23, 25, 26, 31, 32, 33].includes(role.value);
+                                    const idsCol = roleToColumnMap[role.value]?.replace('_id', '_ids');
+
+                                    // Multi-user: read from _ids array (jsonb col — may be string or array)
+                                    const rawIds = isMultiUser ? (currentCenterData as any)?.[idsCol] : null;
+                                    const currentIds: string[] = isMultiUser
+                                        ? (Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds || '[]') : []))
+                                        : [];
+
+                                    // Single-user: read legacy single ID column
+                                    const currentHolderId = !isMultiUser
+                                        ? ((currentCenterData as any)?.[roleToColumnMap[role.value]] || '')
+                                        : '';
+
+                                    const currentHolderName = !isMultiUser
+                                        ? ((currentCenterData as any)?.[roleToColumnMap[role.value]?.replace('_id', '_name')] || '')
+                                        : '';
+
+                                    const isActive = isMultiUser ? currentIds.length > 0 : !!currentHolderId;
+
+                                    return (
+                                        <div key={role.value} className="bg-gray-50/50 rounded-2xl border border-gray-100 p-5 hover:bg-white hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isActive ? 'bg-teal-100 text-teal-600' : 'bg-gray-200 text-gray-400 group-hover:bg-white group-hover:text-teal-500'}`}>
+                                                        <Award className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-gray-900">{role.label}</h4>
+                                                        {isMultiUser && (
+                                                            <span className="text-[9px] font-bold text-teal-600 uppercase tracking-widest">Multi-user</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {isActive && (
+                                                    <div className="px-2 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase rounded-lg">
+                                                        {isMultiUser ? `${currentIds.length} Assigned` : 'Active'}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 block">Assigned To</label>
+
+                                                {isMultiUser ? (
+                                                    // ---- Multi-checkbox list ----
+                                                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1 rounded-xl border border-gray-200 bg-white p-2">
+                                                        {users.length === 0 ? (
+                                                            <p className="text-[10px] text-gray-400 text-center py-3">No users in this center</p>
+                                                        ) : (
+                                                            users.map(u => {
+                                                                const checked = currentIds.includes(u.id);
+                                                                return (
+                                                                    <label
+                                                                        key={u.id}
+                                                                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${checked ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'} ${loadingStructure ? 'opacity-50 pointer-events-none' : ''}`}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={checked}
+                                                                            disabled={loadingStructure}
+                                                                            onChange={() => {
+                                                                                const newIds = checked
+                                                                                    ? currentIds.filter(id => id !== u.id)
+                                                                                    : [...currentIds, u.id];
+                                                                                handleStructureUpdateMulti(role.value, newIds);
+                                                                            }}
+                                                                            className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                                                                        />
+                                                                        <span className={`text-xs font-bold truncate ${checked ? 'text-teal-700' : 'text-gray-700'}`}>
+                                                                            {u.name}
+                                                                        </span>
+                                                                    </label>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    // ---- Single select dropdown ----
+                                                    <div className="relative">
+                                                        <select
+                                                            className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold py-3 pl-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all cursor-pointer hover:border-teal-200"
+                                                            value={currentHolderId}
+                                                            onChange={(e) => handleStructureUpdate(role.value, e.target.value)}
+                                                            disabled={loadingStructure}
+                                                        >
+                                                            <option value="">-- No Assignment --</option>
+                                                            {users.map(u => (
+                                                                <option key={u.id} value={u.id}>
+                                                                    {u.name} ({getRoleDisplayName(getHighestRole(u.role))})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Current holder display for single-user */}
+                                                {!isMultiUser && currentHolderId && (
+                                                    <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-100">
+                                                        <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                                                        <span className="text-xs font-bold text-gray-600 truncate">{currentHolderName || 'Unknown User'}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Assigned pills for multi-user */}
+                                                {isMultiUser && currentIds.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                                        {currentIds.map(id => {
+                                                            const u = users.find(x => x.id === id);
+                                                            return (
+                                                                <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-100 text-teal-700 rounded-full text-[10px] font-bold">
+                                                                    <div className="w-1.5 h-1.5 bg-teal-500 rounded-full" />
+                                                                    {u?.name || 'Unknown'}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* Confirmation Modal (Approvals) - MD Style */}
+        {
+            confirmation.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-white/20 animate-in zoom-in-95 duration-300">
+                        <div className={`p-8 ${confirmation.type === 'approved' ? 'bg-gradient-to-br from-emerald-50 to-teal-50' : 'bg-gradient-to-br from-red-50 to-rose-50'}`}>
+                            <div className="flex flex-col items-center text-center gap-4">
+                                <div className={`p-4 rounded-2xl ${confirmation.type === 'approved' ? 'bg-white text-emerald-600 shadow-emerald-100' : 'bg-white text-red-600 shadow-red-100'} shadow-xl`}>
+                                    {confirmation.type === 'approved' ? <Check className="h-8 w-8 stroke-[2.5px]" /> : <AlertCircle className="h-8 w-8 stroke-[2.5px]" />}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                        {confirmation.type === 'approved' ? 'Approve Updates?' : 'Reject Updates?'}
+                                    </h3>
+                                    <p className="text-gray-500 font-medium mt-1">
+                                        You are about to {confirmation.type} <span className="text-gray-900 font-bold underline decoration-2 decoration-teal-400">{confirmation.count}</span> {activeTab === 'registrations' ? (confirmation.count === 1 ? 'user registration' : 'user registrations') : (confirmation.count === 1 ? 'profiled request' : 'profiled requests')}.
                                     </p>
                                 </div>
-
-                                <div className="space-y-4">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Reason for Rejection (Visible to User)</label>
+                            </div>
+                        </div>
+                        <div className="p-8 bg-white space-y-4">
+                            {confirmation.type === 'rejected' && activeTab === 'registrations' && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Rejection Reason</label>
                                     <textarea
-                                        className="w-full px-6 py-5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-rose-100 focus:ring-4 focus:ring-rose-500/5 outline-none font-medium transition-all shadow-inner resize-none text-gray-700"
-                                        rows={4}
-                                        placeholder="e.g., Profile photo missing or invalid temple center specified..."
-                                        value={rejectionReason}
-                                        onChange={(e) => setRejectionReason(e.target.value)}
+                                        className="w-full px-4 py-3 text-sm bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-400 focus:bg-white outline-none transition-all resize-none"
+                                        rows={3}
+                                        placeholder="Please provide constructive feedback..."
+                                        value={feedback}
+                                        onChange={(e) => setFeedback(e.target.value)}
                                     />
                                 </div>
-
-                                <div className="flex flex-col gap-3">
-                                    <button
-                                        onClick={() => {
-                                            if (verificationMode === 'single') handleUserVerification(userToVerify.id, 'rejected', rejectionReason);
-                                            else handleBulkVerification('rejected', rejectionReason);
-                                            setShowRejectionModal(false);
-                                            setRejectionReason('');
-                                        }}
-                                        disabled={!rejectionReason.trim()}
-                                        className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50 disabled:grayscale"
-                                    >
-                                        Confirm Rejection
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowRejectionModal(false);
-                                            setRejectionReason('');
-                                        }}
-                                        className="w-full py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:text-gray-600 hover:bg-gray-50 rounded-2xl transition-all"
-                                    >
-                                        Return to Review
-                                    </button>
-                                </div>
+                            )}
+                            <div className="flex flex-col gap-3 pt-2">
+                                <button
+                                    onClick={() => {
+                                        if (activeTab === 'registrations') {
+                                            if (verificationMode === 'single' && confirmation.requestId) {
+                                                handleUserVerification(confirmation.requestId, 'approved');
+                                            } else {
+                                                handleBulkVerification('approved');
+                                            }
+                                            setConfirmation({ isOpen: false, type: null, count: 0 });
+                                        } else {
+                                            confirmAction();
+                                        }
+                                    }}
+                                    disabled={confirmation.type === 'rejected' && activeTab === 'registrations' && !feedback.trim()}
+                                    className={`w-full py-4 text-sm font-black text-white rounded-2xl shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale ${confirmation.type === 'approved'
+                                        ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 shadow-emerald-200'
+                                        : 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-red-200'
+                                        }`}
+                                >
+                                    {confirmation.type === 'approved' ? 'CONFIRM APPROVAL' : 'CONFIRM REJECTION'}
+                                </button>
+                                <button
+                                    onClick={() => setConfirmation({ isOpen: false, type: null, count: 0, requestId: null })}
+                                    className="w-full py-4 text-sm font-black text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    CANCEL
+                                </button>
                             </div>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )
+        }
 
-            {/* View User Modal */}
-            <UserDetailModal
-                user={userForView}
-                isOpen={showViewModal}
-                onClose={() => closeUserView()}
-            />
-        </div >
-    );
+        {/* Rejection Modal (Registrations) - Redesigned to match MD style */}
+        {
+            showRejectionModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
+                        <div className="p-8 sm:p-10 bg-gradient-to-br from-rose-600 to-red-700 text-white relative">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl" />
+                            <div className="flex items-center gap-5 relative z-10">
+                                <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl shadow-xl">
+                                    <ShieldAlert className="h-8 w-8 text-white stroke-[2.5px]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black tracking-tight">Access Denied</h3>
+                                    <p className="text-rose-100 text-[10px] font-bold uppercase tracking-widest mt-0.5">Identity Verification Failed</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 sm:p-10 space-y-8 bg-[#fffdfa]">
+                            <div className="text-center">
+                                <p className="text-gray-500 font-medium">
+                                    {verificationMode === 'single'
+                                        ? `Rejecting registration for ${userToVerify?.name}.`
+                                        : `Rejecting ${selectedPendingUserIds.length} selected registrations.`}
+                                </p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Reason for Rejection (Visible to User)</label>
+                                <textarea
+                                    className="w-full px-6 py-5 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-rose-100 focus:ring-4 focus:ring-rose-500/5 outline-none font-medium transition-all shadow-inner resize-none text-gray-700"
+                                    rows={4}
+                                    placeholder="e.g., Profile photo missing or invalid temple center specified..."
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={() => {
+                                        if (verificationMode === 'single') handleUserVerification(userToVerify.id, 'rejected', rejectionReason);
+                                        else handleBulkVerification('rejected', rejectionReason);
+                                        setShowRejectionModal(false);
+                                        setRejectionReason('');
+                                    }}
+                                    disabled={!rejectionReason.trim()}
+                                    className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50 disabled:grayscale"
+                                >
+                                    Confirm Rejection
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowRejectionModal(false);
+                                        setRejectionReason('');
+                                    }}
+                                    className="w-full py-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:text-gray-600 hover:bg-gray-50 rounded-2xl transition-all"
+                                >
+                                    Return to Review
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        {/* View User Modal */}
+        <UserDetailModal
+            user={userForView}
+            isOpen={showViewModal}
+            onClose={() => closeUserView()}
+        />
+    </div >
+);
 }
