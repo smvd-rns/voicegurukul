@@ -318,6 +318,13 @@ export async function runDatabaseBackup({
       ]
     );
 
+    // 8. Auto-cleanup: purge backups older than 30 days from Google Drive and database
+    try {
+      await purgeOldBackups(drive, 30);
+    } catch (cleanupErr: any) {
+      console.warn('Post-backup retention cleanup warning:', cleanupErr);
+    }
+
     return {
       success: true,
       logId,
@@ -352,6 +359,43 @@ export async function runDatabaseBackup({
       durationMs,
       error: err.message || String(err),
     };
+  }
+}
+
+/**
+ * Automatically cleans up backups older than retentionDays (default 30 days):
+ * 1. Permanently deletes the folder and its files in Google Drive
+ * 2. Deletes the corresponding log record in database_backup_logs
+ */
+export async function purgeOldBackups(drive: any, retentionDays: number = 30): Promise<number> {
+  try {
+    const oldLogsRes = await query(
+      `SELECT id, drive_folder_id, drive_folder_name, created_at 
+       FROM database_backup_logs 
+       WHERE created_at < NOW() - ($1 || ' days')::interval`,
+      [retentionDays]
+    );
+
+    const oldLogs = oldLogsRes.rows || [];
+    if (oldLogs.length === 0) return 0;
+
+    for (const oldLog of oldLogs) {
+      if (oldLog.drive_folder_id) {
+        try {
+          await drive.files.delete({ fileId: oldLog.drive_folder_id });
+          console.log(`[Backup Retention] Purged Google Drive folder "${oldLog.drive_folder_name}" (${oldLog.drive_folder_id})`);
+        } catch (driveErr: any) {
+          console.warn(`[Backup Retention] Could not delete Drive folder ${oldLog.drive_folder_id}:`, driveErr.message);
+        }
+      }
+
+      await query(`DELETE FROM database_backup_logs WHERE id = $1`, [oldLog.id]);
+    }
+    console.log(`[Backup Retention] Successfully cleaned up ${oldLogs.length} backup(s) older than ${retentionDays} days.`);
+    return oldLogs.length;
+  } catch (purgeErr: any) {
+    console.error('[Backup Retention] Error during backup purge:', purgeErr);
+    return 0;
   }
 }
 

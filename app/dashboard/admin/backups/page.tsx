@@ -18,11 +18,10 @@ import {
   Calendar,
   Layers,
   ChevronRight,
+  ChevronLeft,
   ExternalLink,
   Shield,
-  Terminal,
-  Copy,
-  Check
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'react-hot-toast';
@@ -69,7 +68,10 @@ export default function DatabaseBackupsPage() {
   const [loading, setLoading] = useState(true);
   const [runningBackup, setRunningBackup] = useState(false);
   const [selectedLog, setSelectedLog] = useState<BackupLogItem | null>(null);
-  const [copiedCron, setCopiedCron] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Verify Admin authorization
   const currentUserRoles = Array.isArray(userData?.role) ? userData.role : [userData?.role];
@@ -159,20 +161,17 @@ export default function DatabaseBackupsPage() {
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
-  const copyCronCommand = () => {
-    const cmd = `30 19 * * * curl -s -X POST https://voicegurukul.com/api/admin/backups/trigger -H "x-cron-secret: YOUR_CRON_SECRET" > /dev/null 2>&1`;
-    navigator.clipboard.writeText(cmd);
-    setCopiedCron(true);
-    toast.success('Copied cron command template to clipboard!');
-    setTimeout(() => setCopiedCron(false), 2500);
-  };
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedLogs = logs.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div className="space-y-4 p-3 sm:p-6 max-w-7xl mx-auto">
       {/* Top Header & Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <Link
               href="/dashboard/admin"
               className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
@@ -183,6 +182,9 @@ export default function DatabaseBackupsPage() {
             <span className="text-slate-300">•</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
               1:00 AM IST Nightly Schedule
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-800 border border-indigo-200">
+              30-Day Auto Retention Active
             </span>
           </div>
           <h1 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
@@ -303,36 +305,6 @@ export default function DatabaseBackupsPage() {
         </div>
       </div>
 
-      {/* Droplet 1:00 AM IST Cron Configuration Card */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 text-white shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs sm:text-sm font-bold text-emerald-400">
-                Droplet 1:00 AM IST Nightly Cron Command
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              To trigger the backup automatically every night on your DigitalOcean droplet, add this line to the droplet crontab (19:30 UTC = 1:00 AM IST):
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={copyCronCommand}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0 border border-slate-700 cursor-pointer"
-          >
-            {copiedCron ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedCron ? 'Copied' : 'Copy Cron Line'}</span>
-          </button>
-        </div>
-
-        <div className="mt-2.5 bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-slate-300 overflow-x-auto border border-slate-800">
-          <code>30 19 * * * curl -s -X POST https://voicegurukul.com/api/admin/backups/trigger -H &quot;x-cron-secret: YOUR_CRON_SECRET&quot; &gt; /dev/null 2&gt;&amp;1</code>
-        </div>
-      </div>
-
       {/* Backup History Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between">
@@ -357,8 +329,9 @@ export default function DatabaseBackupsPage() {
             <p className="text-xs text-slate-400">Click &quot;Run Backup Now&quot; above to create your first Google Drive backup snapshot.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="px-4 py-3">Date &amp; Time (IST)</th>
@@ -371,7 +344,7 @@ export default function DatabaseBackupsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {logs.map((item) => {
+                {paginatedLogs.map((item) => {
                   const isSuccess = item.status === 'completed';
                   const isFailed = item.status === 'failed';
                   const isInProgress = item.status === 'in_progress';
@@ -519,8 +492,65 @@ export default function DatabaseBackupsPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+
+          {/* Pagination Controls */}
+          {logs.length > 0 && (
+            <div className="p-3 sm:p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
+              <div className="flex items-center gap-2 text-slate-500 font-medium">
+                <span>Showing</span>
+                <span className="font-black text-slate-900">
+                  {logs.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, logs.length)}
+                </span>
+                <span>of</span>
+                <span className="font-black text-slate-900">{logs.length}</span>
+                <span>backups</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-slate-600" />
+                  </button>
+
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-black text-slate-800 text-xs shadow-2xs">
+                    Page {safePage} of {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4 text-slate-600" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
 
       {/* Modal: Per-Table Breakdown */}
       {selectedLog && selectedLog.details && (
