@@ -25,7 +25,8 @@ import {
   ChevronRight,
   AlertCircle,
   UserCheck,
-  UserX
+  UserX,
+  Layers
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
@@ -84,8 +85,20 @@ export default function CenterCampRegistrationsView({
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCampId, setSelectedCampId] = useState<string>('all');
+  const [selectedTrack, setSelectedTrack] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'unregistered' | 'confirmed' | 'pending' | 'cancelled'>('all');
   const [distinctCamps, setDistinctCamps] = useState<{ id: string; title: string; slug: string; startDate: string; endDate: string }[]>([]);
+
+  // Distinct Camp Tracks available for registered devotees
+  const distinctTracks = useMemo(() => {
+    const counts: Record<string, number> = {};
+    registrations.forEach((r) => {
+      if (r.camp_track && r.is_registered) {
+        counts[r.camp_track] = (counts[r.camp_track] || 0) + 1;
+      }
+    });
+    return Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [registrations]);
 
   // Real-time server stats
   const [stats, setStats] = useState({
@@ -102,10 +115,10 @@ export default function CenterCampRegistrationsView({
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // Reset to page 1 whenever search, camp filter, status filter, center, or pageSize changes
+  // Reset to page 1 whenever search, camp filter, track filter, status filter, center, or pageSize changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCampId, statusFilter, selectedCenter, pageSize]);
+  }, [searchTerm, selectedCampId, selectedTrack, statusFilter, selectedCenter, pageSize]);
 
   // Update selectedCenter when prop changes
   useEffect(() => {
@@ -167,14 +180,21 @@ export default function CenterCampRegistrationsView({
   // Filtered registrations
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((reg) => {
-      // 1. Camp Filter (if camp selected, unreg devotees are omitted or shown based on status filter)
+      // 1. Camp Event Filter (if camp selected, unreg devotees are omitted or shown based on status filter)
       if (selectedCampId !== 'all') {
         if (!reg.is_registered || reg.camp_id !== selectedCampId) {
           return false;
         }
       }
 
-      // 2. Status Filter
+      // 2. Specific Camp / Track Filter
+      if (selectedTrack !== 'all') {
+        if (!reg.is_registered || reg.camp_track !== selectedTrack) {
+          return false;
+        }
+      }
+
+      // 3. Status Filter
       if (statusFilter === 'registered') {
         if (!reg.is_registered) return false;
       } else if (statusFilter === 'unregistered') {
@@ -187,14 +207,14 @@ export default function CenterCampRegistrationsView({
         if (!reg.is_cancelled) return false;
       }
 
-      // 3. Search Term
+      // 4. Search Term (Matches Name, Email, Phone, Passcode, Camp Title, Camp Track, Counselor)
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const matchesName = (reg.participant_name || '').toLowerCase().includes(q);
         const matchesEmail = (reg.email || '').toLowerCase().includes(q);
         const matchesPhone = (reg.whatsapp || '').toLowerCase().includes(q) || (reg.poc_contact || '').toLowerCase().includes(q);
         const matchesPasscode = (reg.passcode || '').toLowerCase().includes(q);
-        const matchesCamp = (reg.camp_title || '').toLowerCase().includes(q);
+        const matchesCamp = (reg.camp_title || '').toLowerCase().includes(q) || (reg.camp_track || '').toLowerCase().includes(q);
         const matchesCounselor = (reg.counselor_name || '').toLowerCase().includes(q);
 
         if (!matchesName && !matchesEmail && !matchesPhone && !matchesPasscode && !matchesCamp && !matchesCounselor) {
@@ -206,7 +226,7 @@ export default function CenterCampRegistrationsView({
     }).sort((a, b) =>
       (a.participant_name || '').localeCompare(b.participant_name || '', undefined, { sensitivity: 'base' })
     );
-  }, [registrations, selectedCampId, statusFilter, searchTerm]);
+  }, [registrations, selectedCampId, selectedTrack, statusFilter, searchTerm]);
 
   // Pagination Calculations
   const totalPages = Math.max(1, Math.ceil(filteredRegistrations.length / pageSize));
@@ -477,14 +497,14 @@ export default function CenterCampRegistrationsView({
           </button>
         </div>
 
-        {/* Search & Camp Filter Dropdowns */}
+        {/* Search & Camp / Track Filter Dropdowns */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 sm:gap-2.5 items-center pt-1 border-t border-slate-100">
           {/* Search Devotee */}
-          <div className="relative group sm:col-span-2 lg:col-span-7">
+          <div className={`relative group sm:col-span-2 ${distinctTracks.length > 0 ? 'lg:col-span-5' : 'lg:col-span-7'}`}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search devotee name, phone, email, counselor, passcode..."
+              placeholder="Search devotee name, phone, camp, counselor, passcode..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl focus:ring-2 focus:ring-orange-100 text-xs font-medium transition-all shadow-2xs outline-none"
@@ -499,14 +519,14 @@ export default function CenterCampRegistrationsView({
             )}
           </div>
 
-          {/* Camp Filter Dropdown */}
-          <div className="relative sm:col-span-1 lg:col-span-5">
+          {/* Camp Event Filter Dropdown */}
+          <div className={`relative sm:col-span-1 ${distinctTracks.length > 0 ? 'lg:col-span-3' : 'lg:col-span-5'}`}>
             <select
               value={selectedCampId}
               onChange={(e) => setSelectedCampId(e.target.value)}
               className="w-full pl-8 pr-7 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors outline-none"
             >
-              <option value="all">All Camps ({distinctCamps.length})</option>
+              <option value="all">All Events ({distinctCamps.length})</option>
               {distinctCamps.map((camp) => (
                 <option key={camp.id} value={camp.id}>
                   {camp.title}
@@ -516,19 +536,43 @@ export default function CenterCampRegistrationsView({
             <Tent className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
           </div>
+
+          {/* Specific Camp / Track Filter Dropdown */}
+          {distinctTracks.length > 0 && (
+            <div className="relative sm:col-span-1 lg:col-span-4">
+              <select
+                value={selectedTrack}
+                onChange={(e) => setSelectedTrack(e.target.value)}
+                className="w-full pl-8 pr-7 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-orange-500 rounded-xl appearance-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-700 shadow-2xs cursor-pointer transition-colors outline-none"
+              >
+                <option value="all">All Camps / Tracks ({distinctTracks.length})</option>
+                {distinctTracks.map(([trackName, count]) => (
+                  <option key={trackName} value={trackName}>
+                    {trackName} ({count})
+                  </option>
+                ))}
+              </select>
+              <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            </div>
+          )}
         </div>
 
         {/* Filter Summary */}
         <div className="flex items-center justify-between text-xs text-slate-500 pt-1.5 border-t border-slate-100 flex-wrap gap-2">
           <span>
             Showing <strong className="text-slate-900 font-bold">{filteredRegistrations.length === 0 ? 0 : startIndex + 1}–{endIndex}</strong> of <strong className="text-slate-900 font-bold">{filteredRegistrations.length}</strong> devotees from <strong className="text-orange-900 font-bold">{selectedCenter}</strong>
+            {selectedTrack !== 'all' && (
+              <span className="ml-1 text-orange-700 font-bold">in {selectedTrack}</span>
+            )}
           </span>
 
-          {(searchTerm || selectedCampId !== 'all' || statusFilter !== 'all') && (
+          {(searchTerm || selectedCampId !== 'all' || selectedTrack !== 'all' || statusFilter !== 'all') && (
             <button
               onClick={() => {
                 setSearchTerm('');
                 setSelectedCampId('all');
+                setSelectedTrack('all');
                 setStatusFilter('all');
               }}
               className="text-rose-600 hover:text-rose-700 font-bold text-xs flex items-center gap-1 cursor-pointer"
@@ -634,16 +678,16 @@ export default function CenterCampRegistrationsView({
                   </div>
 
                   {/* Camp Information Strip (for registered devotees) */}
-                  {reg.is_registered && reg.camp_title && (
+                  {reg.is_registered && (reg.camp_title || reg.camp_track) && (
                     <div className="rounded-lg bg-orange-50/70 border border-orange-200/80 px-2 py-1 space-y-0.5">
                       <div className="flex items-center justify-between gap-1 text-[11px]">
                         <div className="flex items-center gap-1 min-w-0 font-bold text-orange-950 truncate">
                           <Tent className="w-3 h-3 text-orange-600 shrink-0" />
-                          <span className="truncate">{reg.camp_title}</span>
+                          <span className="truncate font-black">{reg.camp_track || reg.camp_title}</span>
                         </div>
                         {reg.camp_track && (
                           <span className="px-1.5 py-0.2 rounded text-[8.5px] font-extrabold bg-white text-orange-900 border border-orange-300 shadow-2xs whitespace-nowrap shrink-0">
-                            {reg.camp_track}
+                            {reg.camp_title}
                           </span>
                         )}
                       </div>
@@ -720,7 +764,7 @@ export default function CenterCampRegistrationsView({
                   <tr className="bg-slate-50/80 border-b border-slate-200 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider">
                     <th className="px-4 py-3">Devotee</th>
                     <th className="px-3 py-3">Contact</th>
-                    <th className="px-3 py-3">Camp & Venue</th>
+                    <th className="px-3 py-3">Camp / Track & Venue</th>
                     <th className="px-3 py-3">Camp Dates</th>
                     <th className="px-3 py-3 text-center">Status</th>
                     <th className="px-3 py-3 text-right">Fee</th>
@@ -775,18 +819,40 @@ export default function CenterCampRegistrationsView({
                           <div className="text-[10px] text-slate-400 truncate max-w-[130px]">{reg.email || '—'}</div>
                         </td>
 
-                        {/* Camp & Venue */}
+                        {/* Camp / Track & Venue */}
                         <td className="px-3 py-3">
-                          {reg.is_registered && reg.camp_title ? (
-                            <>
-                              <div className="font-bold text-slate-900 truncate max-w-[170px]" title={reg.camp_title}>
-                                {reg.camp_title}
+                          {reg.is_registered && (reg.camp_title || reg.camp_track) ? (
+                            <div className="space-y-0.5">
+                              {/* Specific Camp / Track Name */}
+                              {reg.camp_track ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-black text-slate-900 text-xs tracking-tight" title={reg.camp_track}>
+                                    {reg.camp_track}
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-orange-100 text-orange-900 border border-orange-300 shrink-0">
+                                    Camp
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="font-bold text-slate-900 text-xs truncate max-w-[170px]" title={reg.camp_title}>
+                                  {reg.camp_title}
+                                </div>
+                              )}
+
+                              {/* Overarching Event & Venue */}
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate max-w-[200px]" title={`${reg.camp_title || ''}${reg.camp_venue ? ` • ${reg.camp_venue}` : ''}`}>
+                                {reg.camp_track && (
+                                  <span className="text-slate-600 font-medium truncate">{reg.camp_title}</span>
+                                )}
+                                {reg.camp_venue && (
+                                  <>
+                                    {reg.camp_track && <span className="text-slate-300">•</span>}
+                                    <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                    <span className="truncate">{reg.camp_venue}</span>
+                                  </>
+                                )}
                               </div>
-                              <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate max-w-[170px]">
-                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{reg.camp_venue || 'Venue confirmed'}</span>
-                              </div>
-                            </>
+                            </div>
                           ) : (
                             <span className="text-[11px] text-slate-400 italic">No camp pass booked</span>
                           )}
