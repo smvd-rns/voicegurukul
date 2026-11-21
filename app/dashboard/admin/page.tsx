@@ -218,6 +218,14 @@ export default function AdminDashboardPage() {
             color: 'text-orange-600',
             bgColor: 'bg-orange-100',
         },
+        {
+            title: 'Database Backups',
+            description: 'Automated 1 AM Drive backups & spreadsheet snapshots',
+            icon: Database,
+            href: '/dashboard/admin/backups',
+            color: 'text-emerald-600',
+            bgColor: 'bg-emerald-100',
+        },
     ];
 
     return (
