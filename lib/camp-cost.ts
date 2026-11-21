@@ -392,9 +392,17 @@ export function formatParticipantDateRange(
         const ed = new Date(campEndDate);
         if (!isNaN(ed.getTime())) endYear = ed.getFullYear();
       }
-      if (startStr.includes('Dec') && endStr.includes('Jan')) {
+
+      // If both start and end dates fall in the same month period (e.g. both in December),
+      // ensure endYear stays aligned with startYear rather than the multi-week camp's next year.
+      if (startStr.includes('Dec') && endStr.includes('Dec')) {
+        endYear = startYear;
+      } else if (startStr.includes('Jan') && endStr.includes('Jan')) {
+        startYear = endYear;
+      } else if (startStr.includes('Dec') && endStr.includes('Jan')) {
         endYear = startYear + 1;
       }
+
       if (startYear === endYear) {
         return `${startStr} - ${endStr} ${startYear}`;
       }

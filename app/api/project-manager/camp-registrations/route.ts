@@ -145,12 +145,18 @@ export async function GET(req: NextRequest) {
         cr.poc_contact,
         cr.group_id,
         cr.created_at,
+        cr.first_meal_date,
+        cr.first_meal_type,
+        cr.last_meal_date,
+        cr.last_meal_type,
         c.title AS camp_title,
         c.slug AS camp_slug,
         c.start_date AS camp_start_date,
         c.end_date AS camp_end_date,
         c.venue AS camp_venue,
-        c.status AS camp_status
+        c.status AS camp_status,
+        c.meal_pricing AS camp_meal_pricing,
+        c.special_waivers AS camp_special_waivers
       FROM camp_registrations cr
       JOIN camps c ON c.id = cr.camp_id
       WHERE (

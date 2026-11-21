@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
+import { formatParticipantDateRange } from '@/lib/camp-cost';
 
 export interface CampAttendee {
   id: string;
@@ -57,12 +58,18 @@ export interface CampAttendee {
   poc_contact?: string;
   group_id?: string;
   created_at?: string;
+  first_meal_date?: string;
+  first_meal_type?: string;
+  last_meal_date?: string;
+  last_meal_type?: string;
   camp_title?: string;
   camp_slug?: string;
   camp_start_date?: string;
   camp_end_date?: string;
   camp_venue?: string;
   camp_status?: string;
+  camp_meal_pricing?: any[];
+  camp_special_waivers?: any;
 }
 
 interface CenterCampRegistrationsViewProps {
@@ -257,6 +264,50 @@ export default function CenterCampRegistrationsView({
     } catch {
       return `${startDateStr.slice(5, 10)} → ${endDateStr.slice(0, 10)}`;
     }
+  };
+
+  const formatDevoteeAttendingDates = (reg: CampAttendee): { primary: string; subtext?: string } => {
+    if (!reg.is_registered) {
+      return { primary: '—' };
+    }
+
+    let firstDate = reg.first_meal_date;
+    let lastDate = reg.last_meal_date;
+
+    // Fallback to track dates if first/last meal dates not explicitly saved
+    if ((!firstDate || !lastDate) && reg.camp_track && reg.camp_special_waivers?.track_fees) {
+      const tf = reg.camp_special_waivers.track_fees.find(
+        (t: any) => (t.track || '').trim().toLowerCase() === (reg.camp_track || '').trim().toLowerCase()
+      );
+      if (tf) {
+        if (!firstDate && tf.start_date) firstDate = String(tf.start_date);
+        if (!lastDate && tf.end_date) lastDate = String(tf.end_date);
+      }
+    }
+
+    if (firstDate && lastDate) {
+      const formatted = formatParticipantDateRange(
+        firstDate,
+        lastDate,
+        reg.camp_start_date,
+        reg.camp_end_date,
+        reg.camp_meal_pricing,
+        true
+      ).replace(' - ', ' → ');
+
+      let mealSubtext = '';
+      if (reg.first_meal_type && reg.last_meal_type) {
+        mealSubtext = `${reg.first_meal_type} → ${reg.last_meal_type}`;
+      }
+
+      return { primary: formatted, subtext: mealSubtext || undefined };
+    }
+
+    if (reg.camp_start_date && reg.camp_end_date) {
+      return { primary: formatCampDates(reg.camp_start_date, reg.camp_end_date), subtext: 'Full Camp' };
+    }
+
+    return { primary: '—' };
   };
 
   return (
@@ -692,18 +743,24 @@ export default function CenterCampRegistrationsView({
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between gap-1 text-[9.5px] text-orange-900/80 font-medium">
-                        <span className="flex items-center gap-0.5 font-semibold truncate">
-                          <Calendar className="w-2.5 h-2.5 text-orange-500 shrink-0" />
-                          {formatCampDatesCompact(reg.camp_start_date, reg.camp_end_date)}
-                        </span>
-                        {reg.camp_venue && (
-                          <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9px]">
-                            <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            <span className="truncate max-w-[120px]">{reg.camp_venue}</span>
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const attending = formatDevoteeAttendingDates(reg);
+                        return (
+                          <div className="flex items-center justify-between gap-1 text-[9.5px] text-orange-900/80 font-medium">
+                            <span className="flex items-center gap-0.5 font-bold truncate text-orange-950" title={attending.subtext ? `${attending.primary} (${attending.subtext})` : attending.primary}>
+                              <Calendar className="w-2.5 h-2.5 text-orange-500 shrink-0" />
+                              <span>{attending.primary}</span>
+                              {attending.subtext && <span className="text-[8.5px] text-orange-700/80 font-normal ml-0.5">({attending.subtext})</span>}
+                            </span>
+                            {reg.camp_venue && (
+                              <span className="flex items-center gap-0.5 text-slate-500 truncate text-[9px]">
+                                <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                <span className="truncate max-w-[120px]">{reg.camp_venue}</span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -765,7 +822,7 @@ export default function CenterCampRegistrationsView({
                     <th className="px-4 py-3">Devotee</th>
                     <th className="px-3 py-3">Contact</th>
                     <th className="px-3 py-3">Camp / Track & Venue</th>
-                    <th className="px-3 py-3">Camp Dates</th>
+                    <th className="px-3 py-3">Attending Dates</th>
                     <th className="px-3 py-3 text-center">Status</th>
                     <th className="px-3 py-3 text-right">Fee</th>
                     <th className="px-4 py-3 text-center">Follow-up</th>
@@ -858,16 +915,27 @@ export default function CenterCampRegistrationsView({
                           )}
                         </td>
 
-                        {/* Camp Dates */}
+                        {/* Attending Dates */}
                         <td className="px-3 py-3 whitespace-nowrap">
-                          {reg.is_registered && reg.camp_start_date && reg.camp_end_date ? (
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-900 font-bold text-[11px] border border-orange-200">
-                              <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
-                              <span>{formatCampDates(reg.camp_start_date, reg.camp_end_date)}</span>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
+                          {(() => {
+                            const attending = formatDevoteeAttendingDates(reg);
+                            if (!reg.is_registered || attending.primary === '—') {
+                              return <span className="text-slate-400">—</span>;
+                            }
+                            return (
+                              <div className="space-y-0.5">
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-950 font-extrabold text-[11px] border border-orange-200">
+                                  <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                                  <span>{attending.primary}</span>
+                                </div>
+                                {attending.subtext && (
+                                  <div className="text-[9.5px] text-slate-500 font-semibold pl-1">
+                                    {attending.subtext}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Status */}
