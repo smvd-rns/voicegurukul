@@ -412,16 +412,18 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
   return (
     <div className="space-y-4">
       {/* Top Header & Refresh */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
-        <div>
-          <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-amber-600" />
-            <span>Financial Audit &amp; Reconciliation</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 sm:p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0" />
+            <h2 className="text-sm sm:text-lg font-black text-slate-900 truncate">
+              Financial Audit &amp; Reconciliation
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
               {camp.title}
             </span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          </div>
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
             Verified ledger comparing bank/gateway receipts against Gurukul camp registrations for complete accountability.
           </p>
         </div>
@@ -430,7 +432,7 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
           type="button"
           onClick={loadAuditData}
           disabled={loading}
-          className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
+          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto shrink-0 cursor-pointer shadow-2xs"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : ''}`} />
           <span>Refresh Audit</span>
@@ -468,66 +470,76 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
       )}
 
       {/* Summary Metrics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Net Cash Received</span>
-          <div className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
-            ₹{metrics.netCashReceived.toLocaleString('en-IN')}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Net Cash Received</span>
+            <div className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+              ₹{metrics.netCashReceived.toLocaleString('en-IN')}
+            </div>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">
-            {metrics.confirmedCount} Confirmed Bookings
+          <span className="text-[9.5px] sm:text-[10px] text-slate-400 block mt-1">
+            {metrics.confirmedCount} Confirmed
           </span>
         </div>
 
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <CreditCard className="w-3 h-3 text-emerald-600" />
-              <span>Razorpay Online</span>
+        <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1 min-w-0">
+                <CreditCard className="w-3 h-3 text-emerald-600 shrink-0" />
+                <span className="truncate">Razorpay</span>
+              </span>
+              <span className="text-[8px] sm:text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.2 rounded shrink-0">
+                Gateway
+              </span>
             </span>
-            <span className="text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
-              Gateway
-            </span>
-          </span>
-          <div className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">
-            ₹{metrics.rzpInflow.toLocaleString('en-IN')}
+            <div className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">
+              ₹{metrics.rzpInflow.toLocaleString('en-IN')}
+            </div>
           </div>
-          <div className="text-[9.5px] sm:text-[10px] text-slate-500 font-semibold mt-0.5 space-y-0.5 leading-tight">
-            <div>Paid: <strong className="text-indigo-950 font-bold">₹{metrics.rzpGrossPaid.toLocaleString('en-IN')}</strong></div>
-            <div className="text-emerald-700 font-bold">Camp: ₹{metrics.rzpInflow.toLocaleString('en-IN')} &bull; Fee: +₹{metrics.rzpSurchargeTotal.toLocaleString('en-IN')}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-1 truncate">
+            <span>Paid: <strong className="text-indigo-950 font-bold">₹{metrics.rzpGrossPaid.toLocaleString('en-IN')}</strong></span>
+            {metrics.rzpSurchargeTotal > 0 && (
+              <span className="text-emerald-700 font-bold ml-1">(+₹{metrics.rzpSurchargeTotal.toLocaleString('en-IN')})</span>
+            )}
           </div>
         </div>
 
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider block flex items-center gap-1">
-            <Landmark className="w-3 h-3 text-teal-600" />
-            <span>Transfers (ITT / IDT)</span>
-          </span>
-          <div className="text-base sm:text-lg font-black text-teal-700 mt-0.5">
-            ₹{metrics.transfersInflow.toLocaleString('en-IN')}
+        <div className="p-2.5 sm:p-3 bg-white rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div>
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-teal-700 uppercase tracking-wider block flex items-center gap-1">
+              <Landmark className="w-3 h-3 text-teal-600 shrink-0" />
+              <span className="truncate">Transfers</span>
+            </span>
+            <div className="text-base sm:text-lg font-black text-teal-700 mt-0.5">
+              ₹{metrics.transfersInflow.toLocaleString('en-IN')}
+            </div>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">
+          <span className="text-[9.5px] sm:text-[10px] text-slate-400 block mt-1 truncate" title={metrics.pendingTransfersAmount > 0 ? `Approved (₹${metrics.pendingTransfersAmount.toLocaleString('en-IN')} pending)` : 'Offline Transfers'}>
             {metrics.pendingTransfersAmount > 0
-              ? `Approved Inflow (₹${metrics.pendingTransfersAmount.toLocaleString('en-IN')} pending)`
-              : 'Approved Offline Bank Transfers'}
+              ? `Approved (+₹${metrics.pendingTransfersAmount.toLocaleString('en-IN')} pend)`
+              : 'Offline Transfers'}
           </span>
         </div>
 
-        <div className={`p-3 rounded-xl border shadow-2xs ${metrics.missingBookingsCount > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-200'}`}>
-          <span className={`text-[10px] font-bold uppercase tracking-wider block ${metrics.missingBookingsCount > 0 ? 'text-rose-700' : 'text-slate-500'}`}>
-            Missing Bookings
-          </span>
-          <div className={`text-base sm:text-lg font-black mt-0.5 ${metrics.missingBookingsCount > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
-            {metrics.missingBookingsCount}
+        <div className={`p-2.5 sm:p-3 rounded-xl border shadow-2xs flex flex-col justify-between ${metrics.missingBookingsCount > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-200'}`}>
+          <div>
+            <span className={`text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider block truncate ${metrics.missingBookingsCount > 0 ? 'text-rose-700' : 'text-slate-500'}`}>
+              Missing Bookings
+            </span>
+            <div className={`text-base sm:text-lg font-black mt-0.5 ${metrics.missingBookingsCount > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+              {metrics.missingBookingsCount}
+            </div>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">
-            {metrics.missingBookingsCount > 0 ? `₹${metrics.missingBookingsAmount.toLocaleString('en-IN')} unconfirmed` : 'All payments reconciled'}
+          <span className="text-[9.5px] sm:text-[10px] text-slate-400 block mt-1 truncate">
+            {metrics.missingBookingsCount > 0 ? `₹${metrics.missingBookingsAmount.toLocaleString('en-IN')} unconfirmed` : 'All reconciled'}
           </span>
         </div>
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center gap-2 p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-center gap-2 p-2.5 sm:p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -539,15 +551,15 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full sm:w-auto px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="all">All Statuses ({transactions.length})</option>
             <option value="missing_booking">⚠️ Missing Booking ({metrics.missingBookingsCount})</option>
-            <option value="confirmed">Confirmed Bookings ({metrics.confirmedCount})</option>
+            <option value="confirmed">Confirmed ({metrics.confirmedCount})</option>
             <option value="failed">Failed Attempts</option>
             <option value="abandoned">Abandoned Orders</option>
           </select>
@@ -555,7 +567,7 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
           <select
             value={methodFilter}
             onChange={e => setMethodFilter(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full sm:w-auto px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="all">All Methods</option>
             <option value="RAZORPAY">Razorpay</option>
@@ -600,120 +612,240 @@ export default function CampFinancialAuditTab({ camp, userAccess }: CampFinancia
               return (
                 <div
                   key={txn.txn_id || idx}
-                  className={`p-3.5 sm:p-4 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  className={`transition-colors ${
                     isMissingBooking ? 'bg-rose-50/50 hover:bg-rose-50' : 'hover:bg-slate-50'
                   }`}
                 >
-                  {/* Left: Devotee & Transaction Details */}
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-extrabold text-sm text-slate-900">
-                        {txn.poc_name || 'Devotee'}
-                      </span>
-                      {txn.participant_count > 1 && (
-                        <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          {txn.participant_count} Devotees
+                  {/* MOBILE VIEW CARD (<sm) */}
+                  <div className="block sm:hidden p-2.5 space-y-1.5">
+                    {/* Row 1: Devotee Name, Status & Camp Fee */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+                        <span className="font-extrabold text-xs text-slate-900 truncate">
+                          {txn.poc_name || 'Devotee'}
                         </span>
-                      )}
+                        {txn.participant_count > 1 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {txn.participant_count} Devotees
+                          </span>
+                        )}
 
-                      {/* Status Badges */}
-                      {isMissingBooking && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white flex items-center gap-1 shadow-2xs animate-pulse">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>MISSING BOOKING (ACTION NEEDED)</span>
-                        </span>
-                      )}
-                      {isConfirmed && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-emerald-600" />
-                          <span>CONFIRMED</span>
-                        </span>
-                      )}
-                      {isFailed && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                          FAILED ATTEMPT
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
-                      {txn.poc_contact && <span>📞 {txn.poc_contact}</span>}
-                      {txn.email && <span>✉️ {txn.email}</span>}
-                      <span>📅 {new Date(txn.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 pt-0.5">
-                      <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-sans font-bold">
-                        {txn.payment_method}
-                      </span>
-                      {txn.payment_id && (
-                        <span>
-                          Pay: <code className="text-slate-800">{txn.payment_id}</code>
-                        </span>
-                      )}
-                      {txn.order_id && (
-                        <span>
-                          Order: <code className="text-slate-800">{txn.order_id}</code>
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(txn.payment_id || txn.txn_id, txn.txn_id)}
-                        className="text-[10px] text-amber-600 hover:text-amber-800 cursor-pointer flex items-center gap-0.5"
-                      >
-                        {copiedTxnId === txn.txn_id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedTxnId === txn.txn_id ? 'Copied' : 'Copy'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Right: Amount & Action Buttons */}
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                    <div className="text-right">
-                      <div className="flex items-baseline justify-end gap-1">
-                        <span className="text-base sm:text-lg font-black text-slate-900">
-                          ₹{Number(txn.total_amount || 0).toLocaleString('en-IN')}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-bold">
-                          Camp Fee
-                        </span>
+                        {/* Status Badges */}
+                        {isMissingBooking && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-600 text-white flex items-center gap-0.5 shadow-2xs animate-pulse">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            <span>ACTION NEEDED</span>
+                          </span>
+                        )}
+                        {isConfirmed && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-0.5">
+                            <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
+                            <span>CONFIRMED</span>
+                          </span>
+                        )}
+                        {isFailed && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            FAILED
+                          </span>
+                        )}
                       </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-black text-slate-900">
+                          ₹{Number(txn.total_amount || 0).toLocaleString('en-IN')}
+                          <span className="text-[9px] font-medium text-slate-500 ml-1">Fee</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Contact, Date & Paid / Surcharge */}
+                    <div className="flex items-center justify-between text-[10.5px] text-slate-500 gap-2">
+                      <div className="flex items-center gap-2 truncate text-slate-600 font-medium">
+                        {txn.poc_contact && <span>📞 {txn.poc_contact}</span>}
+                        <span>📅 {new Date(txn.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                      </div>
+
                       {txn.payment_method === 'RAZORPAY' && Boolean((txn.gross_paid_amount || 0) > Number(txn.total_amount || 0) || txn.gateway_surcharge) ? (
-                        <div className="text-[10px] text-indigo-700 font-extrabold mt-0.5" title="Total amount charged at Razorpay gateway">
-                          Paid: ₹{(txn.gross_paid_amount || (Number(txn.total_amount) + (txn.gateway_surcharge || 0))).toLocaleString('en-IN')} <span className="font-medium text-slate-500">(incl. ₹{txn.gateway_surcharge ?? Math.max(0, (txn.gross_paid_amount || 0) - Number(txn.total_amount))} fee)</span>
+                        <div className="text-[9.5px] text-indigo-700 font-bold shrink-0">
+                          Paid: ₹{(txn.gross_paid_amount || (Number(txn.total_amount) + (txn.gateway_surcharge || 0))).toLocaleString('en-IN')}
+                          <span className="text-slate-400 font-normal ml-0.5">(+₹{txn.gateway_surcharge ?? Math.max(0, (txn.gross_paid_amount || 0) - Number(txn.total_amount))})</span>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-slate-400 block">
-                          {isMissingBooking ? 'Razorpay Received' : 'Net Received'}
+                        <span className="text-[9px] text-slate-400 shrink-0">
+                          {isMissingBooking ? 'Gateway Received' : 'Reconciled'}
                         </span>
                       )}
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-1.5">
-                      {isMissingBooking && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openReconcileModal(txn)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Approve &amp; Confirm Booking</span>
-                          </button>
+                    {/* Row 3: Payment ID / Order ID & Copy Bar */}
+                    <div className="flex items-center justify-between gap-1.5 pt-0.5 text-[10px] text-slate-500 bg-slate-50/80 px-2 py-1 rounded-lg border border-slate-100">
+                      <div className="flex items-center gap-1.5 min-w-0 font-mono">
+                        <span className="px-1 py-0.2 bg-white border border-slate-200 rounded text-slate-700 font-sans font-extrabold text-[8.5px] uppercase shrink-0">
+                          {txn.payment_method === 'RAZORPAY' ? 'RZP' : txn.payment_method}
+                        </span>
+                        {txn.payment_id ? (
+                          <span className="truncate text-slate-700 font-medium text-[9.5px]" title={txn.payment_id}>
+                            {txn.payment_id}
+                          </span>
+                        ) : txn.order_id ? (
+                          <span className="truncate text-slate-700 font-medium text-[9.5px]" title={txn.order_id}>
+                            {txn.order_id}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic font-sans text-[9px]">Direct Entry</span>
+                        )}
+                      </div>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedTxn(txn);
-                              setSettleModalOpen(true);
-                            }}
-                            className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                          >
-                            Settle Externally
-                          </button>
-                        </>
+                      {(txn.payment_id || txn.order_id || txn.txn_id) && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(txn.payment_id || txn.order_id || txn.txn_id, txn.txn_id)}
+                          className="text-[9.5px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2 py-0.5 rounded cursor-pointer flex items-center gap-1 shrink-0 transition-colors"
+                        >
+                          {copiedTxnId === txn.txn_id ? <Check className="w-2.5 h-2.5 text-emerald-600" /> : <Copy className="w-2.5 h-2.5" />}
+                          <span>{copiedTxnId === txn.txn_id ? 'Copied' : 'Copy'}</span>
+                        </button>
                       )}
+                    </div>
+
+                    {/* Row 4 (Action Buttons for Missing Bookings) */}
+                    {isMissingBooking && (
+                      <div className="pt-1 flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openReconcileModal(txn)}
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Approve &amp; Confirm Booking</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTxn(txn);
+                            setSettleModalOpen(true);
+                          }}
+                          className="w-full py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                        >
+                          Settle Externally
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DESKTOP VIEW ROW (>=sm) */}
+                  <div className="hidden sm:flex sm:items-center justify-between gap-3 p-3.5 sm:p-4">
+                    {/* Left: Devotee & Transaction Details */}
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-sm text-slate-900">
+                          {txn.poc_name || 'Devotee'}
+                        </span>
+                        {txn.participant_count > 1 && (
+                          <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {txn.participant_count} Devotees
+                          </span>
+                        )}
+
+                        {/* Status Badges */}
+                        {isMissingBooking && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white flex items-center gap-1 shadow-2xs animate-pulse">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>MISSING BOOKING (ACTION NEEDED)</span>
+                          </span>
+                        )}
+                        {isConfirmed && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3 text-emerald-600" />
+                            <span>CONFIRMED</span>
+                          </span>
+                        )}
+                        {isFailed && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            FAILED ATTEMPT
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
+                        {txn.poc_contact && <span>📞 {txn.poc_contact}</span>}
+                        {txn.email && <span>✉️ {txn.email}</span>}
+                        <span>📅 {new Date(txn.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 pt-0.5">
+                        <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-sans font-bold">
+                          {txn.payment_method}
+                        </span>
+                        {txn.payment_id && (
+                          <span>
+                            Pay: <code className="text-slate-800">{txn.payment_id}</code>
+                          </span>
+                        )}
+                        {txn.order_id && (
+                          <span>
+                            Order: <code className="text-slate-800">{txn.order_id}</code>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(txn.payment_id || txn.txn_id, txn.txn_id)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 cursor-pointer flex items-center gap-0.5"
+                        >
+                          {copiedTxnId === txn.txn_id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedTxnId === txn.txn_id ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Right: Amount & Action Buttons */}
+                    <div className="flex flex-col items-end justify-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <div className="flex items-baseline justify-end gap-1">
+                          <span className="text-base sm:text-lg font-black text-slate-900">
+                            ₹{Number(txn.total_amount || 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-bold">
+                            Camp Fee
+                          </span>
+                        </div>
+                        {txn.payment_method === 'RAZORPAY' && Boolean((txn.gross_paid_amount || 0) > Number(txn.total_amount || 0) || txn.gateway_surcharge) ? (
+                          <div className="text-[10px] text-indigo-700 font-extrabold mt-0.5" title="Total amount charged at Razorpay gateway">
+                            Paid: ₹{(txn.gross_paid_amount || (Number(txn.total_amount) + (txn.gateway_surcharge || 0))).toLocaleString('en-IN')} <span className="font-medium text-slate-500">(incl. ₹{txn.gateway_surcharge ?? Math.max(0, (txn.gross_paid_amount || 0) - Number(txn.total_amount))} fee)</span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 block">
+                            {isMissingBooking ? 'Razorpay Received' : 'Net Received'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1.5">
+                        {isMissingBooking && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openReconcileModal(txn)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Approve &amp; Confirm Booking</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTxn(txn);
+                                setSettleModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                            >
+                              Settle Externally
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
