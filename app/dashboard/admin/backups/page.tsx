@@ -262,12 +262,12 @@ export default function DatabaseBackupsPage() {
           <div className="text-xs sm:text-sm font-black text-slate-900 mt-1 truncate">
             {stats.lastBackupAt
               ? new Date(stats.lastBackupAt).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })
               : 'None yet'}
           </div>
           <span className="text-[10px] text-slate-400 block mt-0.5">
@@ -400,11 +400,10 @@ export default function DatabaseBackupsPage() {
                       <td className="px-3 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider ${
-                              item.trigger_type === 'scheduled'
+                            className={`px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider ${item.trigger_type === 'scheduled'
                                 ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                 : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
+                              }`}
                           >
                             {item.trigger_type === 'scheduled' ? 'Nightly 1 AM' : 'Manual'}
                           </span>
