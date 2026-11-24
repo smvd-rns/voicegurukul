@@ -53,18 +53,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Valid login session required to manage POCs' }, { status: 401 });
     }
 
-    // Role verification: Require leadership or administrative privileges
-    const uRes = await query('SELECT role FROM users WHERE id = $1', [effectiveUserId]);
-    if (uRes.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
-    }
-    const roles = Array.isArray(uRes.rows[0].role) ? uRes.rows[0].role : [uRes.rows[0].role];
-    const roleNums = roles.map((r: any) => Number(r)).filter((r: number) => !isNaN(r));
-    const isAuthorized = roleNums.some((r: number) => r >= 2) || roles.some((r: any) => String(r).toLowerCase().includes('admin'));
-    if (!isAuthorized) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Leadership or administrative privileges required to manage POCs' }, { status: 403 });
-    }
-
     if (!campId || !centerName || !pocName || !pocPhone) {
       return NextResponse.json({
         success: false,
