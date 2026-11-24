@@ -44,6 +44,7 @@ jobs:
           SSHPASS: ${{ secrets.DROPLET_PASSWORD }}
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
           DROPLET_USER: ${{ secrets.DROPLET_USER }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           echo "Installing OpenSSH tools..."
           sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
@@ -57,9 +58,20 @@ jobs:
           fi
 
           echo "Connecting to droplet to extract build and restart server..."
-          sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 ${DROPLET_USER}@${DROPLET_HOST} << 'EOF'
+          sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 ${DROPLET_USER}@${DROPLET_HOST} "CRON_SECRET='$CRON_SECRET' bash -s" << 'EOF'
             set -e
             cd /var/www/voicegurukul
+
+            # Inject or update CRON_SECRET in droplet .env if provided in GitHub Secrets
+            if [ -n "$CRON_SECRET" ]; then
+              touch .env
+              if grep -q "^CRON_SECRET=" .env; then
+                sed -i "s|^CRON_SECRET=.*|CRON_SECRET=$CRON_SECRET|" .env
+              else
+                echo "CRON_SECRET=$CRON_SECRET" >> .env
+              fi
+              echo "CRON_SECRET updated in droplet .env successfully."
+            fi
 
             # Ensure branch is clean and strictly matches origin/main without merge conflicts
             git fetch origin main
