@@ -1315,8 +1315,10 @@ export default function CampRegistrationsAdminPage() {
   const pendingBatchesAmount = useMemo(() => filteredBatches.filter(b => b.status === 'processing').reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
   const approvedBatchesCount = useMemo(() => filteredBatches.filter(b => b.status === 'completed' || b.status === 'refunded').length, [filteredBatches]);
   const grossBatchesAmount = useMemo(() => {
-    return filteredBatches.filter(b => b.status === 'completed' || b.status === 'refunded').reduce((s, b) => s + (b.grossAmount || 0), 0);
-  }, [filteredBatches]);
+    return filteredBatches
+      .filter(b => batchStatusFilter === 'rejected' ? b.status === 'rejected' : b.status !== 'rejected')
+      .reduce((s, b) => s + (b.grossAmount || b.totalAmount || 0), 0);
+  }, [filteredBatches, batchStatusFilter]);
   const approvedBatchesAmount = useMemo(() => filteredBatches.filter(b => b.status !== 'processing' && b.status !== 'rejected').reduce((s, b) => s + b.totalAmount, 0), [filteredBatches]);
   const totalDevoteesInBatches = useMemo(() => filteredBatches.reduce((s, b) => s + (b.totalRegisteredCount || b.attendeesCount), 0), [filteredBatches]);
   const activeDevoteesInBatches = useMemo(() => filteredBatches.reduce((s, b) => s + (b.activeAttendeesCount || 0), 0), [filteredBatches]);
@@ -3179,7 +3181,7 @@ export default function CampRegistrationsAdminPage() {
               )}
             </div>
             <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 mt-0.5">
-              ₹{(isBatchFilterActive ? grossBatchesAmount : grossBilledTotal).toLocaleString('en-IN')}
+              ₹{grossBatchesAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium block truncate mt-0.5">
               {isBatchFilterActive ? (
@@ -3197,7 +3199,7 @@ export default function CampRegistrationsAdminPage() {
               <Tag className="w-3.5 h-3.5 text-orange-600" />
             </span>
             <div className="text-sm sm:text-base lg:text-lg font-black text-orange-700 mt-0.5">
-              -₹{(isBatchFilterActive ? totalDiscountAmount : totalDiscounts).toLocaleString('en-IN')}
+              -₹{totalDiscountAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-orange-900 font-semibold block truncate mt-0.5">
               {discountBatchesCount} Subsidized Batches
@@ -3211,7 +3213,7 @@ export default function CampRegistrationsAdminPage() {
               <Banknote className="w-3.5 h-3.5 text-emerald-600" />
             </span>
             <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-700 mt-0.5">
-              ₹{(isBatchFilterActive ? approvedBatchesAmount : totalGrossReceived).toLocaleString('en-IN')}
+              ₹{approvedBatchesAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-emerald-800 font-semibold block truncate mt-0.5">
               Inflow in Bank &amp; Gateway
@@ -3254,10 +3256,10 @@ export default function CampRegistrationsAdminPage() {
               <Undo2 className="w-3.5 h-3.5 text-purple-600" />
             </span>
             <div className="text-sm sm:text-base lg:text-lg font-black text-purple-700 mt-0.5">
-              ₹{(isBatchFilterActive ? batchRefundAmount : completedRefundAmount).toLocaleString('en-IN')}
+              ₹{batchRefundAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-purple-900 font-semibold block truncate mt-0.5">
-              {isBatchFilterActive ? `${batchRefundsCount} Refunded Batch(es)` : `${completedRefundsCount} Payout(s) Disbursed`}
+              {batchRefundsCount} {batchRefundsCount === 1 ? 'Refunded Batch' : 'Refunded Batches'}
             </span>
           </div>
 
@@ -3268,7 +3270,7 @@ export default function CampRegistrationsAdminPage() {
               <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
             </span>
             <div className="text-sm sm:text-base lg:text-lg font-black text-indigo-700 mt-0.5">
-              ₹{(isBatchFilterActive ? batchNetAvailableAmount : netAvailableAmount).toLocaleString('en-IN')}
+              ₹{batchNetAvailableAmount.toLocaleString('en-IN')}
             </div>
             <span className="text-[9px] sm:text-[10px] text-indigo-800 font-semibold block truncate mt-0.5">
               Inflow - Completed Refunds
