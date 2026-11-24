@@ -1642,11 +1642,29 @@ function CampDashboardContent() {
 
   // Active registered tracks for whoever is currently being registered
   const activeRegisteredTracks = useMemo(() => {
-    if (isManager && selectedDevotee) {
-      return selectedDevotee.registeredTracks || [];
+    if (isManager) {
+      if (entryMode === 'manual') {
+        const cleanP = (formData.whatsapp || '').replace(/[^0-9]/g, '').slice(-10);
+        const cleanE = (formData.email || '').trim().toLowerCase();
+        if (cleanP.length >= 10 || cleanE) {
+          const matched = centerDevotees.find((d) => {
+            const dPhone = (d.phone || '').replace(/[^0-9]/g, '').slice(-10);
+            const dEmail = (d.email || '').trim().toLowerCase();
+            return (cleanP.length >= 10 && dPhone === cleanP) || (cleanE && dEmail === cleanE);
+          });
+          if (matched) {
+            return matched.registeredTracks || [];
+          }
+        }
+        return [];
+      }
+      if (selectedDevotee) {
+        return selectedDevotee.registeredTracks || [];
+      }
+      return [];
     }
     return userRegisteredTracks;
-  }, [isManager, selectedDevotee, userRegisteredTracks]);
+  }, [isManager, entryMode, selectedDevotee, formData.whatsapp, formData.email, centerDevotees, userRegisteredTracks]);
 
   // Dynamically filter available camp tracks based on devotee chanting rounds & roles
   const availableTracksForDevotee = useMemo(() => {
@@ -1658,9 +1676,11 @@ function CampDashboardContent() {
       ? Number(formData.rounds)
       : 0;
 
-    const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
-    const attendeeRoyal = isManager && selectedDevotee
-      ? selectedDevotee.royalMember
+    const attendeeRole = isManager
+      ? (entryMode === 'manual' ? (formData.participantType === 'Volunteer' ? 'mentor' : 1) : (selectedDevotee ? selectedDevotee.role : 1))
+      : userData?.role;
+    const attendeeRoyal = isManager
+      ? (entryMode === 'manual' ? false : (selectedDevotee ? selectedDevotee.royalMember : false))
       : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
 
     const trackFees = selectedCamp?.special_waivers?.track_fees || [];
@@ -1681,7 +1701,7 @@ function CampDashboardContent() {
       }
       return true;
     });
-  }, [selectedCamp, formData.rounds, isManager, selectedDevotee, userData]);
+  }, [selectedCamp, formData.rounds, isManager, entryMode, selectedDevotee, formData.participantType, userData]);
 
   // If current campTrack is not in the filtered available tracks, auto-select the first available track
   useEffect(() => {
@@ -1704,8 +1724,30 @@ function CampDashboardContent() {
   // Check if current form track is already registered
   const isCurrentTrackAlreadyRegistered = useMemo(() => {
     if (!formData.campTrack) return false;
+
+    // Check if this attendee is already added to the CURRENT booking batch (entries)
+    const inCurrentBatch = entries.some((e, idx) => {
+      if (editIndex !== null && idx === editIndex) return false;
+      const sameTrack = (e.campTrack || '').trim().toLowerCase() === formData.campTrack.trim().toLowerCase();
+      if (!sameTrack) return false;
+
+      if (isManager) {
+        if (entryMode === 'select' && selectedDevoteeId && e.id === selectedDevoteeId) return true;
+        const ePhone = (e.whatsapp || '').replace(/[^0-9]/g, '').slice(-10);
+        const thisPhone = (formData.whatsapp || '').replace(/[^0-9]/g, '').slice(-10);
+        if (ePhone.length >= 10 && thisPhone.length >= 10 && ePhone === thisPhone) return true;
+        const eEmail = (e.email || '').trim().toLowerCase();
+        const thisEmail = (formData.email || '').trim().toLowerCase();
+        if (eEmail && thisEmail && eEmail === thisEmail) return true;
+      } else {
+        return true;
+      }
+      return false;
+    });
+    if (inCurrentBatch) return true;
+
     return activeRegisteredTracks.includes(formData.campTrack.trim());
-  }, [formData.campTrack, activeRegisteredTracks]);
+  }, [formData.campTrack, activeRegisteredTracks, entries, editIndex, isManager, entryMode, selectedDevoteeId, formData.whatsapp, formData.email]);
 
   const handleSelectDevotee = (devId: string) => {
     setSelectedDevoteeId(devId);
@@ -1879,7 +1921,9 @@ function CampDashboardContent() {
 
     // Prevent duplicate registration for the same track in this camp
     if (isCurrentTrackAlreadyRegistered) {
-      const personName = formData.participantName || (isManager && selectedDevotee ? selectedDevotee.name : 'Devotee');
+      const personName = isManager
+        ? (entryMode === 'manual' ? (formData.participantName || 'This devotee') : (selectedDevotee ? selectedDevotee.name : 'This devotee'))
+        : 'You';
       alert(`"${personName}" is already registered for track "${formData.campTrack}" in this camp. Please select a different track.`);
       return;
     }
@@ -1897,9 +1941,11 @@ function CampDashboardContent() {
 
     // Enforce sub-camp role requirement
     if (selectedTrackFeeObj?.applicable_roles && selectedTrackFeeObj.applicable_roles.length > 0) {
-      const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
-      const attendeeRoyal = isManager && selectedDevotee
-        ? selectedDevotee.royalMember
+      const attendeeRole = isManager
+        ? (entryMode === 'manual' ? (formData.participantType === 'Volunteer' ? 'mentor' : 1) : (selectedDevotee ? selectedDevotee.role : 1))
+        : userData?.role;
+      const attendeeRoyal = isManager
+        ? (entryMode === 'manual' ? false : (selectedDevotee ? selectedDevotee.royalMember : false))
         : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
       const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
       if (!isRoleEligible) {
@@ -4994,7 +5040,7 @@ function CampDashboardContent() {
                                   <div className="sm:col-span-2 -mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 flex items-center gap-2">
                                     <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
                                     <span>
-                                      {isManager && selectedDevotee ? selectedDevotee.name : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another camp.
+                                      {isManager ? (entryMode === 'manual' ? (formData.participantName || 'This devotee') : (selectedDevotee ? selectedDevotee.name : 'This devotee')) : 'You'} already registered for &quot;{formData.campTrack}&quot;. Please select another camp.
                                     </span>
                                   </div>
                                 )}
