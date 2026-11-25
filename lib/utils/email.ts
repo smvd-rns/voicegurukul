@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 import pool from '../db';
 import dns from 'dns/promises';
-import { formatParticipantMealDate, formatParticipantDateRange } from '@/lib/camp-cost';
+import { formatParticipantMealDate, formatParticipantDateRange } from '../camp-cost';
 
 // Force Node to prefer IPv4 DNS resolution (avoids broken IPv6 routing on hosting droplets)
 import { setDefaultResultOrder } from 'dns';

@@ -136,9 +136,14 @@ export async function POST(req: NextRequest) {
         const requiredMinRounds = trackFeeObj?.min_rounds ? Number(trackFeeObj.min_rounds) : 0;
         const entryRoundsNum = entry.rounds !== undefined && entry.rounds !== null && entry.rounds !== '' ? Number(entry.rounds) : 0;
         if (requiredMinRounds > 0 && entryRoundsNum < requiredMinRounds) {
-          return NextResponse.json({
-            error: `Participant "${entryName}" does not meet the chanting requirement for "${entryTrack}". Minimum ${requiredMinRounds} rounds required (Participant has ${entryRoundsNum} rounds).`
-          }, { status: 400 });
+          if (paymentMethod === 'RAZORPAY' && razorpay_payment_id) {
+            console.warn(`[Camp Register] Rounds mismatch: participant "${entryName}" has ${entryRoundsNum} rounds, requires ${requiredMinRounds}, but payment ${razorpay_payment_id} was already completed. Permitting pass creation with audit note.`);
+            entry._roundsWarning = `Chanting rounds warning: requires ${requiredMinRounds} rounds, participant has ${entryRoundsNum}. Pass granted under completed payment ${razorpay_payment_id}.`;
+          } else {
+            return NextResponse.json({
+              error: `Participant "${entryName}" does not meet the chanting requirement for "${entryTrack}". Minimum ${requiredMinRounds} rounds required (Participant has ${entryRoundsNum} rounds).`
+            }, { status: 400 });
+          }
         }
 
         // C2. Enforce sub-camp role restriction
@@ -181,9 +186,15 @@ export async function POST(req: NextRequest) {
 
           const hasAccess = userHasEligibleRole(userRole, userRoyal, trackFeeObj.applicable_roles);
           if (!hasAccess) {
-            return NextResponse.json({
-              error: `The "${entryTrack}" sub-camp is restricted to specific roles (${trackFeeObj.applicable_roles.join(', ')}). Participant "${entryName}" does not have an eligible role.`
-            }, { status: 403 });
+            // Post-payment fail-safe: If online payment was already completed on Razorpay, never drop the paid transaction
+            if (paymentMethod === 'RAZORPAY' && razorpay_payment_id) {
+              console.warn(`[Camp Register] Role mismatch: participant "${entryName}" on track "${entryTrack}", but payment ${razorpay_payment_id} was already completed. Permitting pass creation with audit note.`);
+              entry._roleWarning = `Role restriction warning: sub-camp "${entryTrack}" requires (${trackFeeObj.applicable_roles.join(', ')}). Devotee lacks role. Pass granted under completed payment ${razorpay_payment_id}.`;
+            } else {
+              return NextResponse.json({
+                error: `The "${entryTrack}" sub-camp is restricted to specific roles (${trackFeeObj.applicable_roles.join(', ')}). Participant "${entryName}" does not have an eligible role.`
+              }, { status: 403 });
+            }
           }
         }
 
@@ -197,9 +208,14 @@ export async function POST(req: NextRequest) {
             c.trim().toLowerCase().includes(entryCenter.toLowerCase())
           );
           if (!isMatch) {
-            return NextResponse.json({
-              error: `Registration for "${camp.title}" is restricted to devotees from: ${eligibleCenters.join(', ')}. Participant "${entryName}" has center "${entryCenter || 'Unspecified'}" which is not eligible.`
-            }, { status: 403 });
+            if (paymentMethod === 'RAZORPAY' && razorpay_payment_id) {
+              console.warn(`[Camp Register] Center mismatch: participant "${entryName}" ("${entryCenter}"), but payment ${razorpay_payment_id} was already completed. Permitting pass creation with audit note.`);
+              entry._centerWarning = `Center mismatch warning: center "${entryCenter}" not in eligible centers (${eligibleCenters.join(', ')}). Pass granted under completed payment ${razorpay_payment_id}.`;
+            } else {
+              return NextResponse.json({
+                error: `Registration for "${camp.title}" is restricted to devotees from: ${eligibleCenters.join(', ')}. Participant "${entryName}" has center "${entryCenter || 'Unspecified'}" which is not eligible.`
+              }, { status: 403 });
+            }
           }
         }
       }
@@ -731,7 +747,8 @@ export async function POST(req: NextRequest) {
           discount_amount, coupon_code,
           payment_method, payment_status, payment_id, order_id, deduction_source, passcode,
           payment_screenshot_url, transaction_ref, transaction_date,
-          is_waiting_list, hotel_receipt_url, hotel_name
+          is_waiting_list, hotel_receipt_url, hotel_name,
+          verified_at, verified_by
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9,
@@ -743,7 +760,8 @@ export async function POST(req: NextRequest) {
           $30, $31,
           $32, $33, $34, $35, $36, $37,
           $38, $39, $40,
-          $41, $42, $43
+          $41, $42, $43,
+          $44, $45
         ) RETURNING *
       `;
 
@@ -790,7 +808,9 @@ export async function POST(req: NextRequest) {
         transactionDate,
         Boolean(entry.is_waiting_list || entry.isWaitingList),
         entry.hotel_receipt_url || entry.hotelReceiptUrl || null,
-        entry.hotel_name || entry.hotelName || null
+        entry.hotel_name || entry.hotelName || null,
+        paymentMethod === 'RAZORPAY' ? new Date() : null,
+        paymentMethod === 'RAZORPAY' ? (entry._roleWarning || entry._centerWarning || entry._roundsWarning ? 'Razorpay (Restriction Flagged)' : 'Razorpay') : null
       ];
 
       const res = await query(sql, values);

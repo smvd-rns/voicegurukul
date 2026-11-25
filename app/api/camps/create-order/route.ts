@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { query } from '@/lib/db';
 import { calculateDynamicCampCost } from '@/lib/camp-cost';
+import { userHasEligibleRole } from '@/lib/utils/roles';
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,6 +51,92 @@ export async function POST(req: NextRequest) {
     const entriesList = Array.isArray(entries) && entries.length > 0 ? entries : [];
     if (entriesList.length === 0) {
       return NextResponse.json({ error: 'At least one participant entry is required to create a payment order.' }, { status: 400 });
+    }
+
+    // --- Strict Pre-flight Validation: Prevent charging Razorpay if any participant is ineligible ---
+    const trackFees = camp.special_waivers?.track_fees || [];
+    const eligibleCenters: string[] = Array.isArray(camp.eligible_centers) ? camp.eligible_centers : [];
+
+    for (const entry of entriesList) {
+      const entryName = entry.participant_name || entry.participantName || entry.poc_name || 'Participant';
+      const entryTrack = (entry.camp_track || entry.campTrack || '').trim();
+      const entryEmail = (entry.email || payerEmail || '').trim().toLowerCase();
+      const rawPhone = String(entry.whatsapp || entry.phone || payerContact || '');
+      const entryPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10);
+
+      if (entryTrack) {
+        const trackFeeObj = trackFees.find((tf: any) => tf.track?.toLowerCase() === entryTrack.toLowerCase());
+
+        // 1. Min rounds requirement
+        const requiredMinRounds = trackFeeObj?.min_rounds ? Number(trackFeeObj.min_rounds) : 0;
+        const entryRoundsNum = entry.rounds !== undefined && entry.rounds !== null && entry.rounds !== '' ? Number(entry.rounds) : 0;
+        if (requiredMinRounds > 0 && entryRoundsNum < requiredMinRounds) {
+          return NextResponse.json({
+            error: `Participant "${entryName}" does not meet the chanting requirement for "${entryTrack}". Minimum ${requiredMinRounds} rounds required (Participant has ${entryRoundsNum} rounds). Payment cannot be initiated.`
+          }, { status: 400 });
+        }
+
+        // 2. Sub-camp role restriction (e.g. Royal / manager tracks)
+        if (trackFeeObj?.applicable_roles && Array.isArray(trackFeeObj.applicable_roles) && trackFeeObj.applicable_roles.length > 0) {
+          let userRole = entry.role;
+          let userRoyal = entry.royalMember !== undefined ? entry.royalMember : entry.royal_member;
+
+          if (!userRole || userRoyal === undefined) {
+            const userLookupParams: any[] = [];
+            const userLookupConds: string[] = [];
+            if (entryEmail) {
+              userLookupParams.push(entryEmail);
+              userLookupConds.push(`LOWER(email) = $${userLookupParams.length}`);
+            }
+            if (entryPhone) {
+              userLookupParams.push(entryPhone);
+              userLookupConds.push(`RIGHT(phone, 10) = $${userLookupParams.length}`);
+            }
+            if (userLookupConds.length > 0) {
+              const uRes = await query(
+                `SELECT role, royal_member, hierarchy FROM users WHERE ${userLookupConds.join(' OR ')} LIMIT 1`,
+                userLookupParams
+              );
+              if (uRes.rows.length > 0) {
+                const u = uRes.rows[0];
+                if (!userRole) userRole = u.role;
+                if (userRoyal === undefined) {
+                  userRoyal = Boolean(
+                    u.royal_member === 'yes' ||
+                    u.royal_member === true ||
+                    u.hierarchy?.royalMember === 'yes' ||
+                    u.hierarchy?.royalMember === true ||
+                    u.hierarchy?.royal_member === 'yes' ||
+                    u.hierarchy?.royal_member === true
+                  );
+                }
+              }
+            }
+          }
+
+          const hasAccess = userHasEligibleRole(userRole, userRoyal, trackFeeObj.applicable_roles);
+          if (!hasAccess) {
+            return NextResponse.json({
+              error: `The "${entryTrack}" sub-camp is restricted to specific roles (${trackFeeObj.applicable_roles.join(', ')}). Participant "${entryName}" does not have an eligible role. Payment cannot be initiated.`
+            }, { status: 400 });
+          }
+        }
+
+        // 3. Center-based restriction
+        if (eligibleCenters.length > 0) {
+          const entryCenter = String(entry.voice_name || entry.voiceName || entry.center || '').trim();
+          const isMatch = eligibleCenters.some((c) =>
+            c.trim().toLowerCase() === entryCenter.toLowerCase() ||
+            entryCenter.toLowerCase().includes(c.trim().toLowerCase()) ||
+            c.trim().toLowerCase().includes(entryCenter.toLowerCase())
+          );
+          if (!isMatch) {
+            return NextResponse.json({
+              error: `Registration for "${camp.title}" is restricted to devotees from: ${eligibleCenters.join(', ')}. Participant "${entryName}" has center "${entryCenter || 'Unspecified'}" which is not eligible. Payment cannot be initiated.`
+            }, { status: 400 });
+          }
+        }
+      }
     }
 
     const isLate = Boolean(

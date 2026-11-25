@@ -1122,11 +1122,13 @@ export default function PublicCampRegistrationPage() {
   }, [centerDevotees, selectedDevoteeId]);
 
   const activeRegisteredTracks = useMemo(() => {
-    if (isManager && selectedDevotee) {
-      return selectedDevotee.registeredTracks || [];
+    if (isManager) {
+      if (entryMode === 'manual') return [];
+      if (selectedDevotee) return selectedDevotee.registeredTracks || [];
+      return [];
     }
     return userRegisteredTracks;
-  }, [isManager, selectedDevotee, userRegisteredTracks]);
+  }, [isManager, entryMode, selectedDevotee, userRegisteredTracks]);
 
   // Dynamically filter available camp tracks based on devotee chanting rounds & roles
   const availableTracksForDevotee = useMemo(() => {
@@ -1135,10 +1137,12 @@ export default function PublicCampRegistrationPage() {
       ? Number(formData.rounds)
       : 0;
 
-    const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
-    const attendeeRoyal = isManager && selectedDevotee
-      ? selectedDevotee.royalMember
-      : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
+    const attendeeRole = isManager
+      ? (entryMode === 'manual' ? (formData.participantType === 'Volunteer' ? 'mentor' : 1) : (selectedDevotee ? selectedDevotee.role : 1))
+      : userData?.role;
+    const attendeeRoyal = isManager
+      ? (entryMode === 'manual' ? false : (selectedDevotee ? Boolean(selectedDevotee.royalMember) : false))
+      : Boolean(userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
 
     const trackFees = camp?.special_waivers?.track_fees || [];
 
@@ -1156,7 +1160,7 @@ export default function PublicCampRegistrationPage() {
       }
       return true;
     });
-  }, [camp, formData.rounds, isManager, selectedDevotee, userData]);
+  }, [camp, formData.rounds, isManager, entryMode, selectedDevotee, formData.participantType, userData]);
 
   // If current campTrack is not in the filtered available tracks, auto-select the first available track
   useEffect(() => {
@@ -1334,9 +1338,11 @@ export default function PublicCampRegistrationPage() {
 
     // Enforce sub-camp role requirement
     if (selectedTrackFeeObj?.applicable_roles && selectedTrackFeeObj.applicable_roles.length > 0) {
-      const attendeeRole = isManager && selectedDevotee ? selectedDevotee.role : userData?.role;
-      const attendeeRoyal = isManager && selectedDevotee
-        ? selectedDevotee.royalMember
+      const attendeeRole = isManager
+        ? (entryMode === 'manual' ? (formData.participantType === 'Volunteer' ? 'mentor' : 1) : (selectedDevotee ? selectedDevotee.role : 1))
+        : userData?.role;
+      const attendeeRoyal = isManager
+        ? (entryMode === 'manual' ? false : (selectedDevotee ? Boolean(selectedDevotee.royalMember) : false))
         : (userData?.royalMember || (userData as any)?.royal_member || userData?.hierarchy?.royalMember);
       const isRoleEligible = userHasEligibleRole(attendeeRole, attendeeRoyal, selectedTrackFeeObj.applicable_roles);
       if (!isRoleEligible) {
