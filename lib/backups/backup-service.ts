@@ -198,16 +198,36 @@ export async function runDatabaseBackup({
           columns: rowsRes.fields?.length || 0,
         };
 
-        // Format rows for Excel (stringify JSON/arrays and protect password hashes)
+        // Format rows for Excel (stringify JSON/arrays, protect password hashes, and cap at Excel's 32,767 char cell limit)
+        const MAX_EXCEL_CELL_CHARS = 32700;
         const sanitizedRows = rows.map((r) => {
           const formattedRow: Record<string, any> = {};
           for (const [key, val] of Object.entries(r)) {
             if (key === 'password_hash' || key === 'password') {
               formattedRow[key] = '[PROTECTED_HASH]';
-            } else if (val !== null && typeof val === 'object') {
-              formattedRow[key] = JSON.stringify(val);
-            } else {
+            } else if (val === null || val === undefined) {
+              formattedRow[key] = '';
+            } else if (typeof val === 'number' || typeof val === 'boolean') {
               formattedRow[key] = val;
+            } else if (val instanceof Date) {
+              formattedRow[key] = val.toISOString();
+            } else {
+              let strVal: string;
+              if (typeof val === 'object') {
+                try {
+                  strVal = JSON.stringify(val);
+                } catch {
+                  strVal = String(val);
+                }
+              } else {
+                strVal = String(val);
+              }
+              // Enforce Excel specification: cell text length must not exceed 32,767 characters
+              if (strVal.length > MAX_EXCEL_CELL_CHARS) {
+                formattedRow[key] = strVal.slice(0, MAX_EXCEL_CELL_CHARS) + '... [TRUNCATED - EXCEEDS 32K CELL LIMIT]';
+              } else {
+                formattedRow[key] = strVal;
+              }
             }
           }
           return formattedRow;
