@@ -1036,6 +1036,55 @@ export default function AdminCampsPage() {
     setReconcileSuccess(null);
 
     try {
+      const rawEntries = (selectedTxn as any)?.entries_payload || (selectedTxn as any)?.participants;
+      const originalEntries = Array.isArray(rawEntries) ? rawEntries : [];
+
+      const entriesToSubmit = originalEntries.length > 1
+        ? [
+            {
+              ...originalEntries[0],
+              participant_name: reconcileForm.participantName,
+              whatsapp: reconcileForm.whatsapp,
+              email: reconcileForm.email,
+              camp_track: reconcileForm.campTrack,
+              gender: reconcileForm.gender,
+              participant_type: reconcileForm.participantType,
+              first_meal_date: reconcileForm.firstMealDate,
+              first_meal_type: reconcileForm.firstMealType,
+              last_meal_date: reconcileForm.lastMealDate,
+              last_meal_type: reconcileForm.lastMealType,
+              accommodation: reconcileForm.accommodation,
+              current_center: reconcileForm.currentCenter,
+              current_temple: reconcileForm.currentTemple,
+              total_cost: calculatedReconcileCost?.totalCost || originalEntries[0].totalCost || originalEntries[0].total_cost,
+              meal_cost: calculatedReconcileCost?.mealCost || originalEntries[0].mealCost || 0,
+              acc_cost: calculatedReconcileCost?.accCost || originalEntries[0].accCost || 0,
+              ac_cost: calculatedReconcileCost?.acCost || originalEntries[0].acCost || 0,
+              entry_cost: calculatedReconcileCost?.baseCost || calculatedReconcileCost?.entryCost || originalEntries[0].entryCost || 0,
+            },
+            ...originalEntries.slice(1)
+          ]
+        : [{
+            participant_name: reconcileForm.participantName,
+            whatsapp: reconcileForm.whatsapp,
+            email: reconcileForm.email,
+            camp_track: reconcileForm.campTrack,
+            gender: reconcileForm.gender,
+            participant_type: reconcileForm.participantType,
+            first_meal_date: reconcileForm.firstMealDate,
+            first_meal_type: reconcileForm.firstMealType,
+            last_meal_date: reconcileForm.lastMealDate,
+            last_meal_type: reconcileForm.lastMealType,
+            accommodation: reconcileForm.accommodation,
+            current_center: reconcileForm.currentCenter,
+            current_temple: reconcileForm.currentTemple,
+            total_cost: calculatedReconcileCost?.totalCost || Number(selectedTxn.total_amount),
+            meal_cost: calculatedReconcileCost?.mealCost || 0,
+            acc_cost: calculatedReconcileCost?.accCost || 0,
+            ac_cost: calculatedReconcileCost?.acCost || 0,
+            entry_cost: calculatedReconcileCost?.baseCost || calculatedReconcileCost?.entryCost || 0,
+          }];
+
       const res = await reconcileAndCreateCampBookingAction({
         campId: reconcileForm.campId,
         paymentId: selectedTxn.payment_id || selectedTxn.txn_id,
@@ -1044,26 +1093,7 @@ export default function AdminCampsPage() {
         payerContact: reconcileForm.whatsapp,
         email: reconcileForm.email,
         amount: Number(selectedTxn.total_amount),
-        entries: [{
-          participant_name: reconcileForm.participantName,
-          whatsapp: reconcileForm.whatsapp,
-          email: reconcileForm.email,
-          camp_track: reconcileForm.campTrack,
-          gender: reconcileForm.gender,
-          participant_type: reconcileForm.participantType,
-          first_meal_date: reconcileForm.firstMealDate,
-          first_meal_type: reconcileForm.firstMealType,
-          last_meal_date: reconcileForm.lastMealDate,
-          last_meal_type: reconcileForm.lastMealType,
-          accommodation: reconcileForm.accommodation,
-          current_center: reconcileForm.currentCenter,
-          current_temple: reconcileForm.currentTemple,
-          total_cost: calculatedReconcileCost?.totalCost || Number(selectedTxn.total_amount),
-          meal_cost: calculatedReconcileCost?.mealCost || 0,
-          acc_cost: calculatedReconcileCost?.accCost || 0,
-          ac_cost: calculatedReconcileCost?.acCost || 0,
-          entry_cost: calculatedReconcileCost?.baseCost || calculatedReconcileCost?.entryCost || 0,
-        }],
+        entries: entriesToSubmit,
         notes: reconcileForm.notes,
       });
 
